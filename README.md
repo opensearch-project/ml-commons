@@ -1,4 +1,4 @@
-## My Project
+## Open Distro for Elasticsearch Machine Learning
 
 TODO: Fill this README out!
 
@@ -13,5 +13,5 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
+See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
 
