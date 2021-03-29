@@ -1,11 +1,6 @@
 ## Open Distro for Elasticsearch Machine Learning
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+Machine Learning Framework for Open Distro for Elasticsearch is a new solution that make it easy to develop new machine learning feature. It allows engineers to leverage existing opensource machine learning algorithms and reduce the efforts to build any new machine learning feature. It also removes the necessity from engineers to manage the machine learning tasks which will help to speed the feature developing process.
 
 ## Security
 
