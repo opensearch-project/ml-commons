@@ -1,0 +1,77 @@
+/*
+ *  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License").
+ *  You may not use this file except in compliance with the License.
+ *  A copy of the License is located at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  or in the "license" file accompanying this file. This file is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ *  express or implied. See the License for the specific language governing
+ *  permissions and limitations under the License.
+ */
+
+buildscript {
+    ext {
+        ext {
+            opensearch_group = "org.opensearch"
+            opensearch_version = '7.10.3'
+        }
+    }
+
+    repositories {
+        mavenCentral()
+        maven {
+            url = 's3://search-vemsarat/'
+            credentials(AwsCredentials) {
+                accessKey = System.env.AWS_ACCESS_KEY_ID ?: findProperty('aws_access_key_id')
+                secretKey = System.env.AWS_SECRET_ACCESS_KEY_ID ?: findProperty('aws_secret_access_key')
+            }
+        }
+    }
+
+    dependencies {
+        classpath "${opensearch_group}.gradle:build-tools:${opensearch_version}-SNAPSHOT"
+        classpath "gradle.plugin.com.dorongold.plugins:task-tree:1.5"
+    }
+}
+
+plugins {
+    id 'nebula.ospackage' version "8.3.0"
+    id 'java'
+    id "io.freefair.lombok" version "5.1.0"
+    id 'jacoco'
+}
+
+apply plugin: "com.dorongold.task-tree"
+
+allprojects {
+    group = 'com.amazon.opensearch'
+    version = "${opendistroVersion}.0"
+
+    apply from: "$rootDir/build-tools/repositories.gradle"
+
+    boolean snapshot = "true".equals(System.getProperty("build.snapshot", "true"));
+    if (snapshot) {
+        version += "-SNAPSHOT"
+    }
+
+    plugins.withId('java') {
+        sourceCompatibility = targetCompatibility = "1.8"
+    }
+}
+
+subprojects {
+    configurations {
+        testImplementation.extendsFrom compileOnly
+    }
+}
+
+ext {
+    projectSubstitutions = [:]
+    licenseFile = rootProject.file('LICENSE.txt')
+    noticeFile = rootProject.file('NOTICE')
+}
+

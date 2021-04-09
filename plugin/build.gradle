@@ -1,0 +1,49 @@
+plugins {
+    id 'java'
+    id 'nebula.ospackage'
+    id "io.freefair.lombok"
+}
+apply plugin: 'opensearch.opensearchplugin'
+apply plugin: 'opensearch.testclusters'
+ext {
+    projectSubstitutions = [:]
+    licenseFile = rootProject.file('LICENSE.txt')
+    noticeFile = rootProject.file('NOTICE')
+}
+
+
+opensearchplugin {
+    name 'opensearch-ml'
+    description 'machine learning plugin for opensearch'
+    classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
+}
+
+dependencies {
+    compile project(':opensearch-ml-common')
+    compile project(':opensearch-ml-algorithms')
+
+    compile group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}-SNAPSHOT"
+    compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
+
+}
+
+test {
+    systemProperty 'tests.security.manager', 'false'
+}
+
+compileJava {
+    options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
+}
+
+//TODO: check which one should be enabled
+licenseHeaders.enabled = false
+testingConventions.enabled = false
+forbiddenApis.ignoreFailures = false
+dependencyLicenses.enabled = false
+thirdPartyAudit.enabled = false
+forbiddenApisTest.ignoreFailures = true
+forbiddenApisMain.ignoreFailures = true
+validateNebulaPom.enabled = false
+checkstyleMain.enabled = false
+loggerUsageCheck.enabled = false
