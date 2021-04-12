@@ -1,9 +1,7 @@
 plugins {
     id 'java'
+    id 'jacoco'
 }
-
-group 'com.amazon.opensearch'
-version '1.13.0.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
@@ -12,3 +10,29 @@ repositories {
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
+
+jacocoTestReport {
+    reports {
+        xml.enabled false
+        csv.enabled false
+    }
+
+    dependsOn test
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 1.0
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 1.0
+            }
+        }
+    }
+    dependsOn jacocoTestReport
+}
+check.dependsOn jacocoTestCoverageVerification
