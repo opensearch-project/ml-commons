@@ -32,7 +32,6 @@ public abstract class AbstractDataFrame implements DataFrame {
     @NonNull
     DataFrameType dataFrameType;
 
-
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeEnum(dataFrameType);

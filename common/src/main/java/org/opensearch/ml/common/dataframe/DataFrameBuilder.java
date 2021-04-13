@@ -68,7 +68,7 @@ public class DataFrameBuilder {
 
     /**
      * Load data frame given columnMetas, and list of map objects. and all of the
-     * map objects should have same key set, other wise it will throw exception.
+     * map objects should have same key set, otherwise it will throw exception.
      * @param columnMetas array of ColumnMeta
      * @param input input list of map objects
      * @return data frame
