@@ -74,3 +74,7 @@ ext {
     licenseFile = rootProject.file('LICENSE.txt')
     noticeFile = rootProject.file('NOTICE')
 }
+
+dependencies {
+    implementation 'junit:junit:4.12'
+}
