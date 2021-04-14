@@ -26,6 +26,7 @@ dependencies {
     compile group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}-SNAPSHOT"
     compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
+    compile group: 'com.google.guava', name: 'guava', version:'29.0-jre'
 
 }
 
@@ -61,13 +62,35 @@ jacocoTestReport {
     dependsOn test
 }
 
+List<String> jacocoExclusions = [
+        // code for configuration, settings, etc is excluded from coverage
+        'org.opensearch.ml.plugin.MachineLearningPlugin',
+
+        // Class containing just constants.  Don't need to test
+        'org.opensearch.ml.constant.*',
+
+
+        // related to transport actions
+        'org.opensearch.ml.action.stats.MLStatsNodeRequest',
+        'org.opensearch.ml.action.stats.MLStatsNodeResponse',
+        'org.opensearch.ml.action.stats.MLStatsNodesAction',
+        'org.opensearch.ml.action.stats.MLStatsNodesRequest',
+        'org.opensearch.ml.action.stats.MLStatsNodesResponse'
+]
+
 jacocoTestCoverageVerification {
     violationRules {
         rule {
+            element = 'CLASS'
+            excludes = jacocoExclusions
             limit {
                 counter = 'LINE'
-                minimum = 0.6
+                minimum = 0.75
             }
+        }
+        rule {
+            element = 'CLASS'
+            excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
                 minimum = 0.6
