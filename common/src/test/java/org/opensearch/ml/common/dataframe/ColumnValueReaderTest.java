@@ -40,6 +40,16 @@ public class ColumnValueReaderTest {
     }
 
     @Test
+    public void read_StringValue_Empty() throws IOException {
+        ColumnValue value = new StringValue("");
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        value.writeTo(bytesStreamOutput);
+        value = reader.read(bytesStreamOutput.bytes().streamInput());
+        assertEquals(ColumnType.STRING, value.columnType());
+        assertEquals("", value.stringValue());
+    }
+
+    @Test
     public void read_DoubleValue() throws IOException {
         ColumnValue value = new DoubleValue(2.1D);
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();

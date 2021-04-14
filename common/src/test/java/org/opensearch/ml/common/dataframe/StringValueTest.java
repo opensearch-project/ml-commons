@@ -12,4 +12,9 @@ public class StringValueTest {
         assertEquals("str", value.stringValue());
         assertEquals("str", value.getValue());
     }
+
+    @Test(expected = NullPointerException.class)
+    public void stringValue_NullPointerException() {
+        new StringValue(null);
+    }
 }
