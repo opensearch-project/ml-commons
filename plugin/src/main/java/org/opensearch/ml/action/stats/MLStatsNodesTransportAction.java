@@ -94,7 +94,7 @@ public class MLStatsNodesTransportAction extends
 
     @Override
     protected MLStatsNodeResponse nodeOperation(MLStatsNodeRequest request) {
-        return createMLStatsNodeResponse(request.getMLStatsNodesRequest());
+        return createMLStatsNodeResponse(request.getMlStatsNodesRequest());
     }
 
     private MLStatsNodeResponse createMLStatsNodeResponse(MLStatsNodesRequest mlStatsNodesRequest) {

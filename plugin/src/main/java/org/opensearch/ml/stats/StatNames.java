@@ -15,6 +15,8 @@
 
 package org.opensearch.ml.stats;
 
+import lombok.Getter;
+
 import java.util.HashSet;
 import java.util.Set;
 
@@ -24,19 +26,11 @@ import java.util.Set;
 public enum StatNames {
     ML_EXECUTING_TASK_COUNT("ml_executing_task_count");
 
+    @Getter
     private String name;
 
     StatNames(String name) {
         this.name = name;
-    }
-
-    /**
-     * Get stat name
-     *
-     * @return name
-     */
-    public String getName() {
-        return name;
     }
 
     /**

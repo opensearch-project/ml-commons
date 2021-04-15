@@ -62,6 +62,11 @@ public class MLStatsTests extends OpenSearchTestCase {
                         mlStats.getStats().get(clusterStatName1) == stat);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testGetStatNoExisting() {
+        MLStat<?> stat = mlStats.getStat("dummy stat name");
+    }
+
     @Test
     public void testGetNodeStats() {
         Map<String, MLStat<?>> stats = mlStats.getStats();
@@ -69,8 +74,8 @@ public class MLStatsTests extends OpenSearchTestCase {
 
         for (MLStat<?> stat : stats.values()) {
             Assert.assertTrue("getNodeStats returns incorrect stat",
-                    (stat.isClusterLevel() && !nodeStats.contains(stat)) ||
-                            (!stat.isClusterLevel() && nodeStats.contains(stat)));
+                    (stat.getClusterLevel() && !nodeStats.contains(stat)) ||
+                            (!stat.getClusterLevel() && nodeStats.contains(stat)));
         }
     }
 
@@ -81,8 +86,8 @@ public class MLStatsTests extends OpenSearchTestCase {
 
         for (MLStat<?> stat : stats.values()) {
             Assert.assertTrue("getClusterStats returns incorrect stat",
-                    (stat.isClusterLevel() && clusterStats.contains(stat)) ||
-                            (!stat.isClusterLevel() && !clusterStats.contains(stat)));
+                    (stat.getClusterLevel() && clusterStats.contains(stat)) ||
+                            (!stat.getClusterLevel() && !clusterStats.contains(stat)));
         }
     }
 }

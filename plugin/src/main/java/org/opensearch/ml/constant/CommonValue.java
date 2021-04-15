@@ -17,6 +17,5 @@
 package org.opensearch.ml.constant;
 
 public class CommonValue {
-    public static String INTERNAL_ACTION_PREFIX = "cluster:admin/opensearch/ml-internal/";
-    public static String EXTERNAL_ACTION_PREFIX = "cluster:admin/opensearch/ml/";
+    public static String ACTION_PREFIX = "cluster:admin/opensearch/ml/";
 }

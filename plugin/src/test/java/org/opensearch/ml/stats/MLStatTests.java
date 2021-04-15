@@ -16,6 +16,7 @@
 package org.opensearch.ml.stats;
 
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
+import org.opensearch.ml.stats.suppliers.SettableSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 import org.junit.Assert;
 import org.junit.Test;
@@ -26,18 +27,27 @@ public class MLStatTests extends OpenSearchTestCase {
     @Test
     public void testIsClusterLevel() {
         MLStat<String> stat1 = new MLStat<>(true, new TestSupplier());
-        Assert.assertTrue("isCluster returns the wrong value", stat1.isClusterLevel());
+        Assert.assertTrue("isCluster returns the wrong value", stat1.getClusterLevel());
         MLStat<String> stat2 = new MLStat<>(false, new TestSupplier());
-        Assert.assertTrue("isCluster returns the wrong value", !stat2.isClusterLevel());
+        Assert.assertTrue("isCluster returns the wrong value", !stat2.getClusterLevel());
     }
 
     @Test
-    public void testGetValue() {
+    public void testSetGetValue() {
         MLStat<Long> stat1 = new MLStat<>(false, new CounterSupplier());
+        Assert.assertEquals("GetValue returns the incorrect value", 0L, (long)(stat1.getValue()));
+        stat1.setValue(1L);
         Assert.assertEquals("GetValue returns the incorrect value", 0L, (long)(stat1.getValue()));
 
         MLStat<String> stat2 = new MLStat<>(false, new TestSupplier());
         Assert.assertEquals("GetValue returns the incorrect value", "test", stat2.getValue());
+        stat2.setValue(1L);
+        Assert.assertEquals("GetValue returns the incorrect value", "test", stat2.getValue());
+
+        MLStat<Long> stat3 = new MLStat<>(false, new SettableSupplier());
+        Assert.assertEquals("GetValue returns the incorrect value", 0L, (long)stat3.getValue());
+        stat3.setValue(1L);
+        Assert.assertEquals("GetValue returns the incorrect value", 1L, (long)stat3.getValue());
     }
 
     @Test

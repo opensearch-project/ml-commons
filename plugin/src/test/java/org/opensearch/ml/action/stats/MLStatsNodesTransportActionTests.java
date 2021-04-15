@@ -18,6 +18,10 @@ package org.opensearch.ml.action.stats;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import org.opensearch.Version;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.ml.stats.InternalStatNames;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -32,6 +36,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -88,7 +93,22 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         MLStatsNodeRequest mlStatsNodeRequest1 = new MLStatsNodeRequest(mlStatsNodesRequest);
         MLStatsNodeRequest mlStatsNodeRequest2 = action.newNodeRequest(mlStatsNodesRequest);
 
-        assertEquals(mlStatsNodeRequest1.getMLStatsNodesRequest(), mlStatsNodeRequest2.getMLStatsNodesRequest());
+        assertEquals(mlStatsNodeRequest1.getMlStatsNodesRequest(), mlStatsNodeRequest2.getMlStatsNodesRequest());
+    }
+
+    @Test
+    public void testNewNodeResponse() throws IOException {
+        Map<String, Object> statValues = new HashMap<>();
+        DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
+        MLStatsNodeResponse statsNodeResponse = new MLStatsNodeResponse(localNode, statValues);
+        BytesStreamOutput out = new BytesStreamOutput();
+        statsNodeResponse.writeTo(out);
+        StreamInput in = out.bytes().streamInput();
+        MLStatsNodeResponse newStatsNodeResponse = action.newNodeResponse(in);
+        Assert.assertEquals(statsNodeResponse.getStatsMap().size(), newStatsNodeResponse.getStatsMap().size());
+        for (String statName : newStatsNodeResponse.getStatsMap().keySet()) {
+            Assert.assertTrue(statsNodeResponse.getStatsMap().containsKey(statName));
+        }
     }
 
     @Test
@@ -133,6 +153,25 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         for (String statName : stats.keySet()) {
             Assert.assertTrue(statsToBeRetrieved.contains(statName));
         }
+    }
+
+    @Test
+    public void testNodeOperationNotSupportedStat() {
+        String nodeId = clusterService().localNode().getId();
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));
+        mlStatsNodesRequest.clear();
+
+        Set<String> statsToBeRetrieved = new HashSet<>(Arrays.asList("notSupportedStat"));
+
+        for (String stat : statsToBeRetrieved) {
+            mlStatsNodesRequest.addStat(stat);
+        }
+
+        MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
+
+        Map<String, Object> stats = response.getStatsMap();
+
+        Assert.assertEquals(0, stats.size());
     }
 
 }

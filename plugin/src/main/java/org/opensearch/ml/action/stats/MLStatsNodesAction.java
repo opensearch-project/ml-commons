@@ -21,7 +21,7 @@ import org.opensearch.action.ActionType;
 
 public class MLStatsNodesAction extends ActionType<MLStatsNodesResponse> {
     // Internal Action which is not used for public facing RestAPIs.
-    public static final String NAME = CommonValue.INTERNAL_ACTION_PREFIX + "stats/nodes";
+    public static final String NAME = CommonValue.ACTION_PREFIX + "stats/nodes";
     public static final MLStatsNodesAction INSTANCE = new MLStatsNodesAction();
 
     /**

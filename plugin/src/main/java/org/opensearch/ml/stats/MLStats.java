@@ -15,6 +15,8 @@
 
 package org.opensearch.ml.stats;
 
+import lombok.Getter;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,6 +24,7 @@ import java.util.Map;
  * This class is the main entry-point for access to the stats that the ML plugin keeps track of.
  */
 public class MLStats {
+    @Getter
     private Map<String, MLStat<?>> stats;
 
     /**
@@ -31,15 +34,6 @@ public class MLStats {
      */
     public MLStats(Map<String, MLStat<?>> stats) {
         this.stats = stats;
-    }
-
-    /**
-     * Get the stats
-     *
-     * @return all of the stats
-     */
-    public Map<String, MLStat<?>> getStats() {
-        return stats;
     }
 
     /**
@@ -78,7 +72,7 @@ public class MLStats {
         Map<String, MLStat<?>> statsMap = new HashMap<>();
 
         for (Map.Entry<String, MLStat<?>> entry : stats.entrySet()) {
-            if (entry.getValue().isClusterLevel() == getClusterStats) {
+            if (entry.getValue().getClusterLevel() == getClusterStats) {
                 statsMap.put(entry.getKey(), entry.getValue());
             }
         }

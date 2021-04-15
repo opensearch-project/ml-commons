@@ -16,6 +16,7 @@
 
 package org.opensearch.ml.action.stats;
 
+import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodeRequest;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -23,7 +24,8 @@ import org.opensearch.common.io.stream.StreamOutput;
 import java.io.IOException;
 
 public class MLStatsNodeRequest extends BaseNodeRequest {
-    private MLStatsNodesRequest request;
+    @Getter
+    private MLStatsNodesRequest mlStatsNodesRequest;
 
     /**
      * Constructor
@@ -34,7 +36,7 @@ public class MLStatsNodeRequest extends BaseNodeRequest {
 
     public MLStatsNodeRequest(StreamInput in) throws IOException {
         super(in);
-        this.request = new MLStatsNodesRequest(in);
+        this.mlStatsNodesRequest = new MLStatsNodesRequest(in);
     }
 
     /**
@@ -43,21 +45,12 @@ public class MLStatsNodeRequest extends BaseNodeRequest {
      * @param request MLStatsNodesRequest
      */
     public MLStatsNodeRequest(MLStatsNodesRequest request) {
-        this.request = request;
-    }
-
-    /**
-     * Get MLStatsRequest
-     *
-     * @return MLStatsNodesRequest for this node
-     */
-    public MLStatsNodesRequest getMLStatsNodesRequest() {
-        return request;
+        this.mlStatsNodesRequest = request;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        request.writeTo(out);
+        mlStatsNodesRequest.writeTo(out);
     }
 }

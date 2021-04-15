@@ -16,6 +16,7 @@
 
 package org.opensearch.ml.action.stats;
 
+import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.StreamInput;
@@ -31,6 +32,7 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
      */
     public static final String ALL_STATS_KEY = "_all";
 
+    @Getter
     private Set<String> statsToBeRetrieved;
 
     public MLStatsNodesRequest(StreamInput in) throws IOException {
@@ -81,15 +83,6 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
      */
     public void clear() {
         statsToBeRetrieved.clear();
-    }
-
-    /**
-     * Get the set that tracks which stats should be retrieved
-     *
-     * @return the set that contains the stat names marked for retrieval
-     */
-    public Set<String> getStatsToBeRetrieved() {
-        return statsToBeRetrieved;
     }
 
     public void readFrom(StreamInput in) throws IOException {

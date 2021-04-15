@@ -36,6 +36,14 @@ test {
     finalizedBy jacocoTestReport
 }
 
+jacocoTestReport {
+    reports {
+        xml.enabled true
+        html.enabled true
+        csv.enabled true
+    }
+}
+
 compileJava {
     options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
 }
@@ -62,38 +70,16 @@ jacocoTestReport {
     dependsOn test
 }
 
-List<String> jacocoExclusions = [
-        // code for configuration, settings, etc is excluded from coverage
-        'org.opensearch.ml.plugin.MachineLearningPlugin',
-
-        // Class containing just constants.  Don't need to test
-        'org.opensearch.ml.constant.*',
-
-
-        // related to transport actions
-        'org.opensearch.ml.action.stats.MLStatsNodeRequest',
-        'org.opensearch.ml.action.stats.MLStatsNodeResponse',
-        'org.opensearch.ml.action.stats.MLStatsNodesAction',
-        'org.opensearch.ml.action.stats.MLStatsNodesRequest',
-        'org.opensearch.ml.action.stats.MLStatsNodesResponse'
-]
-
 jacocoTestCoverageVerification {
     violationRules {
         rule {
-            element = 'CLASS'
-            excludes = jacocoExclusions
             limit {
                 counter = 'LINE'
-                minimum = 0.75
+                minimum = 0.8
             }
-        }
-        rule {
-            element = 'CLASS'
-            excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.6
+                minimum = 0.8
             }
         }
     }

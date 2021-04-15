@@ -16,6 +16,7 @@
 
 package org.opensearch.ml.action.stats;
 
+import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.StreamInput;
@@ -27,6 +28,7 @@ import java.io.IOException;
 import java.util.Map;
 
 public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentFragment {
+    @Getter
     private Map<String, Object> statsMap;
 
     /**
@@ -59,17 +61,7 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
      * @throws IOException throws an IO exception if the StreamInput cannot be reML from
      */
     public static MLStatsNodeResponse readStats(StreamInput in) throws IOException {
-
         return new MLStatsNodeResponse(in);
-    }
-
-    /**
-     * getStatsMap
-     *
-     * @return map of stats
-     */
-    public Map<String, Object> getStatsMap() {
-        return statsMap;
     }
 
     @Override
@@ -90,7 +82,6 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
         for (String stat : statsMap.keySet()) {
             builder.field(stat, statsMap.get(stat));
         }
-
         return builder;
     }
 }

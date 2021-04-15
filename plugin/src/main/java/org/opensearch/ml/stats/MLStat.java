@@ -15,6 +15,7 @@
 
 package org.opensearch.ml.stats;
 
+import lombok.Getter;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
 
@@ -24,7 +25,9 @@ import java.util.function.Supplier;
  * Class represents a stat the ML plugin keeps track of
  */
 public class MLStat<T> {
+    @Getter
     private Boolean clusterLevel;
+
     private Supplier<T> supplier;
 
     /**
@@ -36,15 +39,6 @@ public class MLStat<T> {
     public MLStat(Boolean clusterLevel, Supplier<T> supplier) {
         this.clusterLevel = clusterLevel;
         this.supplier = supplier;
-    }
-
-    /**
-     * Determines whether the stat is cluster specific or node specific
-     *
-     * @return true is stat is cluster level; false otherwise
-     */
-    public Boolean isClusterLevel() {
-        return clusterLevel;
     }
 
     /**
