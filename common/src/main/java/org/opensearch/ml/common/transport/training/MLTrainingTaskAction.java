@@ -13,15 +13,16 @@
  *  permissions and limitations under the License.
  */
 
-package org.opensearch.ml.common.transport.prediiction;
+package org.opensearch.ml.common.transport.training;
 
 import org.opensearch.action.ActionType;
 
-public class MLPredictionTaskAction extends ActionType<MLPredictionTaskResponse> {
-    public static final MLPredictionTaskAction INSTANCE = new MLPredictionTaskAction();
-    public static final String NAME = "cluster:admin/opensearch-ml/predict";
+public class MLTrainingTaskAction extends ActionType<MLTrainingTaskResponse> {
+    public static MLTrainingTaskAction INSTANCE = new MLTrainingTaskAction();
+    public static final String NAME = "cluster:admin/opensearch-ml/training";
 
-    private MLPredictionTaskAction() {
-        super(NAME, MLPredictionTaskResponse::new);
+    private MLTrainingTaskAction() {
+        super(NAME, MLTrainingTaskResponse::new);
     }
+
 }

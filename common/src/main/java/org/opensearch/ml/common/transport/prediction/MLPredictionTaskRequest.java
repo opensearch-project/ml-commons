@@ -13,7 +13,7 @@
  *  permissions and limitations under the License.
  */
 
-package org.opensearch.ml.common.transport.prediiction;
+package org.opensearch.ml.common.transport.prediction;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

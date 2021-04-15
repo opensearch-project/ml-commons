@@ -13,7 +13,7 @@
  *  permissions and limitations under the License.
  */
 
-package org.opensearch.ml.common.transport.prediiction;
+package org.opensearch.ml.common.transport.training;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -26,8 +26,6 @@ import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -37,49 +35,40 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLPredictionTaskResponse extends ActionResponse {
+public class MLTrainingTaskResponse extends ActionResponse {
+    String status;
     String taskId;
 
-    String status;
-
-    @ToString.Exclude
-    DataFrame predictionResult;
-
     @Builder
-    public MLPredictionTaskResponse(String taskId, String status, DataFrame predictionResult) {
-        this.taskId = taskId;
+    public MLTrainingTaskResponse(String status, String taskId) {
         this.status = status;
-        this.predictionResult = predictionResult;
+        this.taskId = taskId;
     }
 
-    public MLPredictionTaskResponse(StreamInput in) throws IOException {
-        super(in);
-        this.taskId = in.readString();
+    public MLTrainingTaskResponse(StreamInput in) throws IOException {
         this.status = in.readString();
-        this.predictionResult = DataFrameBuilder.load(in);
+        this.taskId = in.readString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(taskId);
         out.writeString(status);
-        predictionResult.writeTo(out);
-
+        out.writeString(taskId);
     }
 
-    public static MLPredictionTaskResponse fromActionResponse(ActionResponse actionResponse) {
-        if (actionResponse instanceof MLPredictionTaskResponse) {
-            return (MLPredictionTaskResponse) actionResponse;
+    public static MLTrainingTaskResponse fromActionResponse(ActionResponse actionResponse) {
+        if (actionResponse instanceof MLTrainingTaskResponse) {
+            return (MLTrainingTaskResponse) actionResponse;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionResponse.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLPredictionTaskResponse(input);
+                return new MLTrainingTaskResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLTrainingTaskResponse", e);
         }
     }
 }
