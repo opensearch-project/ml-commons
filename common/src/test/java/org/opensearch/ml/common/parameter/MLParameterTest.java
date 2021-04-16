@@ -5,7 +5,7 @@ import java.io.IOException;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class MLParameterTest {
 

@@ -20,11 +20,10 @@ import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.HashMap;
 
+import org.junit.Test;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.junit.Test;
-
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 
 import static org.junit.Assert.assertEquals;

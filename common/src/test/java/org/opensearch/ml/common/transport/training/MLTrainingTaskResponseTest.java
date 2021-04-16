@@ -18,10 +18,10 @@ package org.opensearch.ml.common.transport.training;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.junit.Test;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
