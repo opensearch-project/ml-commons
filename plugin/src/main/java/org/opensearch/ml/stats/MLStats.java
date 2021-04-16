@@ -72,7 +72,7 @@ public class MLStats {
         Map<String, MLStat<?>> statsMap = new HashMap<>();
 
         for (Map.Entry<String, MLStat<?>> entry : stats.entrySet()) {
-            if (entry.getValue().getClusterLevel() == getClusterStats) {
+            if (entry.getValue().isClusterLevel() == getClusterStats) {
                 statsMap.put(entry.getKey(), entry.getValue());
             }
         }

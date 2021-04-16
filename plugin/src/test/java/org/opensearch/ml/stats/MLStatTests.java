@@ -27,9 +27,9 @@ public class MLStatTests extends OpenSearchTestCase {
     @Test
     public void testIsClusterLevel() {
         MLStat<String> stat1 = new MLStat<>(true, new TestSupplier());
-        Assert.assertTrue("isCluster returns the wrong value", stat1.getClusterLevel());
+        Assert.assertTrue("isCluster returns the wrong value", stat1.isClusterLevel());
         MLStat<String> stat2 = new MLStat<>(false, new TestSupplier());
-        Assert.assertTrue("isCluster returns the wrong value", !stat2.getClusterLevel());
+        Assert.assertTrue("isCluster returns the wrong value", !stat2.isClusterLevel());
     }
 
     @Test

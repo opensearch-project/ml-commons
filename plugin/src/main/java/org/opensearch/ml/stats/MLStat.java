@@ -26,7 +26,7 @@ import java.util.function.Supplier;
  */
 public class MLStat<T> {
     @Getter
-    private Boolean clusterLevel;
+    private boolean clusterLevel;
 
     private Supplier<T> supplier;
 
@@ -36,7 +36,7 @@ public class MLStat<T> {
      * @param clusterLevel whether the stat has clusterLevel scope or nodeLevel scope
      * @param supplier supplier that returns the stat's value
      */
-    public MLStat(Boolean clusterLevel, Supplier<T> supplier) {
+    public MLStat(boolean clusterLevel, Supplier<T> supplier) {
         this.clusterLevel = clusterLevel;
         this.supplier = supplier;
     }

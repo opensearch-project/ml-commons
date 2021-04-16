@@ -74,8 +74,8 @@ public class MLStatsTests extends OpenSearchTestCase {
 
         for (MLStat<?> stat : stats.values()) {
             Assert.assertTrue("getNodeStats returns incorrect stat",
-                    (stat.getClusterLevel() && !nodeStats.contains(stat)) ||
-                            (!stat.getClusterLevel() && nodeStats.contains(stat)));
+                    (stat.isClusterLevel() && !nodeStats.contains(stat)) ||
+                            (!stat.isClusterLevel() && nodeStats.contains(stat)));
         }
     }
 
@@ -86,8 +86,8 @@ public class MLStatsTests extends OpenSearchTestCase {
 
         for (MLStat<?> stat : stats.values()) {
             Assert.assertTrue("getClusterStats returns incorrect stat",
-                    (stat.getClusterLevel() && clusterStats.contains(stat)) ||
-                            (!stat.getClusterLevel() && !clusterStats.contains(stat)));
+                    (stat.isClusterLevel() && clusterStats.contains(stat)) ||
+                            (!stat.isClusterLevel() && !clusterStats.contains(stat)));
         }
     }
 }
