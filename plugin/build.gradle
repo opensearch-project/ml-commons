@@ -26,6 +26,7 @@ dependencies {
     compile group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}-SNAPSHOT"
     compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
+    compile group: 'com.google.guava', name: 'guava', version:'29.0-jre'
 
 }
 
@@ -33,6 +34,14 @@ test {
     include '**/*Test.class'
     systemProperty 'tests.security.manager', 'false'
     finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled true
+        html.enabled true
+        csv.enabled true
+    }
 }
 
 compileJava {
@@ -66,11 +75,11 @@ jacocoTestCoverageVerification {
         rule {
             limit {
                 counter = 'LINE'
-                minimum = 1.0
+                minimum = 0.8
             }
             limit {
                 counter = 'BRANCH'
-                minimum = 1.0
+                minimum = 0.8
             }
         }
     }
