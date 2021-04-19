@@ -46,15 +46,30 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @ToString
 public class MLPredictionTaskRequest extends ActionRequest {
 
+    /**
+     * the name of algorithm
+     */
     String algorithm;
 
+    /**
+     * list of ml parameters
+     */
     List<MLParameter> parameters;
 
+    /**
+     * input data set
+     */
     @ToString.Exclude
     DataFrame dataFrame;
 
+    /**
+     * Trained model id
+     */
     String modelId;
 
+    /**
+     * version id, in case there is future schema change. This can be used to detect which version the client is using.
+     */
     int version;
 
     @Builder
