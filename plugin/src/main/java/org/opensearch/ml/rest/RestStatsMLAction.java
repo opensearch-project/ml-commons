@@ -65,6 +65,7 @@ public class RestStatsMLAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLStatsNodesRequest getRequest(RestRequest request) {
+        // todo: add logic to triage request based on node type(ML node or data node)
         MLStatsNodesRequest mlStatsRequest = new MLStatsNodesRequest(
                 splitCommaSeparatedParam(request, "nodeId").orElse(null));
         mlStatsRequest.timeout(request.param("timeout"));
