@@ -44,7 +44,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             throw new IllegalArgumentException("algorithm name can't be null or empty");
         }
         if(Objects.isNull(inputData) || inputData.size() <= 0) {
-            throw new IllegalArgumentException("input data frame is empty");
+            throw new IllegalArgumentException("input data frame can't be null or empty");
         }
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder()

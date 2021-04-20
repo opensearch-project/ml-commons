@@ -12,7 +12,9 @@
 package org.opensearch.ml.client;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -56,6 +58,9 @@ public class MachineLearningNodeClientTest {
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
 
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
@@ -83,19 +88,25 @@ public class MachineLearningNodeClientTest {
         assertEquals(output, dataFrameArgumentCaptor.getValue());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void predict_Exception_WithNullAlgorithm() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("algorithm name can't be null or empty");
         machineLearningNodeClient.predict(null, null, input, null, dataFrameActionListener);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void predict_Exception_WithEmptyDataFrame() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("input data frame can't be null or empty");
         when(input.size()).thenReturn(0);
         machineLearningNodeClient.predict("algo", null, input, null, dataFrameActionListener);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void predict_Exception_WithNullDataFrame() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("input data frame can't be null or empty");
         machineLearningNodeClient.predict("algo", null, null, null, dataFrameActionListener);
     }
 
