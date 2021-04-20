@@ -51,7 +51,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
-    public static final String ML_BASE_URI = "/_opendistro/_ml";
+    public static final String ML_BASE_URI = "/_opensearch/_ml";
 
     private MLStats mlStats;
 
