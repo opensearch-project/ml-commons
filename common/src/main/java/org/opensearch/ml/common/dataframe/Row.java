@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 
+import lombok.Getter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
@@ -27,6 +28,7 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class Row implements Iterable<ColumnValue>, Writeable {
+    @Getter
     ColumnValue[] values;
 
     Row(int size) {

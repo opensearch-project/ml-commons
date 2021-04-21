@@ -1,6 +1,8 @@
 package org.opensearch.ml.engine;
 
 import org.junit.Test;
+import org.opensearch.ml.engine.utils.ModelSerDeSer;
+
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
