@@ -12,6 +12,7 @@
 
 repositories {
     mavenCentral()
+    jcenter()
     maven {
         url = 's3://search-vemsarat/'
         credentials(AwsCredentials) {
