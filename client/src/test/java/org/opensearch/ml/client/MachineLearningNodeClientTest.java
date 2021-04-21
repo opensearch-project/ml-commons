@@ -131,19 +131,25 @@ public class MachineLearningNodeClientTest {
         assertEquals("taskId", argumentCaptor.getValue());
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void train_Exception_WithNullAlgorithm() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("algorithm name can't be null or empty");
         machineLearningNodeClient.train(null, null, input, trainingActionListener);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void train_Exception_WithEmptyDataFrame() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("input data frame can't be null or empty");
         when(input.size()).thenReturn(0);
         machineLearningNodeClient.train("algo", null, input, trainingActionListener);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void train_Exception_WithNullDataFrame() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("input data frame can't be null or empty");
         machineLearningNodeClient.train("algo", null, null, trainingActionListener);
     }
 }
