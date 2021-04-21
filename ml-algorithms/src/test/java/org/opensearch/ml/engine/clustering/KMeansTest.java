@@ -61,9 +61,9 @@ public class KMeansTest {
 
         Random rng = new Random(1);
         MultivariateNormalDistribution g1 = new MultivariateNormalDistribution(new JDKRandomGenerator(rng.nextInt()),
-                new double[]{0.0, 0.0}, new double[][]{{1.0, 0.0}, {0.0, 1.0}});
+                new double[]{0.0, 0.0}, new double[][]{{2.0, 1.0}, {1.0, 2.0}});
         MultivariateNormalDistribution g2 = new MultivariateNormalDistribution(new JDKRandomGenerator(rng.nextInt()),
-                new double[]{5.0, 5.0}, new double[][]{{1.0, 0.0}, {0.0, 1.0}});
+                new double[]{10.0, 10.0}, new double[][]{{2.0, 1.0}, {1.0, 2.0}});
         MultivariateNormalDistribution[] gaussians = new MultivariateNormalDistribution[]{g1, g2};
         for (int i = 0; i < trainSize; ++i) {
             int id = 0;
