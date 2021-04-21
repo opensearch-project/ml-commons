@@ -12,8 +12,7 @@
 
 package org.opensearch.ml.engine;
 
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
+import lombok.experimental.UtilityClass;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -21,7 +20,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@UtilityClass
 public class ModelSerDeSer {
     public static byte[] serialize(Object model) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
