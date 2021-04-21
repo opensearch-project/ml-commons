@@ -35,7 +35,7 @@ public class MLParameter implements Writeable {
     String name;
     Object value;
 
-    MLParameter(String name, Object value) {
+    public MLParameter(String name, Object value) {
         if(Objects.isNull(name) || Objects.isNull(value)) {
             throw new IllegalArgumentException("name or value can't be null");
         }
