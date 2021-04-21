@@ -12,6 +12,8 @@
 
 plugins {
     id 'java'
+    id 'jacoco'
+    id "io.freefair.lombok"
 }
 
 repositories {
@@ -19,5 +21,32 @@ repositories {
 }
 
 dependencies {
+    compile project(':opensearch-ml-common')
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
+
+jacocoTestReport {
+    reports {
+        xml.enabled false
+        csv.enabled false
+    }
+
+    dependsOn test
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.9
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.9
+            }
+        }
+    }
+    dependsOn jacocoTestReport
+}
+check.dependsOn jacocoTestCoverageVerification
