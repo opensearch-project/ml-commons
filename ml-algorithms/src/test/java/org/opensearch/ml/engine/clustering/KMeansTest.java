@@ -6,7 +6,12 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.dataframe.*;
+import org.opensearch.ml.common.dataframe.ColumnMeta;
+import org.opensearch.ml.common.dataframe.ColumnType;
+import org.opensearch.ml.common.dataframe.ColumnValueBuilder;
+import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DefaultDataFrame;
+import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.Model;
 
@@ -15,7 +20,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import static org.junit.Assert.*;
 
 public class KMeansTest {
     private List<MLParameter> parameters = new ArrayList<>();
