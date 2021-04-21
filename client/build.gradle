@@ -1,7 +1,93 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 plugins {
     id 'java'
+    id "io.freefair.lombok"
+    id 'maven-publish'
+    id 'jacoco'
+    id 'com.github.johnrengelman.shadow'
 }
 
 dependencies {
+    compile project(':opensearch-ml-common')
+    compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}-SNAPSHOT"
     testCompile group: 'junit', name: 'junit', version: '4.12'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.9.0'
+
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled false
+        csv.enabled false
+    }
+
+    dependsOn test
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.9
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.9
+            }
+        }
+    }
+    dependsOn jacocoTestReport
+}
+check.dependsOn jacocoTestCoverageVerification
+
+
+shadowJar {
+    archiveClassifier.set(null)
+}
+
+publishing {
+    publications {
+        shadow(MavenPublication) {
+            project.shadow.component(it)
+
+            pom {
+                name = "OpenSearch Machine Learning Client Library"
+                packaging = "jar"
+                url = "https://github.com/opensearch-project/machine-learning"
+                description = "OpenSearch Machine Learning Client Library"
+                scm {
+                    connection = "scm:git@github.com:opensearch-project/machine-learning.git"
+                    developerConnection = "scm:git@github.com:opensearch-project/machine-learning.git"
+                    url = "git@github.com:opensearch-project/machine-learning.git"
+                }
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        id = "amazonwebservices"
+                        organization = "Amazon Web Services"
+                        organizationUrl = "https://aws.amazon.com"
+                    }
+                }
+            }
+        }
+    }
+
+
 }
