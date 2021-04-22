@@ -6,17 +6,13 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
-import org.opensearch.ml.common.dataframe.ColumnValueBuilder;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.dataframe.Row;
+import org.opensearch.ml.common.dataframe.*;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.Model;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -36,15 +32,7 @@ public class KMeansTest {
         parameters.add(new MLParameter("k", 2));
 
         kMeans = new KMeans(parameters);
-        constructTrainDataFrame();
-    }
-
-    @After
-    public void tearDown() throws Exception {
-    }
-
-    @Test
-    public void predict() {
+        constructKMeansTrainDataFrame();
     }
 
     @Test
@@ -55,9 +43,9 @@ public class KMeansTest {
         Assert.assertNotNull(model.getContent());
     }
 
-    private void constructTrainDataFrame() {
+    private void constructKMeansTrainDataFrame() {
         ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE)};
-        trainDataFrame = new DefaultDataFrame(columnMetas);
+        trainDataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
 
         Random random = new Random(1);
         MultivariateNormalDistribution g1 = new MultivariateNormalDistribution(new JDKRandomGenerator(random.nextInt()),
@@ -71,10 +59,7 @@ public class KMeansTest {
                 id = 1;
             }
             double[] sample = normalDistributions[id].sample();
-            Row row = new Row(2);
-            row.setValue(0, ColumnValueBuilder.build(sample[0]));
-            row.setValue(1, ColumnValueBuilder.build(sample[1]));
-            trainDataFrame.appendRow(row);
+            trainDataFrame.appendRow(Arrays.stream(sample).boxed().toArray(Double[]::new));
         }
     }
 }

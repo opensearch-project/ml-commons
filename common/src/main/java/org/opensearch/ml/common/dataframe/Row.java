@@ -31,7 +31,7 @@ public class Row implements Iterable<ColumnValue>, Writeable {
     @Getter
     ColumnValue[] values;
 
-    public Row(int size) {
+    Row(int size) {
         this.values = new ColumnValue[size];
         Arrays.fill(this.values, new NullValue());
     }
@@ -40,7 +40,7 @@ public class Row implements Iterable<ColumnValue>, Writeable {
         this.values = input.readArray(new ColumnValueReader(), ColumnValue[]::new);
     }
 
-    public void setValue(int index, ColumnValue value) {
+    void setValue(int index, ColumnValue value) {
         if(index < 0 || index > size() - 1) {
             throw new IllegalArgumentException("index is out of scope, index:" + index + "; row size:" + size());
         }

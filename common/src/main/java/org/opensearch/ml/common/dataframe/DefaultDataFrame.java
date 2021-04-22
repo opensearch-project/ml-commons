@@ -32,23 +32,23 @@ public class DefaultDataFrame extends AbstractDataFrame{
     List<Row> rows;
     ColumnMeta[] columnMetas;
 
-    public DefaultDataFrame(final ColumnMeta[] columnMetas){
+    DefaultDataFrame(final ColumnMeta[] columnMetas){
         super(DataFrameType.DEFAULT);
         this.columnMetas = columnMetas;
         this.rows = new ArrayList<>();
     }
 
-    public DefaultDataFrame(final ColumnMeta[] columnMetas, final List<Row> rows){
+    DefaultDataFrame(final ColumnMeta[] columnMetas, final List<Row> rows){
         super(DataFrameType.DEFAULT);
         this.columnMetas = columnMetas;
         this.rows = rows;
     }
 
-    public DefaultDataFrame(StreamInput streamInput) throws IOException {
+    DefaultDataFrame(StreamInput streamInput) throws IOException {
         this(streamInput, false);
     }
 
-    public DefaultDataFrame(StreamInput streamInput, boolean readType) throws IOException {
+    DefaultDataFrame(StreamInput streamInput, boolean readType) throws IOException {
         super(readType ? streamInput.readEnum(DataFrameType.class) : DataFrameType.DEFAULT);
         this.columnMetas = streamInput.readArray(ColumnMeta::new, ColumnMeta[]::new);
         this.rows = streamInput.readList(Row::new);

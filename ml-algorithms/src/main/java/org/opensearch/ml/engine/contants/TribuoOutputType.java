@@ -10,7 +10,7 @@
  *
  */
 
-package org.opensearch.ml.engine.utils;
+package org.opensearch.ml.engine.contants;
 
 public enum TribuoOutputType {
     CLUSTERID;

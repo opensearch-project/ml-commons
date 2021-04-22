@@ -33,5 +33,7 @@ public interface MLAlgo {
      * @param dataFrame training data
      * @return the java serialized model
      */
-    Model train(DataFrame dataFrame) throws IOException;
+    default Model train(DataFrame dataFrame) throws IOException {
+        throw new RuntimeException("Unsupported train.");
+    }
 }

@@ -16,6 +16,7 @@ import lombok.experimental.UtilityClass;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.Row;
+import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.tribuo.Example;
 import org.tribuo.MutableDataset;
 import org.tribuo.Output;

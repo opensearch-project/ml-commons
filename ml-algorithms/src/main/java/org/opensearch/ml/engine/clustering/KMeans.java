@@ -17,7 +17,7 @@ import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
-import org.opensearch.ml.engine.utils.TribuoOutputType;
+import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
 import org.tribuo.clustering.ClusterID;
@@ -68,7 +68,8 @@ public class KMeans implements MLAlgo {
 
     @Override
     public DataFrame predict(DataFrame dataFrame, String model) {
-        return null;
+        //TODO
+        throw new RuntimeException("Unsupported predict");
     }
 
     @Override
