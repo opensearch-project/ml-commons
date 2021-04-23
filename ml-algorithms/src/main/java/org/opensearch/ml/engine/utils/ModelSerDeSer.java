@@ -10,7 +10,7 @@
  *
  */
 
-package org.opensearch.ml.engine;
+package org.opensearch.ml.engine.utils;
 
 import lombok.experimental.UtilityClass;
 

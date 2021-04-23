@@ -14,6 +14,8 @@ package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 
+import java.io.IOException;
+
 /**
  * This is machine learning algorithms interface.
  */
@@ -31,5 +33,7 @@ public interface MLAlgo {
      * @param dataFrame training data
      * @return the java serialized model
      */
-    Model train(DataFrame dataFrame);
+    default Model train(DataFrame dataFrame) throws IOException {
+        throw new RuntimeException("Unsupported train.");
+    }
 }
