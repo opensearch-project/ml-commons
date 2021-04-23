@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.StreamSupport;
 
 @UtilityClass
 public class TribuoUtil {
@@ -40,7 +41,7 @@ public class TribuoUtil {
         int i = 0;
         while (itr.hasNext()) {
             Row row = itr.next();
-            featureValues[i] = Arrays.stream(row.getValues()).mapToDouble(e -> e.doubleValue()).toArray();
+            featureValues[i] = StreamSupport.stream(row.spliterator(), false).mapToDouble(e -> e.doubleValue()).toArray();
             ++i;
         }
 

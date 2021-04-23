@@ -28,7 +28,6 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class Row implements Iterable<ColumnValue>, Writeable {
-    @Getter
     ColumnValue[] values;
 
     Row(int size) {

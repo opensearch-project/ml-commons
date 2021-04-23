@@ -2,12 +2,15 @@ package org.opensearch.ml.engine.clustering;
 
 import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.dataframe.*;
+import org.opensearch.ml.common.dataframe.ColumnMeta;
+import org.opensearch.ml.common.dataframe.ColumnType;
+import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
+import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import org.opensearch.ml.engine.Model;
 
 import java.io.IOException;
@@ -24,12 +27,12 @@ public class KMeansTest {
     private int trainSize = 100;
 
     @Before
-    public void setUp() throws Exception {
-        parameters.add(new MLParameter("seed", 1));
-        parameters.add(new MLParameter("num_threads", 1));
-        parameters.add(new MLParameter("distance_type", 0));
-        parameters.add(new MLParameter("iterations", 10));
-        parameters.add(new MLParameter("k", 2));
+    public void setUp() {
+        parameters.add(MLParameterBuilder.parameter("seed", 1));
+        parameters.add(MLParameterBuilder.parameter("num_threads", 1));
+        parameters.add(MLParameterBuilder.parameter("distance_type", 0));
+        parameters.add(MLParameterBuilder.parameter("iterations", 10));
+        parameters.add(MLParameterBuilder.parameter("k", 2));
 
         kMeans = new KMeans(parameters);
         constructKMeansTrainDataFrame();
