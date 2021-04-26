@@ -26,7 +26,7 @@ public interface MLAlgo {
      * @param model the java serialized model
      * @return predicted results
      */
-    DataFrame predict(DataFrame dataFrame, String model);
+    DataFrame predict(DataFrame dataFrame, Model model) throws IOException, ClassNotFoundException;
 
     /**
      * Train model with given features.

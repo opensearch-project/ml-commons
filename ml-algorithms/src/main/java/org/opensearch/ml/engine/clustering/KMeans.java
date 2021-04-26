@@ -13,6 +13,7 @@
 package org.opensearch.ml.engine.clustering;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.Model;
@@ -20,16 +21,20 @@ import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
+import org.tribuo.Prediction;
 import org.tribuo.clustering.ClusterID;
 import org.tribuo.clustering.ClusteringFactory;
 import org.tribuo.clustering.kmeans.KMeansModel;
 import org.tribuo.clustering.kmeans.KMeansTrainer;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class KMeans implements MLAlgo {
-    private int k = 5;
+    private int k = 2;
     private int iterations = 10;
     private KMeansTrainer.Distance distanceType = KMeansTrainer.Distance.EUCLIDEAN;
     private int numThreads = Runtime.getRuntime().availableProcessors() + 1; //Assume cpu-bound.
@@ -67,14 +72,28 @@ public class KMeans implements MLAlgo {
     }
 
     @Override
-    public DataFrame predict(DataFrame dataFrame, String model) {
-        //TODO
-        throw new RuntimeException("Unsupported predict");
+    public DataFrame predict(DataFrame dataFrame, Model model) throws IOException, ClassNotFoundException {
+        if (model == null) {
+            throw new RuntimeException("No model found for KMeans prediction.");
+        }
+
+        List<Prediction<ClusterID>> predictions;
+        MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
+                "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
+        KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
+
+        predictions = kMeansModel.predict(predictionDataset);
+
+        List<Map<String, Object>> listClusterID = new ArrayList<>();
+        predictions.forEach(e -> listClusterID.add(Collections.singletonMap("Cluster ID", e.getOutput().getID())));
+
+        return DataFrameBuilder.load(listClusterID);
     }
 
     @Override
     public Model train(DataFrame dataFrame) throws IOException {
-        MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(), "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
+        MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
+                "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
         KMeansTrainer trainer = new KMeansTrainer(k, iterations, distanceType, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();
