@@ -62,9 +62,46 @@ The e2e workflow will be:
 * Kibana can use the forecasting result to build a dashboard for customers.
 
 
+## How to use it for new feature development ##
+
+As mentioned above, new interfaces will be provided to other plugins including both prediction and training. In the opensearch, transport action is the communication mechanism between plugins. Here are the transport action for prediction and training interfaces.
+
+* Predict Transport Action for prediction job request 
+```
+    Request: {
+        "algorithm": "ARIMA",  //the name of algorithm
+        "parameters": {"forecasts_en":10, "seasonal"=true}, // parameters of the algorithm, can be null or empty
+        "modelId":null, //the id for trainded model. can be null
+        "inputData": [[1.0, 2, 3.1, true, "v1"],[1.1, 4, 5.2, false, "v2"]] // internal data frame interface
+    }
+    
+    Response: {
+        "taskId": "123", //the id of the job request
+        "status": "SUCCESS", // the job execution status
+        "predictionResult": [[6.0],[7.0]] // internal data frame interface
+    }
+    
+   ```     
+* Training Transport Action to start training job request - Async Interface
+``` 
+    Request: {
+     "algorithm": "ARIMA", //the name of algorithm
+     "parameters": {"forecasts_en":10, "seasonal"=true}, // parameters of the algorithm, can be null or empty
+     "inputData": [[1.0, 2, 3.1, true, "v1"],[1.1, 4, 5.2, false, "v2"]] // internal data frame interface
+    }
+    
+    
+    Response: {
+     "taskId": "123", //the id of the job request
+     "status": "IN_PROGRESS" // the job execution status
+    }
+```
+A common client library will be also built for easy use. You can find more details in the github repo:https://github.com/opensearch-project/machine-learning/blob/develop/client/src/main/java/org/opensearch/ml/client/MachineLearningClient.java
+
+
 ## Request for Comments: ##
 
-We would like comments and feedback on the proposal for building Machine Learning Framework [here](https://github.com/opendistro-for-elasticsearch/machine-learning/issues/xxx). Some specific questions we’re seeking feedback include
+We would like comments and feedback on the proposal for building Machine Learning Framework [here](https://github.com/opensearch-project/machine-learning/issues/20). Some specific questions we’re seeking feedback include
 
 * What are the machine learning end user features you are interested in or have built yourselves based on opensearch?
 * What are types of problems you are facing when using opensearch for machine learning use cases?
