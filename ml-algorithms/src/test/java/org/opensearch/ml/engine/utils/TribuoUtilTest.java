@@ -45,7 +45,7 @@ public class TribuoUtilTest {
 
     @Test
     public void generateDataset() {
-        MutableDataset<ClusterID> dataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(), "test", TribuoOutputType.CLUSTERID);
+        MutableDataset<ClusterID> dataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(), "test", TribuoOutputType.CLUSTERID, null);
         List<Example<ClusterID>> examples = dataset.getData();
         Assert.assertEquals(rawData.length, examples.size());
         for (int i=0; i<rawData.length; ++i){

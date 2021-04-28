@@ -70,7 +70,7 @@ public class KMeans implements MLAlgo {
             } else if (mlParameter.getName().equalsIgnoreCase("num_threads")) {
                 numThreads = (int) mlParameter.getValue();
             } else if (mlParameter.getName().equalsIgnoreCase("seed")) {
-                seed = (int) mlParameter.getValue();
+                seed = (long) mlParameter.getValue();
             }
         });
     }
@@ -83,7 +83,7 @@ public class KMeans implements MLAlgo {
 
         List<Prediction<ClusterID>> predictions;
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
-                "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
+                "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID, null);
         KMeansModel kMeansModel = null;
         try {
             kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
@@ -102,7 +102,7 @@ public class KMeans implements MLAlgo {
     @Override
     public Model train(DataFrame dataFrame) {
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
-                "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
+                "KMeans training data from opensearch", TribuoOutputType.CLUSTERID, null);
         KMeansTrainer trainer = new KMeansTrainer(k, iterations, distanceType, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();
