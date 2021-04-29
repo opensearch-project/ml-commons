@@ -13,7 +13,6 @@ import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import org.opensearch.ml.engine.Model;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -42,7 +41,7 @@ public class KMeansTest {
     }
 
     @Test
-    public void predict() throws IOException, ClassNotFoundException {
+    public void predict() {
         Model model = kMeans.train(trainDataFrame);
         DataFrame predictions = kMeans.predict(predictionDataFrame, model);
         Assert.assertEquals(predictionSize, predictions.size());
@@ -50,7 +49,7 @@ public class KMeansTest {
     }
 
     @Test
-    public void train() throws IOException {
+    public void train() {
         Model model = kMeans.train(trainDataFrame);
         Assert.assertEquals("KMeans", model.getName());
         Assert.assertEquals(1, model.getVersion());

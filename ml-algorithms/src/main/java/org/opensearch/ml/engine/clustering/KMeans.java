@@ -27,17 +27,21 @@ import org.tribuo.clustering.ClusteringFactory;
 import org.tribuo.clustering.kmeans.KMeansModel;
 import org.tribuo.clustering.kmeans.KMeansTrainer;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 public class KMeans implements MLAlgo {
+    //The number of clusters.
     private int k = 2;
+    //The number of iterations.
     private int iterations = 10;
+    //The distance function.
     private KMeansTrainer.Distance distanceType = KMeansTrainer.Distance.EUCLIDEAN;
+    //The number of threads.
     private int numThreads = Runtime.getRuntime().availableProcessors() + 1; //Assume cpu-bound.
+    //The random seed.
     private long seed = System.currentTimeMillis();
 
     KMeans(List<MLParameter> parameters) {
@@ -72,7 +76,7 @@ public class KMeans implements MLAlgo {
     }
 
     @Override
-    public DataFrame predict(DataFrame dataFrame, Model model) throws IOException, ClassNotFoundException {
+    public DataFrame predict(DataFrame dataFrame, Model model) {
         if (model == null) {
             throw new RuntimeException("No model found for KMeans prediction.");
         }
@@ -80,7 +84,12 @@ public class KMeans implements MLAlgo {
         List<Prediction<ClusterID>> predictions;
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
-        KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
+        KMeansModel kMeansModel = null;
+        try {
+            kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize model.", e.getCause());
+        }
 
         predictions = kMeansModel.predict(predictionDataset);
 
@@ -91,7 +100,7 @@ public class KMeans implements MLAlgo {
     }
 
     @Override
-    public Model train(DataFrame dataFrame) throws IOException {
+    public Model train(DataFrame dataFrame) {
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
         KMeansTrainer trainer = new KMeansTrainer(k, iterations, distanceType, numThreads, seed);
@@ -99,7 +108,11 @@ public class KMeans implements MLAlgo {
         Model model = new Model();
         model.setName("KMeans");
         model.setVersion(1);
-        model.setContent(ModelSerDeSer.serialize(kMeansModel));
+        try {
+            model.setContent(ModelSerDeSer.serialize(kMeansModel));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize model.", e.getCause());
+        }
 
         return model;
     }
