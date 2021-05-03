@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
 
-import lombok.Getter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
