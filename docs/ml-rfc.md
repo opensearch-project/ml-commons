@@ -103,7 +103,7 @@ A common client library will be also built for easy use. You can find more detai
 
 We would like comments and feedback on the proposal for building Machine Learning Framework [here](https://github.com/opensearch-project/machine-learning/issues/20). Some specific questions we’re seeking feedback include
 
-* What are some problems you would like to be able to use machine learning to solve? How would you expect to be able to use machine learning for solving those problems?
+* What problems would you like to be able to use machine learning to solve? How would you expect to be able to use machine learning for solving those problems?
 * What kind of new features would you like to add in this project?
 * What are the machine learning algorithms you are most interested in?
 
