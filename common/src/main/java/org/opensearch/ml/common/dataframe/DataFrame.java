@@ -49,4 +49,19 @@ public interface DataFrame extends Iterable<Row>, Writeable {
      * @return array of ColumnMeta
      */
     ColumnMeta[] columnMetas();
+
+    /**
+     * Build a new DataFrame by removing one column based on index
+     * @param columnIndex the index of column
+     * @return new DataFrame
+     */
+    DataFrame remove(int columnIndex);
+
+    /**
+     * Buld a new data frame given the input columns
+     * @param columns the indices of column
+     * @return new DataFrame
+     */
+    DataFrame select(int[] columns);
+
 }

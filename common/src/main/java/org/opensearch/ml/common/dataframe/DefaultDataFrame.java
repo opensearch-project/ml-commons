@@ -16,7 +16,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -103,6 +105,37 @@ public class DefaultDataFrame extends AbstractDataFrame{
     @Override
     public ColumnMeta[] columnMetas() {
         return Arrays.copyOf(columnMetas, columnMetas.length);
+    }
+
+    @Override
+    public DataFrame remove(int columnIndex) {
+        if(columnIndex < 0 || columnIndex >= columnMetas.length) {
+            throw new IllegalArgumentException("columnIndex can't be negative or bigger than columns length:" + columnMetas.length);
+        }
+        ColumnMeta[] newColumnMetas = new ColumnMeta[columnMetas.length - 1];
+        int index = 0;
+        for(int i = 0; i < columnMetas.length && i != columnIndex; i++) {
+            newColumnMetas[index++] = columnMetas[i];
+        }
+        return new DefaultDataFrame(newColumnMetas, rows.stream().map(row-> row.remove(columnIndex)).collect(Collectors.toList()));
+    }
+
+    @Override
+    public DataFrame select(int[] columns) {
+        if(columns == null || columns.length == 0) {
+            throw new IllegalArgumentException("columns can't be null or empty");
+        }
+        ColumnMeta[] newColumnMetas = new ColumnMeta[columns.length];
+        int index = 0;
+        for(int col : columns) {
+            if(col < 0 || col >= columnMetas.length) {
+                throw new IllegalArgumentException("columnIndex can't be negative or bigger than columns length");
+            }
+
+            newColumnMetas[index++] = columnMetas[col];
+        }
+
+        return new DefaultDataFrame(newColumnMetas, rows.stream().map(row-> row.select(columns)).collect(Collectors.toList()));
     }
 
     @Override
