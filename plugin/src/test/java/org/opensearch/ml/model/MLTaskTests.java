@@ -26,10 +26,11 @@ public class MLTaskTests {
         Instant now = Instant.now();
         MLTask task1 = MLTask.builder()
                 .taskId("dummy taskId")
-                .taskType(MLTaskType.PREDICTION.name())
+                .taskType(MLTaskType.PREDICTION)
                 .modelId(null)
                 .createTime(now)
-                .state(MLTaskState.RUNNING.name())
+                .state(MLTaskState.RUNNING)
+                .error(null)
                 .build();
         task1.writeTo(output);
         MLTask task2 = new MLTask(output.bytes().streamInput());

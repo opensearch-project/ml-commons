@@ -13,7 +13,9 @@
 package org.opensearch.ml.model;
 
 import lombok.Builder;
-import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
@@ -21,37 +23,54 @@ import org.opensearch.common.io.stream.Writeable;
 import java.io.IOException;
 import java.time.Instant;
 
-@Data
+@EqualsAndHashCode
 public class MLTask implements Writeable {
+    @Getter
     private final String taskId;
-    private final String taskType;
-    private String state;
+
+    @Getter
+    private final MLTaskType taskType;
+
+    @Setter
+    @Getter
+    private MLTaskState state;
+
+    @Getter
     private final Instant createTime;
+
+    @Getter
     private final String modelId;
 
+    @Setter
+    @Getter
+    private String error;
+
     @Builder
-    public MLTask(String taskId, String taskType, String state, Instant createTime, String modelId) {
+    public MLTask(String taskId, MLTaskType taskType, MLTaskState state, Instant createTime, String modelId, String error) {
         this.taskId = taskId;
         this.taskType = taskType;
         this.state = state;
         this.createTime = createTime;
         this.modelId = modelId;
+        this.error = error;
     }
 
     public MLTask(StreamInput input) throws IOException {
         this.taskId = input.readOptionalString();
-        this.taskType = input.readOptionalString();
-        this.state = input.readOptionalString();
+        this.taskType = input.readEnum(MLTaskType.class);
+        this.state = input.readEnum(MLTaskState.class);
         this.createTime = input.readOptionalInstant();
         this.modelId = input.readOptionalString();
+        this.error = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(taskId);
-        out.writeOptionalString(taskType);
-        out.writeOptionalString(state);
+        out.writeEnum(taskType);
+        out.writeEnum(state);
         out.writeOptionalInstant(createTime);
         out.writeOptionalString(modelId);
+        out.writeOptionalString(error);
     }
 }
