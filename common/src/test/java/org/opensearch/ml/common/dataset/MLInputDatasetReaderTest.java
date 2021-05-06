@@ -21,7 +21,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class MLInputDatasetReaderTest {
 
@@ -38,7 +38,7 @@ public class MLInputDatasetReaderTest {
         dataFrameInputDataset.writeTo(bytesStreamOutput);
         MLInputDataset inputDataset = mlInputDatasetReader.read(bytesStreamOutput.bytes().streamInput());
         assertEquals(MLInputDataType.DATA_FRAME, inputDataset.getInputDataType());
-        assertEquals(1, ((DataFrameInputDataset)inputDataset).getDataFrame().size());
+        assertEquals(1, ((DataFrameInputDataset) inputDataset).getDataFrame().size());
     }
 
     @Test
@@ -51,7 +51,7 @@ public class MLInputDatasetReaderTest {
         searchQueryInputDataset.writeTo(bytesStreamOutput);
         MLInputDataset inputDataset = mlInputDatasetReader.read(bytesStreamOutput.bytes().streamInput());
         assertEquals(MLInputDataType.SEARCH_QUERY, inputDataset.getInputDataType());
-        searchQueryInputDataset = (SearchQueryInputDataset)inputDataset;
+        searchQueryInputDataset = (SearchQueryInputDataset) inputDataset;
         assertEquals(Arrays.asList("index1"), searchQueryInputDataset.getIndices());
     }
 }
