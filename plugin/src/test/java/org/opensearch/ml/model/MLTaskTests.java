@@ -26,7 +26,7 @@ public class MLTaskTests {
         Instant now = Instant.now();
         MLTask task1 = MLTask.builder()
                 .taskId("dummy taskId")
-                .taskType(MLTaskType.INFERENCE.name())
+                .taskType(MLTaskType.PREDICTION.name())
                 .modelId(null)
                 .createTime(now)
                 .state(MLTaskState.RUNNING.name())
