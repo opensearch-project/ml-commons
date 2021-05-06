@@ -1,3 +1,15 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.engine.regression;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -5,6 +17,7 @@ import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
+import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
@@ -22,6 +35,7 @@ import org.tribuo.regression.sgd.objectives.AbsoluteLoss;
 import org.tribuo.regression.sgd.objectives.Huber;
 import org.tribuo.regression.sgd.objectives.SquaredLoss;
 
+import java.io.IOException;
 import java.util.List;
 
 public class LinearRegression implements MLAlgo {
@@ -82,7 +96,6 @@ public class LinearRegression implements MLAlgo {
                         momentumType = SGD.Momentum.NESTEROV;
                         break;
                     default:
-                        //No momentum by default.
                         break;
                 }
             } else if (mlParameter.getName().equalsIgnoreCase("momentum_factor")) {
@@ -141,7 +154,7 @@ public class LinearRegression implements MLAlgo {
 
     @Override
     public Model train(DataFrame dataFrame) {
-        MutableDataset<Regressor> trainDataset = TribuoUtil.generateDataset(dataFrame, new RegressionFactory(),
+        MutableDataset<Regressor> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(),
                 "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, target);
         LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, interval, miniBatchSize, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
@@ -150,8 +163,8 @@ public class LinearRegression implements MLAlgo {
         model.setVersion(1);
         try {
             model.setContent(ModelSerDeSer.serialize(regressionModel));
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to serialize model.", e.getCause());
+        } catch (IOException e) {
+            throw new ModelSerDeSerException("Failed to serialize model.", e.getCause());
         }
 
         return model;

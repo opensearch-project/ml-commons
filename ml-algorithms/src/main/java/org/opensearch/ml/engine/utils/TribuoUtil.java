@@ -51,37 +51,69 @@ public class TribuoUtil {
         return new Tuple(featureNames, featureValues);
     }
 
-    public static <T extends Output<T>> MutableDataset<T> generateDataset(DataFrame dataFrame, OutputFactory<T> outputFactory, String desc, TribuoOutputType outputType, String target) {
+    /**
+     * Generate tribuo dataset from data frame.
+     * @param dataFrame features data
+     * @param outputFactory the tribuo output factory
+     * @param desc description for tribuo provenance
+     * @param outputType the tribuo output type
+     * @return tribuo dataset
+     */
+    public static <T extends Output<T>> MutableDataset<T> generateDataset(DataFrame dataFrame, OutputFactory<T> outputFactory, String desc, TribuoOutputType outputType) {
         List<Example<T>> dataset = new ArrayList<>();
         Tuple<String[], double[][]> featureNamesValues = transformDataFrame(dataFrame);
-
-        int targetIndex = -1;
-        if (StringUtils.isNoneEmpty(target)) {
-            for (int i = 0; i < featureNamesValues.v1().length; ++i) {
-                if (featureNamesValues.v1()[i].equals(target)) {
-                    targetIndex = i;
-                    break;
-                }
-            }
-        }
-
         ArrayExample<T> example;
-        final int finalTargetIndex = targetIndex;
-        String[] featureNames = new String[0];
-        if (outputType.equals(TribuoOutputType.REGRESSOR)) {
-            if (finalTargetIndex == -1) {
-                throw new RuntimeException("Unknown target when generating dataset from data frame for regression.");
-            }
-            featureNames = IntStream.range(0, featureNamesValues.v1().length).
-                    filter(e -> e != finalTargetIndex).
-                    mapToObj(e -> featureNamesValues.v1()[e]).
-                    toArray(String[]::new);
-        }
         for (int i=0; i<dataFrame.size(); ++i) {
             switch (outputType) {
                 case CLUSTERID:
                     example = new ArrayExample<T>((T) new ClusterID(ClusterID.UNASSIGNED), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
+                default:
+                    throw new IllegalArgumentException("unknown type:" + outputType);
+            }
+            dataset.add(example);
+        }
+        SimpleDataSourceProvenance provenance = new SimpleDataSourceProvenance(desc, outputFactory);
+        return new MutableDataset<>(new ListDataSource<>(dataset, outputFactory, provenance));
+    }
+
+    /**
+     * Generate tribuo dataset from data frame with target.
+     * @param dataFrame features data
+     * @param outputFactory the tribuo output factory
+     * @param desc description for tribuo provenance
+     * @param outputType the tribuo output type
+     * @param target target name
+     * @return tribuo dataset
+     */
+    public static <T extends Output<T>> MutableDataset<T> generateDatasetWithTarget(DataFrame dataFrame, OutputFactory<T> outputFactory, String desc, TribuoOutputType outputType, String target) {
+        if (StringUtils.isEmpty(target)) {
+            throw new IllegalArgumentException("Empty target when generating dataset from data frame.");
+        }
+
+        List<Example<T>> dataset = new ArrayList<>();
+        Tuple<String[], double[][]> featureNamesValues = transformDataFrame(dataFrame);
+
+        int targetIndex = -1;
+        for (int i = 0; i < featureNamesValues.v1().length; ++i) {
+            if (featureNamesValues.v1()[i].equals(target)) {
+                targetIndex = i;
+                break;
+            }
+        }
+        if (targetIndex == -1) {
+            throw new IllegalArgumentException("No matched target when generating dataset from data frame.");
+        }
+
+        ArrayExample<T> example;
+        final int finalTargetIndex = targetIndex;
+        String[] featureNames = IntStream.range(0, featureNamesValues.v1().length).
+                filter(e -> e != finalTargetIndex).
+                mapToObj(e -> featureNamesValues.v1()[e]).
+                toArray(String[]::new);
+
+        for (int i=0; i<dataFrame.size(); ++i) {
+            switch (outputType) {
                 case REGRESSOR:
                     final int finalI = i;
                     double targetValue = featureNamesValues.v2()[finalI][finalTargetIndex];

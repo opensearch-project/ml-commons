@@ -83,7 +83,7 @@ public class KMeans implements MLAlgo {
 
         List<Prediction<ClusterID>> predictions;
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
-                "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID, null);
+                "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
         KMeansModel kMeansModel = null;
         try {
             kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
@@ -102,7 +102,7 @@ public class KMeans implements MLAlgo {
     @Override
     public Model train(DataFrame dataFrame) {
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
-                "KMeans training data from opensearch", TribuoOutputType.CLUSTERID, null);
+                "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
         KMeansTrainer trainer = new KMeansTrainer(k, iterations, distanceType, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();

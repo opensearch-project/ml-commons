@@ -51,7 +51,16 @@ public class LinearRegressionTest {
     @Test
     public void trainExceptionWithoutTarget() {
         exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("Unknown target when generating dataset from data frame for regression.");
+        exceptionRule.expectMessage("Empty target when generating dataset from data frame.");
+        LinearRegression regression = new LinearRegression(parameters);
+        Model model = regression.train(trainDataFrame);
+    }
+
+    @Test
+    public void trainExceptionUnmatchedTarget() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("No matched target when generating dataset from data frame.");
+        parameters.add(MLParameterBuilder.parameter("target", "not found"));
         LinearRegression regression = new LinearRegression(parameters);
         Model model = regression.train(trainDataFrame);
     }
