@@ -14,5 +14,5 @@ package org.opensearch.ml.model;
 
 public enum MLTaskType {
     TRAINING,
-    INFERENCE
+    PREDICTION
 }
