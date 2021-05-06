@@ -23,26 +23,16 @@ import org.opensearch.common.io.stream.Writeable;
 import java.io.IOException;
 import java.time.Instant;
 
+@Getter
 @EqualsAndHashCode
 public class MLTask implements Writeable {
-    @Getter
     private final String taskId;
-
-    @Getter
     private final MLTaskType taskType;
-
     @Setter
-    @Getter
     private MLTaskState state;
-
-    @Getter
     private final Instant createTime;
-
-    @Getter
     private final String modelId;
-
     @Setter
-    @Getter
     private String error;
 
     @Builder
