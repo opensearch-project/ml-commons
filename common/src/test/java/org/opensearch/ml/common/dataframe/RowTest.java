@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class RowTest {
@@ -75,5 +76,25 @@ public class RowTest {
         row.writeTo(bytesStreamOutput);
         row = new Row(bytesStreamOutput.bytes().streamInput());
         assertEquals(1, row.size());
+    }
+
+    @Test
+    public void remove() {
+        row = new Row(2);
+        row.setValue(0, ColumnValueBuilder.build(0));
+        row.setValue(1, ColumnValueBuilder.build(false));
+        row = row.remove(1);
+        assertEquals(1, row.size());
+        assertEquals(0, row.getValue(0).intValue());
+    }
+
+    @Test
+    public void select() {
+        row = new Row(2);
+        row.setValue(0, ColumnValueBuilder.build(0));
+        row.setValue(1, ColumnValueBuilder.build(false));
+        row = row.select(new int[]{1});
+        assertEquals(1, row.size());
+        assertFalse(row.getValue(0).booleanValue());
     }
 }

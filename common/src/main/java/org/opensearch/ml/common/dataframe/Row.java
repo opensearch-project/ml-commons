@@ -34,6 +34,10 @@ public class Row implements Iterable<ColumnValue>, Writeable {
         Arrays.fill(this.values, new NullValue());
     }
 
+    private Row(ColumnValue[] values) {
+        this.values = values;
+    }
+
     Row(StreamInput input) throws IOException {
         this.values = input.readArray(new ColumnValueReader(), ColumnValue[]::new);
     }
@@ -64,5 +68,25 @@ public class Row implements Iterable<ColumnValue>, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeArray(values);
+    }
+
+    Row remove(int removedIndex) {
+        ColumnValue[] newValues = new ColumnValue[values.length - 1];
+        int index = 0;
+        for (int i = 0; i < values.length && i != removedIndex; i++) {
+            newValues[index++] = values[i];
+        }
+
+        return new Row(newValues);
+    }
+
+    Row select(int[] columns) {
+        ColumnValue[] newValues = new ColumnValue[columns.length];
+        int index = 0;
+        for(int col: columns) {
+            newValues[index++] = values[col];
+        }
+
+        return new Row(newValues);
     }
 }
