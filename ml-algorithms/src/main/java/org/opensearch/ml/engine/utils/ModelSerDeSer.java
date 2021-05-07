@@ -13,6 +13,7 @@
 package org.opensearch.ml.engine.utils;
 
 import lombok.experimental.UtilityClass;
+import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -22,24 +23,34 @@ import java.io.ObjectOutputStream;
 
 @UtilityClass
 public class ModelSerDeSer {
-    public static byte[] serialize(Object model) throws IOException {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
-        objectOutputStream.writeObject(model);
-        objectOutputStream.flush();
-        byte[] res = byteArrayOutputStream.toByteArray();
-        objectOutputStream.close();
-        byteArrayOutputStream.close();
+    public static byte[] serialize(Object model) {
+        byte[] res = new byte[0];
+        try {
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
+            objectOutputStream.writeObject(model);
+            objectOutputStream.flush();
+            res = byteArrayOutputStream.toByteArray();
+            objectOutputStream.close();
+            byteArrayOutputStream.close();
+        } catch (IOException e) {
+            throw new ModelSerDeSerException("Failed to serialize model.", e.getCause());
+        }
 
         return res;
     }
 
-    public static Object deserialize(byte[] modelBin) throws IOException, ClassNotFoundException {
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
-        ObjectInputStream objectInputStream = new ObjectInputStream(inputStream);
-        Object res = objectInputStream.readObject();
-        objectInputStream.close();
-        inputStream.close();
+    public static Object deserialize(byte[] modelBin) {
+        Object res;
+        try {
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
+            ObjectInputStream objectInputStream = new ObjectInputStream(inputStream);
+            res = objectInputStream.readObject();
+            objectInputStream.close();
+            inputStream.close();
+        } catch (IOException | ClassNotFoundException e) {
+            throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
+        }
 
         return res;
     }

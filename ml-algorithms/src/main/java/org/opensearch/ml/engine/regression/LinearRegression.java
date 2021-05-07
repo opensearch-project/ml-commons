@@ -35,7 +35,6 @@ import org.tribuo.regression.sgd.objectives.AbsoluteLoss;
 import org.tribuo.regression.sgd.objectives.Huber;
 import org.tribuo.regression.sgd.objectives.SquaredLoss;
 
-import java.io.IOException;
 import java.util.List;
 
 public class LinearRegression implements MLAlgo {
@@ -144,6 +143,42 @@ public class LinearRegression implements MLAlgo {
                 //Use default SGD with a constant learning rate.
                 break;
         }
+
+        validateParameters();
+    }
+
+    private void validateParameters() {
+        if (learningRate < 0) {
+            throw new IllegalArgumentException("Learning rate should not be negative.");
+        }
+
+        if (momentumFactor < 0) {
+            throw new IllegalArgumentException("MomentumFactor should not be negative.");
+        }
+
+        if (epsilon < 0) {
+            throw new IllegalArgumentException("Epsilon should not be negative.");
+        }
+
+        if (beta1 <= 0 || beta1 >= 1) {
+            throw new IllegalArgumentException("Beta1 should be in an open interval (0,1).");
+        }
+
+        if (beta2 <= 0 || beta2 >= 1) {
+            throw new IllegalArgumentException("Beta2 should be in an open interval (0,1).");
+        }
+
+        if (decayRate < 0) {
+            throw new IllegalArgumentException("DecayRate should not be negative.");
+        }
+
+        if (epochs < 0) {
+            throw new IllegalArgumentException("Epochs should not be negative.");
+        }
+
+        if (miniBatchSize < 0) {
+            throw new IllegalArgumentException("MiniBatchSize should not be negative.");
+        }
     }
 
     @Override
@@ -161,11 +196,7 @@ public class LinearRegression implements MLAlgo {
         Model model = new Model();
         model.setName("LinearRegression");
         model.setVersion(1);
-        try {
-            model.setContent(ModelSerDeSer.serialize(regressionModel));
-        } catch (IOException e) {
-            throw new ModelSerDeSerException("Failed to serialize model.", e.getCause());
-        }
+        model.setContent(ModelSerDeSer.serialize(regressionModel));
 
         return model;
     }

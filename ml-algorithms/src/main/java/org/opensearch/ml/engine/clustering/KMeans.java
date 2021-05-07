@@ -73,6 +73,22 @@ public class KMeans implements MLAlgo {
                 seed = (long) mlParameter.getValue();
             }
         });
+
+        validateParameters();
+    }
+
+    private void validateParameters() {
+        if (k <= 0) {
+            throw new IllegalArgumentException("K should be positive.");
+        }
+
+        if (iterations <= 0) {
+            throw new IllegalArgumentException("Iterations should be positive.");
+        }
+
+        if (numThreads <= 0) {
+            throw new IllegalArgumentException("NumThreads should be positive.");
+        }
     }
 
     @Override
