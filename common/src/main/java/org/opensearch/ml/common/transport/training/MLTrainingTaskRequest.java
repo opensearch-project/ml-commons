@@ -26,8 +26,8 @@ import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDatasetReader;
 import org.opensearch.ml.common.parameter.MLParameter;
 
 import lombok.AccessLevel;
@@ -57,7 +57,7 @@ public class MLTrainingTaskRequest extends ActionRequest {
      * input data set
      */
     @ToString.Exclude
-    DataFrame dataFrame;
+    MLInputDataset inputDataset;
 
     /**
      * version id, in case there is future schema change. This can be used to detect which version the client is using.
@@ -65,10 +65,10 @@ public class MLTrainingTaskRequest extends ActionRequest {
     int version;
 
     @Builder
-    public MLTrainingTaskRequest(String algorithm, List<MLParameter> parameters, DataFrame dataFrame) {
+    public MLTrainingTaskRequest(String algorithm, List<MLParameter> parameters, MLInputDataset inputDataset) {
         this.algorithm = algorithm;
         this.parameters = parameters;
-        this.dataFrame = dataFrame;
+        this.inputDataset = inputDataset;
         this.version = 1;
     }
 
@@ -78,7 +78,7 @@ public class MLTrainingTaskRequest extends ActionRequest {
         this.algorithm = in.readString();
 
         this.parameters = in.readList(MLParameter::new);
-        this.dataFrame = DataFrameBuilder.load(in);
+        this.inputDataset = new MLInputDatasetReader().read(in);
     }
 
     @Override
@@ -87,8 +87,8 @@ public class MLTrainingTaskRequest extends ActionRequest {
         if(Strings.isNullOrEmpty(this.algorithm)) {
             exception = addValidationError("algorithm name can't be null or empty", exception);
         }
-        if(Objects.isNull(this.dataFrame) || this.dataFrame.size() < 1) {
-            exception = addValidationError("input data can't be null or empty", exception);
+        if(Objects.isNull(this.inputDataset)) {
+            exception = addValidationError("input data can't be null", exception);
         }
 
         return exception;
@@ -101,7 +101,7 @@ public class MLTrainingTaskRequest extends ActionRequest {
         out.writeString(this.algorithm);
 
         out.writeList(this.parameters);
-        this.dataFrame.writeTo(out);
+        this.inputDataset.writeTo(out);
     }
 
     public static MLTrainingTaskRequest fromActionRequest(ActionRequest actionRequest) {

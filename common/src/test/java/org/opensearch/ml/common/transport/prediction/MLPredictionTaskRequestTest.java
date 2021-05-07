@@ -17,15 +17,13 @@ import java.io.UncheckedIOException;
 import java.util.Collections;
 import java.util.HashMap;
 
-import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
 
 import static org.junit.Assert.assertEquals;
@@ -37,16 +35,19 @@ public class MLPredictionTaskRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
+
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm("algo")
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .algorithm("algo")
+            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .inputDataset(DataFrameInputDataset.builder()
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
-                .build();
+                .build())
+            .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
-        assertEquals(40, bytesStreamOutput.size());
+        assertEquals(41, bytesStreamOutput.size());
         request = new MLPredictionTaskRequest(bytesStreamOutput.bytes().streamInput());
         assertEquals("algo", request.getAlgorithm());
         assertEquals(1, request.getParameters().size());
@@ -56,12 +57,14 @@ public class MLPredictionTaskRequestTest {
     @Test
     public void validate_Success() {
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm("algo")
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .algorithm("algo")
+            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .inputDataset(DataFrameInputDataset.builder()
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
-                .build();
+                .build())
+            .build();
 
         assertNull(request.validate());
     }
@@ -69,70 +72,59 @@ public class MLPredictionTaskRequestTest {
     @Test
     public void validate_Exception_NullAlgorithmName() {
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm(null)
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .algorithm(null)
+            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .inputDataset(DataFrameInputDataset.builder()
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
-                .build();
+                .build())
+            .build();
 
         ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: algorithm name can't be null or empty;", exception.getMessage());
     }
 
     @Test
-    public void validate_Exception_EmptyDataFrame() {
-        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm("algo")
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-                .dataFrame(DataFrameBuilder.emptyDataFrame(new ColumnMeta[]{
-                        ColumnMeta.builder()
-                                .name("name")
-                                .columnType(ColumnType.DOUBLE)
-                                .build()
-                }))
-                .build();
-
-        ActionRequestValidationException exception = request.validate();
-
-        assertEquals("Validation Failed: 1: input data can't be null or empty;", exception.getMessage());
-    }
-
-    @Test
     public void validate_Exception_NullDataFrame() {
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm("algo")
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-                .dataFrame(null)
-                .build();
+            .algorithm("algo")
+            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .inputDataset(null)
+            .build();
 
         ActionRequestValidationException exception = request.validate();
 
-        assertEquals("Validation Failed: 1: input data can't be null or empty;", exception.getMessage());
+        assertEquals("Validation Failed: 1: input data can't be null;", exception.getMessage());
     }
 
 
     @Test
     public void fromActionRequest_Success_WithMLPredictionTaskRequest() {
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm("algo")
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .algorithm("algo")
+            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .inputDataset(DataFrameInputDataset.builder()
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
-                .build();
+                .build())
+
+            .build();
         assertSame(MLPredictionTaskRequest.fromActionRequest(request), request);
     }
 
     @Test
     public void fromActionRequest_Success_WithNonMLPredictionTaskRequest() {
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .algorithm("algo")
-                .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .algorithm("algo")
+            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
+            .inputDataset(DataFrameInputDataset.builder()
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
-                .build();
+                .build())
+            .build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -147,7 +139,7 @@ public class MLPredictionTaskRequestTest {
         MLPredictionTaskRequest result = MLPredictionTaskRequest.fromActionRequest(actionRequest);
         assertNotSame(result, request);
         assertEquals(request.getAlgorithm(), result.getAlgorithm());
-        assertEquals(request.getDataFrame().size(), result.getDataFrame().size());
+        assertEquals(request.getInputDataset().getInputDataType(), result.getInputDataset().getInputDataType());
     }
 
     @Test(expected = UncheckedIOException.class)
