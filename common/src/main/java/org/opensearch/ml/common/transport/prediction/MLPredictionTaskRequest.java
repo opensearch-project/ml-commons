@@ -26,8 +26,8 @@ import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDatasetReader;
 import org.opensearch.ml.common.parameter.MLParameter;
 
 import lombok.AccessLevel;
@@ -57,7 +57,7 @@ public class MLPredictionTaskRequest extends ActionRequest {
      * input data set
      */
     @ToString.Exclude
-    DataFrame dataFrame;
+    MLInputDataset inputDataset;
 
     /**
      * Trained model id
@@ -71,11 +71,11 @@ public class MLPredictionTaskRequest extends ActionRequest {
 
     @Builder
     public MLPredictionTaskRequest(String algorithm, List<MLParameter> parameters,
-                                   String modelId, DataFrame dataFrame) {
+                                   String modelId, MLInputDataset inputDataset) {
         this.algorithm = algorithm;
         this.parameters = parameters;
         this.modelId = modelId;
-        this.dataFrame = dataFrame;
+        this.inputDataset = inputDataset;
         this.version = 1;
     }
 
@@ -85,7 +85,7 @@ public class MLPredictionTaskRequest extends ActionRequest {
         this.algorithm = in.readString();
         this.parameters = in.readList(MLParameter::new);
         this.modelId = in.readOptionalString();
-        this.dataFrame = DataFrameBuilder.load(in);
+        this.inputDataset = new MLInputDatasetReader().read(in);
     }
 
     @Override
@@ -95,7 +95,7 @@ public class MLPredictionTaskRequest extends ActionRequest {
         out.writeString(this.algorithm);
         out.writeList(this.parameters);
         out.writeOptionalString(this.modelId);
-        this.dataFrame.writeTo(out);
+        this.inputDataset.writeTo(out);
     }
 
     @Override
@@ -104,8 +104,8 @@ public class MLPredictionTaskRequest extends ActionRequest {
         if(Strings.isNullOrEmpty(this.algorithm)) {
             exception = addValidationError("algorithm name can't be null or empty", exception);
         }
-        if(Objects.isNull(this.dataFrame) || this.dataFrame.size() < 1) {
-            exception = addValidationError("input data can't be null or empty", exception);
+        if(Objects.isNull(this.inputDataset)) {
+            exception = addValidationError("input data can't be null", exception);
         }
 
         return exception;

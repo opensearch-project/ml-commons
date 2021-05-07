@@ -20,6 +20,7 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
 import org.opensearch.ml.common.dataframe.DataFrame;
 
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -38,20 +39,20 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     NodeClient client;
 
     @Override
-    public void predict(String algorithm, List<MLParameter> parameters, DataFrame inputData, String modelId,
+    public void predict(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, String modelId,
                         ActionListener<DataFrame> listener) {
         if(Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("algorithm name can't be null or empty");
         }
-        if(Objects.isNull(inputData) || inputData.size() <= 0) {
-            throw new IllegalArgumentException("input data frame can't be null or empty");
+        if(Objects.isNull(inputData)) {
+            throw new IllegalArgumentException("input data set can't be null");
         }
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder()
             .algorithm(algorithm)
             .modelId(modelId)
             .parameters(parameters)
-            .dataFrame(inputData)
+            .inputDataset(inputData)
             .build();
 
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
@@ -64,17 +65,17 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void train(String algorithm, List<MLParameter> parameters, DataFrame inputData, ActionListener<String> listener) {
+    public void train(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, ActionListener<String> listener) {
         if(Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("algorithm name can't be null or empty");
         }
-        if(Objects.isNull(inputData) || inputData.size() <= 0) {
-            throw new IllegalArgumentException("input data frame can't be null or empty");
+        if(Objects.isNull(inputData)) {
+            throw new IllegalArgumentException("input data set can't be null");
         }
 
         MLTrainingTaskRequest trainingTaskRequest = MLTrainingTaskRequest.builder()
                 .algorithm(algorithm)
-                .dataFrame(inputData)
+                .inputDataset(inputData)
                 .parameters(parameters)
                 .build();
 

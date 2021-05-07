@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.parameter.MLParameter;
 
 import static org.junit.Assert.assertEquals;
@@ -49,13 +50,13 @@ public class MachineLearningClientTest {
 
         machineLearningClient = new MachineLearningClient() {
             @Override
-            public void predict(String algorithm, List<MLParameter> parameters, DataFrame inputData, String modelId,
+            public void predict(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, String modelId,
                                 ActionListener<DataFrame> listener) {
                 listener.onResponse(output);
             }
 
             @Override
-            public void train(String algorithm, List<MLParameter> parameters, DataFrame inputData,
+            public void train(String algorithm, List<MLParameter> parameters, MLInputDataset inputData,
                               ActionListener<String> listener) {
                 listener.onResponse("taskId");
             }
