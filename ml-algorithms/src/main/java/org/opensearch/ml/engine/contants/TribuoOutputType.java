@@ -13,5 +13,8 @@
 package org.opensearch.ml.engine.contants;
 
 public enum TribuoOutputType {
-    CLUSTERID;
+    //for tribuo clustering
+    CLUSTERID,
+    //for tribuo regression
+    REGRESSOR;
 }
