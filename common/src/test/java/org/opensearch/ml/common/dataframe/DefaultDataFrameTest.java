@@ -160,4 +160,39 @@ public class DefaultDataFrameTest {
         ColumnMeta[] metas = defaultDataFrame.columnMetas();
         assertEquals(4, metas.length);
     }
+
+    @Test
+    public void remove_Exception_InputColumnIndexBiggerThanColumensLength(){
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:4");
+        defaultDataFrame.remove(4);
+    }
+
+    @Test
+    public void remove_Success(){
+        DataFrame dataFrame = defaultDataFrame.remove(3);
+        assertEquals(3, dataFrame.columnMetas().length);
+        assertEquals(3, dataFrame.getRow(0).size());
+    }
+
+    @Test
+    public void select_Success(){
+        DataFrame dataFrame = defaultDataFrame.select(new int[]{1, 3});
+        assertEquals(2, dataFrame.columnMetas().length);
+        assertEquals(2, dataFrame.getRow(0).size());
+    }
+
+    @Test
+    public void select_Exception_EmptyInputColumns(){
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("columns can't be null or empty");
+        defaultDataFrame.select(new int[0]);
+    }
+
+    @Test
+    public void select_Exception_InvalidColumn(){
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length");
+        defaultDataFrame.select(new int[]{5});
+    }
 }
