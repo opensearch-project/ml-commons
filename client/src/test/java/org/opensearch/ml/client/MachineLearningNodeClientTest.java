@@ -22,6 +22,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
@@ -44,7 +45,7 @@ public class MachineLearningNodeClientTest {
     NodeClient client;
 
     @Mock
-    DataFrame input;
+    MLInputDataset input;
 
     @Mock
     DataFrame output;
@@ -64,7 +65,6 @@ public class MachineLearningNodeClientTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        when(input.size()).thenReturn(1);
     }
 
     @Test
@@ -96,18 +96,10 @@ public class MachineLearningNodeClientTest {
     }
 
     @Test
-    public void predict_Exception_WithEmptyDataFrame() {
+    public void predict_Exception_WithNullDataSet() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input data frame can't be null or empty");
-        when(input.size()).thenReturn(0);
-        machineLearningNodeClient.predict("algo", null, input, null, dataFrameActionListener);
-    }
-
-    @Test
-    public void predict_Exception_WithNullDataFrame() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input data frame can't be null or empty");
-        machineLearningNodeClient.predict("algo", null, null, null, dataFrameActionListener);
+        exceptionRule.expectMessage("input data set can't be null");
+        machineLearningNodeClient.predict("algo", null, (MLInputDataset) null, null, dataFrameActionListener);
     }
 
     @Test
@@ -139,17 +131,9 @@ public class MachineLearningNodeClientTest {
     }
 
     @Test
-    public void train_Exception_WithEmptyDataFrame() {
+    public void train_Exception_WithNullDataSet() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input data frame can't be null or empty");
-        when(input.size()).thenReturn(0);
-        machineLearningNodeClient.train("algo", null, input, trainingActionListener);
-    }
-
-    @Test
-    public void train_Exception_WithNullDataFrame() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("input data frame can't be null or empty");
-        machineLearningNodeClient.train("algo", null, null, trainingActionListener);
+        exceptionRule.expectMessage("input data set can't be null");
+        machineLearningNodeClient.train("algo", null, (MLInputDataset)null, trainingActionListener);
     }
 }
