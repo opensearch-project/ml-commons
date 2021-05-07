@@ -58,7 +58,7 @@ public interface DataFrame extends Iterable<Row>, Writeable {
     DataFrame remove(int columnIndex);
 
     /**
-     * Buld a new data frame given the input columns
+     * Build a new DataFrame given the input columns
      * @param columns the indices of column
      * @return new DataFrame
      */
