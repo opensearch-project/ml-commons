@@ -29,7 +29,7 @@ public class KMeansTest {
 
     @Before
     public void setUp() {
-        parameters.add(MLParameterBuilder.parameter("seed", 1));
+        parameters.add(MLParameterBuilder.parameter("seed", 1L));
         parameters.add(MLParameterBuilder.parameter("num_threads", 1));
         parameters.add(MLParameterBuilder.parameter("distance_type", 0));
         parameters.add(MLParameterBuilder.parameter("iterations", 10));
