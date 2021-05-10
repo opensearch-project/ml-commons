@@ -40,7 +40,7 @@ apply plugin: "com.dorongold.task-tree"
 
 allprojects {
     group = 'org.opensearch.ml'
-    version = "${opendistroVersion}.0"
+    version = "${opensearchBaseVersion}.0"
 
     apply from: "$rootDir/build-tools/repositories.gradle"
 
