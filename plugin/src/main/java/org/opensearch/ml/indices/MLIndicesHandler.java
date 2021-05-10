@@ -49,8 +49,6 @@ public class MLIndicesHandler {
 
     private void initMLIndexIfAbsent(String indexName, String mapping) {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
-            val request = new CreateIndexRequest(indexName)
-                    .mapping("_doc", mapping, XContentType.JSON);
             client.admin().indices().prepareCreate(indexName).addMapping("_doc", mapping, XContentType.JSON).get();
             log.info("create index:{}", indexName);
         } else {
