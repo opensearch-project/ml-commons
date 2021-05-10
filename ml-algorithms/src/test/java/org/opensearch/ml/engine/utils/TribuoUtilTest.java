@@ -2,7 +2,9 @@ package org.opensearch.ml.engine.utils;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
@@ -15,12 +17,17 @@ import org.tribuo.MutableDataset;
 import org.tribuo.clustering.ClusterID;
 import org.tribuo.clustering.ClusteringFactory;
 import org.tribuo.impl.ArrayExample;
+import org.tribuo.regression.RegressionFactory;
+import org.tribuo.regression.Regressor;
 
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
 public class TribuoUtilTest {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
     private DataFrame dataFrame;
     private Double[][] rawData = {
         {0.1, 0.2},
@@ -59,6 +66,38 @@ public class TribuoUtilTest {
                 ++idx;
             }
         }
+    }
+
+    @Test
+    public void generateDatasetWithTarget() {
+        MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f2");
+        List<Example<Regressor>> examples = dataset.getData();
+        Assert.assertEquals(rawData.length, examples.size());
+        for (int i=0; i<rawData.length; ++i){
+            ArrayExample arrayExample = (ArrayExample) examples.get(i);
+            Iterator<Feature> iterator = arrayExample.iterator();
+            int idx = 1;
+            while (iterator.hasNext()) {
+                Feature feature = iterator.next();
+                Assert.assertEquals("f"+idx, feature.getName());
+                Assert.assertEquals(i+idx/10.0, feature.getValue(), 0.01);
+                ++idx;
+            }
+        }
+    }
+
+    @Test
+    public void generateDatasetWithEmptyTarget() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Empty target when generating dataset from data frame.");
+        MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, null);
+    }
+
+    @Test
+    public void generateDatasetWithUnmatchedTarget() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("No matched target when generating dataset from data frame.");
+        MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f0");
     }
 
     private void constructDataFrame() {

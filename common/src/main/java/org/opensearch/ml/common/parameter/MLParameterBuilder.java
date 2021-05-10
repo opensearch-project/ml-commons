@@ -51,4 +51,8 @@ public class MLParameterBuilder {
     public MLParameter parameter(String name, boolean[] value) {
         return new MLParameter(name, value);
     }
+
+    public MLParameter parameter(String name, long value) {
+        return new MLParameter(name, (Long) value);
+    }
 }
