@@ -14,23 +14,17 @@ buildscript {
     ext {
         ext {
             opensearch_group = "org.opensearch"
-            opensearch_version = '7.10.3'
+            opensearch_version = "1.0.0-beta1"
         }
     }
 
     repositories {
+        mavenLocal()
         mavenCentral()
-        maven {
-            url = 's3://search-vemsarat/'
-            credentials(AwsCredentials) {
-                accessKey = System.env.AWS_ACCESS_KEY_ID ?: findProperty('aws_access_key_id')
-                secretKey = System.env.AWS_SECRET_ACCESS_KEY ?: findProperty('aws_secret_access_key')
-            }
-        }
     }
 
     dependencies {
-        classpath "${opensearch_group}.gradle:build-tools:${opensearch_version}-SNAPSHOT"
+        classpath "${opensearch_group}.gradle:build-tools:${opensearch_version}"
         classpath "gradle.plugin.com.dorongold.plugins:task-tree:1.5"
     }
 }
@@ -45,7 +39,7 @@ plugins {
 apply plugin: "com.dorongold.task-tree"
 
 allprojects {
-    group = 'com.amazon.opensearch'
+    group = 'org.opensearch.ml'
     version = "${opendistroVersion}.0"
 
     apply from: "$rootDir/build-tools/repositories.gradle"
