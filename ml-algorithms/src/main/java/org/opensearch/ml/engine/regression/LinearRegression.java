@@ -60,7 +60,7 @@ public class LinearRegression implements MLAlgo {
     private StochasticGradientOptimiser optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentumType);
 
 
-    LinearRegression(List<MLParameter> parameters) {
+    public LinearRegression(List<MLParameter> parameters) {
         parameters.forEach(mlParameter ->
         {
             if (mlParameter.getName().equalsIgnoreCase("objective")) {

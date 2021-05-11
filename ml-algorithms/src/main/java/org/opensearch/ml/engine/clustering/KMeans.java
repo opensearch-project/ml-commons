@@ -44,7 +44,7 @@ public class KMeans implements MLAlgo {
     //The random seed.
     private long seed = System.currentTimeMillis();
 
-    KMeans(List<MLParameter> parameters) {
+    public KMeans(List<MLParameter> parameters) {
         parameters.forEach(mlParameter ->
         {
             if (mlParameter.getName().equalsIgnoreCase("k")) {
