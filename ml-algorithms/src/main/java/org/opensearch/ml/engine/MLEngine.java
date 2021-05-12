@@ -21,12 +21,15 @@ import org.opensearch.ml.engine.regression.LinearRegression;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * This is the interface to all ml algorithms.
+ */
 public class MLEngine {
     public static DataFrame predict(String algoName, List<MLParameter> parameters, DataFrame dataFrame, Model model) {
         if (parameters == null) {
             parameters = new ArrayList<>();
         }
-        switch (algoName.toLowerCase()) {
+        switch (algoName.trim().toLowerCase()) {
             case MLAlgoNames.KMEANS:
                 KMeans kMeans = new KMeans(parameters);
                 return kMeans.predict(dataFrame, model);
@@ -39,7 +42,7 @@ public class MLEngine {
         if (parameters == null) {
             parameters = new ArrayList<>();
         }
-        switch (algoName.toLowerCase()) {
+        switch (algoName.trim().toLowerCase()) {
             case MLAlgoNames.KMEANS:
                 KMeans kMeans = new KMeans(parameters);
                 return kMeans.train(dataFrame);

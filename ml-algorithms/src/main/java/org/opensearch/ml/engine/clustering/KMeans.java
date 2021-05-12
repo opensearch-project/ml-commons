@@ -33,6 +33,12 @@ import java.util.List;
 import java.util.Map;
 
 public class KMeans implements MLAlgo {
+    public static final String K = "k";
+    public static final String ITERATIONS = "iterations";
+    public static final String DISTANCE_TYPE = "distance_type";
+    public static final String NUM_THREADS = "num_threads";
+    public static final String SEED = "seed";
+
     //The number of clusters.
     private int k = 2;
     //The number of iterations.
@@ -47,11 +53,11 @@ public class KMeans implements MLAlgo {
     public KMeans(List<MLParameter> parameters) {
         parameters.forEach(mlParameter ->
         {
-            if (mlParameter.getName().equalsIgnoreCase("k")) {
+            if (mlParameter.getName().equalsIgnoreCase(K)) {
                 k = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("iterations")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(ITERATIONS)) {
                 iterations = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("distance_type")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(DISTANCE_TYPE)) {
                 int type = (int) mlParameter.getValue();
                 switch (type) {
                     case 0:
@@ -67,9 +73,9 @@ public class KMeans implements MLAlgo {
                         distanceType = KMeansTrainer.Distance.EUCLIDEAN;
                         break;
                 }
-            } else if (mlParameter.getName().equalsIgnoreCase("num_threads")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(NUM_THREADS)) {
                 numThreads = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("seed")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(SEED)) {
                 seed = (long) mlParameter.getValue();
             }
         });

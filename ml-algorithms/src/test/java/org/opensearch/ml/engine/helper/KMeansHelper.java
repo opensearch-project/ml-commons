@@ -1,5 +1,18 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.engine.helper;
 
+import lombok.experimental.UtilityClass;
 import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
@@ -10,6 +23,7 @@ import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import java.util.Arrays;
 import java.util.Random;
 
+@UtilityClass
 public class KMeansHelper {
     public static DataFrame constructKMeansDataFrame(int size) {
         ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE)};

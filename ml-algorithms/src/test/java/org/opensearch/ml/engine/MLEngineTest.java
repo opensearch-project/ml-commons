@@ -1,7 +1,21 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.engine;
 
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
@@ -9,10 +23,17 @@ import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.opensearch.ml.engine.clustering.KMeans.DISTANCE_TYPE;
+import static org.opensearch.ml.engine.clustering.KMeans.ITERATIONS;
+import static org.opensearch.ml.engine.clustering.KMeans.K;
+import static org.opensearch.ml.engine.clustering.KMeans.NUM_THREADS;
+import static org.opensearch.ml.engine.clustering.KMeans.SEED;
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 
 public class MLEngineTest {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Test
     public void predictKMeans() {
@@ -39,13 +60,29 @@ public class MLEngineTest {
         Assert.assertNotNull(model.getContent());
     }
 
+    @Test
+    public void trainUnsupportedAlgorithm() {
+        String algoName = "unsupported_algorithm";
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported algorithm: " + algoName);
+        MLEngine.train(algoName, null, null);
+    }
+
+    @Test
+    public void predictUnsupportedAlgorithm() {
+        String algoName = "unsupported_algorithm";
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported algorithm: " + algoName);
+        MLEngine.predict(algoName, null, null, null);
+    }
+
     private Model trainKMeansModel() {
         List<MLParameter> parameters = new ArrayList<>();
-        parameters.add(MLParameterBuilder.parameter("seed", 1L));
-        parameters.add(MLParameterBuilder.parameter("num_threads", 1));
-        parameters.add(MLParameterBuilder.parameter("distance_type", 0));
-        parameters.add(MLParameterBuilder.parameter("iterations", 10));
-        parameters.add(MLParameterBuilder.parameter("k", 2));
+        parameters.add(MLParameterBuilder.parameter(SEED, 1L));
+        parameters.add(MLParameterBuilder.parameter(NUM_THREADS, 1));
+        parameters.add(MLParameterBuilder.parameter(DISTANCE_TYPE, 0));
+        parameters.add(MLParameterBuilder.parameter(ITERATIONS, 10));
+        parameters.add(MLParameterBuilder.parameter(K, 2));
         DataFrame trainDataFrame = constructKMeansDataFrame(100);
         return MLEngine.train("kmeans", parameters, trainDataFrame);
     }
