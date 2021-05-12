@@ -18,6 +18,9 @@ import org.opensearch.ml.model.MLTaskState;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * MLTaskManager is responsible for managing MLTask.
+ */
 public class MLTaskManager {
     private final Map<String, MLTask> taskCaches;
     // todo make this value configurable in the future
@@ -37,6 +40,8 @@ public class MLTaskManager {
      * @param mlTask ML task
      */
     public synchronized void add(MLTask mlTask) {
+        // todo: once circuit break is in place, we need to add those checks
+        // to make sure we have some limitation while adding new tasks.
         String taskId = mlTask.getTaskId();
         if (contains(taskId)) {
             throw new IllegalArgumentException("Duplicate taskId");
