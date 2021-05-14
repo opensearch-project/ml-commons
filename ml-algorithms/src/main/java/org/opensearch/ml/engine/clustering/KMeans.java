@@ -100,19 +100,13 @@ public class KMeans implements MLAlgo {
     @Override
     public DataFrame predict(DataFrame dataFrame, Model model) {
         if (model == null) {
-            throw new RuntimeException("No model found for KMeans prediction.");
+            throw new IllegalArgumentException("No model found for KMeans prediction.");
         }
 
         List<Prediction<ClusterID>> predictions;
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
-        KMeansModel kMeansModel = null;
-        try {
-            kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to deserialize model.", e.getCause());
-        }
-
+        KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
         predictions = kMeansModel.predict(predictionDataset);
 
         List<Map<String, Object>> listClusterID = new ArrayList<>();
@@ -130,11 +124,7 @@ public class KMeans implements MLAlgo {
         Model model = new Model();
         model.setName("KMeans");
         model.setVersion(1);
-        try {
-            model.setContent(ModelSerDeSer.serialize(kMeansModel));
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to serialize model.", e.getCause());
-        }
+        model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
         return model;
     }
