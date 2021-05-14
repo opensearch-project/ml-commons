@@ -10,14 +10,9 @@
  *
  */
 
-package org.opensearch.ml.engine;
+package org.opensearch.ml.engine.contants;
 
-import lombok.EqualsAndHashCode;
-
-import java.io.Serializable;
-
-@EqualsAndHashCode
-public class DummyModel implements Serializable {
-    private String name = "dummy model";
-    private String version = "0.1";
+public class MLAlgoNames {
+    public static final String LINEAR_REGRESSION = "linear_regression";
+    public static final String KMEANS = "kmeans";
 }
