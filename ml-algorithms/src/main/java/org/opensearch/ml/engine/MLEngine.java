@@ -33,6 +33,9 @@ public class MLEngine {
             case MLAlgoNames.KMEANS:
                 KMeans kMeans = new KMeans(parameters);
                 return kMeans.predict(dataFrame, model);
+            case MLAlgoNames.LINEAR_REGRESSION:
+                LinearRegression linearRegression = new LinearRegression(parameters);
+                return linearRegression.predict(dataFrame, model);
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }

@@ -68,6 +68,9 @@ public class TribuoUtil {
                 case CLUSTERID:
                     example = new ArrayExample<T>((T) new ClusterID(ClusterID.UNASSIGNED), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
+                case REGRESSOR:
+                    example = new ArrayExample<T>((T) new Regressor("DIM-0", Double.NaN), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);
             }
