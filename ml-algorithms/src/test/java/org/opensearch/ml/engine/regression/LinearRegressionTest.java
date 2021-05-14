@@ -1,3 +1,15 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.engine.regression;
 
 import org.junit.Assert;
@@ -5,19 +17,22 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import org.opensearch.ml.engine.Model;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
+import static org.opensearch.ml.engine.regression.LinearRegression.BETA1;
+import static org.opensearch.ml.engine.regression.LinearRegression.BETA2;
+import static org.opensearch.ml.engine.regression.LinearRegression.EPSILON;
+import static org.opensearch.ml.engine.regression.LinearRegression.LEARNING_RATE;
+import static org.opensearch.ml.engine.regression.LinearRegression.OBJECTIVE;
+import static org.opensearch.ml.engine.regression.LinearRegression.OPTIMISER;
+import static org.opensearch.ml.engine.regression.LinearRegression.TARGET;
 
 
 public class LinearRegressionTest {
@@ -29,18 +44,18 @@ public class LinearRegressionTest {
 
     @Before
     public void setUp() {
-        parameters.add(MLParameterBuilder.parameter("objective", 0));
-        parameters.add(MLParameterBuilder.parameter("optimiser", 5));
-        parameters.add(MLParameterBuilder.parameter("learning_rate", 0.01));
-        parameters.add(MLParameterBuilder.parameter("epsilon", 1e-6));
-        parameters.add(MLParameterBuilder.parameter("beta1", 0.9));
-        parameters.add(MLParameterBuilder.parameter("beta2", 0.99));
-        constructLinearRegressionTrainDataFrame();
+        parameters.add(MLParameterBuilder.parameter(OBJECTIVE, 0));
+        parameters.add(MLParameterBuilder.parameter(OPTIMISER, 5));
+        parameters.add(MLParameterBuilder.parameter(LEARNING_RATE, 0.01));
+        parameters.add(MLParameterBuilder.parameter(EPSILON, 1e-6));
+        parameters.add(MLParameterBuilder.parameter(BETA1, 0.9));
+        parameters.add(MLParameterBuilder.parameter(BETA2, 0.99));
+        trainDataFrame = constructLinearRegressionTrainDataFrame();
     }
 
     @Test
     public void train() {
-        parameters.add(MLParameterBuilder.parameter("target", "price"));
+        parameters.add(MLParameterBuilder.parameter(TARGET, "price"));
         LinearRegression regression = new LinearRegression(parameters);
         Model model = regression.train(trainDataFrame);
         Assert.assertEquals("LinearRegression", model.getName());
@@ -65,18 +80,4 @@ public class LinearRegressionTest {
         Model model = regression.train(trainDataFrame);
     }
 
-    private void constructLinearRegressionTrainDataFrame() {
-        double[] feet = new double[]{1000.00, 1500.00, 2000.00, 2500.00, 3000.00, 3500.00, 4000.00, 4500.00};
-        double[] prices = new double[]{10000.00, 15000.00, 20000.00, 25000.00, 30000.00, 35000.00, 40000.00, 45000.00};
-        String[] columnNames = new String[]{"feet", "price"};
-        ColumnMeta[] columnMetas = Arrays.stream(columnNames).map(e -> new ColumnMeta(e, ColumnType.DOUBLE)).toArray(ColumnMeta[]::new);
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (int i=0; i<prices.length; ++i) {
-            Map<String, Object> row = new HashMap<>();
-            row.put("feet", feet[i]);
-            row.put("price", prices[i]);
-            rows.add(row);
-        }
-        trainDataFrame = DataFrameBuilder.load(columnMetas, rows);
-    }
 }

@@ -1,22 +1,29 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.engine.clustering;
 
-import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
-import org.apache.commons.math3.random.JDKRandomGenerator;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import org.opensearch.ml.engine.Model;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
+
+import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 
 
 public class KMeansTest {
@@ -64,25 +71,4 @@ public class KMeansTest {
         trainDataFrame = constructKMeansDataFrame(trainSize);
     }
 
-    private DataFrame constructKMeansDataFrame(int size) {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE)};
-        DataFrame dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
-
-        Random random = new Random(1);
-        MultivariateNormalDistribution g1 = new MultivariateNormalDistribution(new JDKRandomGenerator(random.nextInt()),
-                new double[]{0.0, 0.0}, new double[][]{{2.0, 1.0}, {1.0, 2.0}});
-        MultivariateNormalDistribution g2 = new MultivariateNormalDistribution(new JDKRandomGenerator(random.nextInt()),
-                new double[]{10.0, 10.0}, new double[][]{{2.0, 1.0}, {1.0, 2.0}});
-        MultivariateNormalDistribution[] normalDistributions = new MultivariateNormalDistribution[]{g1, g2};
-        for (int i = 0; i < size; ++i) {
-            int id = 0;
-            if (Math.random() < 0.5) {
-                id = 1;
-            }
-            double[] sample = normalDistributions[id].sample();
-            dataFrame.appendRow(Arrays.stream(sample).boxed().toArray(Double[]::new));
-        }
-
-        return dataFrame;
-    }
 }

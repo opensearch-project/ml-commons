@@ -17,7 +17,6 @@ import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
-import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
@@ -38,6 +37,20 @@ import org.tribuo.regression.sgd.objectives.SquaredLoss;
 import java.util.List;
 
 public class LinearRegression implements MLAlgo {
+    public static final String OBJECTIVE = "objective";
+    public static final String OPTIMISER = "optimiser";
+    public static final String LEARNING_RATE = "learning_rate";
+    public static final String MOMENTUM_TYPE = "momentum_type";
+    public static final String MOMENTUM_FACTOR = "momentum_factor";
+    public static final String EPSILON = "epsilon";
+    public static final String BETA1 = "beta1";
+    public static final String BETA2 = "beta2";
+    public static final String DECAY_RATE = "decay_rate";
+    public static final String EPOCHS = "epochs";
+    public static final String BATCH_SIZE = "batch_size";
+    public static final String SEED = "seed";
+    public static final String TARGET = "target";
+
     private String target;
     private RegressionObjective objective = new SquaredLoss();
     private int optimizerType = 0;
@@ -55,15 +68,19 @@ public class LinearRegression implements MLAlgo {
 
     private int epochs = 10;
     private int interval = -1;
-    private int miniBatchSize = 1;
+    private int batchSize = 1;
     private long seed = System.currentTimeMillis();
     private StochasticGradientOptimiser optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentumType);
 
 
-    LinearRegression(List<MLParameter> parameters) {
+    /**
+     * Initialize a linear regression algorithm.
+     * @param parameters the parameters for linear regression algorithm
+     */
+    public LinearRegression(List<MLParameter> parameters) {
         parameters.forEach(mlParameter ->
         {
-            if (mlParameter.getName().equalsIgnoreCase("objective")) {
+            if (mlParameter.getName().equalsIgnoreCase(OBJECTIVE)) {
                 int type = (int) mlParameter.getValue();
                 switch (type) {
                     case 0:
@@ -81,11 +98,11 @@ public class LinearRegression implements MLAlgo {
                         //Use default l2 loss function.
                         break;
                 }
-            } else if (mlParameter.getName().equalsIgnoreCase("optimiser")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(OPTIMISER)) {
                 optimizerType = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("learning_rate")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(LEARNING_RATE)) {
                 learningRate = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("momentum_type")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(MOMENTUM_TYPE)) {
                 int type = (int) mlParameter.getValue();
                 switch (type) {
                     case 0:
@@ -97,23 +114,23 @@ public class LinearRegression implements MLAlgo {
                     default:
                         break;
                 }
-            } else if (mlParameter.getName().equalsIgnoreCase("momentum_factor")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(MOMENTUM_FACTOR)) {
                 momentumFactor = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("epsilon")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(EPSILON)) {
                 epsilon = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("beta1")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(BETA1)) {
                 beta1 = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("beta2")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(BETA2)) {
                 beta2 = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("decay_rate")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(DECAY_RATE)) {
                 decayRate = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("epochs")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(EPOCHS)) {
                 epochs = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("mini_batch_size")) {
-                miniBatchSize = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("seed")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(BATCH_SIZE)) {
+                batchSize = (int) mlParameter.getValue();
+            } else if (mlParameter.getName().equalsIgnoreCase(SEED)) {
                 seed = (long) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase("target")) {
+            } else if (mlParameter.getName().equalsIgnoreCase(TARGET)) {
                 target = (String) mlParameter.getValue();
             }
         });
@@ -176,7 +193,7 @@ public class LinearRegression implements MLAlgo {
             throw new IllegalArgumentException("Epochs should not be negative.");
         }
 
-        if (miniBatchSize < 0) {
+        if (batchSize < 0) {
             throw new IllegalArgumentException("MiniBatchSize should not be negative.");
         }
     }
@@ -191,7 +208,7 @@ public class LinearRegression implements MLAlgo {
     public Model train(DataFrame dataFrame) {
         MutableDataset<Regressor> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(),
                 "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, target);
-        LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, interval, miniBatchSize, seed);
+        LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, interval, batchSize, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
         Model model = new Model();
         model.setName("LinearRegression");
