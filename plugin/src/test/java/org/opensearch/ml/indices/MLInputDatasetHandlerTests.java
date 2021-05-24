@@ -15,7 +15,9 @@ package org.opensearch.ml.indices;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
@@ -53,6 +55,10 @@ public class MLInputDatasetHandlerTests{
     ActionListener<DataFrame> listener;
     DataFrame dataFrame;
     SearchResponse searchResponse;
+
+    @Rule
+    public ExpectedException expectedEx = ExpectedException.none();
+
     @Before
     public void setup() {
         Map<String, Object> source = new HashMap<>();
@@ -84,6 +90,17 @@ public class MLInputDatasetHandlerTests{
                 .build();
         DataFrame result = mlInputDatasetHandler.parseDataFrameInput(dataFrameInputDataset);
         Assert.assertEquals(testDataFrame, result);
+    }
+
+    @Test
+    public void testDataFrameInputDatasetWrongType() {
+        expectedEx.expect(IllegalArgumentException.class);
+        expectedEx.expectMessage("Input dataset is not DATA_FRAME type.");
+        SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset.builder()
+                .indices(Arrays.asList("index1"))
+                .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
+                .build();
+        DataFrame result = mlInputDatasetHandler.parseDataFrameInput(searchQueryInputDataset);
     }
 
 
@@ -130,6 +147,21 @@ public class MLInputDatasetHandlerTests{
                 .build();
         mlInputDatasetHandler.parseSearchQueryInput(searchQueryInputDataset, listener);
         verify(listener, times(1)).onFailure(any());
+    }
+
+    @Test
+    public void testSearchQueryInputDatasetWrongType() {
+        expectedEx.expect(IllegalArgumentException.class);
+        expectedEx.expectMessage("Input dataset is not SEARCH_QUERY type.");
+        DataFrame testDataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
+        DataFrameInputDataset dataFrameInputDataset = DataFrameInputDataset.builder()
+                .dataFrame(testDataFrame)
+                .build();
+        mlInputDatasetHandler.parseSearchQueryInput(dataFrameInputDataset, listener);
     }
 
 }

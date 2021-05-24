@@ -22,6 +22,7 @@ import org.opensearch.client.Client;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.search.SearchHit;
@@ -46,6 +47,9 @@ public class MLInputDatasetHandler {
      * @return DataFrame
      */
     public DataFrame parseDataFrameInput(MLInputDataset mlInputDataset) {
+        if (!mlInputDataset.getInputDataType().equals(MLInputDataType.DATA_FRAME)) {
+            throw new IllegalArgumentException("Input dataset is not DATA_FRAME type.");
+        }
         DataFrameInputDataset inputDataset = (DataFrameInputDataset) mlInputDataset;
         return inputDataset.getDataFrame();
     }
@@ -56,6 +60,9 @@ public class MLInputDatasetHandler {
      * @param listener ActionListener
      */
     public void parseSearchQueryInput(MLInputDataset mlInputDataset, ActionListener<DataFrame> listener) {
+        if (!mlInputDataset.getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+            throw new IllegalArgumentException("Input dataset is not SEARCH_QUERY type.");
+        }
         SearchQueryInputDataset inputDataset = (SearchQueryInputDataset) mlInputDataset;
         SearchRequest searchRequest = new SearchRequest();
         searchRequest.source(inputDataset.getSearchSourceBuilder());
@@ -79,7 +86,6 @@ public class MLInputDatasetHandler {
             List<Map<String, Object>> input = new ArrayList<>();
             SearchHit[] searchHits = hits.getHits();
             for (SearchHit hit : searchHits) {
-                System.out.println("hit" + hit);
                 input.add(hit.getSourceAsMap());
             }
             DataFrame dataFrame = DataFrameBuilder.load(input);
