@@ -14,12 +14,11 @@ package org.opensearch.ml.task;
 
 import com.google.common.collect.ImmutableSet;
 import lombok.extern.log4j.Log4j2;
-import lombok.val;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
-import org.opensearch.action.ActionRequest;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -29,11 +28,7 @@ import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
@@ -41,6 +36,7 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.model.MLTaskType;
@@ -49,21 +45,10 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
-import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
-import static org.opensearch.ml.stats.InternalStatNames.JVM_HEAP_USAGE;
-import static org.opensearch.ml.indices.MLIndicesHandler.OS_ML_MODEL_RESULT;
-
-
-
 import javax.naming.LimitExceededException;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,17 +56,25 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
+import static org.opensearch.ml.stats.InternalStatNames.JVM_HEAP_USAGE;
+import static org.opensearch.ml.indices.MLIndicesHandler.OS_ML_MODEL_RESULT;
+
+/**
+ * MLTaskRunner is responsible for dispatching and running predict/training tasks.
+ */
 @Log4j2
 public class MLTaskRunner {
     // todo: move to a config class
     private final short DEFAULT_JVM_HEAP_USAGE_THRESHOLD = 85;
-
     private final ThreadPool threadPool;
     private final ClusterService clusterService;
     private final Client client;
     private final MLTaskManager mlTaskManager;
     private final MLStats mlStats;
     private final MLIndicesHandler mlIndicesHandler;
+    private final MLInputDatasetHandler mlInputDatasetHandler;
     private volatile Integer maxAdBatchTaskPerNode;
 
     public MLTaskRunner(
@@ -90,7 +83,8 @@ public class MLTaskRunner {
             Client client,
             MLTaskManager mlTaskManager,
             MLStats mlStats,
-            MLIndicesHandler mlIndicesHandler
+            MLIndicesHandler mlIndicesHandler,
+            MLInputDatasetHandler mlInputDatasetHandler
     ) {
         this.threadPool = threadPool;
         this.clusterService = clusterService;
@@ -98,6 +92,7 @@ public class MLTaskRunner {
         this.mlTaskManager = mlTaskManager;
         this.mlStats = mlStats;
         this.mlIndicesHandler = mlIndicesHandler;
+        this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.maxAdBatchTaskPerNode = MLTaskManager.MAX_ML_TASK_PER_NODE;
     }
 
@@ -207,48 +202,74 @@ public class MLTaskRunner {
             MLPredictionTaskRequest request,
             ActionListener<MLPredictionTaskResponse> listener
     ) {
-        threadPool.executor(TASK_THREAD_POOL).execute(() -> {
-            MLTask mlTask = MLTask.builder()
-                    .taskId(UUID.randomUUID().toString())
-                    .taskType(MLTaskType.PREDICTION)
-                    .createTime(Instant.now())
-                    .state(MLTaskState.CREATED)
-                    .build();
-
-            // track ML task count and add ML task into cache
-            mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
-            mlTaskManager.add(mlTask);
-
-            // run prediction
-            String modelData = null;
-            if(request.getModelId() != null) {
-                val response = client.prepareGet(OS_ML_MODEL_RESULT, "_doc", request.getModelId()).get();
-                modelData = new String(Base64.getDecoder().decode(response.getSourceAsMap().get("model").toString()));
-            }
-
-            DataFrame forecastsResults = null;
-            try {
-                mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
-                // todo: MLEngine is still implementing, put a placeholder here
-                forecastsResults = MLEngine.predict(request.getAlgorithm(), request.getParameters(), request.getDataFrame(), modelData);
-
-                // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
-                mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
-                mlTask.setState(MLTaskState.COMPLETED);
-            } catch (Exception e) { // todo need to specify what exception
-                log.error(e);
-                mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
+        MLTask mlTask = MLTask.builder()
+                .taskId(UUID.randomUUID().toString())
+                .taskType(MLTaskType.PREDICTION)
+                .createTime(Instant.now())
+                .state(MLTaskState.CREATED)
+                .build();
+        if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+            ActionListener<DataFrame> dataFrameActionListener = ActionListener.wrap(dataFrame -> {
+                predict(mlTask, dataFrame, request, listener);
+            }, e -> {
+                log.error("Failed to generate DataFrame from search query", e);
+                mlTaskManager.add(mlTask);
                 mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
                 mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
                 listener.onFailure(e);
-            }
+            });
+            mlInputDatasetHandler.parseSearchQueryInput(request.getInputDataset(),
+                    new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false));
+        } else {
+            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(request.getInputDataset());
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> {
+                predict(mlTask, inputDataFrame, request, listener);
+            });
+        }
+    }
 
-            MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
-                    .taskId(mlTask.getTaskId())
-                    .status(mlTaskManager.get(mlTask.getTaskId()).getState().name())
-                    .predictionResult(forecastsResults).build();
-            listener.onResponse(response);
-        });
+    private void predict(MLTask mlTask, DataFrame inputDataFrame, MLPredictionTaskRequest request, ActionListener<MLPredictionTaskResponse> listener) {
+        // track ML task count and add ML task into cache
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
+        mlTaskManager.add(mlTask);
+
+        // get model
+        Model model = new Model();
+        if (request.getModelId() != null) {
+            GetResponse response = client.prepareGet(OS_ML_MODEL_RESULT, "_doc", request.getModelId()).get();
+            Map<String, Object> source = response.getSourceAsMap();
+            model.setName((String) source.get("modelName"));
+            model.setVersion(Integer.parseInt((String) source.get("modelVersion")));
+            byte[] decoded = Base64.getDecoder().decode(source.get("modelContent").toString().getBytes());
+            model.setContent(decoded);
+        } else {
+            IllegalArgumentException e = new IllegalArgumentException("ModelId is invalid");
+            handleMLTaskFailure(mlTask, e);
+            log.error("ModelId is invalid", e);
+            listener.onFailure(e);
+            return;
+        }
+
+        // run predict
+        DataFrame forecastsResults = null;
+        try {
+            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
+            forecastsResults = MLEngine.predict(request.getAlgorithm(), request.getParameters(), inputDataFrame, model);
+
+            // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
+            handleMLTaskComplete(mlTask);
+        } catch (Exception e) {
+            // todo need to specify what exception
+            log.error(e);
+            handleMLTaskFailure(mlTask, e);
+            listener.onFailure(e);
+        }
+
+        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+                .taskId(mlTask.getTaskId())
+                .status(mlTaskManager.get(mlTask.getTaskId()).getState().name())
+                .predictionResult(forecastsResults).build();
+        listener.onResponse(response);
     }
 
 
@@ -261,56 +282,76 @@ public class MLTaskRunner {
             MLTrainingTaskRequest request,
             ActionListener<MLTrainingTaskResponse> listener
     ) {
-        String taskId = UUID.randomUUID().toString();
-        // if searchquery
-        // search(request, listener(thread pool listener))
-        // if dataframe
-
-        threadPool.executor(TASK_THREAD_POOL).execute(() -> {
-            MLTask mlTask = MLTask.builder()
-                    .taskId(taskId)
-                    .taskType(MLTaskType.TRAINING)
-                    .createTime(Instant.now())
-                    .state(MLTaskState.CREATED)
-                    .build();
-
-            // track ML task count and add ML task into cache
-            mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
-            mlTaskManager.add(mlTask);
-
-            // run training
-            try {
-                mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
-                // todo: MLEngine is not ready yet, put a placeholder here
-                MLInputDataset mlInputDataset = request.getInputDataset();
-                DataFrame inputDataFrame = null;
-                if (mlInputDataset.getInputDataType() == MLInputDataType.DATA_FRAME) {
-                    DataFrameInputDataset inputDataset = (DataFrameInputDataset) mlInputDataset;
-                    inputDataFrame = inputDataset.getDataFrame();
-                }
-                Model model = MLEngine.train(request.getAlgorithm(), request.getParameters(), inputDataFrame);
-                mlIndicesHandler.initModelIndexIfAbsent();
-                val source = new HashMap<String, Object>();
-                source.put("taskId", taskId);
-                source.put("algorithm", request.getAlgorithm());
-                source.put("model", model.getContent());
-                val response =
-                        client.prepareIndex(OS_ML_MODEL_RESULT, "_doc").setSource(source).get();
-                log.info("mode data indexing done, result:{}", response.getResult());
-                mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
-                mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.COMPLETED);
-            } catch (Exception e) { // todo need to specify what exception
-                log.error(e);
-                mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
+        MLTask mlTask = MLTask.builder()
+                .taskId(UUID.randomUUID().toString())
+                .taskType(MLTaskType.TRAINING)
+                .createTime(Instant.now())
+                .state(MLTaskState.CREATED)
+                .build();
+        if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+            ActionListener<DataFrame> dataFrameActionListener = ActionListener.wrap(dataFrame -> {
+                train(mlTask, dataFrame, request);
+            }, e -> {
+                log.error("Failed to generate DataFrame from search query", e);
+                mlTaskManager.add(mlTask);
                 mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
                 mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
-            }
-        });
-
+            });
+            mlInputDatasetHandler.parseSearchQueryInput(request.getInputDataset(), new ThreadedActionListener<>(
+                    log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false));
+        } else {
+            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(request.getInputDataset());
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> {
+                train(mlTask, inputDataFrame, request);
+            });
+        }
         listener.onResponse(MLTrainingTaskResponse.builder()
-                .taskId(taskId)
+                .taskId(mlTask.getTaskId())
                 .status(MLTaskState.CREATED.name())
                 .build());
+    }
+
+    private void train(MLTask mlTask, DataFrame inputDataFrame, MLTrainingTaskRequest request) {
+        // track ML task count and add ML task into cache
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
+        mlTaskManager.add(mlTask);
+
+        // run training
+        try {
+            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
+            Model model = MLEngine.train(request.getAlgorithm(), request.getParameters(), inputDataFrame);
+            byte[] encoded = Base64.getEncoder().encode(model.getContent());
+            mlIndicesHandler.initModelIndexIfAbsent();
+            Map<String, Object> source = new HashMap<>();
+            source.put("taskId", mlTask.getTaskId());
+            source.put("algorithm", request.getAlgorithm());
+            source.put("modelName", model.getName());
+            source.put("modelVersion", model.getVersion());
+            source.put("modelContent", encoded);
+            IndexResponse response = client.prepareIndex(OS_ML_MODEL_RESULT, "_doc").setSource(source).get();
+            log.info("mode data indexing done, result:{}", response.getResult());
+            handleMLTaskComplete(mlTask);
+        } catch (Exception e) {
+            // todo need to specify what exception
+            log.error(e);
+            handleMLTaskFailure(mlTask, e);
+        }
+    }
+
+    private void handleMLTaskFailure(MLTask mlTask, Exception e) {
+        // decrease ML_EXECUTING_TASK_COUNT
+        // update task state to MLTaskState.FAILED
+        // update task error
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
+        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
+        mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
+    }
+
+    private void handleMLTaskComplete(MLTask mlTask) {
+        // decrease ML_EXECUTING_TASK_COUNT
+        // update task state to MLTaskState.COMPLETED
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
+        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.COMPLETED);
     }
 
 

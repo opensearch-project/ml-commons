@@ -31,7 +31,9 @@ public class MLIndicesHandler {
             "    \"properties\": {\n" +
             "      \"taskId\": { \"type\": \"keyword\" },\n" +
             "      \"algorithm\": {\"type\": \"keyword\"},\n" +
-            "      \"model\" : { \"type\": \"binary\"}\n" +
+            "      \"modelName\" : { \"type\": \"keyword\"},\n" +
+            "      \"modelVersion\" : { \"type\": \"keyword\"},\n" +
+            "      \"modelContent\" : { \"type\": \"binary\"}\n" +
             "    }\n" +
             "}";
 
