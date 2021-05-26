@@ -41,4 +41,17 @@ public class LinearRegressionHelper {
 
         return DataFrameBuilder.load(columnMetas, rows);
     }
+
+    public static DataFrame constructLinearRegressionPredictionDataFrame() {
+        double[] feet = new double[]{5000, 5500};
+        String[] columnNames = new String[]{"feet"};
+        ColumnMeta[] columnMetas = Arrays.stream(columnNames).map(e -> new ColumnMeta(e, ColumnType.DOUBLE)).toArray(ColumnMeta[]::new);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int i=0; i<feet.length; ++i) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("feet", feet[i]);
+            rows.add(row);
+        }
+        return DataFrameBuilder.load(columnMetas, rows);
+    }
 }

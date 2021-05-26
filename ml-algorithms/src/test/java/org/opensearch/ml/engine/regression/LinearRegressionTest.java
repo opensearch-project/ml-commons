@@ -25,6 +25,7 @@ import org.opensearch.ml.engine.Model;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.regression.LinearRegression.BETA1;
 import static org.opensearch.ml.engine.regression.LinearRegression.BETA2;
@@ -41,6 +42,7 @@ public class LinearRegressionTest {
 
     private List<MLParameter> parameters = new ArrayList<>();
     private DataFrame trainDataFrame;
+    private DataFrame predictionDataFrame;
 
     @Before
     public void setUp() {
@@ -51,6 +53,25 @@ public class LinearRegressionTest {
         parameters.add(MLParameterBuilder.parameter(BETA1, 0.9));
         parameters.add(MLParameterBuilder.parameter(BETA2, 0.99));
         trainDataFrame = constructLinearRegressionTrainDataFrame();
+        predictionDataFrame = constructLinearRegressionPredictionDataFrame();
+    }
+
+    @Test
+    public void predict() {
+        parameters.add(MLParameterBuilder.parameter(TARGET, "price"));
+        LinearRegression regression = new LinearRegression(parameters);
+        Model model = regression.train(trainDataFrame);
+        DataFrame predictions = regression.predict(predictionDataFrame, model);
+        Assert.assertEquals(2, predictions.size());
+    }
+
+    @Test
+    public void predictWithoutModel() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("No model found for linear regression prediction.");
+        parameters.add(MLParameterBuilder.parameter(TARGET, "price"));
+        LinearRegression regression = new LinearRegression(parameters);
+        regression.predict(predictionDataFrame, null);
     }
 
     @Test
