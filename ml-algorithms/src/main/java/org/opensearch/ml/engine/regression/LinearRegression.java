@@ -13,6 +13,7 @@
 package org.opensearch.ml.engine.regression;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.Model;
@@ -20,6 +21,7 @@ import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
+import org.tribuo.Prediction;
 import org.tribuo.math.StochasticGradientOptimiser;
 import org.tribuo.math.optimisers.AdaDelta;
 import org.tribuo.math.optimisers.AdaGrad;
@@ -34,7 +36,10 @@ import org.tribuo.regression.sgd.objectives.AbsoluteLoss;
 import org.tribuo.regression.sgd.objectives.Huber;
 import org.tribuo.regression.sgd.objectives.SquaredLoss;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class LinearRegression implements MLAlgo {
     public static final String OBJECTIVE = "objective";
@@ -200,8 +205,18 @@ public class LinearRegression implements MLAlgo {
 
     @Override
     public DataFrame predict(DataFrame dataFrame, Model model) {
-        //TODO
-        throw new RuntimeException("Unsupported predict.");
+        if (model == null) {
+            throw new IllegalArgumentException("No model found for linear regression prediction.");
+        }
+
+        org.tribuo.Model<Regressor> regressionModel = (org.tribuo.Model<Regressor>) ModelSerDeSer.deserialize(model.getContent());
+        MutableDataset<Regressor> predictionDataset = TribuoUtil.generateDataset(dataFrame, new RegressionFactory(),
+                "Linear regression prediction data from opensearch", TribuoOutputType.REGRESSOR);
+        List<Prediction<Regressor>> predictions = regressionModel.predict(predictionDataset);
+        List<Map<String, Object>> listPrediction = new ArrayList<>();
+        predictions.forEach(e -> listPrediction.add(Collections.singletonMap("Prediction", e.getOutput().getValues()[0])));
+
+        return DataFrameBuilder.load(listPrediction);
     }
 
     @Override

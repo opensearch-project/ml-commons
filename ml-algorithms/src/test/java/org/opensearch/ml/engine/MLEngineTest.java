@@ -19,6 +19,7 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
+import org.opensearch.ml.engine.regression.LinearRegression;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,15 @@ import static org.opensearch.ml.engine.clustering.KMeans.K;
 import static org.opensearch.ml.engine.clustering.KMeans.NUM_THREADS;
 import static org.opensearch.ml.engine.clustering.KMeans.SEED;
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
+import static org.opensearch.ml.engine.regression.LinearRegression.BETA1;
+import static org.opensearch.ml.engine.regression.LinearRegression.BETA2;
+import static org.opensearch.ml.engine.regression.LinearRegression.EPSILON;
+import static org.opensearch.ml.engine.regression.LinearRegression.LEARNING_RATE;
+import static org.opensearch.ml.engine.regression.LinearRegression.OBJECTIVE;
+import static org.opensearch.ml.engine.regression.LinearRegression.OPTIMISER;
+import static org.opensearch.ml.engine.regression.LinearRegression.TARGET;
 
 public class MLEngineTest {
     @Rule
@@ -42,6 +51,14 @@ public class MLEngineTest {
         DataFrame predictions = MLEngine.predict("kmeans", null, predictionDataFrame, model);
         Assert.assertEquals(10, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
+    }
+
+    @Test
+    public void predictLinearRegression() {
+        Model model = trainLinearRegressionModel();
+        DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
+        DataFrame predictions = MLEngine.predict("linear_regression", null, predictionDataFrame, model);
+        Assert.assertEquals(2, predictions.size());
     }
 
     @Test
@@ -76,6 +93,13 @@ public class MLEngineTest {
         MLEngine.predict(algoName, null, null, null);
     }
 
+    @Test
+    public void predictWithoutModel() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("No model found for linear regression prediction.");
+        MLEngine.predict("linear_regression", null, null, null);
+    }
+
     private Model trainKMeansModel() {
         List<MLParameter> parameters = new ArrayList<>();
         parameters.add(MLParameterBuilder.parameter(SEED, 1L));
@@ -89,13 +113,13 @@ public class MLEngineTest {
 
     private Model trainLinearRegressionModel() {
         List<MLParameter> parameters = new ArrayList<>();
-        parameters.add(MLParameterBuilder.parameter("objective", 0));
-        parameters.add(MLParameterBuilder.parameter("optimiser", 5));
-        parameters.add(MLParameterBuilder.parameter("learning_rate", 0.01));
-        parameters.add(MLParameterBuilder.parameter("epsilon", 1e-6));
-        parameters.add(MLParameterBuilder.parameter("beta1", 0.9));
-        parameters.add(MLParameterBuilder.parameter("beta2", 0.99));
-        parameters.add(MLParameterBuilder.parameter("target", "price"));
+        parameters.add(MLParameterBuilder.parameter(OBJECTIVE, 0));
+        parameters.add(MLParameterBuilder.parameter(OPTIMISER, 5));
+        parameters.add(MLParameterBuilder.parameter(LEARNING_RATE, 0.01));
+        parameters.add(MLParameterBuilder.parameter(EPSILON, 1e-6));
+        parameters.add(MLParameterBuilder.parameter(BETA1, 0.9));
+        parameters.add(MLParameterBuilder.parameter(BETA2, 0.99));
+        parameters.add(MLParameterBuilder.parameter(TARGET, "price"));
         DataFrame trainDataFrame = constructLinearRegressionTrainDataFrame();
         return MLEngine.train("linear_regression", parameters, trainDataFrame);
     }

@@ -68,6 +68,10 @@ public class TribuoUtil {
                 case CLUSTERID:
                     example = new ArrayExample<T>((T) new ClusterID(ClusterID.UNASSIGNED), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
+                case REGRESSOR:
+                    //Create single dimension tribuo regressor with name DIM-0 and value double NaN.
+                    example = new ArrayExample<T>((T) new Regressor("DIM-0", Double.NaN), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);
             }
