@@ -44,15 +44,19 @@ import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ExecutorBuilder;
+import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
+    public static final String TASK_THREAD_POOL = "OPENSEARCH_ML_TASK_THREAD_POOL";
     public static final String ML_BASE_URI = "/_opensearch/_ml";
 
     private MLStats mlStats;
@@ -108,5 +112,19 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 .of(
                         restStatsMLAction
                 );
+    }
+
+    @Override
+    public List<ExecutorBuilder<?>> getExecutorBuilders(Settings settings) {
+        FixedExecutorBuilder ml = new FixedExecutorBuilder(
+                settings,
+                TASK_THREAD_POOL,
+                4,
+                4,
+                "ml.task_thread_pool",
+                false
+        );
+
+        return Collections.singletonList(ml);
     }
 }
