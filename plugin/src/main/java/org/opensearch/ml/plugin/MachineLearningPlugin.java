@@ -28,8 +28,16 @@ import org.opensearch.common.settings.SettingsFilter;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
+import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionTransportAction;
+import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
+import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
+import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
+import org.opensearch.ml.action.training.TransportTrainingTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.rest.RestStatsMLAction;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -76,7 +84,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList.of(
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE,
-                        MLStatsNodesTransportAction.class)
+                        MLStatsNodesTransportAction.class),
+                new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
+                new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
+                new ActionHandler<>(MLPredictionTaskExecutionAction.INSTANCE,
+                        MLPredictionTaskExecutionTransportAction.class),
+                new ActionHandler<>(MLTrainingTaskExecutionAction.INSTANCE, MLTrainingTaskExecutionTransportAction.class)
         );
     }
 
