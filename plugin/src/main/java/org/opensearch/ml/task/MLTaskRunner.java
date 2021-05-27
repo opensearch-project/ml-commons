@@ -23,10 +23,11 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.ml.action.prediction.MLPredictionTaskRemoteExecutionAction;
+import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
+import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -185,8 +186,8 @@ public class MLTaskRunner {
                 transportService
                         .sendRequest(
                                 node,
-                                MLPredictionTaskRemoteExecutionAction.NAME,
-                                MLPredictionTaskRequest.fromActionRequest(request),
+                                MLPredictionTaskExecutionAction.NAME,
+                                request,
                                 new ActionListenerResponseHandler<>(listener, MLPredictionTaskResponse::new)
                         );
             }
@@ -272,6 +273,41 @@ public class MLTaskRunner {
         listener.onResponse(response);
     }
 
+    /**
+     * Run training
+     * @param request MLTrainingTaskRequest
+     * @param transportService transport service
+     * @param listener Action listener
+     */
+    public void runTraining(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTrainingTaskResponse> listener) {
+        dispatchTask(ActionListener.wrap(node -> {
+            if (clusterService.localNode().getId().equals(node.getId())) {
+                // Execute training task locally
+                log
+                        .info(
+                                "execute ML training request {} locally on node {}",
+                                request.toString(),
+                                node.getId()
+                        );
+                startTrainingTask(request, listener);
+            } else {
+                // Execute batch task remotely
+                log
+                        .info(
+                                "execute ML training request {} remotely on node {}",
+                                request.toString(),
+                                node.getId()
+                        );
+                transportService
+                        .sendRequest(
+                                node,
+                                MLTrainingTaskExecutionAction.NAME,
+                                request,
+                                new ActionListenerResponseHandler<>(listener, MLTrainingTaskResponse::new)
+                        );
+            }
+        }, e -> listener.onFailure(e)));
+    }
 
     /**
      * Start training task
@@ -288,6 +324,10 @@ public class MLTaskRunner {
                 .createTime(Instant.now())
                 .state(MLTaskState.CREATED)
                 .build();
+        listener.onResponse(MLTrainingTaskResponse.builder()
+                .taskId(mlTask.getTaskId())
+                .status(MLTaskState.CREATED.name())
+                .build());
         if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener.wrap(dataFrame -> {
                 train(mlTask, dataFrame, request);
@@ -305,10 +345,6 @@ public class MLTaskRunner {
                 train(mlTask, inputDataFrame, request);
             });
         }
-        listener.onResponse(MLTrainingTaskResponse.builder()
-                .taskId(mlTask.getTaskId())
-                .status(MLTaskState.CREATED.name())
-                .build());
     }
 
     private void train(MLTask mlTask, DataFrame inputDataFrame, MLTrainingTaskRequest request) {
