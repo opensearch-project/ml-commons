@@ -16,8 +16,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
-import lombok.val;
-import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.xcontent.XContentType;
@@ -31,7 +29,9 @@ public class MLIndicesHandler {
             "    \"properties\": {\n" +
             "      \"taskId\": { \"type\": \"keyword\" },\n" +
             "      \"algorithm\": {\"type\": \"keyword\"},\n" +
-            "      \"model\" : { \"type\": \"binary\"}\n" +
+            "      \"modelName\" : { \"type\": \"keyword\"},\n" +
+            "      \"modelVersion\" : { \"type\": \"keyword\"},\n" +
+            "      \"modelContent\" : { \"type\": \"binary\"}\n" +
             "    }\n" +
             "}";
 
