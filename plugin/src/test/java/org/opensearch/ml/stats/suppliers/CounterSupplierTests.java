@@ -12,8 +12,8 @@
 
 package org.opensearch.ml.stats.suppliers;
 
-import org.opensearch.test.OpenSearchTestCase;
 import org.junit.Test;
+import org.opensearch.test.OpenSearchTestCase;
 
 public class CounterSupplierTests extends OpenSearchTestCase {
     @Test

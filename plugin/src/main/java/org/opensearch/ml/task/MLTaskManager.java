@@ -12,11 +12,11 @@
 
 package org.opensearch.ml.task;
 
-import org.opensearch.ml.model.MLTask;
-import org.opensearch.ml.model.MLTaskState;
-
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.opensearch.ml.model.MLTask;
+import org.opensearch.ml.model.MLTaskState;
 
 /**
  * MLTaskManager is responsible for managing MLTask.
@@ -25,6 +25,7 @@ public class MLTaskManager {
     private final Map<String, MLTask> taskCaches;
     // todo make this value configurable in the future
     public final static int MAX_ML_TASK_PER_NODE = 10;
+
     /**
      * Constructor to create ML task manager.
      *

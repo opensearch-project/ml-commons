@@ -12,14 +12,14 @@
 
 package org.opensearch.ml.action.stats;
 
-import org.junit.Assert;
-import org.junit.Test;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.junit.Assert;
+import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 
 public class MLStatsNodesRequestTests {
     @Test
@@ -35,10 +35,7 @@ public class MLStatsNodesRequestTests {
         BytesStreamOutput output = new BytesStreamOutput();
         request.writeTo(output);
         MLStatsNodesRequest newRequest = new MLStatsNodesRequest(output.bytes().streamInput());
-        Assert.assertEquals(
-                newRequest.getStatsToBeRetrieved().size(),
-                request.getStatsToBeRetrieved().size()
-        );
+        Assert.assertEquals(newRequest.getStatsToBeRetrieved().size(), request.getStatsToBeRetrieved().size());
         for (String stat : newRequest.getStatsToBeRetrieved()) {
             Assert.assertTrue(request.getStatsToBeRetrieved().contains(stat));
         }

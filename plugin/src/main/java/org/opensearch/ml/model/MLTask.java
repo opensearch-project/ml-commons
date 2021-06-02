@@ -12,16 +12,17 @@
 
 package org.opensearch.ml.model;
 
+import java.io.IOException;
+import java.time.Instant;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
-
-import java.io.IOException;
-import java.time.Instant;
 
 @Getter
 @EqualsAndHashCode

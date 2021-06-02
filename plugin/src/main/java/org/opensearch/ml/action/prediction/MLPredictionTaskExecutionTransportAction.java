@@ -12,13 +12,13 @@
 
 package org.opensearch.ml.action.prediction;
 
-import org.opensearch.ml.task.MLTaskRunner;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
+import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -28,9 +28,9 @@ public class MLPredictionTaskExecutionTransportAction extends HandledTransportAc
 
     @Inject
     public MLPredictionTaskExecutionTransportAction(
-            ActionFilters actionFilters,
-            TransportService transportService,
-            MLTaskRunner mlTaskRunner
+        ActionFilters actionFilters,
+        TransportService transportService,
+        MLTaskRunner mlTaskRunner
     ) {
         super(MLPredictionTaskExecutionAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlTaskRunner = mlTaskRunner;

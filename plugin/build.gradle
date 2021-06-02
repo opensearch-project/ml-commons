@@ -97,16 +97,32 @@ jacocoTestReport {
     dependsOn test
 }
 
+List<String> jacocoExclusions = [
+        // TODO: add more unit test to meet the minimal test coverage.
+        'org.opensearch.ml.action.*',
+        'org.opensearch.ml.constant.CommonValue',
+        'org.opensearch.ml.indices.MLInputDatasetHandler',
+        'org.opensearch.ml.plugin.*',
+        'org.opensearch.ml.task.MLTaskRunner',
+]
+
 jacocoTestCoverageVerification {
     violationRules {
         rule {
-            limit {
-                counter = 'LINE'
-                minimum = 0.1
-            }
+            element = 'CLASS'
+            excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.1
+                minimum = 0.8
+            }
+        }
+        rule {
+            element = 'CLASS'
+            excludes = jacocoExclusions
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.7
             }
         }
     }

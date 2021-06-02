@@ -10,15 +10,15 @@
  *
  */
 
-
 package org.opensearch.ml.action.stats;
 
+import java.io.IOException;
+
 import lombok.Getter;
+
 import org.opensearch.action.support.nodes.BaseNodeRequest;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-
-import java.io.IOException;
 
 public class MLStatsNodeRequest extends BaseNodeRequest {
     @Getter

@@ -10,10 +10,16 @@
  *
  */
 
-
 package org.opensearch.ml.plugin;
 
-import com.google.common.collect.ImmutableMap;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
+
+import org.opensearch.action.ActionRequest;
+import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
@@ -45,9 +51,6 @@ import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
-import org.opensearch.action.ActionRequest;
-import org.opensearch.action.ActionResponse;
-import com.google.common.collect.ImmutableList;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
@@ -57,11 +60,8 @@ import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Supplier;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String TASK_THREAD_POOL = "OPENSEARCH_ML_TASK_THREAD_POOL";
@@ -69,8 +69,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     private MLStats mlStats;
 
-    public static final Setting<Boolean> IS_ML_NODE_SETTING =
-            Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
+    public static final Setting<Boolean> IS_ML_NODE_SETTING = Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
 
     public static final DiscoveryNodeRole ML_ROLE = new DiscoveryNodeRole("ml", "l") {
         @Override
@@ -79,64 +78,57 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         }
     };
 
-
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
-        return ImmutableList.of(
-                new ActionHandler<>(MLStatsNodesAction.INSTANCE,
-                        MLStatsNodesTransportAction.class),
+        return ImmutableList
+            .of(
+                new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
-                new ActionHandler<>(MLPredictionTaskExecutionAction.INSTANCE,
-                        MLPredictionTaskExecutionTransportAction.class),
+                new ActionHandler<>(MLPredictionTaskExecutionAction.INSTANCE, MLPredictionTaskExecutionTransportAction.class),
                 new ActionHandler<>(MLTrainingTaskExecutionAction.INSTANCE, MLTrainingTaskExecutionTransportAction.class)
-        );
+            );
     }
 
     @Override
-    public Collection<Object> createComponents(Client client, ClusterService clusterService, ThreadPool threadPool,
-                                               ResourceWatcherService resourceWatcherService,
-                                               ScriptService scriptService,
-                                               NamedXContentRegistry xContentRegistry, Environment environment,
-                                               NodeEnvironment nodeEnvironment,
-                                               NamedWriteableRegistry namedWriteableRegistry,
-                                               IndexNameExpressionResolver indexNameExpressionResolver,
-                                               Supplier<RepositoriesService> repositoriesServiceSupplier) {
+    public Collection<Object> createComponents(
+        Client client,
+        ClusterService clusterService,
+        ThreadPool threadPool,
+        ResourceWatcherService resourceWatcherService,
+        ScriptService scriptService,
+        NamedXContentRegistry xContentRegistry,
+        Environment environment,
+        NodeEnvironment nodeEnvironment,
+        NamedWriteableRegistry namedWriteableRegistry,
+        IndexNameExpressionResolver indexNameExpressionResolver,
+        Supplier<RepositoriesService> repositoriesServiceSupplier
+    ) {
         Map<String, MLStat<?>> stats = ImmutableMap
-                .<String, MLStat<?>>builder()
-                .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
-                .build();
+            .<String, MLStat<?>>builder()
+            .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
+            .build();
         this.mlStats = new MLStats(stats);
         return ImmutableList.of(mlStats);
     }
 
     @Override
     public List<RestHandler> getRestHandlers(
-            Settings settings,
-            RestController restController,
-            ClusterSettings clusterSettings,
-            IndexScopedSettings indexScopedSettings,
-            SettingsFilter settingsFilter,
-            IndexNameExpressionResolver indexNameExpressionResolver,
-            Supplier<DiscoveryNodes> nodesInCluster
+        Settings settings,
+        RestController restController,
+        ClusterSettings clusterSettings,
+        IndexScopedSettings indexScopedSettings,
+        SettingsFilter settingsFilter,
+        IndexNameExpressionResolver indexNameExpressionResolver,
+        Supplier<DiscoveryNodes> nodesInCluster
     ) {
         RestStatsMLAction restStatsMLAction = new RestStatsMLAction(mlStats);
-        return ImmutableList
-                .of(
-                        restStatsMLAction
-                );
+        return ImmutableList.of(restStatsMLAction);
     }
 
     @Override
     public List<ExecutorBuilder<?>> getExecutorBuilders(Settings settings) {
-        FixedExecutorBuilder ml = new FixedExecutorBuilder(
-                settings,
-                TASK_THREAD_POOL,
-                4,
-                4,
-                "ml.task_thread_pool",
-                false
-        );
+        FixedExecutorBuilder ml = new FixedExecutorBuilder(settings, TASK_THREAD_POOL, 4, 4, "ml.task_thread_pool", false);
 
         return Collections.singletonList(ml);
     }

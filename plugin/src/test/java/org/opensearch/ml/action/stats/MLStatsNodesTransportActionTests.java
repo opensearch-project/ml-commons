@@ -15,7 +15,18 @@ package org.opensearch.ml.action.stats;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.Version;
+import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
@@ -24,21 +35,10 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
-import org.opensearch.action.support.ActionFilters;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.jvm.JvmStats;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.transport.TransportService;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 
 public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     private MLStatsNodesTransportAction action;
@@ -73,12 +73,12 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         when(mem.getHeapUsedPercent()).thenReturn(randomShort());
 
         action = new MLStatsNodesTransportAction(
-                client().threadPool(),
-                clusterService(),
-                mock(TransportService.class),
-                mock(ActionFilters.class),
-                mlStats,
-                jvmService
+            client().threadPool(),
+            clusterService(),
+            mock(TransportService.class),
+            mock(ActionFilters.class),
+            mlStats,
+            jvmService
         );
     }
 
