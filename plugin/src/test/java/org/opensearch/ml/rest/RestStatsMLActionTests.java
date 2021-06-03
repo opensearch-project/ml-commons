@@ -12,23 +12,6 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.collect.ImmutableMap;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.Assert;
-import org.junit.rules.ExpectedException;
-import org.opensearch.ml.action.stats.MLStatsNodesRequest;
-import org.opensearch.ml.plugin.MachineLearningPlugin;
-import org.opensearch.ml.stats.MLStat;
-import org.opensearch.ml.stats.MLStats;
-import org.opensearch.ml.stats.StatNames;
-import org.opensearch.ml.stats.suppliers.CounterSupplier;
-import org.opensearch.rest.RestRequest;
-
-import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.test.rest.FakeRestRequest;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -37,10 +20,26 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.opensearch.ml.action.stats.MLStatsNodesRequest;
+import org.opensearch.ml.plugin.MachineLearningPlugin;
+import org.opensearch.ml.stats.MLStat;
+import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.StatNames;
+import org.opensearch.ml.stats.suppliers.CounterSupplier;
+import org.opensearch.rest.RestRequest;
+import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.test.rest.FakeRestRequest;
+
+import com.google.common.collect.ImmutableMap;
 
 public class RestStatsMLActionTests extends OpenSearchTestCase {
     @Rule
-    public ExpectedException thrown= ExpectedException.none();
+    public ExpectedException thrown = ExpectedException.none();
 
     RestStatsMLAction restAction;
     MLStats mlStats;
@@ -48,24 +47,21 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         Map<String, MLStat<?>> statMap = ImmutableMap
-                .<String, MLStat<?>>builder()
-                .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
-                .build();
+            .<String, MLStat<?>>builder()
+            .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
+            .build();
         mlStats = new MLStats(statMap);
         restAction = new RestStatsMLAction(mlStats);
     }
 
     @Test
     public void testsplitCommaSeparatedParam() {
-        Map<String, String> param = ImmutableMap
-                .<String, String>builder()
-                .put("nodeId", "111,222")
-                .build();
+        Map<String, String> param = ImmutableMap.<String, String>builder().put("nodeId", "111,222").build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
-                .withMethod(RestRequest.Method.GET)
-                .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
-                .withParams(param)
-                .build();
+            .withMethod(RestRequest.Method.GET)
+            .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
+            .withParams(param)
+            .build();
         Optional<String[]> nodeId = restAction.splitCommaSeparatedParam(fakeRestRequest, "nodeId");
         String[] array = nodeId.get();
         Assert.assertEquals(array[0], "111");
@@ -87,13 +83,13 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage(MLStatsNodesRequest.ALL_STATS_KEY);
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
-                .withMethod(RestRequest.Method.GET)
-                .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
-                .build();
+            .withMethod(RestRequest.Method.GET)
+            .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
+            .build();
         Set<String> validStats = new HashSet<>();
         validStats.add("stat1");
         validStats.add("stat2");
-        List<String> requestedStats = new ArrayList<>(Arrays.asList("stat1", "stat2",MLStatsNodesRequest.ALL_STATS_KEY));
+        List<String> requestedStats = new ArrayList<>(Arrays.asList("stat1", "stat2", MLStatsNodesRequest.ALL_STATS_KEY));
         restAction.getStatsToBeRetrieved(fakeRestRequest, validStats, requestedStats);
     }
 
@@ -102,28 +98,28 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("unrecognized");
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
-                .withMethod(RestRequest.Method.GET)
-                .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
-                .build();
+            .withMethod(RestRequest.Method.GET)
+            .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
+            .build();
         Set<String> validStats = new HashSet<>();
         validStats.add("stat1");
         validStats.add("stat2");
-        List<String> requestedStats = new ArrayList<>(Arrays.asList("stat1", "stat2","invalidStat"));
+        List<String> requestedStats = new ArrayList<>(Arrays.asList("stat1", "stat2", "invalidStat"));
         restAction.getStatsToBeRetrieved(fakeRestRequest, validStats, requestedStats);
     }
 
     @Test
     public void testGetRequestAllStats() {
         Map<String, String> param = ImmutableMap
-                .<String, String>builder()
-                .put("nodeId", "111,222")
-                .put("stat", MLStatsNodesRequest.ALL_STATS_KEY)
-                .build();
+            .<String, String>builder()
+            .put("nodeId", "111,222")
+            .put("stat", MLStatsNodesRequest.ALL_STATS_KEY)
+            .build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
-                .withMethod(RestRequest.Method.GET)
-                .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/{stat}")
-                .withParams(param)
-                .build();
+            .withMethod(RestRequest.Method.GET)
+            .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/{stat}")
+            .withParams(param)
+            .build();
         MLStatsNodesRequest request = restAction.getRequest(fakeRestRequest);
         Assert.assertEquals(request.getStatsToBeRetrieved().size(), 1);
         Assert.assertTrue(request.getStatsToBeRetrieved().contains(StatNames.ML_EXECUTING_TASK_COUNT.getName()));
@@ -131,15 +127,12 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetRequestEmptyStats() {
-        Map<String, String> param = ImmutableMap
-                .<String, String>builder()
-                .put("nodeId", "111,222")
-                .build();
+        Map<String, String> param = ImmutableMap.<String, String>builder().put("nodeId", "111,222").build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
-                .withMethod(RestRequest.Method.GET)
-                .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
-                .withParams(param)
-                .build();
+            .withMethod(RestRequest.Method.GET)
+            .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
+            .withParams(param)
+            .build();
         MLStatsNodesRequest request = restAction.getRequest(fakeRestRequest);
         Assert.assertEquals(request.getStatsToBeRetrieved().size(), 1);
         Assert.assertTrue(request.getStatsToBeRetrieved().contains(StatNames.ML_EXECUTING_TASK_COUNT.getName()));
@@ -148,15 +141,15 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
     @Test
     public void testGetRequestSpecifyStats() {
         Map<String, String> param = ImmutableMap
-                .<String, String>builder()
-                .put("nodeId", "111,222")
-                .put("stat", StatNames.ML_EXECUTING_TASK_COUNT.getName())
-                .build();
+            .<String, String>builder()
+            .put("nodeId", "111,222")
+            .put("stat", StatNames.ML_EXECUTING_TASK_COUNT.getName())
+            .build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
-                .withMethod(RestRequest.Method.GET)
-                .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/{stat}")
-                .withParams(param)
-                .build();
+            .withMethod(RestRequest.Method.GET)
+            .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/{stat}")
+            .withParams(param)
+            .build();
         MLStatsNodesRequest request = restAction.getRequest(fakeRestRequest);
         Assert.assertEquals(request.getStatsToBeRetrieved().size(), 1);
         Assert.assertTrue(request.getStatsToBeRetrieved().contains(StatNames.ML_EXECUTING_TASK_COUNT.getName()));

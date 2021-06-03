@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.xcontent.XContentType;
@@ -25,16 +26,15 @@ import org.opensearch.common.xcontent.XContentType;
 @Log4j2
 public class MLIndicesHandler {
     public static final String OS_ML_MODEL_RESULT = ".os_ml_model_result";
-    private static final String OS_ML_MODEL_RESULT_INDEX_MAPPING = "{\n" +
-            "    \"properties\": {\n" +
-            "      \"taskId\": { \"type\": \"keyword\" },\n" +
-            "      \"algorithm\": {\"type\": \"keyword\"},\n" +
-            "      \"modelName\" : { \"type\": \"keyword\"},\n" +
-            "      \"modelVersion\" : { \"type\": \"keyword\"},\n" +
-            "      \"modelContent\" : { \"type\": \"binary\"}\n" +
-            "    }\n" +
-            "}";
-
+    private static final String OS_ML_MODEL_RESULT_INDEX_MAPPING = "{\n"
+        + "    \"properties\": {\n"
+        + "      \"taskId\": { \"type\": \"keyword\" },\n"
+        + "      \"algorithm\": {\"type\": \"keyword\"},\n"
+        + "      \"modelName\" : { \"type\": \"keyword\"},\n"
+        + "      \"modelVersion\" : { \"type\": \"keyword\"},\n"
+        + "      \"modelContent\" : { \"type\": \"binary\"}\n"
+        + "    }\n"
+        + "}";
 
     ClusterService clusterService;
     Client client;

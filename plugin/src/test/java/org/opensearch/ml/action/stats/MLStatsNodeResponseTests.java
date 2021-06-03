@@ -12,17 +12,17 @@
 
 package org.opensearch.ml.action.stats;
 
-import org.junit.Assert;
-import org.junit.Test;
-import org.opensearch.Version;
-import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.common.io.stream.BytesStreamOutput;
+import static org.opensearch.test.OpenSearchTestCase.buildNewFakeTransportAddress;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.opensearch.test.OpenSearchTestCase.buildNewFakeTransportAddress;
+import org.junit.Assert;
+import org.junit.Test;
+import org.opensearch.Version;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 
 public class MLStatsNodeResponseTests {
     @Test

@@ -12,8 +12,8 @@
 
 package org.opensearch.ml.action.prediction;
 
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.action.ActionType;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 
 public class MLPredictionTaskExecutionAction extends ActionType<MLPredictionTaskResponse> {
     public static MLPredictionTaskExecutionAction INSTANCE = new MLPredictionTaskExecutionAction();

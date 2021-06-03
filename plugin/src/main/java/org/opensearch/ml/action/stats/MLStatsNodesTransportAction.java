@@ -10,20 +10,7 @@
  *
  */
 
-
 package org.opensearch.ml.action.stats;
-
-import org.opensearch.ml.stats.InternalStatNames;
-import org.opensearch.ml.stats.MLStats;
-import org.opensearch.action.FailedNodeException;
-import org.opensearch.action.support.ActionFilters;
-import org.opensearch.action.support.nodes.TransportNodesAction;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.inject.Inject;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.monitor.jvm.JvmService;
-import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.TransportService;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -31,8 +18,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.support.nodes.TransportNodesAction;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.ml.stats.InternalStatNames;
+import org.opensearch.ml.stats.MLStats;
+import org.opensearch.monitor.jvm.JvmService;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportService;
+
 public class MLStatsNodesTransportAction extends
-        TransportNodesAction<MLStatsNodesRequest, MLStatsNodesResponse, MLStatsNodeRequest, MLStatsNodeResponse> {
+    TransportNodesAction<MLStatsNodesRequest, MLStatsNodesResponse, MLStatsNodeRequest, MLStatsNodeResponse> {
     private MLStats mlStats;
     private final JvmService jvmService;
 
@@ -48,23 +47,23 @@ public class MLStatsNodesTransportAction extends
      */
     @Inject
     public MLStatsNodesTransportAction(
-            ThreadPool threadPool,
-            ClusterService clusterService,
-            TransportService transportService,
-            ActionFilters actionFilters,
-            MLStats mlStats,
-            JvmService jvmService
+        ThreadPool threadPool,
+        ClusterService clusterService,
+        TransportService transportService,
+        ActionFilters actionFilters,
+        MLStats mlStats,
+        JvmService jvmService
     ) {
         super(
-                MLStatsNodesAction.NAME,
-                threadPool,
-                clusterService,
-                transportService,
-                actionFilters,
-                MLStatsNodesRequest::new,
-                MLStatsNodeRequest::new,
-                ThreadPool.Names.MANAGEMENT,
-                MLStatsNodeResponse.class
+            MLStatsNodesAction.NAME,
+            threadPool,
+            clusterService,
+            transportService,
+            actionFilters,
+            MLStatsNodesRequest::new,
+            MLStatsNodeRequest::new,
+            ThreadPool.Names.MANAGEMENT,
+            MLStatsNodeResponse.class
         );
         this.mlStats = mlStats;
         this.jvmService = jvmService;
@@ -72,9 +71,9 @@ public class MLStatsNodesTransportAction extends
 
     @Override
     protected MLStatsNodesResponse newResponse(
-            MLStatsNodesRequest request,
-            List<MLStatsNodeResponse> responses,
-            List<FailedNodeException> failures
+        MLStatsNodesRequest request,
+        List<MLStatsNodeResponse> responses,
+        List<FailedNodeException> failures
     ) {
         return new MLStatsNodesResponse(clusterService.getClusterName(), responses, failures);
     }
@@ -112,4 +111,3 @@ public class MLStatsNodesTransportAction extends
         return new MLStatsNodeResponse(clusterService.localNode(), statValues);
     }
 }
-

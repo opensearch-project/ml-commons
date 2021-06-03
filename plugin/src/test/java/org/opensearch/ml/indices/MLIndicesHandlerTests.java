@@ -23,6 +23,7 @@ public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
     ClusterService clusterService;
     Client client;
     MLIndicesHandler mlIndicesHandler;
+
     @Before
     public void setup() {
         clusterService = clusterService();

@@ -12,15 +12,16 @@
 
 package org.opensearch.ml.action.training;
 
-import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
-import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
+import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -31,8 +32,11 @@ public class MLTrainingTaskExecutionTransportAction extends HandledTransportActi
     MLTaskRunner mlTaskRunner;
 
     @Inject
-    public MLTrainingTaskExecutionTransportAction(TransportService transportService, ActionFilters actionFilters,
-                                                  MLTaskRunner mlTaskRunner) {
+    public MLTrainingTaskExecutionTransportAction(
+        TransportService transportService,
+        ActionFilters actionFilters,
+        MLTaskRunner mlTaskRunner
+    ) {
         super(MLTrainingTaskExecutionAction.NAME, transportService, actionFilters, MLTrainingTaskRequest::new);
         this.mlTaskRunner = mlTaskRunner;
     }

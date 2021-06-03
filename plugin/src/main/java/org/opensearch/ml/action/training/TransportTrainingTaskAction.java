@@ -13,6 +13,7 @@
 package org.opensearch.ml.action.training;
 
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -32,8 +33,7 @@ public class TransportTrainingTaskAction extends HandledTransportAction<ActionRe
     TransportService transportService;
 
     @Inject
-    public TransportTrainingTaskAction(TransportService transportService, ActionFilters actionFilters,
-                                       MLTaskRunner mlTaskRunner) {
+    public TransportTrainingTaskAction(TransportService transportService, ActionFilters actionFilters, MLTaskRunner mlTaskRunner) {
         super(MLTrainingTaskAction.NAME, transportService, actionFilters, MLTrainingTaskRequest::new);
         this.mlTaskRunner = mlTaskRunner;
         this.transportService = transportService;

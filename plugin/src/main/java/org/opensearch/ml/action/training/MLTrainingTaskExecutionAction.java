@@ -12,8 +12,8 @@
 
 package org.opensearch.ml.action.training;
 
-import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 import org.opensearch.action.ActionType;
+import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 
 public class MLTrainingTaskExecutionAction extends ActionType<MLTrainingTaskResponse> {
 

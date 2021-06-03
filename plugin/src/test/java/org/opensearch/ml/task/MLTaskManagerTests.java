@@ -12,6 +12,8 @@
 
 package org.opensearch.ml.task;
 
+import java.time.Instant;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -20,8 +22,6 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.model.MLTaskType;
-
-import java.time.Instant;
 
 public class MLTaskManagerTests {
     MLTaskManager mlTaskManager;
@@ -33,12 +33,13 @@ public class MLTaskManagerTests {
     @Before
     public void setup() {
         this.mlTaskManager = new MLTaskManager();
-        this.mlTask = MLTask.builder()
-                .taskId("task id")
-                .taskType(MLTaskType.PREDICTION)
-                .createTime(Instant.now())
-                .state(MLTaskState.CREATED)
-                .build();
+        this.mlTask = MLTask
+            .builder()
+            .taskId("task id")
+            .taskType(MLTaskType.PREDICTION)
+            .createTime(Instant.now())
+            .state(MLTaskState.CREATED)
+            .build();
     }
 
     @Test
@@ -80,22 +81,10 @@ public class MLTaskManagerTests {
 
     @Test
     public void testGetRunningTaskCount() {
-        MLTask task1 = MLTask.builder()
-                .taskId("1")
-                .state(MLTaskState.CREATED)
-                .build();
-        MLTask task2 = MLTask.builder()
-                .taskId("2")
-                .state(MLTaskState.RUNNING)
-                .build();
-        MLTask task3 = MLTask.builder()
-                .taskId("3")
-                .state(MLTaskState.FAILED)
-                .build();
-        MLTask task4 = MLTask.builder()
-                .taskId("4")
-                .state(MLTaskState.COMPLETED)
-                .build();
+        MLTask task1 = MLTask.builder().taskId("1").state(MLTaskState.CREATED).build();
+        MLTask task2 = MLTask.builder().taskId("2").state(MLTaskState.RUNNING).build();
+        MLTask task3 = MLTask.builder().taskId("3").state(MLTaskState.FAILED).build();
+        MLTask task4 = MLTask.builder().taskId("4").state(MLTaskState.COMPLETED).build();
         mlTaskManager.add(task1);
         mlTaskManager.add(task2);
         mlTaskManager.add(task3);
@@ -105,22 +94,10 @@ public class MLTaskManagerTests {
 
     @Test
     public void testClear() {
-        MLTask task1 = MLTask.builder()
-                .taskId("1")
-                .state(MLTaskState.CREATED)
-                .build();
-        MLTask task2 = MLTask.builder()
-                .taskId("2")
-                .state(MLTaskState.RUNNING)
-                .build();
-        MLTask task3 = MLTask.builder()
-                .taskId("3")
-                .state(MLTaskState.FAILED)
-                .build();
-        MLTask task4 = MLTask.builder()
-                .taskId("4")
-                .state(MLTaskState.COMPLETED)
-                .build();
+        MLTask task1 = MLTask.builder().taskId("1").state(MLTaskState.CREATED).build();
+        MLTask task2 = MLTask.builder().taskId("2").state(MLTaskState.RUNNING).build();
+        MLTask task3 = MLTask.builder().taskId("3").state(MLTaskState.FAILED).build();
+        MLTask task4 = MLTask.builder().taskId("4").state(MLTaskState.COMPLETED).build();
         mlTaskManager.add(task1);
         mlTaskManager.add(task2);
         mlTaskManager.add(task3);
