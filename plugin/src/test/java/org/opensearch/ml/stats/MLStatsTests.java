@@ -12,16 +12,16 @@
 
 package org.opensearch.ml.stats;
 
-import org.opensearch.ml.stats.suppliers.CounterSupplier;
-import org.opensearch.test.OpenSearchTestCase;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.opensearch.ml.stats.suppliers.CounterSupplier;
+import org.opensearch.test.OpenSearchTestCase;
 
 public class MLStatsTests extends OpenSearchTestCase {
     private Map<String, MLStat<?>> statsMap;
@@ -47,21 +47,26 @@ public class MLStatsTests extends OpenSearchTestCase {
 
     @Test
     public void testStatNamesGetNames() {
-        Assert.assertEquals("getNames of StatNames returns the incorrect number of stats",
-                StatNames.getNames().size(), StatNames.values().length);
+        Assert
+            .assertEquals(
+                "getNames of StatNames returns the incorrect number of stats",
+                StatNames.getNames().size(),
+                StatNames.values().length
+            );
     }
 
     @Test
     public void testGetStats() {
         Map<String, MLStat<?>> stats = mlStats.getStats();
 
-        Assert.assertEquals("getStats returns the incorrect number of stats",
-                stats.size(), statsMap.size());
+        Assert.assertEquals("getStats returns the incorrect number of stats", stats.size(), statsMap.size());
 
         for (Map.Entry<String, MLStat<?>> stat : stats.entrySet()) {
-            Assert.assertTrue("getStats returns incorrect stats",
-                    mlStats.getStats().containsKey(stat.getKey()) &&
-                            mlStats.getStats().get(stat.getKey()) == stat.getValue());
+            Assert
+                .assertTrue(
+                    "getStats returns incorrect stats",
+                    mlStats.getStats().containsKey(stat.getKey()) && mlStats.getStats().get(stat.getKey()) == stat.getValue()
+                );
         }
     }
 
@@ -69,9 +74,11 @@ public class MLStatsTests extends OpenSearchTestCase {
     public void testGetStat() {
         MLStat<?> stat = mlStats.getStat(clusterStatName1);
 
-        Assert.assertTrue("getStat returns incorrect stat",
-                mlStats.getStats().containsKey(clusterStatName1) &&
-                        mlStats.getStats().get(clusterStatName1) == stat);
+        Assert
+            .assertTrue(
+                "getStat returns incorrect stat",
+                mlStats.getStats().containsKey(clusterStatName1) && mlStats.getStats().get(clusterStatName1) == stat
+            );
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -85,9 +92,11 @@ public class MLStatsTests extends OpenSearchTestCase {
         Set<MLStat<?>> nodeStats = new HashSet<>(mlStats.getNodeStats().values());
 
         for (MLStat<?> stat : stats.values()) {
-            Assert.assertTrue("getNodeStats returns incorrect stat",
-                    (stat.isClusterLevel() && !nodeStats.contains(stat)) ||
-                            (!stat.isClusterLevel() && nodeStats.contains(stat)));
+            Assert
+                .assertTrue(
+                    "getNodeStats returns incorrect stat",
+                    (stat.isClusterLevel() && !nodeStats.contains(stat)) || (!stat.isClusterLevel() && nodeStats.contains(stat))
+                );
         }
     }
 
@@ -97,9 +106,11 @@ public class MLStatsTests extends OpenSearchTestCase {
         Set<MLStat<?>> clusterStats = new HashSet<>(mlStats.getClusterStats().values());
 
         for (MLStat<?> stat : stats.values()) {
-            Assert.assertTrue("getClusterStats returns incorrect stat",
-                    (stat.isClusterLevel() && clusterStats.contains(stat)) ||
-                            (!stat.isClusterLevel() && !clusterStats.contains(stat)));
+            Assert
+                .assertTrue(
+                    "getClusterStats returns incorrect stat",
+                    (stat.isClusterLevel() && clusterStats.contains(stat)) || (!stat.isClusterLevel() && !clusterStats.contains(stat))
+                );
         }
     }
 }

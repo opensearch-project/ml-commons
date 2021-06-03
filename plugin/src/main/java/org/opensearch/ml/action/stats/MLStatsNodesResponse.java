@@ -10,8 +10,10 @@
  *
  */
 
-
 package org.opensearch.ml.action.stats;
+
+import java.io.IOException;
+import java.util.List;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.nodes.BaseNodesResponse;
@@ -21,9 +23,6 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
-
-import java.io.IOException;
-import java.util.List;
 
 public class MLStatsNodesResponse extends BaseNodesResponse<MLStatsNodeResponse> implements ToXContentObject {
     private static final String NODES_KEY = "nodes";

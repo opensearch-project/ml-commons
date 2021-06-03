@@ -15,6 +15,8 @@ plugins {
     id 'nebula.ospackage'
     id "io.freefair.lombok"
     id 'jacoco'
+    id "com.diffplug.gradle.spotless" version "3.26.1"
+    id 'checkstyle'
 }
 apply plugin: 'opensearch.opensearchplugin'
 apply plugin: 'opensearch.testclusters'
@@ -40,6 +42,7 @@ dependencies {
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
     compile group: 'com.google.guava', name: 'guava', version:'29.0-jre'
 
+    checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 
 test {
@@ -94,16 +97,32 @@ jacocoTestReport {
     dependsOn test
 }
 
+List<String> jacocoExclusions = [
+        // TODO: add more unit test to meet the minimal test coverage.
+        'org.opensearch.ml.action.*',
+        'org.opensearch.ml.constant.CommonValue',
+        'org.opensearch.ml.indices.MLInputDatasetHandler',
+        'org.opensearch.ml.plugin.*',
+        'org.opensearch.ml.task.MLTaskRunner',
+]
+
 jacocoTestCoverageVerification {
     violationRules {
         rule {
-            limit {
-                counter = 'LINE'
-                minimum = 0.7
-            }
+            element = 'CLASS'
+            excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
                 minimum = 0.8
+            }
+        }
+        rule {
+            element = 'CLASS'
+            excludes = jacocoExclusions
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.7
             }
         }
     }
@@ -115,4 +134,17 @@ configurations.all {
     resolutionStrategy.force 'junit:junit:4.12'
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
+}
+
+spotless {
+    java {
+        removeUnusedImports()
+        importOrder 'java', 'javax', 'org', 'com'
+
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    }
+}
+
+checkstyle {
+    toolVersion = '8.29'
 }

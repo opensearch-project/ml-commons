@@ -10,7 +10,6 @@
  *
  */
 
-
 package org.opensearch.ml.constant;
 
 public class CommonValue {

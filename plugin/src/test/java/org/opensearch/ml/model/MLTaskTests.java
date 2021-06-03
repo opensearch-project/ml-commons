@@ -12,26 +12,27 @@
 
 package org.opensearch.ml.model;
 
+import java.io.IOException;
+import java.time.Instant;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-
-import java.io.IOException;
-import java.time.Instant;
 
 public class MLTaskTests {
     @Test
     public void testWriteTo() throws IOException {
         BytesStreamOutput output = new BytesStreamOutput();
         Instant now = Instant.now();
-        MLTask task1 = MLTask.builder()
-                .taskId("dummy taskId")
-                .taskType(MLTaskType.PREDICTION)
-                .modelId(null)
-                .createTime(now)
-                .state(MLTaskState.RUNNING)
-                .error(null)
-                .build();
+        MLTask task1 = MLTask
+            .builder()
+            .taskId("dummy taskId")
+            .taskType(MLTaskType.PREDICTION)
+            .modelId(null)
+            .createTime(now)
+            .state(MLTaskState.RUNNING)
+            .error(null)
+            .build();
         task1.writeTo(output);
         MLTask task2 = new MLTask(output.bytes().streamInput());
         Assert.assertEquals(task1, task2);

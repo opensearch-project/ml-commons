@@ -12,9 +12,10 @@
 
 package org.opensearch.ml.utils;
 
-import org.opensearch.ml.plugin.MachineLearningPlugin;
 import lombok.experimental.UtilityClass;
+
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.ml.plugin.MachineLearningPlugin;
 
 @UtilityClass
 public class MLNodeUtils {

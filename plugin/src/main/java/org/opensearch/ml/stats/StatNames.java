@@ -12,10 +12,10 @@
 
 package org.opensearch.ml.stats;
 
-import lombok.Getter;
-
 import java.util.HashSet;
 import java.util.Set;
+
+import lombok.Getter;
 
 /**
  * Enum containing names of all stats

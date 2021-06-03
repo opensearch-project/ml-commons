@@ -10,11 +10,10 @@
  *
  */
 
-
 package org.opensearch.ml.action.stats;
 
-import org.opensearch.ml.constant.CommonValue;
 import org.opensearch.action.ActionType;
+import org.opensearch.ml.constant.CommonValue;
 
 public class MLStatsNodesAction extends ActionType<MLStatsNodesResponse> {
     // Internal Action which is not used for public facing RestAPIs.

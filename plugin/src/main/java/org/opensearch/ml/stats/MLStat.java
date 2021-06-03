@@ -12,11 +12,12 @@
 
 package org.opensearch.ml.stats;
 
+import java.util.function.Supplier;
+
 import lombok.Getter;
+
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
-
-import java.util.function.Supplier;
 
 /**
  * Class represents a stat the ML plugin keeps track of

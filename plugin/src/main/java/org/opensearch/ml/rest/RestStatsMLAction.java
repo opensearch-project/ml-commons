@@ -12,15 +12,7 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.annotations.VisibleForTesting;
-import org.opensearch.ml.action.stats.MLStatsNodesAction;
-import org.opensearch.ml.action.stats.MLStatsNodesRequest;
-import org.opensearch.ml.stats.MLStats;
-import com.google.common.collect.ImmutableList;
-import org.opensearch.client.node.NodeClient;
-import org.opensearch.rest.BaseRestHandler;
-import org.opensearch.rest.RestRequest;
-import org.opensearch.rest.action.RestToXContentListener;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,7 +22,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import org.opensearch.client.node.NodeClient;
+import org.opensearch.ml.action.stats.MLStatsNodesAction;
+import org.opensearch.ml.action.stats.MLStatsNodesRequest;
+import org.opensearch.ml.stats.MLStats;
+import org.opensearch.rest.BaseRestHandler;
+import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.action.RestToXContentListener;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 public class RestStatsMLAction extends BaseRestHandler {
     private static final String STATS_ML_ACTION = "stats_ml";
@@ -50,18 +51,16 @@ public class RestStatsMLAction extends BaseRestHandler {
         return STATS_ML_ACTION;
     }
 
-
     @Override
     public List<Route> routes() {
         return ImmutableList
-                .of(
-                        new Route(RestRequest.Method.GET, ML_BASE_URI + "/{nodeId}/stats/"),
-                        new Route(RestRequest.Method.GET, ML_BASE_URI + "/{nodeId}/stats/{stat}"),
-                        new Route(RestRequest.Method.GET, ML_BASE_URI + "/stats/"),
-                        new Route(RestRequest.Method.GET, ML_BASE_URI + "/stats/{stat}")
-                );
+            .of(
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/{nodeId}/stats/"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/{nodeId}/stats/{stat}"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/stats/"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/stats/{stat}")
+            );
     }
-
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) {
@@ -78,14 +77,10 @@ public class RestStatsMLAction extends BaseRestHandler {
     @VisibleForTesting
     MLStatsNodesRequest getRequest(RestRequest request) {
         // todo: add logic to triage request based on node type(ML node or data node)
-        MLStatsNodesRequest mlStatsRequest = new MLStatsNodesRequest(
-                splitCommaSeparatedParam(request, "nodeId").orElse(null));
+        MLStatsNodesRequest mlStatsRequest = new MLStatsNodesRequest(splitCommaSeparatedParam(request, "nodeId").orElse(null));
         mlStatsRequest.timeout(request.param("timeout"));
 
-        List<String> requestedStats =
-                splitCommaSeparatedParam(request, "stat")
-                        .map(Arrays::asList)
-                        .orElseGet(Collections::emptyList);
+        List<String> requestedStats = splitCommaSeparatedParam(request, "stat").map(Arrays::asList).orElseGet(Collections::emptyList);
 
         Set<String> validStats = mlStats.getStats().keySet();
         if (isAllStatsRequested(requestedStats)) {
@@ -98,35 +93,28 @@ public class RestStatsMLAction extends BaseRestHandler {
     }
 
     @VisibleForTesting
-    Set<String> getStatsToBeRetrieved(
-            RestRequest request, Set<String> validStats, List<String> requestedStats) {
+    Set<String> getStatsToBeRetrieved(RestRequest request, Set<String> validStats, List<String> requestedStats) {
         if (requestedStats.contains(MLStatsNodesRequest.ALL_STATS_KEY)) {
             throw new IllegalArgumentException(
-                    String.format("Request %s contains both %s and individual stats",
-                            request.path(), MLStatsNodesRequest.ALL_STATS_KEY));
+                String.format("Request %s contains both %s and individual stats", request.path(), MLStatsNodesRequest.ALL_STATS_KEY)
+            );
         }
 
-        Set<String> invalidStats =
-                requestedStats.stream()
-                        .filter(s -> !validStats.contains(s))
-                        .collect(Collectors.toSet());
+        Set<String> invalidStats = requestedStats.stream().filter(s -> !validStats.contains(s)).collect(Collectors.toSet());
 
         if (!invalidStats.isEmpty()) {
-            throw new IllegalArgumentException(
-                    unrecognized(request, invalidStats, new HashSet<>(requestedStats), "stat"));
+            throw new IllegalArgumentException(unrecognized(request, invalidStats, new HashSet<>(requestedStats), "stat"));
         }
         return new HashSet<>(requestedStats);
     }
 
     @VisibleForTesting
     boolean isAllStatsRequested(List<String> requestedStats) {
-        return requestedStats.isEmpty()
-                || (requestedStats.size() == 1 && requestedStats.contains(MLStatsNodesRequest.ALL_STATS_KEY));
+        return requestedStats.isEmpty() || (requestedStats.size() == 1 && requestedStats.contains(MLStatsNodesRequest.ALL_STATS_KEY));
     }
 
     @VisibleForTesting
     Optional<String[]> splitCommaSeparatedParam(RestRequest request, String paramName) {
-        return Optional.ofNullable(request.param(paramName))
-                .map(s -> s.split(","));
+        return Optional.ofNullable(request.param(paramName)).map(s -> s.split(","));
     }
 }

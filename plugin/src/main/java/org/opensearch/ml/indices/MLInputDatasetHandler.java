@@ -12,10 +12,15 @@
 
 package org.opensearch.ml.indices;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.Client;
@@ -27,10 +32,6 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Convert MLInputDataset to Dataframe
@@ -72,12 +73,7 @@ public class MLInputDatasetHandler {
         searchRequest.indices(indices);
 
         client.search(searchRequest, ActionListener.wrap(r -> {
-            if (
-                    r == null ||
-                    r.getHits() == null ||
-                    r.getHits().getTotalHits() == null ||
-                    r.getHits().getTotalHits().value == 0
-            ) {
+            if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
                 // todo: add specific exception
                 listener.onFailure(new RuntimeException("No document found"));
                 return;

@@ -12,10 +12,10 @@
 
 package org.opensearch.ml.stats;
 
-import lombok.Getter;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import lombok.Getter;
 
 /**
  * This class is the main entry-point for access to the stats that the ML plugin keeps track of.
