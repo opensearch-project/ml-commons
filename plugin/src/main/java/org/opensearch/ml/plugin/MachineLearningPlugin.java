@@ -44,11 +44,15 @@ import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
+import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.rest.RestStatsMLAction;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
+import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
@@ -68,6 +72,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String ML_BASE_URI = "/_opensearch/_ml";
 
     private MLStats mlStats;
+    private MLTaskManager mlTaskManager;
+    private MLIndicesHandler mlIndicesHandler;
+    private MLInputDatasetHandler mlInputDatasetHandler;
+    private MLTaskRunner mlTaskRunner;
 
     public static final Setting<Boolean> IS_ML_NODE_SETTING = Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
 
@@ -109,7 +117,22 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
             .build();
         this.mlStats = new MLStats(stats);
-        return ImmutableList.of(mlStats);
+
+        mlTaskManager = new MLTaskManager();
+        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        mlInputDatasetHandler = new MLInputDatasetHandler(client);
+
+        mlTaskRunner = new MLTaskRunner(
+            threadPool,
+            clusterService,
+            client,
+            mlTaskManager,
+            mlStats,
+            mlIndicesHandler,
+            mlInputDatasetHandler
+        );
+
+        return ImmutableList.of(mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTaskRunner);
     }
 
     @Override
