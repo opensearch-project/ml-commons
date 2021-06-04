@@ -79,7 +79,7 @@ public class MLTaskRunner {
     private final MLStats mlStats;
     private final MLIndicesHandler mlIndicesHandler;
     private final MLInputDatasetHandler mlInputDatasetHandler;
-    private volatile Integer maxAdBatchTaskPerNode;
+    private volatile Integer maxMLBatchTaskPerNode;
 
     public MLTaskRunner(
         ThreadPool threadPool,
@@ -97,7 +97,7 @@ public class MLTaskRunner {
         this.mlStats = mlStats;
         this.mlIndicesHandler = mlIndicesHandler;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
-        this.maxAdBatchTaskPerNode = MLTaskManager.MAX_ML_TASK_PER_NODE;
+        this.maxMLBatchTaskPerNode = MLTaskManager.MAX_ML_TASK_PER_NODE;
     }
 
     /**
@@ -119,9 +119,9 @@ public class MLTaskRunner {
                 .collect(Collectors.toList());
 
             if (candidateNodeResponse.size() == 0) {
-                String errorMessage = "All nodes' memory usage exceeds limitation"
+                String errorMessage = "All nodes' memory usage exceeds limitation "
                     + DEFAULT_JVM_HEAP_USAGE_THRESHOLD
-                    + ". No eligible node to run ml jobs ";
+                    + ". No eligible node available to run ml jobs ";
                 log.warn(errorMessage);
                 listener.onFailure(new LimitExceededException(errorMessage));
                 return;
@@ -130,10 +130,10 @@ public class MLTaskRunner {
             // Check # of executing ML task
             candidateNodeResponse = candidateNodeResponse
                 .stream()
-                .filter(stat -> (Long) stat.getStatsMap().get(ML_EXECUTING_TASK_COUNT.getName()) < maxAdBatchTaskPerNode)
+                .filter(stat -> (Long) stat.getStatsMap().get(ML_EXECUTING_TASK_COUNT.getName()) < maxMLBatchTaskPerNode)
                 .collect(Collectors.toList());
             if (candidateNodeResponse.size() == 0) {
-                String errorMessage = "All nodes' executing ML task count exceeds limitation.";
+                String errorMessage = "All nodes' executing ML task count reach limitation.";
                 log.warn(errorMessage);
                 listener.onFailure(new LimitExceededException(errorMessage));
                 return;
@@ -234,7 +234,7 @@ public class MLTaskRunner {
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
 
-        // get model
+        // get model by model id.
         Model model = new Model();
         if (request.getModelId() != null) {
             GetResponse response = client.prepareGet(OS_ML_MODEL_RESULT, "_doc", request.getModelId()).get();
@@ -318,6 +318,8 @@ public class MLTaskRunner {
             .createTime(Instant.now())
             .state(MLTaskState.CREATED)
             .build();
+        // TODO: move this listener onResponse later to catch the following cases:
+        // 1). search data failure, 2) train model failure, 3) persist model failure.
         listener.onResponse(MLTrainingTaskResponse.builder().taskId(mlTask.getTaskId()).status(MLTaskState.CREATED.name()).build());
         if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
