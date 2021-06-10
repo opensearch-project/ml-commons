@@ -46,6 +46,8 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestStatsMLAction;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -146,7 +148,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         Supplier<DiscoveryNodes> nodesInCluster
     ) {
         RestStatsMLAction restStatsMLAction = new RestStatsMLAction(mlStats);
-        return ImmutableList.of(restStatsMLAction);
+        RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
+        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
+        return ImmutableList.of(restStatsMLAction, restMLTrainingAction, restMLPredictionAction);
     }
 
     @Override

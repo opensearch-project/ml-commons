@@ -22,6 +22,8 @@ import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 
@@ -34,7 +36,7 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLPredictionTaskResponse extends ActionResponse {
+public class MLPredictionTaskResponse extends ActionResponse implements ToXContentObject {
     String taskId;
 
     String status;
@@ -78,5 +80,15 @@ public class MLPredictionTaskResponse extends ActionResponse {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
         }
+    }
+
+    @Override
+    public XContentBuilder toXContent(final XContentBuilder xContentBuilder, final Params params) throws IOException {
+        xContentBuilder.startObject();
+        xContentBuilder.field("TaskId", taskId);
+        xContentBuilder.field("Status", status);
+        xContentBuilder.field("PredictionResult", predictionResult);
+        xContentBuilder.endObject();
+        return xContentBuilder;
     }
 }
