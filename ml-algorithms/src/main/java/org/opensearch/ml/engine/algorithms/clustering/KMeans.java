@@ -10,13 +10,15 @@
  *
  */
 
-package org.opensearch.ml.engine.clustering;
+package org.opensearch.ml.engine.algorithms.clustering;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
+import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.annotation.MLAlgorithm;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -32,6 +34,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@MLAlgorithm("kmeans")
 public class KMeans implements MLAlgo {
     public static final String K = "k";
     public static final String ITERATIONS = "iterations";
@@ -49,6 +52,8 @@ public class KMeans implements MLAlgo {
     private int numThreads = Runtime.getRuntime().availableProcessors() + 1; //Assume cpu-bound.
     //The random seed.
     private long seed = System.currentTimeMillis();
+
+    public KMeans() {}
 
     public KMeans(List<MLParameter> parameters) {
         parameters.forEach(mlParameter ->
@@ -127,5 +132,15 @@ public class KMeans implements MLAlgo {
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
         return model;
+    }
+
+    @Override
+    public MLAlgoMetaData getMetaData() {
+        return MLAlgoMetaData.builder().name("kmeans")
+                .description("A clustering algorithm.")
+                .version("1.0")
+                .predictable(true)
+                .trainable(true)
+                .build();
     }
 }

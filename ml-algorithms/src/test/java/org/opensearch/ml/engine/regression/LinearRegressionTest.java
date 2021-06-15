@@ -21,19 +21,20 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
-import static org.opensearch.ml.engine.regression.LinearRegression.BETA1;
-import static org.opensearch.ml.engine.regression.LinearRegression.BETA2;
-import static org.opensearch.ml.engine.regression.LinearRegression.EPSILON;
-import static org.opensearch.ml.engine.regression.LinearRegression.LEARNING_RATE;
-import static org.opensearch.ml.engine.regression.LinearRegression.OBJECTIVE;
-import static org.opensearch.ml.engine.regression.LinearRegression.OPTIMISER;
-import static org.opensearch.ml.engine.regression.LinearRegression.TARGET;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.BETA1;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.BETA2;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.EPSILON;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.LEARNING_RATE;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.OBJECTIVE;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.OPTIMISER;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.TARGET;
 
 
 public class LinearRegressionTest {

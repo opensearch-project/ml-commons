@@ -35,4 +35,12 @@ public interface MLAlgo {
     default Model train(DataFrame dataFrame) {
         throw new RuntimeException("Unsupported train.");
     }
+
+    /**
+     * Return meta data of the algorithm.
+     * @return the meta data
+     */
+    default MLAlgoMetaData getMetaData() {
+        throw new RuntimeException("Unsupported getMetaData.");
+    }
 }
