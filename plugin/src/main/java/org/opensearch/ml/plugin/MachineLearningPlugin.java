@@ -55,6 +55,7 @@ import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.task.MLTaskRunner;
+import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
@@ -78,6 +79,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
     private MLTaskRunner mlTaskRunner;
+
+    private Client client;
+    private ClusterService clusterService;
+    private ThreadPool threadPool;
 
     public static final Setting<Boolean> IS_ML_NODE_SETTING = Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
 
@@ -114,6 +119,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         IndexNameExpressionResolver indexNameExpressionResolver,
         Supplier<RepositoriesService> repositoriesServiceSupplier
     ) {
+        this.client = client;
+        this.threadPool = threadPool;
+        this.clusterService = clusterService;
+
+        JvmService jvmService = new JvmService(environment.settings());
+
         Map<String, MLStat<?>> stats = ImmutableMap
             .<String, MLStat<?>>builder()
             .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
@@ -134,7 +145,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler
         );
 
-        return ImmutableList.of(mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTaskRunner);
+        return ImmutableList.of(jvmService, mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTaskRunner);
     }
 
     @Override
