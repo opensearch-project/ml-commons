@@ -95,21 +95,24 @@ public class BaseMLSearchAction extends RestSearchAction {
     @VisibleForTesting
     List<MLParameter> getMLParameters(RestRequest request) throws IOException {
         List<MLParameter> parameters = new ArrayList<>();
-        XContentParser parser = request.contentParser();
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-            String fieldName = parser.currentName();
-            parser.nextToken();
-            if (ML_PARAMETERS.equals(fieldName)) {
-                Map<String, Object> uiMetadata = parser.map();
-                parameters = uiMetadata
-                    .entrySet()
-                    .stream()
-                    .map(e -> new MLParameter(e.getKey(), e.getValue()))
-                    .collect(Collectors.toList());
-                break;
+        if (request.hasContent()) {
+            XContentParser parser = request.contentParser();
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                String fieldName = parser.currentName();
+                parser.nextToken();
+                if (ML_PARAMETERS.equals(fieldName)) {
+                    Map<String, Object> uiMetadata = parser.map();
+                    parameters = uiMetadata
+                        .entrySet()
+                        .stream()
+                        .map(e -> new MLParameter(e.getKey(), e.getValue()))
+                        .collect(Collectors.toList());
+                    break;
+                }
             }
         }
+
         return parameters;
     }
 

@@ -16,7 +16,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.metadata.ComponentTemplateMetadata;
 import org.opensearch.common.ParsingException;
@@ -27,6 +26,7 @@ import org.opensearch.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.QueryStringQueryBuilder;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
@@ -143,8 +143,7 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetMLParametersWithoutRequestBody() throws IOException {
-        thrown.expect(OpenSearchParseException.class);
-        Map<String, String> param = ImmutableMap.of();
+        Map<String, String> param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, "kmeans").build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
         List<MLParameter> mlParameters = baseMLSearchAction.getMLParameters(fakeRestRequest);
         assertTrue(mlParameters.isEmpty());
@@ -212,7 +211,22 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetSearchQueryWithoutInput() throws IOException {
+    public void testGetSearchQueryWithoutSearchInput() throws IOException {
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
+
+        SearchQueryInputDataset searchQueryInputDataset = baseMLSearchAction.buildSearchQueryInput(fakeRestRequest, client);
+        assertNotNull(searchQueryInputDataset);
+        assertNotNull(searchQueryInputDataset.getSearchSourceBuilder());
+        assertNull(searchQueryInputDataset.getSearchSourceBuilder().query());
+    }
+
+    @Test
+    public void testGetSearchQueryInvalidRequestBody() throws IOException {
         thrown.expect(ParsingException.class);
         XContentBuilder xContentBuilder = XContentFactory
             .jsonBuilder()
@@ -253,7 +267,26 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetSearchQueryWithValidInput() throws IOException {
+    public void testGetSearchQueryWithSearchParams() throws IOException {
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .put("q", "user:dilbert")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
+
+        SearchQueryInputDataset searchQueryInputDataset = baseMLSearchAction.buildSearchQueryInput(fakeRestRequest, client);
+        assertNotNull(searchQueryInputDataset);
+        assertNotNull(searchQueryInputDataset.getSearchSourceBuilder());
+        assertNotNull(searchQueryInputDataset.getSearchSourceBuilder().query());
+
+        QueryStringQueryBuilder queryBuilder = (QueryStringQueryBuilder) searchQueryInputDataset.getSearchSourceBuilder().query();
+        assertEquals("user:dilbert", queryBuilder.queryString());
+    }
+
+    @Test
+    public void testGetSearchQueryWithSearchRequestBody() throws IOException {
         String restContent = " { \"_source\": { \"includes\": \"include\", \"excludes\": \"*.field2\"}}";
         BytesArray bytesContent = new BytesArray(restContent.getBytes(StandardCharsets.UTF_8));
 
