@@ -22,6 +22,16 @@ import org.opensearch.rest.action.search.RestSearchAction;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
+/**
+ * This is the base class to handle search related ML requests, including training and prediction.
+ * Basically,
+ * 1. Training request will search the data, then train the model.
+ * 2. Prediction request will search the data then run the model to predict based on the data.
+ *
+ * This base class extends the RestSearchAction to build the SearchRequest,
+ * and it has the common code to parse the training request and prediction request.
+ *
+ */
 public class BaseMLSearchAction extends RestSearchAction {
     private static final String BASE_ML_SEARCH_ACTION = "base_ml_search_action";
     protected static final String PARAMETER_ALGORITHM = "algorithm";

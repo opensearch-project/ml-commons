@@ -161,23 +161,6 @@ testClusters.integTest {
     }
     plugin(project.tasks.bundlePlugin.archiveFile)
 
-    // As of ES 7.7.0 the opendistro-anomaly-detection plugin is being added to the list of plugins for the testCluster during build before
-    // the opensearch-job-scheduler plugin, which is causing build failures. From the stack trace, this looks like a bug.
-    //
-    // Exception in thread "main" java.lang.IllegalArgumentException: Missing plugin [opensearch-job-scheduler], dependency of [opendistro-anomaly-detection]
-    //       at org.opensearch.plugins.PluginsService.addSortedBundle(PluginsService.java:452)
-    //
-    // One explanation is that ES build script sort plugins according to the natural ordering of their names.
-    // opendistro-anomaly-detection comes before opensearch-job-scheduler.
-    //
-    // The following is a comparison of different plugin installation order:
-    // Before 7.7:
-    // ./bin/elasticsearch-plugin install --batch file:opendistro-anomaly-detection.zip file:opensearch-job-scheduler.zip
-    //
-    // After 7.7:
-    // ./bin/elasticsearch-plugin install --batch file:opensearch-job-scheduler.zip file:opendistro-anomaly-detection.zip
-    //
-    // A temporary hack is to reorder the plugins list after evaluation but prior to task execution when the plugins are installed.
     nodes.each { node ->
         def plugins = node.plugins
         def firstPlugin = plugins.get(0)
