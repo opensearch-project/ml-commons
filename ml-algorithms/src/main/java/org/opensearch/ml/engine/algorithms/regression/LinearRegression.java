@@ -10,13 +10,15 @@
  *
  */
 
-package org.opensearch.ml.engine.regression;
+package org.opensearch.ml.engine.algorithms.regression;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.engine.MLAlgo;
+import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.annotation.MLAlgorithm;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -41,6 +43,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@MLAlgorithm("linear_regression")
 public class LinearRegression implements MLAlgo {
     public static final String OBJECTIVE = "objective";
     public static final String OPTIMISER = "optimiser";
@@ -77,6 +80,7 @@ public class LinearRegression implements MLAlgo {
     private long seed = System.currentTimeMillis();
     private StochasticGradientOptimiser optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentumType);
 
+    public LinearRegression() {}
 
     /**
      * Initialize a linear regression algorithm.
@@ -231,5 +235,15 @@ public class LinearRegression implements MLAlgo {
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 
         return model;
+    }
+
+    @Override
+    public MLAlgoMetaData getMetaData() {
+        return MLAlgoMetaData.builder().name("linear_regression")
+                .description("Linear regression algorithm.")
+                .version("1.0")
+                .predictable(true)
+                .trainable(true)
+                .build();
     }
 }

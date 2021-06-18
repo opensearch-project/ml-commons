@@ -13,36 +13,47 @@
 package org.opensearch.ml.engine;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
-import org.opensearch.ml.engine.regression.LinearRegression;
+import org.opensearch.ml.engine.contants.MLAlgoNames;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-import static org.opensearch.ml.engine.clustering.KMeans.DISTANCE_TYPE;
-import static org.opensearch.ml.engine.clustering.KMeans.ITERATIONS;
-import static org.opensearch.ml.engine.clustering.KMeans.K;
-import static org.opensearch.ml.engine.clustering.KMeans.NUM_THREADS;
-import static org.opensearch.ml.engine.clustering.KMeans.SEED;
+import static org.opensearch.ml.engine.algorithms.clustering.KMeans.DISTANCE_TYPE;
+import static org.opensearch.ml.engine.algorithms.clustering.KMeans.ITERATIONS;
+import static org.opensearch.ml.engine.algorithms.clustering.KMeans.K;
+import static org.opensearch.ml.engine.algorithms.clustering.KMeans.NUM_THREADS;
+import static org.opensearch.ml.engine.algorithms.clustering.KMeans.SEED;
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
-import static org.opensearch.ml.engine.regression.LinearRegression.BETA1;
-import static org.opensearch.ml.engine.regression.LinearRegression.BETA2;
-import static org.opensearch.ml.engine.regression.LinearRegression.EPSILON;
-import static org.opensearch.ml.engine.regression.LinearRegression.LEARNING_RATE;
-import static org.opensearch.ml.engine.regression.LinearRegression.OBJECTIVE;
-import static org.opensearch.ml.engine.regression.LinearRegression.OPTIMISER;
-import static org.opensearch.ml.engine.regression.LinearRegression.TARGET;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.BETA1;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.BETA2;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.EPSILON;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.LEARNING_RATE;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.OBJECTIVE;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.OPTIMISER;
+import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.TARGET;
 
 public class MLEngineTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    private Set<String> algoNames = new HashSet<>();
+
+    @Before
+    public void setUp() {
+        algoNames.add(MLAlgoNames.KMEANS);
+        algoNames.add(MLAlgoNames.LINEAR_REGRESSION);
+    }
 
     @Test
     public void predictKMeans() {
@@ -98,6 +109,12 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
         MLEngine.predict("linear_regression", null, null, null);
+    }
+
+    @Test
+    public void getMetaData() {
+        MLEngineMetaData metaData = MLEngine.getMetaData();
+        metaData.getAlgoMetaDataList().forEach(e -> Assert.assertTrue(algoNames.contains(e.getName())));
     }
 
     private Model trainKMeansModel() {

@@ -14,17 +14,24 @@ package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
-import org.opensearch.ml.engine.clustering.KMeans;
+import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.algorithms.clustering.KMeans;
 import org.opensearch.ml.engine.contants.MLAlgoNames;
-import org.opensearch.ml.engine.regression.LinearRegression;
+import org.opensearch.ml.engine.exceptions.MetaDataException;
+import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
+import org.reflections.Reflections;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * This is the interface to all ml algorithms.
  */
 public class MLEngine {
+    private static final String ALGO_PACKAGE_NAME = "org.opensearch.ml.engine.algorithms";
+
     public static DataFrame predict(String algoName, List<MLParameter> parameters, DataFrame dataFrame, Model model) {
         if (parameters == null) {
             parameters = new ArrayList<>();
@@ -55,5 +62,20 @@ public class MLEngine {
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
+    }
+
+    public static MLEngineMetaData getMetaData() {
+        MLEngineMetaData engineMetaData = new MLEngineMetaData();
+        Reflections reflections = new Reflections(ALGO_PACKAGE_NAME);
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLAlgorithm.class);
+        try {
+            for (Class c : classes) {
+                MLAlgo algo = (MLAlgo) c.getDeclaredConstructor().newInstance();
+                engineMetaData.addAlgoMetaData(algo.getMetaData());
+            }
+        } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
+            throw new MetaDataException("Failed to get ML engine meta data.", e.getCause());
+        }
+        return engineMetaData;
     }
 }
