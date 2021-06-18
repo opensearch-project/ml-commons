@@ -19,6 +19,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.ml.common.parameter.MLParameterBuilder;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.algorithms.clustering.KMeans;
 
 import java.util.ArrayList;
 import java.util.List;
