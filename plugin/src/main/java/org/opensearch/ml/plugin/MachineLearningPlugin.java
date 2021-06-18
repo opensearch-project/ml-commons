@@ -72,7 +72,7 @@ import com.google.common.collect.ImmutableMap;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String TASK_THREAD_POOL = "OPENSEARCH_ML_TASK_THREAD_POOL";
-    public static final String ML_BASE_URI = "/_opensearch/_ml";
+    public static final String ML_BASE_URI = "/_plugins/_ml";
 
     private MLStats mlStats;
     private MLTaskManager mlTaskManager;
