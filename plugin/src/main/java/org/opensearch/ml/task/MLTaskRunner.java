@@ -106,7 +106,8 @@ public class MLTaskRunner {
      */
     public void dispatchTask(ActionListener<DiscoveryNode> listener) {
         // todo: add ML node type setting check
-        DiscoveryNode[] mlNodes = getEligibleMLNodes();
+        // DiscoveryNode[] mlNodes = getEligibleMLNodes();
+        DiscoveryNode[] mlNodes = getEligibleDataNodes();
         MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(mlNodes);
         MLStatsNodesRequest.addAll(ImmutableSet.of(ML_EXECUTING_TASK_COUNT.getName(), JVM_HEAP_USAGE.getName()));
 
@@ -392,5 +393,16 @@ public class MLTaskRunner {
             }
         }
         return eligibleNodes.toArray(new DiscoveryNode[0]);
+    }
+
+    private DiscoveryNode[] getEligibleDataNodes() {
+        ClusterState state = this.clusterService.state();
+        final List<DiscoveryNode> eligibleDataNodes = new ArrayList<>();
+        for (DiscoveryNode node : state.nodes()) {
+            if (node.isDataNode()) {
+                eligibleDataNodes.add(node);
+            }
+        }
+        return eligibleDataNodes.toArray(new DiscoveryNode[0]);
     }
 }
