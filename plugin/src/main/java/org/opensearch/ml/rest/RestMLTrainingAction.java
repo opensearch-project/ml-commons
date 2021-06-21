@@ -31,7 +31,7 @@ public class RestMLTrainingAction extends BaseMLSearchAction {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.GET, ML_BASE_URI + "/training/"));
+        return ImmutableList.of(new Route(RestRequest.Method.GET, ML_BASE_URI + "/_train/"));
     }
 
     @Override

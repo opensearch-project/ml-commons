@@ -42,6 +42,6 @@ public class RestMLTrainingActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.GET, route.getMethod());
-        assertEquals("/_plugins/_ml/training/", route.getPath());
+        assertEquals("/_plugins/_ml/_train/", route.getPath());
     }
 }
