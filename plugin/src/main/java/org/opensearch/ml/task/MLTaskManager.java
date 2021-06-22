@@ -99,6 +99,7 @@ public class MLTaskManager {
      * Get task from cache.
      *
      * @param taskId ML task id
+     * @return ML task
      */
     public MLTask get(String taskId) {
         if (contains(taskId)) {
