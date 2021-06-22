@@ -46,6 +46,9 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+
+import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestStatsMLAction;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -53,6 +56,7 @@ import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.task.MLTaskRunner;
+import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
@@ -69,13 +73,17 @@ import com.google.common.collect.ImmutableMap;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String TASK_THREAD_POOL = "OPENSEARCH_ML_TASK_THREAD_POOL";
-    public static final String ML_BASE_URI = "/_opensearch/_ml";
+    public static final String ML_BASE_URI = "/_plugins/_ml";
 
     private MLStats mlStats;
     private MLTaskManager mlTaskManager;
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
     private MLTaskRunner mlTaskRunner;
+
+    private Client client;
+    private ClusterService clusterService;
+    private ThreadPool threadPool;
 
     public static final Setting<Boolean> IS_ML_NODE_SETTING = Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
 
@@ -112,6 +120,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         IndexNameExpressionResolver indexNameExpressionResolver,
         Supplier<RepositoriesService> repositoriesServiceSupplier
     ) {
+        this.client = client;
+        this.threadPool = threadPool;
+        this.clusterService = clusterService;
+
+        JvmService jvmService = new JvmService(environment.settings());
+
         Map<String, MLStat<?>> stats = ImmutableMap
             .<String, MLStat<?>>builder()
             .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
@@ -132,7 +146,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler
         );
 
-        return ImmutableList.of(mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTaskRunner);
+        return ImmutableList.of(jvmService, mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTaskRunner);
     }
 
     @Override
@@ -146,7 +160,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         Supplier<DiscoveryNodes> nodesInCluster
     ) {
         RestStatsMLAction restStatsMLAction = new RestStatsMLAction(mlStats);
-        return ImmutableList.of(restStatsMLAction);
+        RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
+        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
+        return ImmutableList.of(restStatsMLAction, restMLTrainingAction, restMLPredictionAction);
     }
 
     @Override

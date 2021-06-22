@@ -12,27 +12,28 @@
 
 package org.opensearch.ml.common.transport.training;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import org.opensearch.action.ActionResponse;
-import org.opensearch.common.io.stream.InputStreamStreamInput;
-import org.opensearch.common.io.stream.OutputStreamStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.action.ActionResponse;
+import org.opensearch.common.io.stream.InputStreamStreamInput;
+import org.opensearch.common.io.stream.OutputStreamStreamOutput;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.common.xcontent.XContentBuilder;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLTrainingTaskResponse extends ActionResponse {
+public class MLTrainingTaskResponse extends ActionResponse implements ToXContentObject {
     String status;
     String taskId;
 
@@ -67,5 +68,14 @@ public class MLTrainingTaskResponse extends ActionResponse {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLTrainingTaskResponse", e);
         }
+    }
+
+    @Override
+    public XContentBuilder toXContent(final XContentBuilder xContentBuilder, final Params params) throws IOException {
+        xContentBuilder.startObject();
+        xContentBuilder.field("TaskId", taskId);
+        xContentBuilder.field("Status", status);
+        xContentBuilder.endObject();
+        return xContentBuilder;
     }
 }
