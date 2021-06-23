@@ -209,7 +209,7 @@ public class MLTaskRunner {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { predict(mlTask, dataFrame, request, listener); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
-                    mlTaskManager.add(mlTask);
+                    mlTaskManager.addIfAbsent(mlTask);
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
                     mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
                     listener.onFailure(e);
@@ -241,8 +241,8 @@ public class MLTaskRunner {
             GetResponse response = client.prepareGet(OS_ML_MODEL_RESULT, "_doc", request.getModelId()).get();
             Map<String, Object> source = response.getSourceAsMap();
             model.setName((String) source.get("modelName"));
-            model.setVersion(Integer.parseInt((String) source.get("modelVersion")));
-            byte[] decoded = Base64.getDecoder().decode(source.get("modelContent").toString().getBytes());
+            model.setVersion((Integer) source.get("modelVersion"));
+            byte[] decoded = Base64.getDecoder().decode((String) source.get("modelContent"));
             model.setContent(decoded);
         } else {
             IllegalArgumentException e = new IllegalArgumentException("ModelId is invalid");
@@ -326,7 +326,7 @@ public class MLTaskRunner {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { train(mlTask, dataFrame, request); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
-                    mlTaskManager.add(mlTask);
+                    mlTaskManager.addIfAbsent(mlTask);
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
                     mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
                 });
@@ -350,14 +350,14 @@ public class MLTaskRunner {
         try {
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
             Model model = MLEngine.train(request.getAlgorithm(), request.getParameters(), inputDataFrame);
-            byte[] encoded = Base64.getEncoder().encode(model.getContent());
+            String encodedModelContent = Base64.getEncoder().encodeToString(model.getContent());
             mlIndicesHandler.initModelIndexIfAbsent();
             Map<String, Object> source = new HashMap<>();
             source.put("taskId", mlTask.getTaskId());
             source.put("algorithm", request.getAlgorithm());
             source.put("modelName", model.getName());
             source.put("modelVersion", model.getVersion());
-            source.put("modelContent", encoded);
+            source.put("modelContent", encodedModelContent);
             IndexResponse response = client.prepareIndex(OS_ML_MODEL_RESULT, "_doc").setSource(source).get();
             log.info("mode data indexing done, result:{}", response.getResult());
             handleMLTaskComplete(mlTask);
