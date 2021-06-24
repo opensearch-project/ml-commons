@@ -83,12 +83,16 @@ public class MLPredictionTaskResponse extends ActionResponse implements ToXConte
     }
 
     @Override
-    public XContentBuilder toXContent(final XContentBuilder xContentBuilder, final Params params) throws IOException {
-        xContentBuilder.startObject();
-        xContentBuilder.field("TaskId", taskId);
-        xContentBuilder.field("Status", status);
-        xContentBuilder.field("PredictionResult", predictionResult);
-        xContentBuilder.endObject();
-        return xContentBuilder;
+    public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
+        builder.startObject();
+        builder.field("TaskId", taskId);
+        builder.field("Status", status);
+
+        builder.startObject("PredictionResult");
+        predictionResult.toXContent(builder);
+        builder.endObject();
+
+        builder.endObject();
+        return builder;
     }
 }

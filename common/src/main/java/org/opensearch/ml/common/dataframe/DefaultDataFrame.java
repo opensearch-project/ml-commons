@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -24,9 +23,9 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 
 import lombok.AccessLevel;
-import lombok.NonNull;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.xcontent.XContentBuilder;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
@@ -149,5 +148,24 @@ public class DefaultDataFrame extends AbstractDataFrame{
         super.writeTo(out);
         out.writeArray(columnMetas);
         out.writeList(rows);
+    }
+
+    @Override
+    public void toXContent(final XContentBuilder builder) throws IOException {
+        builder.startArray("ColumnMetas");
+        for(ColumnMeta columnMeta : columnMetas) {
+            builder.startObject();
+            columnMeta.toXContent(builder);
+            builder.endObject();
+        }
+        builder.endArray();
+
+        builder.startArray("Rows");
+        for(Row row : rows) {
+            builder.startObject();
+            row.toXContent(builder);
+            builder.endObject();
+        }
+        builder.endArray();
     }
 }

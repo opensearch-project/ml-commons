@@ -13,8 +13,15 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
+import org.opensearch.common.Strings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class StringValueTest {
     @Test
@@ -28,5 +35,18 @@ public class StringValueTest {
     @Test(expected = NullPointerException.class)
     public void stringValue_NullPointerException() {
         new StringValue(null);
+    }
+
+    @Test
+    public void testToXContent() throws IOException {
+        StringValue value = new StringValue("str");
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        builder.startObject();
+        value.toXContent(builder);
+        builder.endObject();
+
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+        assertEquals("{\"ColumnType\":\"STRING\",\"Value\":\"str\"}", jsonStr);
     }
 }

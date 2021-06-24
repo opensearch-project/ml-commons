@@ -24,6 +24,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.xcontent.XContentBuilder;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @Getter
@@ -43,5 +44,10 @@ public class ColumnMeta implements Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(name);
         out.writeEnum(columnType);
+    }
+
+    public void toXContent(final XContentBuilder builder) throws IOException {
+        builder.field("Name", name);
+        builder.field("ColumnType", columnType);
     }
 }

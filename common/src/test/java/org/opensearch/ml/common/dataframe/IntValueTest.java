@@ -13,8 +13,15 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
+import org.opensearch.common.Strings;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class IntValueTest {
 
@@ -24,5 +31,18 @@ public class IntValueTest {
         assertEquals(ColumnType.INTEGER, intValue.columnType());
         assertEquals(2, intValue.getValue());
         assertEquals(2, intValue.intValue());
+    }
+
+    @Test
+    public void testToXContent() throws IOException {
+        IntValue intValue = new IntValue(2);
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        builder.startObject();
+        intValue.toXContent(builder);
+        builder.endObject();
+
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+        assertEquals("{\"ColumnType\":\"INTEGER\",\"Value\":2}", jsonStr);
     }
 }

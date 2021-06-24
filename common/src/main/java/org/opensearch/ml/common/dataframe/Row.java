@@ -23,6 +23,7 @@ import org.opensearch.common.io.stream.Writeable;
 import lombok.AccessLevel;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.xcontent.XContentBuilder;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
@@ -88,5 +89,15 @@ public class Row implements Iterable<ColumnValue>, Writeable {
         }
 
         return new Row(newValues);
+    }
+
+    public void toXContent(final XContentBuilder builder) throws IOException {
+        builder.startArray("Values");
+        for(ColumnValue value : values) {
+            builder.startObject();
+            value.toXContent(builder);
+            builder.endObject();
+        }
+        builder.endArray();
     }
 }
