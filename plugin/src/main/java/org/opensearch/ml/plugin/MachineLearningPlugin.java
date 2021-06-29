@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import org.opensearch.SpecialPermission;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -47,7 +46,6 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
-
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestStatsMLAction;
@@ -94,16 +92,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             return IS_ML_NODE_SETTING;
         }
     };
-
-    // This is required by the Java Security permissions.
-    // https://www.elastic.co/guide/en/elasticsearch/plugins/current/plugin-authors.html#_java_security_permissions
-    static {
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null) {
-            // unprivileged code such as scripts do not have SpecialPermission
-            sm.checkPermission(new SpecialPermission());
-        }
-    }
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
