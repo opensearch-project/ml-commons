@@ -19,11 +19,19 @@ import java.util.HashMap;
 
 import org.junit.Test;
 import org.opensearch.action.ActionResponse;
+import org.opensearch.common.Strings;
+import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 
@@ -92,5 +100,26 @@ public class MLPredictionTaskResponseTest {
 
 
         MLPredictionTaskResponse.fromActionResponse(actionResponse);
+    }
+
+    @Test
+    public void toXContentTest() throws IOException {
+        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+            .taskId("b5009b99-268f-476d-a676-379a30f82457")
+            .status("Success")
+            .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+                put("Cluster ID", 0);
+            }})))
+            .build();
+
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+        assertEquals("{\"task_id\":\"b5009b99-268f-476d-a676-379a30f82457\"," +
+             "\"status\":\"Success\"," +
+             "\"prediction_result\":{" +
+             "\"column_metas\":[{\"name\":\"Cluster ID\",\"column_type\":\"INTEGER\"}]," +
+             "\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}]}}", jsonStr);
     }
 }

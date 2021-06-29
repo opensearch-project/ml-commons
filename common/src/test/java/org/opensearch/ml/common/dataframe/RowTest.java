@@ -17,10 +17,15 @@ import java.util.Iterator;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class RowTest {
@@ -96,5 +101,16 @@ public class RowTest {
         row = row.select(new int[]{1});
         assertEquals(1, row.size());
         assertFalse(row.getValue(0).booleanValue());
+    }
+
+    @Test
+    public void testToXContent() throws IOException {
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        row.toXContent(builder);
+
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+
+        assertEquals("{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}", jsonStr);
     }
 }

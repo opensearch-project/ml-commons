@@ -20,10 +20,15 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class DefaultDataFrameTest {
@@ -194,5 +199,27 @@ public class DefaultDataFrameTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length");
         defaultDataFrame.select(new int[]{5});
+    }
+
+    @Test
+    public void testToXContent() throws IOException {
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        builder.startObject();
+        defaultDataFrame.toXContent(builder);
+        builder.endObject();
+
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+        assertEquals("{\"column_metas\":[" +
+             "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
+             "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +
+             "{\"name\":\"c3\",\"column_type\":\"DOUBLE\"}," +
+             "{\"name\":\"c4\",\"column_type\":\"BOOLEAN\"}]," +
+             "\"rows\":[" +
+             "{\"values\":[" +
+             "{\"column_type\":\"STRING\",\"value\":\"string\"}," +
+             "{\"column_type\":\"INTEGER\",\"value\":1}," +
+             "{\"column_type\":\"DOUBLE\",\"value\":2.0}," +
+             "{\"column_type\":\"BOOLEAN\",\"value\":true}]}]}", jsonStr);
     }
 }

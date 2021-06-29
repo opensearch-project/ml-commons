@@ -13,6 +13,9 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.common.xcontent.XContentBuilder;
+
+import java.io.IOException;
 
 public interface ColumnValue extends Writeable {
     ColumnType columnType();
@@ -35,4 +38,10 @@ public interface ColumnValue extends Writeable {
         throw new RuntimeException("the value isn't Boolean type");
     }
 
+    default void toXContent(XContentBuilder builder) throws IOException {
+        builder.startObject();
+        builder.field("column_type", columnType());
+        builder.field("value", getValue());
+        builder.endObject();
+    }
 }

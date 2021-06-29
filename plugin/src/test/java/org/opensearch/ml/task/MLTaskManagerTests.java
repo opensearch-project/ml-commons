@@ -52,6 +52,14 @@ public class MLTaskManagerTests {
     }
 
     @Test
+    public void testAddIfAbsent() {
+        mlTaskManager.addIfAbsent(mlTask);
+        Assert.assertTrue(mlTaskManager.contains(mlTask.getTaskId()));
+        mlTaskManager.addIfAbsent(mlTask);
+        Assert.assertTrue(mlTaskManager.contains(mlTask.getTaskId()));
+    }
+
+    @Test
     public void testUpdateTaskState() {
         expectedEx.expect(RuntimeException.class);
         expectedEx.expectMessage("Task not found");

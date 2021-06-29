@@ -15,9 +15,14 @@ package org.opensearch.ml.common.dataframe;
 import java.io.IOException;
 
 import org.junit.Test;
+import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class DoubleValueTest {
 
@@ -44,5 +49,16 @@ public class DoubleValueTest {
         assertEquals(9, bytesStreamOutput.size());
         doubleValue = (DoubleValue) new ColumnValueReader().read(bytesStreamOutput.bytes().streamInput());
         assertEquals(5.0D, doubleValue.doubleValue(), 0.00001D);
+    }
+
+    @Test
+    public void testToXContent() throws IOException {
+        DoubleValue doubleValue = new DoubleValue(5.0D);
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        doubleValue.toXContent(builder);
+
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+        assertEquals("{\"column_type\":\"DOUBLE\",\"value\":5.0}", jsonStr);
     }
 }

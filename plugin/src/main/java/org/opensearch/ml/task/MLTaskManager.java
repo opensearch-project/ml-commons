@@ -51,6 +51,18 @@ public class MLTaskManager {
     }
 
     /**
+     * Put ML task into cache if it's not existed in the cache.
+     *
+     * @param mlTask ML task
+     */
+    public synchronized void addIfAbsent(MLTask mlTask) {
+        String taskId = mlTask.getTaskId();
+        if (!contains(taskId)) {
+            taskCaches.put(taskId, mlTask);
+        }
+    }
+
+    /**
      * Update ML task state
      * @param taskId task id
      * @param state MLTaskState
