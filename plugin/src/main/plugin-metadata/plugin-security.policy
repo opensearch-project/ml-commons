@@ -16,6 +16,4 @@ grant {
     permission java.lang.RuntimePermission "accessDeclaredMembers";
     permission java.lang.reflect.ReflectPermission "suppressAccessChecks";
     permission java.util.logging.LoggingPermission "control";
-    permission java.io.FilePermission "<<ALL FILES>>", "read";
-    permission java.util.PropertyPermission "*", "read,write";
 };
