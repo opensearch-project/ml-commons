@@ -37,12 +37,10 @@ public class BooleanValueTest {
     public void testToXContent() throws IOException {
         BooleanValue value = new BooleanValue(true);
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         value.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"ColumnType\":\"BOOLEAN\",\"Value\":true}", jsonStr);
+        assertEquals("{\"column_type\":\"BOOLEAN\",\"value\":true}", jsonStr);
     }
 }

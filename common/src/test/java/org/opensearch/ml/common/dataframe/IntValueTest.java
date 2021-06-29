@@ -37,12 +37,10 @@ public class IntValueTest {
     public void testToXContent() throws IOException {
         IntValue intValue = new IntValue(2);
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         intValue.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"ColumnType\":\"INTEGER\",\"Value\":2}", jsonStr);
+        assertEquals("{\"column_type\":\"INTEGER\",\"value\":2}", jsonStr);
     }
 }

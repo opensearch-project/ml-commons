@@ -39,7 +39,9 @@ public interface ColumnValue extends Writeable {
     }
 
     default void toXContent(XContentBuilder builder) throws IOException {
-        builder.field("ColumnType", columnType());
-        builder.field("Value", getValue());
+        builder.startObject();
+        builder.field("column_type", columnType());
+        builder.field("value", getValue());
+        builder.endObject();
     }
 }

@@ -152,19 +152,15 @@ public class DefaultDataFrame extends AbstractDataFrame{
 
     @Override
     public void toXContent(final XContentBuilder builder) throws IOException {
-        builder.startArray("ColumnMetas");
+        builder.startArray("column_metas");
         for(ColumnMeta columnMeta : columnMetas) {
-            builder.startObject();
             columnMeta.toXContent(builder);
-            builder.endObject();
         }
         builder.endArray();
 
-        builder.startArray("Rows");
+        builder.startArray("rows");
         for(Row row : rows) {
-            builder.startObject();
             row.toXContent(builder);
-            builder.endObject();
         }
         builder.endArray();
     }

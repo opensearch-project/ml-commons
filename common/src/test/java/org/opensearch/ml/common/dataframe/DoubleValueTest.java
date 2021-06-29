@@ -55,12 +55,10 @@ public class DoubleValueTest {
     public void testToXContent() throws IOException {
         DoubleValue doubleValue = new DoubleValue(5.0D);
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         doubleValue.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"ColumnType\":\"DOUBLE\",\"Value\":5.0}", jsonStr);
+        assertEquals("{\"column_type\":\"DOUBLE\",\"value\":5.0}", jsonStr);
     }
 }

@@ -41,12 +41,10 @@ public class StringValueTest {
     public void testToXContent() throws IOException {
         StringValue value = new StringValue("str");
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         value.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"ColumnType\":\"STRING\",\"Value\":\"str\"}", jsonStr);
+        assertEquals("{\"column_type\":\"STRING\",\"value\":\"str\"}", jsonStr);
     }
 }

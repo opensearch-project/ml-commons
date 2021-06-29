@@ -210,16 +210,16 @@ public class DefaultDataFrameTest {
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"ColumnMetas\":[" +
-             "{\"Name\":\"c1\",\"ColumnType\":\"STRING\"}," +
-             "{\"Name\":\"c2\",\"ColumnType\":\"INTEGER\"}," +
-             "{\"Name\":\"c3\",\"ColumnType\":\"DOUBLE\"}," +
-             "{\"Name\":\"c4\",\"ColumnType\":\"BOOLEAN\"}]," +
-             "\"Rows\":[" +
-             "{\"Values\":[" +
-             "{\"ColumnType\":\"STRING\",\"Value\":\"string\"}," +
-             "{\"ColumnType\":\"INTEGER\",\"Value\":1}," +
-             "{\"ColumnType\":\"DOUBLE\",\"Value\":2.0}," +
-             "{\"ColumnType\":\"BOOLEAN\",\"Value\":true}]}]}", jsonStr);
+        assertEquals("{\"column_metas\":[" +
+             "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
+             "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +
+             "{\"name\":\"c3\",\"column_type\":\"DOUBLE\"}," +
+             "{\"name\":\"c4\",\"column_type\":\"BOOLEAN\"}]," +
+             "\"rows\":[" +
+             "{\"values\":[" +
+             "{\"column_type\":\"STRING\",\"value\":\"string\"}," +
+             "{\"column_type\":\"INTEGER\",\"value\":1}," +
+             "{\"column_type\":\"DOUBLE\",\"value\":2.0}," +
+             "{\"column_type\":\"BOOLEAN\",\"value\":true}]}]}", jsonStr);
     }
 }

@@ -37,12 +37,10 @@ public class NullValueTest {
     public void testToXContent() throws IOException {
         NullValue value = new NullValue();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         value.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"ColumnType\":\"NULL\",\"Value\":null}", jsonStr);
+        assertEquals("{\"column_type\":\"NULL\",\"value\":null}", jsonStr);
     }
 }

@@ -106,13 +106,11 @@ public class RowTest {
     @Test
     public void testToXContent() throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         row.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
 
-        assertEquals("{\"Values\":[{\"ColumnType\":\"INTEGER\",\"Value\":0}]}", jsonStr);
+        assertEquals("{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}", jsonStr);
     }
 }

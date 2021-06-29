@@ -47,7 +47,9 @@ public class ColumnMeta implements Writeable {
     }
 
     public void toXContent(final XContentBuilder builder) throws IOException {
-        builder.field("Name", name);
-        builder.field("ColumnType", columnType);
+        builder.startObject();
+        builder.field("name", name);
+        builder.field("column_type", columnType);
+        builder.endObject();
     }
 }

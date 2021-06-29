@@ -35,12 +35,10 @@ public class ColumnMetaTest {
     @Test
     public void testToXContent() throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        builder.startObject();
         columnMeta.toXContent(builder);
-        builder.endObject();
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"Name\":\"columnMetaName\",\"ColumnType\":\"STRING\"}", jsonStr);
+        assertEquals("{\"name\":\"columnMetaName\",\"column_type\":\"STRING\"}", jsonStr);
     }
 }

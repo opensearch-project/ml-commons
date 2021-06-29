@@ -116,10 +116,10 @@ public class MLPredictionTaskResponseTest {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"TaskId\":\"b5009b99-268f-476d-a676-379a30f82457\"," +
-             "\"Status\":\"Success\"," +
-             "\"PredictionResult\":{" +
-             "\"ColumnMetas\":[{\"Name\":\"Cluster ID\",\"ColumnType\":\"INTEGER\"}]," +
-             "\"Rows\":[{\"Values\":[{\"ColumnType\":\"INTEGER\",\"Value\":0}]}]}}", jsonStr);
+        assertEquals("{\"task_id\":\"b5009b99-268f-476d-a676-379a30f82457\"," +
+             "\"status\":\"Success\"," +
+             "\"prediction_result\":{" +
+             "\"column_metas\":[{\"name\":\"Cluster ID\",\"column_type\":\"INTEGER\"}]," +
+             "\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}]}}", jsonStr);
     }
 }

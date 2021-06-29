@@ -92,12 +92,12 @@ public class Row implements Iterable<ColumnValue>, Writeable {
     }
 
     public void toXContent(final XContentBuilder builder) throws IOException {
-        builder.startArray("Values");
+        builder.startObject();
+        builder.startArray("values");
         for(ColumnValue value : values) {
-            builder.startObject();
             value.toXContent(builder);
-            builder.endObject();
         }
         builder.endArray();
+        builder.endObject();
     }
 }
