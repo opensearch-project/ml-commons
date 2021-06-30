@@ -53,8 +53,10 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
+import org.opensearch.ml.task.MLPredictTaskRunner;
+import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
-import org.opensearch.ml.task.MLTaskRunner;
+import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
@@ -78,7 +80,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLTaskManager mlTaskManager;
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
-    private MLTaskRunner mlTaskRunner;
+    private MLTrainingTaskRunner mlTrainingTaskRunner;
+    private MLPredictTaskRunner mlPredictTaskRunner;
 
     private Client client;
     private ClusterService clusterService;
@@ -135,17 +138,29 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
-        mlTaskRunner = new MLTaskRunner(
+        MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client);
+        mlTrainingTaskRunner = new MLTrainingTaskRunner(
             threadPool,
             clusterService,
             client,
             mlTaskManager,
             mlStats,
             mlIndicesHandler,
-            mlInputDatasetHandler
+            mlInputDatasetHandler,
+            mlTaskDispatcher
+        );
+        mlPredictTaskRunner = new MLPredictTaskRunner(
+            threadPool,
+            clusterService,
+            client,
+            mlTaskManager,
+            mlStats,
+            mlInputDatasetHandler,
+            mlTaskDispatcher
         );
 
-        return ImmutableList.of(jvmService, mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTaskRunner);
+        return ImmutableList
+            .of(jvmService, mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTrainingTaskRunner, mlPredictTaskRunner);
     }
 
     @Override
