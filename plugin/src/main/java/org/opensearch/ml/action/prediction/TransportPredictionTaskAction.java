@@ -24,26 +24,30 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
-import org.opensearch.ml.task.MLTaskRunner;
+import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class TransportPredictionTaskAction extends HandledTransportAction<ActionRequest, MLPredictionTaskResponse> {
-    MLTaskRunner mlTaskRunner;
+    MLPredictTaskRunner mlPredictTaskRunner;
     TransportService transportService;
 
     @Inject
-    public TransportPredictionTaskAction(TransportService transportService, ActionFilters actionFilters, MLTaskRunner mlTaskRunner) {
+    public TransportPredictionTaskAction(
+        TransportService transportService,
+        ActionFilters actionFilters,
+        MLPredictTaskRunner mlPredictTaskRunner
+    ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
-        this.mlTaskRunner = mlTaskRunner;
+        this.mlPredictTaskRunner = mlPredictTaskRunner;
         this.transportService = transportService;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLPredictionTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
-        mlTaskRunner.runPrediction(mlPredictionTaskRequest, transportService, listener);
+        mlPredictTaskRunner.runPrediction(mlPredictionTaskRequest, transportService, listener);
     }
 }
