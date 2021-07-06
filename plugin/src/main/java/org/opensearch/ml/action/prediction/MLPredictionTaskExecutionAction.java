@@ -17,7 +17,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 
 public class MLPredictionTaskExecutionAction extends ActionType<MLPredictionTaskResponse> {
     public static MLPredictionTaskExecutionAction INSTANCE = new MLPredictionTaskExecutionAction();
-    public static final String NAME = "cluster:admin/opensearch-ml/prediction/execution";
+    public static final String NAME = "cluster:admin/opensearch/ml/prediction/execution";
 
     private MLPredictionTaskExecutionAction() {
         super(NAME, MLPredictionTaskResponse::new);

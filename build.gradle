@@ -15,6 +15,7 @@ buildscript {
         ext {
             opensearch_group = "org.opensearch"
             opensearch_version = "1.0.0-rc1"
+            common_utils_version = '1.0.0.0-rc1'
         }
     }
 
