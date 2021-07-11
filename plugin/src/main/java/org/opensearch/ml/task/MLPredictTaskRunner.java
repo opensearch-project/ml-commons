@@ -13,6 +13,8 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.indices.MLIndicesHandler.OS_ML_MODEL_RESULT;
+import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
+import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
 
@@ -23,6 +25,7 @@ import java.util.UUID;
 
 import lombok.extern.log4j.Log4j2;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
@@ -30,6 +33,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
@@ -169,6 +173,19 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                 }
 
                 Map<String, Object> source = searchResponse.getHits().getAt(0).getSourceAsMap();
+
+                User requestUser = getUserContext(client);
+                User resourceUser = User.parse((String) source.get(USER));
+                if (!checkUserPermissions(requestUser, resourceUser, request.getModelId())) {
+                    // The backend roles of request user and resource user doesn't have intersection
+                    OpenSearchException e = new OpenSearchException(
+                        "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + request.getModelId()
+                    );
+                    log.debug(e);
+                    handlePredictFailure(mlTask, listener, e);
+                    return;
+                }
+
                 model.setName((String) source.get(MODEL_NAME));
                 model.setVersion((Integer) source.get(MODEL_VERSION));
                 byte[] decoded = Base64.getDecoder().decode((String) source.get(MODEL_CONTENT));
@@ -185,8 +202,8 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                 } catch (Exception e) {
                     // todo need to specify what exception
                     log.error(e);
-                    handleMLTaskFailure(mlTask, e);
-                    listener.onFailure(e);
+                    handlePredictFailure(mlTask, listener, e);
+                    return;
                 }
 
                 MLPredictionTaskResponse response = MLPredictionTaskResponse

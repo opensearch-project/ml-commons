@@ -31,6 +31,7 @@ public class MLTaskRunner {
     protected static final String MODEL_NAME = "modelName";
     protected static final String MODEL_VERSION = "modelVersion";
     protected static final String MODEL_CONTENT = "modelContent";
+    protected static final String USER = "user";
 
     public MLTaskRunner(MLTaskManager mlTaskManager, MLStats mlStats, MLTaskDispatcher mlTaskDispatcher) {
         this.mlTaskManager = mlTaskManager;

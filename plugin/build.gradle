@@ -46,6 +46,7 @@ dependencies {
     compile project(':opensearch-ml-algorithms')
 
     compile group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
+    compile "org.opensearch:common-utils:${common_utils_version}"
     compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
     compile group: 'com.google.guava', name: 'guava', version:'29.0-jre'

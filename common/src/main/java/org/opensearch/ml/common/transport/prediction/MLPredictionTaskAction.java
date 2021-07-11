@@ -16,7 +16,7 @@ import org.opensearch.action.ActionType;
 
 public class MLPredictionTaskAction extends ActionType<MLPredictionTaskResponse> {
     public static final MLPredictionTaskAction INSTANCE = new MLPredictionTaskAction();
-    public static final String NAME = "cluster:admin/opensearch-ml/predict";
+    public static final String NAME = "cluster:admin/opensearch/ml/predict";
 
     private MLPredictionTaskAction() {
         super(NAME, MLPredictionTaskResponse::new);
