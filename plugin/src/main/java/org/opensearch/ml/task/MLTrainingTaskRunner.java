@@ -126,9 +126,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
         listener.onResponse(MLTrainingTaskResponse.builder().taskId(mlTask.getTaskId()).status(MLTaskState.CREATED.name()).build());
         if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
-                .wrap(dataFrame -> {
-                    train(mlTask, dataFrame, request);
-                }, e -> {
+                .wrap(dataFrame -> { train(mlTask, dataFrame, request); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
                     mlTaskManager.addIfAbsent(mlTask);
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
@@ -141,9 +139,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
                 );
         } else {
             DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(request.getInputDataset());
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> {
-                train(mlTask, inputDataFrame, request);
-            });
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, inputDataFrame, request); });
         }
     }
 
@@ -162,6 +158,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
             source.put(TASK_ID, mlTask.getTaskId());
             source.put(ALGORITHM, request.getAlgorithm());
             source.put(MODEL_NAME, model.getName());
+            source.put(MODEL_FORMAT, model.getFormat());
             source.put(MODEL_VERSION, model.getVersion());
             source.put(MODEL_CONTENT, encodedModelContent);
 

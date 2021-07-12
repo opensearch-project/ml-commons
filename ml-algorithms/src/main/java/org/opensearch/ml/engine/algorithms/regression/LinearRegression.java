@@ -20,6 +20,7 @@ import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.annotation.MLAlgorithm;
 import org.opensearch.ml.engine.contants.MLAlgoNames;
+import org.opensearch.ml.engine.contants.SupportedFormats;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -235,7 +236,7 @@ public class LinearRegression implements MLAlgo {
         Model model = new Model();
         model.setVersion(1);
         model.setName("LinearRegression");
-        model.setFormat("DEFAULT");
+        model.setFormat(SupportedFormats.DEFAULT);
         model.setAlgorithm(MLAlgoNames.LINEAR_REGRESSION);
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 

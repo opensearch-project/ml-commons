@@ -12,7 +12,7 @@
 
 package org.opensearch.ml.engine.contants;
 
-public class MLAlgoNames {
-    public static final String LINEAR_REGRESSION = "linear_regression";
-    public static final String KMEANS = "kmeans";
+public class SupportedFormats {
+    public static final String DEFAULT = "default";
+    public static final String PMML = "pmml";
 }

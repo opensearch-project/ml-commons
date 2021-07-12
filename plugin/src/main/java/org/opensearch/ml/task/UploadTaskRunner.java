@@ -126,9 +126,9 @@ public class UploadTaskRunner extends MLTaskRunner {
             source.put(MODEL_FORMAT, request.getFormat());
             source.put(MODEL_CONTENT, request.getBody());
             // TODO: make sure this doesn't block the thread, use index()
-            IndexResponse indexResponse = client.prepareIndex(OS_ML_MODEL_RESULT, "_doc").setSource(source).get();
             // IndexRequest indexRequest = new IndexRequest(OS_ML_MODEL_RESULT, "_doc");
             // client.index(indexRequest, ActionListener.wrap(indexResponse -> {}));
+            IndexResponse indexResponse = client.prepareIndex(OS_ML_MODEL_RESULT, "_doc").setSource(source).get();
             log.info("mode data indexing done, result:{}", indexResponse.getResult());
             handleMLTaskComplete(mlTask);
             UploadTaskResponse taskResponse = UploadTaskResponse.builder().modelId(mlTask.getTaskId()).build();

@@ -19,6 +19,7 @@ import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.contants.SupportedFormats;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.contants.MLAlgoNames;
@@ -131,7 +132,7 @@ public class KMeans implements MLAlgo {
         Model model = new Model();
         model.setVersion(1);
         model.setName("KMeans");
-        model.setFormat("DEFAULT");
+        model.setFormat(SupportedFormats.DEFAULT);
         model.setAlgorithm(MLAlgoNames.KMEANS);
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 

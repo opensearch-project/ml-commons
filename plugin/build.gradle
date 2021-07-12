@@ -51,6 +51,9 @@ dependencies {
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
     compile group: 'com.google.guava', name: 'guava', version: '29.0-jre'
 
+    implementation 'org.scala-lang:scala-library:2.12'
+    implementation 'org.pmml4s:pmml4s_2.12:0.9.11'
+
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 

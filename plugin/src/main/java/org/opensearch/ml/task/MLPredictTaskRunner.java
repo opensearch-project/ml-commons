@@ -125,9 +125,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
             .build();
         if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
-                .wrap(dataFrame -> {
-                    predict(mlTask, dataFrame, request, listener);
-                }, e -> {
+                .wrap(dataFrame -> { predict(mlTask, dataFrame, request, listener); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
                     mlTaskManager.addIfAbsent(mlTask);
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
@@ -141,9 +139,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                 );
         } else {
             DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(request.getInputDataset());
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> {
-                predict(mlTask, inputDataFrame, request, listener);
-            });
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> { predict(mlTask, inputDataFrame, request, listener); });
         }
     }
 
@@ -164,7 +160,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             QueryBuilder queryBuilder = QueryBuilders.termQuery(TASK_ID, request.getModelId());
             searchSourceBuilder.query(queryBuilder);
-            SearchRequest searchRequest = new SearchRequest(new String[]{OS_ML_MODEL_RESULT}, searchSourceBuilder);
+            SearchRequest searchRequest = new SearchRequest(new String[] { OS_ML_MODEL_RESULT }, searchSourceBuilder);
 
             // Search model.
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {

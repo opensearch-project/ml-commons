@@ -18,6 +18,7 @@ import org.opensearch.ml.engine.algorithms.custom.PMMLModel;
 import org.opensearch.ml.engine.annotation.MLAlgorithm;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
 import org.opensearch.ml.engine.contants.MLAlgoNames;
+import org.opensearch.ml.engine.contants.SupportedFormats;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.reflections.Reflections;
@@ -44,7 +45,8 @@ public class MLEngine {
             case MLAlgoNames.LINEAR_REGRESSION:
                 LinearRegression linearRegression = new LinearRegression(parameters);
                 return linearRegression.predict(dataFrame, model);
-            case MLAlgoNames.PMML:
+            // Later we will the stored model metadata instead of the algoName passed in (won't need that parameter).
+            case SupportedFormats.PMML:
                 PMMLModel pmmlModel = new PMMLModel();
                 return pmmlModel.predict(dataFrame, model);
             default:
@@ -63,7 +65,8 @@ public class MLEngine {
             case MLAlgoNames.LINEAR_REGRESSION:
                 LinearRegression linearRegression = new LinearRegression(parameters);
                 return linearRegression.train(dataFrame);
-            case MLAlgoNames.PMML:
+            // Later we will the stored model metadata instead of the algoName passed in (won't need that parameter).
+            case SupportedFormats.PMML:
                 throw new IllegalArgumentException("Can't re-train uploaded custom models.");
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
