@@ -38,6 +38,7 @@ public class MLTaskRunner {
     protected static final String MODEL_NAME = "modelName";
     protected static final String MODEL_FORMAT = "modelFormat";
     protected static final String MODEL_CONTENT = "modelContent";
+    protected static final String USER = "user";
 
     public MLTaskRunner(MLTaskManager mlTaskManager, MLStats mlStats, MLTaskDispatcher mlTaskDispatcher) {
         this.mlTaskManager = mlTaskManager;
