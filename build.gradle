@@ -70,4 +70,7 @@ ext {
 
 dependencies {
     implementation 'junit:junit:4.12'
+    // https://mvnrepository.com/artifact/org.pmml4s/pmml4s
+    // implementation group: 'org.pmml4s', name: 'pmml4s_2.12', version: '0.9.11'
+    // implementation 'org.pmml4s:pmml4s_2.12:0.9.11'
 }

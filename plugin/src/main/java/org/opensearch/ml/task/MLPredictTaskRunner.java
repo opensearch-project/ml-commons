@@ -76,9 +76,10 @@ public class MLPredictTaskRunner extends MLTaskRunner {
 
     /**
      * Run prediction
-     * @param request MLPredictionTaskRequest
+     *
+     * @param request          MLPredictionTaskRequest
      * @param transportService transport service
-     * @param listener Action listener
+     * @param listener         Action listener
      */
     public void runPrediction(
         MLPredictionTaskRequest request,
@@ -106,7 +107,8 @@ public class MLPredictTaskRunner extends MLTaskRunner {
 
     /**
      * Start prediction task
-     * @param request MLPredictionTaskRequest
+     *
+     * @param request  MLPredictionTaskRequest
      * @param listener Action listener
      */
     public void startPredictionTask(MLPredictionTaskRequest request, ActionListener<MLPredictionTaskResponse> listener) {
@@ -169,8 +171,10 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                 }
 
                 Map<String, Object> source = searchResponse.getHits().getAt(0).getSourceAsMap();
-                model.setName((String) source.get(MODEL_NAME));
                 model.setVersion((Integer) source.get(MODEL_VERSION));
+                model.setName((String) source.get(MODEL_NAME));
+                model.setFormat((String) source.get(MODEL_FORMAT));
+                model.setAlgorithm((String) source.get(ALGORITHM));
                 byte[] decoded = Base64.getDecoder().decode((String) source.get(MODEL_CONTENT));
                 model.setContent(decoded);
 

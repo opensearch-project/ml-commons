@@ -30,32 +30,86 @@ import org.opensearch.ml.common.parameter.MLParameter;
 public interface MachineLearningClient {
 
     /**
+     * Do uploading custom models job
+     *
+     * @param name      name for the custom model
+     * @param format    model format, for now only support "PMML"
+     * @param algorithm algorithm name
+     * @param body      the base64 encoded string of the model body
+     * @return the result future
+     */
+    default ActionFuture<String> upload(String name, String format, String algorithm, String body) {
+        PlainActionFuture<String> actionFuture = PlainActionFuture.newFuture();
+        upload(name, format, algorithm, body, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Do uploading custom models job
+     *
+     * @param name      name for the custom model
+     * @param format    model format, for now only support "PMML"
+     * @param algorithm algorithm name
+     * @param body      the base64 encoded string of the model body
+     * @param listener  a listener to be notified of the result
+     */
+    void upload(String name, String format, String algorithm, String body, ActionListener<String> listener);
+
+    /**
+     * Do searching models job
+     *
+     * @param modelId   model id
+     * @param name      model name
+     * @param format    model format
+     * @param algorithm algorithm name
+     * @return the result future
+     */
+    default ActionFuture<String> search(String modelId, String name, String format, String algorithm) {
+        PlainActionFuture<String> actionFuture = PlainActionFuture.newFuture();
+        search(modelId, name, format, algorithm, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Do searching models job
+     *
+     * @param modelId model id
+     *                * @param name      model name
+     *                * @param format    model format
+     *                * @param algorithm algorithm name
+     */
+    void search(String modelId, String name, String format, String algorithm, ActionListener<String> listener);
+
+    /**
      * Do prediction machine learning job
+     *
      * @param algorithm algorithm name
      * @param inputData input data frame
      * @return the result future
      */
     default ActionFuture<DataFrame> predict(String algorithm, DataFrame inputData) {
-        return predict(algorithm, null, inputData, (String)null);
+        return predict(algorithm, null, inputData, (String) null);
     }
 
     /**
      * Do prediction machine learning job
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data frame
+     * @param inputData  input data frame
      * @return the result future
      */
     default ActionFuture<DataFrame> predict(String algorithm, List<MLParameter> parameters, DataFrame inputData) {
-        return predict(algorithm, parameters, inputData,(String)null);
+        return predict(algorithm, parameters, inputData, (String) null);
     }
 
     /**
      * Do prediction machine learning job
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data frame
-     * @param modelId the trained model id
+     * @param inputData  input data frame
+     * @param modelId    the trained model id
      * @return the result future
      */
     default ActionFuture<DataFrame> predict(String algorithm, List<MLParameter> parameters, DataFrame inputData, String modelId) {
@@ -66,32 +120,35 @@ public interface MachineLearningClient {
 
     /**
      * Do prediction machine learning job
+     *
      * @param algorithm algorithm name
      * @param inputData input data frame
-     * @param listener a listener to be notified of the result
+     * @param listener  a listener to be notified of the result
      */
     default void predict(String algorithm, DataFrame inputData, ActionListener<DataFrame> listener) {
-         predict(algorithm, null, inputData, null,  listener);
+        predict(algorithm, null, inputData, null, listener);
     }
 
     /**
      * Do prediction machine learning job
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data frame
-     * @param listener a listener to be notified of the result
+     * @param inputData  input data frame
+     * @param listener   a listener to be notified of the result
      */
-    default void predict(String algorithm, List<MLParameter> parameters, DataFrame inputData, ActionListener<DataFrame> listener){
-        predict(algorithm, parameters, inputData, null,  listener);
+    default void predict(String algorithm, List<MLParameter> parameters, DataFrame inputData, ActionListener<DataFrame> listener) {
+        predict(algorithm, parameters, inputData, null, listener);
     }
 
     /**
      * Do prediction machine learning job
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data frame
-     * @param modelId the trained model id
-     * @param listener a listener to be notified of the result
+     * @param inputData  input data frame
+     * @param modelId    the trained model id
+     * @param listener   a listener to be notified of the result
      */
     default void predict(String algorithm, List<MLParameter> parameters, DataFrame inputData, String modelId, ActionListener<DataFrame> listener) {
         predict(algorithm, parameters, DataFrameInputDataset.builder().dataFrame(inputData).build(), modelId, listener);
@@ -99,19 +156,21 @@ public interface MachineLearningClient {
 
     /**
      * Do prediction machine learning job
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data set
-     * @param modelId the trained model id
-     * @param listener a listener to be notified of the result
+     * @param inputData  input data set
+     * @param modelId    the trained model id
+     * @param listener   a listener to be notified of the result
      */
     void predict(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, String modelId, ActionListener<DataFrame> listener);
 
     /**
-     *  Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
-     * @param algorithm algorithm name
+     * Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data frame
+     * @param inputData  input data frame
      * @return the result future
      */
     default ActionFuture<String> train(String algorithm, List<MLParameter> parameters, DataFrame inputData) {
@@ -122,10 +181,11 @@ public interface MachineLearningClient {
 
     /**
      * Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data frame
-     * @param listener a listener to be notified of the result
+     * @param inputData  input data frame
+     * @param listener   a listener to be notified of the result
      */
     default void train(String algorithm, List<MLParameter> parameters, DataFrame inputData, ActionListener<String> listener) {
         train(algorithm, parameters, DataFrameInputDataset.builder().dataFrame(inputData).build(), listener);
@@ -134,10 +194,11 @@ public interface MachineLearningClient {
 
     /**
      * Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
-     * @param algorithm algorithm name
+     *
+     * @param algorithm  algorithm name
      * @param parameters parameters of ml algorithm
-     * @param inputData input data set
-     * @param listener a listener to be notified of the result
+     * @param inputData  input data set
+     * @param listener   a listener to be notified of the result
      */
     void train(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, ActionListener<String> listener);
 

@@ -15,4 +15,5 @@ package org.opensearch.ml.engine.contants;
 public class MLAlgoNames {
     public static final String LINEAR_REGRESSION = "linear_regression";
     public static final String KMEANS = "kmeans";
+    public static final String PMML = "custom_pmml_model";
 }

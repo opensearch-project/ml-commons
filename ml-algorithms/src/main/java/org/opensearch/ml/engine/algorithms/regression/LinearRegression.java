@@ -19,6 +19,7 @@ import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.contants.MLAlgoNames;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -80,10 +81,12 @@ public class LinearRegression implements MLAlgo {
     private long seed = System.currentTimeMillis();
     private StochasticGradientOptimiser optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentumType);
 
-    public LinearRegression() {}
+    public LinearRegression() {
+    }
 
     /**
      * Initialize a linear regression algorithm.
+     *
      * @param parameters the parameters for linear regression algorithm
      */
     public LinearRegression(List<MLParameter> parameters) {
@@ -215,7 +218,7 @@ public class LinearRegression implements MLAlgo {
 
         org.tribuo.Model<Regressor> regressionModel = (org.tribuo.Model<Regressor>) ModelSerDeSer.deserialize(model.getContent());
         MutableDataset<Regressor> predictionDataset = TribuoUtil.generateDataset(dataFrame, new RegressionFactory(),
-                "Linear regression prediction data from opensearch", TribuoOutputType.REGRESSOR);
+            "Linear regression prediction data from opensearch", TribuoOutputType.REGRESSOR);
         List<Prediction<Regressor>> predictions = regressionModel.predict(predictionDataset);
         List<Map<String, Object>> listPrediction = new ArrayList<>();
         predictions.forEach(e -> listPrediction.add(Collections.singletonMap("Prediction", e.getOutput().getValues()[0])));
@@ -226,12 +229,14 @@ public class LinearRegression implements MLAlgo {
     @Override
     public Model train(DataFrame dataFrame) {
         MutableDataset<Regressor> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(),
-                "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, target);
+            "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, target);
         LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, interval, batchSize, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
         Model model = new Model();
-        model.setName("LinearRegression");
         model.setVersion(1);
+        model.setName("LinearRegression");
+        model.setFormat("DEFAULT");
+        model.setAlgorithm(MLAlgoNames.LINEAR_REGRESSION);
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 
         return model;
@@ -240,10 +245,10 @@ public class LinearRegression implements MLAlgo {
     @Override
     public MLAlgoMetaData getMetaData() {
         return MLAlgoMetaData.builder().name("linear_regression")
-                .description("Linear regression algorithm.")
-                .version("1.0")
-                .predictable(true)
-                .trainable(true)
-                .build();
+            .description("Linear regression algorithm.")
+            .version("1.0")
+            .predictable(true)
+            .trainable(true)
+            .build();
     }
 }

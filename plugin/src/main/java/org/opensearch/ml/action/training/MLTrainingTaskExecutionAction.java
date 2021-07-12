@@ -16,7 +16,6 @@ import org.opensearch.action.ActionType;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 
 public class MLTrainingTaskExecutionAction extends ActionType<MLTrainingTaskResponse> {
-
     public static final MLTrainingTaskExecutionAction INSTANCE = new MLTrainingTaskExecutionAction();
     public static final String NAME = "cluster:admin/opensearch-ml/training/execution";
 

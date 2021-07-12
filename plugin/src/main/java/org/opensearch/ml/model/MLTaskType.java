@@ -13,6 +13,8 @@
 package org.opensearch.ml.model;
 
 public enum MLTaskType {
+    UPLOADING,
+    SEARCHING,
     TRAINING,
     PREDICTION
 }
