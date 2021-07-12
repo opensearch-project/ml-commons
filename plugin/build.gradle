@@ -112,6 +112,7 @@ task integTest(type: RestIntegTestTask) {
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
 }
+tasks.named("check").configure { dependsOn(integTest) }
 
 integTest {
     dependsOn "bundlePlugin"
