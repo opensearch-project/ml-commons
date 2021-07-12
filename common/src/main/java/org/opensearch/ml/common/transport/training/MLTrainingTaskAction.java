@@ -16,7 +16,7 @@ import org.opensearch.action.ActionType;
 
 public class MLTrainingTaskAction extends ActionType<MLTrainingTaskResponse> {
     public static MLTrainingTaskAction INSTANCE = new MLTrainingTaskAction();
-    public static final String NAME = "cluster:admin/opensearch-ml/training";
+    public static final String NAME = "cluster:admin/opensearch/ml/training";
 
     private MLTrainingTaskAction() {
         super(NAME, MLTrainingTaskResponse::new);
