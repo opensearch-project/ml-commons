@@ -14,9 +14,11 @@ package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLParameter;
+import org.opensearch.ml.engine.algorithms.custom.PMMLModel;
 import org.opensearch.ml.engine.annotation.MLAlgorithm;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
 import org.opensearch.ml.engine.contants.MLAlgoNames;
+import org.opensearch.ml.engine.contants.SupportedFormats;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.reflections.Reflections;
@@ -43,6 +45,11 @@ public class MLEngine {
             case MLAlgoNames.LINEAR_REGRESSION:
                 LinearRegression linearRegression = new LinearRegression(parameters);
                 return linearRegression.predict(dataFrame, model);
+            // Temporarily using the passed in algoName to decide which algo (or pmml) to use.
+            // Later we will refactor code and remove this parameter since we can use the stored model metadata.
+            case SupportedFormats.PMML:
+                PMMLModel pmmlModel = new PMMLModel();
+                return pmmlModel.predict(dataFrame, model);
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
@@ -59,6 +66,10 @@ public class MLEngine {
             case MLAlgoNames.LINEAR_REGRESSION:
                 LinearRegression linearRegression = new LinearRegression(parameters);
                 return linearRegression.train(dataFrame);
+            // Temporarily using the passed in algoName to decide which algo (or pmml) to use.
+            // Later we will refactor code and remove this parameter since we can use the stored model metadata.
+            case SupportedFormats.PMML:
+                throw new IllegalArgumentException("Unsupported train: PMML custom models");
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
