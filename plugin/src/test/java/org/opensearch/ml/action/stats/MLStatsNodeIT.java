@@ -12,7 +12,6 @@
 
 package org.opensearch.ml.action.stats;
 
-import static org.opensearch.ml.action.stats.MLStatsNodesRequest.ALL_STATS_KEY;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_DATA;
 import static org.opensearch.ml.utils.IntegTestUtils.generateMLTestingData;
 import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
@@ -26,6 +25,7 @@ import java.util.concurrent.ExecutionException;
 import org.junit.Before;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
+import org.opensearch.ml.stats.StatNames;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
@@ -52,7 +52,7 @@ public class MLStatsNodeIT extends OpenSearchIntegTestCase {
 
     public void testNormalCase() throws ExecutionException, InterruptedException {
         MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0]);
-        request.addStat(ALL_STATS_KEY);
+        request.addStat(StatNames.ML_EXECUTING_TASK_COUNT.getName());
 
         ActionFuture<MLStatsNodesResponse> future = client().execute(MLStatsNodesAction.INSTANCE, request);
         MLStatsNodesResponse response = future.get();
@@ -65,7 +65,7 @@ public class MLStatsNodeIT extends OpenSearchIntegTestCase {
         MLStatsNodeResponse nodeResponse = responseList.get(0);
         Map<String, Object> statsMap = nodeResponse.getStatsMap();
 
-        assertNotNull(statsMap);
-        assertEquals(0, statsMap.size());
+        assertEquals(1, statsMap.size());
+        assertEquals(0l, statsMap.get("ml_executing_task_count"));
     }
 }
