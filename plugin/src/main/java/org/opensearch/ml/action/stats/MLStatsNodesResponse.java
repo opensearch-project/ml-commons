@@ -67,7 +67,7 @@ public class MLStatsNodesResponse extends BaseNodesResponse<MLStatsNodeResponse>
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         String nodeId;
         DiscoveryNode node;
-        builder.startObject(NODES_KEY);
+        builder.startObject();
         for (MLStatsNodeResponse mlStats : getNodes()) {
             node = mlStats.getNode();
             nodeId = node.getId();
