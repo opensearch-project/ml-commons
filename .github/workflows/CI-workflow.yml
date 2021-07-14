@@ -1,6 +1,12 @@
-name: ML CI
+name: Build and Test ML
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "*"
+  pull_request:
+    branches:
+      - "*"
 
 jobs:
   build:
