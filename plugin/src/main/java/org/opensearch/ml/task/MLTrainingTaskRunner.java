@@ -12,7 +12,7 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.OS_ML_MODEL_RESULT;
+import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL;
 import static org.opensearch.ml.permission.AccessController.getUserStr;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
@@ -162,7 +162,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
             // put the user into model for backend role based access control.
             source.put(USER, getUserStr(client));
 
-            IndexResponse response = client.prepareIndex(OS_ML_MODEL_RESULT, "_doc").setSource(source).get();
+            IndexResponse response = client.prepareIndex(ML_MODEL, "_doc").setSource(source).get();
             log.info("mode data indexing done, result:{}", response.getResult());
             handleMLTaskComplete(mlTask);
         } catch (Exception e) {
