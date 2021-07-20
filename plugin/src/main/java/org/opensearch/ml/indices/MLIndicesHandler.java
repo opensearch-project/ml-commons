@@ -25,8 +25,8 @@ import org.opensearch.common.xcontent.XContentType;
 @RequiredArgsConstructor
 @Log4j2
 public class MLIndicesHandler {
-    public static final String OS_ML_MODEL_RESULT = ".os_ml_model_result";
-    private static final String OS_ML_MODEL_RESULT_INDEX_MAPPING = "{\n"
+    public static final String ML_MODEL = ".plugins_ml_model";
+    private static final String ML_MODEL_INDEX_MAPPING = "{\n"
         + "    \"properties\": {\n"
         + "      \"taskId\": { \"type\": \"keyword\" },\n"
         + "      \"algorithm\": {\"type\": \"keyword\"},\n"
@@ -40,11 +40,11 @@ public class MLIndicesHandler {
     Client client;
 
     public void initModelIndexIfAbsent() {
-        initMLIndexIfAbsent(OS_ML_MODEL_RESULT, OS_ML_MODEL_RESULT_INDEX_MAPPING);
+        initMLIndexIfAbsent(ML_MODEL, ML_MODEL_INDEX_MAPPING);
     }
 
     public boolean doesModelIndexExist() {
-        return clusterService.state().metadata().hasIndex(OS_ML_MODEL_RESULT);
+        return clusterService.state().metadata().hasIndex(ML_MODEL);
     }
 
     private void initMLIndexIfAbsent(String indexName, String mapping) {

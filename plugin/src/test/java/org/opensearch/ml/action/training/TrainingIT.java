@@ -12,7 +12,7 @@
 
 package org.opensearch.ml.action.training;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.OS_ML_MODEL_RESULT;
+import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL;
 import static org.opensearch.ml.utils.IntegTestUtils.DATA_FRAME_INPUT_DATASET;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_DATA;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_INDEX_NAME;
@@ -123,7 +123,7 @@ public class TrainingIT extends OpenSearchIntegTestCase {
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
         modelSearchSourceBuilder.query(queryBuilder);
-        SearchRequest modelSearchRequest = new SearchRequest(new String[] { OS_ML_MODEL_RESULT }, modelSearchSourceBuilder);
+        SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL }, modelSearchSourceBuilder);
         SearchResponse modelSearchResponse = null;
         int i = 0;
         while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 100) {

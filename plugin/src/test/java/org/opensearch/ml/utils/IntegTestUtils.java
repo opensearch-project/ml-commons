@@ -12,7 +12,7 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.OS_ML_MODEL_RESULT;
+import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -136,10 +136,10 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
         modelSearchSourceBuilder.query(queryBuilder);
-        SearchRequest modelSearchRequest = new SearchRequest(new String[] { OS_ML_MODEL_RESULT }, modelSearchSourceBuilder);
+        SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL }, modelSearchSourceBuilder);
         SearchResponse modelSearchResponse = null;
         int i = 0;
-        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 200) {
+        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 500) {
             try {
                 ActionFuture<SearchResponse> searchFuture = client().execute(SearchAction.INSTANCE, modelSearchRequest);
                 modelSearchResponse = searchFuture.actionGet();
