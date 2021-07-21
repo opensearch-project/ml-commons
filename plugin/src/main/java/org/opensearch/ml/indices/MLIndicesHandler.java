@@ -25,7 +25,7 @@ import org.opensearch.common.xcontent.XContentType;
 @RequiredArgsConstructor
 @Log4j2
 public class MLIndicesHandler {
-    public static final String ML_MODEL = ".plugins_ml_model";
+    public static final String ML_MODEL = ".plugins-ml-model";
     private static final String ML_MODEL_INDEX_MAPPING = "{\n"
         + "    \"properties\": {\n"
         + "      \"taskId\": { \"type\": \"keyword\" },\n"
