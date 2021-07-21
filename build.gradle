@@ -47,11 +47,6 @@ allprojects {
 
     apply from: "$rootDir/build-tools/repositories.gradle"
 
-    boolean snapshot = "true".equals(System.getProperty("build.snapshot", "true"));
-    if (snapshot) {
-        version += "-SNAPSHOT"
-    }
-
     plugins.withId('java') {
         sourceCompatibility = targetCompatibility = "1.8"
     }
