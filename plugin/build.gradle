@@ -202,8 +202,12 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTaskRunner',
         'org.opensearch.ml.task.MLTrainingTaskRunner',
         'org.opensearch.ml.task.MLPredictTaskRunner',
+        'org.opensearch.ml.task.UploadTaskRunner',
+        'org.opensearch.ml.task.SearchTaskRunner',
         'org.opensearch.ml.rest.RestMLTrainingAction',
-        'org.opensearch.ml.rest.RestMLPredictionAction'
+        'org.opensearch.ml.rest.RestMLPredictionAction',
+        'org.opensearch.ml.rest.RestMLUploadAction',
+        'org.opensearch.ml.rest.RestMLSearchAction'
 ]
 
 jacocoTestCoverageVerification {
@@ -213,7 +217,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.0
+                minimum = 0.8
             }
         }
         rule {
@@ -222,7 +226,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.0
+                minimum = 0.7
             }
         }
     }

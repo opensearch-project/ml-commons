@@ -16,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Base64;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -31,37 +32,23 @@ import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 
+import org.pmml4s.model.Model;
+
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class UploadTaskRequest extends ActionRequest {
-
-    /**
-     * name of the model
-     */
-    String name;
-
-    /**
-     * format of the model
-     */
-    String format;
-
-    /**
-     * name of the algorithm
-     */
-    String algorithm;
-
-    /**
-     * body of the model
-     */
-    String body;
-
     /**
      * version id, in case there is future schema change. This can be used to detect which version the client is using.
      */
     int version;
+
+    String name;
+    String format;
+    String algorithm;
+    String body;
 
     @Builder
     public UploadTaskRequest(String name, String format, String algorithm, String body) {
@@ -95,7 +82,7 @@ public class UploadTaskRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (Strings.isNullOrEmpty(this.name)) {
-            exception = addValidationError("custom name can't be null or empty", exception);
+            exception = addValidationError("model name can't be null or empty", exception);
         }
         if (Strings.isNullOrEmpty(this.format)) {
             exception = addValidationError("model format can't be null or empty", exception);
@@ -107,7 +94,15 @@ public class UploadTaskRequest extends ActionRequest {
             exception = addValidationError("model body can't be null or empty", exception);
         }
 
-        return exception;
+        // make sure model body (base64 encoded string) can be decoded and turned into a valid model
+        try {
+            byte[] bodyBytes = Base64.getDecoder().decode(body);
+            Model model = Model.fromBytes(bodyBytes);
+            return exception;
+        } catch (Exception e) {
+            exception = addValidationError("can't retrieve model from body passed in", exception);
+            return exception;
+        }
     }
 
     public static UploadTaskRequest fromActionRequest(ActionRequest actionRequest) {

@@ -67,7 +67,7 @@ public class MLEngine {
                 return linearRegression.train(dataFrame);
             // Later we will the stored model metadata instead of the algoName passed in (won't need that parameter).
             case SupportedFormats.PMML:
-                throw new IllegalArgumentException("Can't re-train uploaded custom models.");
+                throw new IllegalArgumentException("Unsupported train for uploaded custom models.");
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }

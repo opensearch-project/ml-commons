@@ -27,7 +27,7 @@ public class PMMLModel implements MLAlgo {
             throw new IllegalArgumentException("data frame can't be null or empty");
         }
         if (model == null || model.getContent() == null || model.getContent().length == 0) {
-            throw new IllegalArgumentException("model or model content can't be null or empty");
+            throw new IllegalArgumentException("model and model content can't be null or empty");
         }
         try {
             // retrieve the model from byte array
@@ -70,7 +70,8 @@ public class PMMLModel implements MLAlgo {
 
     /**
      * Transforms row to pmml4s predict input format
-     * @param row a row of input data frame
+     *
+     * @param row         a row of input data frame
      * @param inputSchema the input schema of the pmml model
      * @return object array, representing a row of the data frame
      */
@@ -87,7 +88,8 @@ public class PMMLModel implements MLAlgo {
 
     /**
      * Transforms output arrays from pmml4s predictions to proper format for data frame builder
-     * @param predictions pmml4s predictions
+     *
+     * @param predictions  pmml4s predictions
      * @param outputFields the field names of each prediction array (custom models can have different fields)
      * @return list of maps, in which each map represents one prediction
      */

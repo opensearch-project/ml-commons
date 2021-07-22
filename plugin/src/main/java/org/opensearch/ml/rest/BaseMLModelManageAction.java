@@ -24,6 +24,8 @@ public class BaseMLModelManageAction extends BaseRestHandler {
     protected static final String PARAMETER_ALGORITHM = "algorithm";
     protected static final String PARAMETER_BODY = "body";
 
+    public BaseMLModelManageAction() {}
+
     @Override
     public String getName() {
         return BASE_ML_MODEL_MANAGE_ACTION;
