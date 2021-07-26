@@ -60,6 +60,16 @@ public class MachineLearningClientTest {
                               ActionListener<String> listener) {
                 listener.onResponse("taskId");
             }
+
+            @Override
+            public void upload(String name, String format, String algorithm, String body, ActionListener<String> listener) {
+                listener.onResponse("modelId");
+            }
+
+            @Override
+            public void search(String modelId, String name, String format, String algorithm, ActionListener<String> listener) {
+                listener.onResponse("[]");
+            }
         };
     }
 

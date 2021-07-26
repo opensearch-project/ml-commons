@@ -10,11 +10,9 @@
  *
  */
 
-package org.opensearch.ml.model;
+package org.opensearch.ml.engine.contants;
 
-public enum MLTaskType {
-    UPLOADING,
-    SEARCHING,
-    TRAINING,
-    PREDICTION
+public class SupportedFormats {
+    public static final String DEFAULT = "default";
+    public static final String PMML = "pmml";
 }

@@ -78,9 +78,10 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
 
     /**
      * Run training
-     * @param request MLTrainingTaskRequest
+     *
+     * @param request          MLTrainingTaskRequest
      * @param transportService transport service
-     * @param listener Action listener
+     * @param listener         Action listener
      */
     public void runTraining(
         MLTrainingTaskRequest request,
@@ -108,7 +109,8 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
 
     /**
      * Start training task
-     * @param request MLTrainingTaskRequest
+     *
+     * @param request  MLTrainingTaskRequest
      * @param listener Action listener
      */
     public void startTrainingTask(MLTrainingTaskRequest request, ActionListener<MLTrainingTaskResponse> listener) {
@@ -156,12 +158,14 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
             source.put(TASK_ID, mlTask.getTaskId());
             source.put(ALGORITHM, request.getAlgorithm());
             source.put(MODEL_NAME, model.getName());
+            source.put(MODEL_FORMAT, model.getFormat());
             source.put(MODEL_VERSION, model.getVersion());
             source.put(MODEL_CONTENT, encodedModelContent);
 
             // put the user into model for backend role based access control.
             source.put(USER, getUserStr(client));
 
+            // TODO: fix the following line which might block the thread, use index() instead
             IndexResponse response = client.prepareIndex(ML_MODEL, "_doc").setSource(source).get();
             log.info("mode data indexing done, result:{}", response.getResult());
             handleMLTaskComplete(mlTask);

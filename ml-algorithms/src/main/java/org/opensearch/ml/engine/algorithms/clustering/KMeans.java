@@ -19,8 +19,10 @@ import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.contants.SupportedFormats;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
+import org.opensearch.ml.engine.contants.MLAlgoNames;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
 import org.tribuo.Prediction;
@@ -53,7 +55,8 @@ public class KMeans implements MLAlgo {
     //The random seed.
     private long seed = System.currentTimeMillis();
 
-    public KMeans() {}
+    public KMeans() {
+    }
 
     public KMeans(List<MLParameter> parameters) {
         parameters.forEach(mlParameter ->
@@ -110,7 +113,7 @@ public class KMeans implements MLAlgo {
 
         List<Prediction<ClusterID>> predictions;
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
-                "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
+            "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
         KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
         predictions = kMeansModel.predict(predictionDataset);
 
@@ -123,12 +126,14 @@ public class KMeans implements MLAlgo {
     @Override
     public Model train(DataFrame dataFrame) {
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
-                "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
+            "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
         KMeansTrainer trainer = new KMeansTrainer(k, iterations, distanceType, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();
-        model.setName("KMeans");
         model.setVersion(1);
+        model.setName("KMeans");
+        model.setFormat(SupportedFormats.DEFAULT);
+        model.setAlgorithm(MLAlgoNames.KMEANS);
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
         return model;
@@ -137,10 +142,10 @@ public class KMeans implements MLAlgo {
     @Override
     public MLAlgoMetaData getMetaData() {
         return MLAlgoMetaData.builder().name("kmeans")
-                .description("A clustering algorithm.")
-                .version("1.0")
-                .predictable(true)
-                .trainable(true)
-                .build();
+            .description("A clustering algorithm.")
+            .version("1.0")
+            .predictable(true)
+            .trainable(true)
+            .build();
     }
 }

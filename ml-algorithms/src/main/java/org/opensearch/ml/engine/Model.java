@@ -16,7 +16,9 @@ import lombok.Data;
 
 @Data
 public class Model {
-    String name;
     int version;
+    String name;
+    String format;
+    String algorithm;
     byte[] content;
 }
