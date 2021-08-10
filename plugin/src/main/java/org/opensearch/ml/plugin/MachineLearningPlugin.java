@@ -57,7 +57,6 @@ import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.task.MLTrainingTaskRunner;
-import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
@@ -126,8 +125,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.threadPool = threadPool;
         this.clusterService = clusterService;
 
-        JvmService jvmService = new JvmService(environment.settings());
-
         Map<String, MLStat<?>> stats = ImmutableMap
             .<String, MLStat<?>>builder()
             .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
@@ -159,8 +156,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlTaskDispatcher
         );
 
-        return ImmutableList
-            .of(jvmService, mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTrainingTaskRunner, mlPredictTaskRunner);
+        return ImmutableList.of(mlStats, mlTaskManager, mlIndicesHandler, mlInputDatasetHandler, mlTrainingTaskRunner, mlPredictTaskRunner);
     }
 
     @Override

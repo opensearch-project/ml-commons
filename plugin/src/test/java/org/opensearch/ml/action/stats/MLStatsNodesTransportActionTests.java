@@ -30,13 +30,13 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.env.Environment;
 import org.opensearch.ml.stats.InternalStatNames;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
-import org.opensearch.monitor.jvm.JvmService;
-import org.opensearch.monitor.jvm.JvmStats;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.transport.TransportService;
 
@@ -64,13 +64,9 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         };
 
         mlStats = new MLStats(statsMap);
-        JvmService jvmService = mock(JvmService.class);
-        JvmStats jvmStats = mock(JvmStats.class);
-        JvmStats.Mem mem = mock(JvmStats.Mem.class);
-
-        when(jvmService.stats()).thenReturn(jvmStats);
-        when(jvmStats.getMem()).thenReturn(mem);
-        when(mem.getHeapUsedPercent()).thenReturn(randomShort());
+        Environment environment = mock(Environment.class);
+        Settings settings = Settings.builder().build();
+        when(environment.settings()).thenReturn(settings);
 
         action = new MLStatsNodesTransportAction(
             client().threadPool(),
@@ -78,7 +74,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
             mock(TransportService.class),
             mock(ActionFilters.class),
             mlStats,
-            jvmService
+            environment
         );
     }
 
