@@ -24,6 +24,7 @@ import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.env.Environment;
 import org.opensearch.ml.stats.InternalStatNames;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.monitor.jvm.JvmService;
@@ -43,7 +44,7 @@ public class MLStatsNodesTransportAction extends
      * @param transportService TransportService
      * @param actionFilters Action Filters
      * @param mlStats MLStats object
-     * @param jvmService ES JVM Service
+     * @param environment OpenSearch Environment
      */
     @Inject
     public MLStatsNodesTransportAction(
@@ -52,7 +53,7 @@ public class MLStatsNodesTransportAction extends
         TransportService transportService,
         ActionFilters actionFilters,
         MLStats mlStats,
-        JvmService jvmService
+        Environment environment
     ) {
         super(
             MLStatsNodesAction.NAME,
@@ -66,7 +67,7 @@ public class MLStatsNodesTransportAction extends
             MLStatsNodeResponse.class
         );
         this.mlStats = mlStats;
-        this.jvmService = jvmService;
+        this.jvmService = new JvmService(environment.settings());
     }
 
     @Override
