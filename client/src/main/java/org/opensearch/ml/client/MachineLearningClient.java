@@ -74,9 +74,9 @@ public interface MachineLearningClient {
      * Do searching models job
      *
      * @param modelId model id
-     *                * @param name      model name
-     *                * @param format    model format
-     *                * @param algorithm algorithm name
+     * @param name      model name
+     * @param format    model format
+     * @param algorithm algorithm name
      */
     void search(String modelId, String name, String format, String algorithm, ActionListener<String> listener);
 

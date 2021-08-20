@@ -63,7 +63,6 @@ public class MLPredictionTaskResponse extends ActionResponse implements ToXConte
         out.writeString(taskId);
         out.writeString(status);
         predictionResult.writeTo(out);
-
     }
 
     public static MLPredictionTaskResponse fromActionResponse(ActionResponse actionResponse) {

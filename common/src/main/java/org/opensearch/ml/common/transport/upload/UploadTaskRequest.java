@@ -86,6 +86,10 @@ public class UploadTaskRequest extends ActionRequest {
         }
         if (Strings.isNullOrEmpty(this.format)) {
             exception = addValidationError("model format can't be null or empty", exception);
+        } else {
+            if (!format.equalsIgnoreCase("pmml")) {
+                exception = addValidationError("only pmml models are supported in upload now", exception);
+            }
         }
         if (Strings.isNullOrEmpty(this.algorithm)) {
             exception = addValidationError("algorithm name can't be null or empty", exception);

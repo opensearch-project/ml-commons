@@ -14,6 +14,7 @@ package org.opensearch.ml.client;
 import java.util.List;
 import java.util.Objects;
 
+import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
@@ -51,6 +52,9 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         }
         if (Strings.isNullOrEmpty(format)) {
             throw new IllegalArgumentException("model format can't be null or empty");
+        }
+        if (!format.equalsIgnoreCase("pmml")) {
+            throw new IllegalArgumentException("only pmml models are supported in upload now");
         }
         if (Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("algorithm name can't be null or empty");
@@ -105,13 +109,15 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             .inputDataset(inputData)
             .build();
 
-        client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
-            MLPredictionTaskResponse mlPredictionTaskResponse =
-                MLPredictionTaskResponse
-                    .fromActionResponse(response);
-            listener.onResponse(mlPredictionTaskResponse.getPredictionResult());
-        }, listener::onFailure));
-
+        // TODO: fix this which might cause blocking. See potential example: https://github.com/opensearch-project/common-utils/issues/37
+        // temporarily use action future for prototyping purposes
+        try {
+            ActionFuture<MLPredictionTaskResponse> actionFuture = client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
+            MLPredictionTaskResponse response = MLPredictionTaskResponse.fromActionResponse(actionFuture.actionGet());
+            listener.onResponse(response.getPredictionResult());
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     @Override
@@ -133,5 +139,4 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             listener.onResponse(MLTrainingTaskResponse.fromActionResponse(response).getTaskId());
         }, listener::onFailure));
     }
-
 }

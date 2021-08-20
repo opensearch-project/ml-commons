@@ -16,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -81,21 +82,26 @@ public class MLPredictionTaskRequest extends ActionRequest {
 
     public MLPredictionTaskRequest(StreamInput in) throws IOException {
         super(in);
-        this.version = in.readInt();
         this.algorithm = in.readString();
         this.parameters = in.readList(MLParameter::new);
         this.modelId = in.readOptionalString();
         this.inputDataset = new MLInputDatasetReader().read(in);
+        this.version = in.readInt();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeInt(this.version);
         out.writeString(this.algorithm);
-        out.writeList(this.parameters);
+        if (this.parameters != null) {
+            out.writeList(this.parameters);
+        } else {
+            List<MLParameter> emptyParameters = new ArrayList<>();
+            out.writeList(emptyParameters);
+        }
         out.writeOptionalString(this.modelId);
         this.inputDataset.writeTo(out);
+        out.writeInt(this.version);
     }
 
     @Override
@@ -111,7 +117,6 @@ public class MLPredictionTaskRequest extends ActionRequest {
         return exception;
     }
 
-
     public static MLPredictionTaskRequest fromActionRequest(ActionRequest actionRequest) {
         if (actionRequest instanceof MLPredictionTaskRequest) {
             return (MLPredictionTaskRequest) actionRequest;
@@ -126,6 +131,5 @@ public class MLPredictionTaskRequest extends ActionRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
         }
-
     }
 }

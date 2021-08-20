@@ -69,6 +69,9 @@ public class RestMLUploadAction extends BaseMLModelManageAction {
         if (Strings.isNullOrEmpty(format)) {
             throw new IllegalArgumentException("Request should contain format!");
         }
+        if (!format.equalsIgnoreCase("pmml")) {
+            throw new IllegalArgumentException("Request format only supports pmml now!");
+        }
         if (Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("Request should contain algorithm!");
         }

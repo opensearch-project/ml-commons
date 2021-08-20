@@ -85,6 +85,19 @@ public class UploadTaskRequestTest {
     }
 
     @Test
+    public void validate_Exception_InvalidFormat() {
+        UploadTaskRequest request = UploadTaskRequest.builder()
+            .name("test")
+            .format("pickle")
+            .algorithm("isolationforest")
+            .body(bodyExample)
+            .build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: only pmml models are supported in upload now;", exception.getMessage());
+    }
+
+    @Test
     public void validate_Exception_NullAlgorithm() {
         UploadTaskRequest request = UploadTaskRequest.builder()
             .name("test")
