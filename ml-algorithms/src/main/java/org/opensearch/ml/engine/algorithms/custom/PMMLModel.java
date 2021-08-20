@@ -1,3 +1,15 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.engine.algorithms.custom;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -36,6 +48,9 @@ public class PMMLModel implements MLAlgo {
             org.pmml4s.model.Model pmmlModel = org.pmml4s.model.Model.fromBytes(model.getContent());
             // input schema contains a list of input fields with its name and data type
             StructType inputSchema = pmmlModel.inputSchema();
+            if (dataFrame.columnMetas().length != inputSchema.size()) {
+                throw new IllegalArgumentException("data frame header and model header have different lengths");
+            }
             // make predictions for each data point
             List<Series> predictions = new ArrayList<>();
             for (int i = 0; i < dataFrame.size(); i++) {

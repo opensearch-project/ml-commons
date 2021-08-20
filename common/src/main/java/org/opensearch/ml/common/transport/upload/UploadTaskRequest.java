@@ -16,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Arrays;
 import java.util.Base64;
 
 import org.opensearch.action.ActionRequest;
@@ -40,14 +41,27 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class UploadTaskRequest extends ActionRequest {
+    static final String[] supportedFormats = new String[]{"pmml"};
+
     /**
      * version id, in case there is future schema change. This can be used to detect which version the client is using.
      */
     int version;
-
+    /**
+     * model name
+     */
     String name;
+    /**
+     * model format
+     */
     String format;
+    /**
+     * model algorithm
+     */
     String algorithm;
+    /**
+     * model body
+     */
     String body;
 
     @Builder
@@ -87,7 +101,7 @@ public class UploadTaskRequest extends ActionRequest {
         if (Strings.isNullOrEmpty(this.format)) {
             exception = addValidationError("model format can't be null or empty", exception);
         } else {
-            if (!format.equalsIgnoreCase("pmml")) {
+            if (!Arrays.asList(supportedFormats).contains(format.toLowerCase())) {
                 exception = addValidationError("only pmml models are supported in upload now", exception);
             }
         }

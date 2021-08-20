@@ -26,6 +26,7 @@ dependencies {
 }
 
 configurations {
+    // We have to manually exclude this package since it might conflict with other plugins (like AD) during build
     compile.exclude group: 'org.pmml4s'
 }
 

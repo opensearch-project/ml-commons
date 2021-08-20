@@ -11,6 +11,7 @@
 
 package org.opensearch.ml.client;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -45,6 +46,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
     NodeClient client;
 
+    static final String[] supportedFormats = new String[]{"pmml"};
+
     @Override
     public void upload(String name, String format, String algorithm, String body, ActionListener<String> listener) {
         if (Strings.isNullOrEmpty(name)) {
@@ -53,7 +56,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         if (Strings.isNullOrEmpty(format)) {
             throw new IllegalArgumentException("model format can't be null or empty");
         }
-        if (!format.equalsIgnoreCase("pmml")) {
+        if (!Arrays.asList(supportedFormats).contains(format.toLowerCase())) {
             throw new IllegalArgumentException("only pmml models are supported in upload now");
         }
         if (Strings.isNullOrEmpty(algorithm)) {

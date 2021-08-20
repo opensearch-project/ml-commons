@@ -37,14 +37,26 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class SearchTaskRequest extends ActionRequest {
+
     /**
      * version id, in case there is future schema change. This can be used to detect which version the client is using.
      */
     int version;
-
+    /**
+     * model id
+     */
     String modelId;
+    /**
+     * model name
+     */
     String name;
+    /**
+     * model format
+     */
     String format;
+    /**
+     * model algorithm
+     */
     String algorithm;
 
     @Builder

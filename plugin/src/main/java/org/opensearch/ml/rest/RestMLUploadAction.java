@@ -4,6 +4,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -23,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 
 public class RestMLUploadAction extends BaseMLModelManageAction {
     private static final String ML_UPLOAD_ACTION = "ml_upload_action";
+    static final String[] supportedFormats = new String[] { "pmml" };
 
     /**
      * Constructor
@@ -69,8 +71,8 @@ public class RestMLUploadAction extends BaseMLModelManageAction {
         if (Strings.isNullOrEmpty(format)) {
             throw new IllegalArgumentException("Request should contain format!");
         }
-        if (!format.equalsIgnoreCase("pmml")) {
-            throw new IllegalArgumentException("Request format only supports pmml now!");
+        if (!Arrays.asList(supportedFormats).contains(format.toLowerCase())) {
+            throw new IllegalArgumentException("only pmml models are supported in upload now");
         }
         if (Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("Request should contain algorithm!");
