@@ -21,7 +21,6 @@ import org.junit.Before;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionRequestValidationException;
-import org.opensearch.common.io.stream.NotSerializableExceptionWrapper;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -99,6 +98,6 @@ public class PredictionIT extends OpenSearchIntegTestCase {
             emptySearchInputDataset
         );
         ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
-        expectThrows(NotSerializableExceptionWrapper.class, () -> predictionFuture.actionGet());
+        expectThrows(IllegalArgumentException.class, () -> predictionFuture.actionGet());
     }
 }
