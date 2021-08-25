@@ -2,7 +2,6 @@ package org.opensearch.ml.rest;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.rest.BaseMLSearchAction.ML_PARAMETERS;
 import static org.opensearch.ml.rest.BaseMLSearchAction.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.rest.BaseMLSearchAction.PARAMETER_MODEL_ID;
 
@@ -151,20 +150,13 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetMLParametersWithoutInput() throws IOException {
-        XContentBuilder xContentBuilder = XContentFactory
-            .jsonBuilder()
-            .startObject()
-            .startObject("type1")
-            .startObject("properties")
-            .startObject("location")
-            .field("type", "geo_point")
-            .endObject()
-            .endObject()
-            .endObject()
-            .endObject();
-
-        Map<String, String> param = ImmutableMap.of();
-        FakeRestRequest fakeRestRequest = buildFakeRestRequest(param, xContentBuilder);
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .put("q", "user:dilbert")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
 
         List<MLParameter> mlParameters = baseMLSearchAction.getMLParameters(fakeRestRequest);
         assertTrue(mlParameters.isEmpty());
@@ -172,42 +164,80 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetMLParametersWithEmptyInput() throws IOException {
-        XContentBuilder xContentBuilder = XContentFactory.jsonBuilder().startObject().startObject(ML_PARAMETERS).endObject().endObject();
-
-        Map<String, String> param = ImmutableMap.of();
-        FakeRestRequest fakeRestRequest = buildFakeRestRequest(param, xContentBuilder);
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .put("ml_parameters", "")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
 
         List<MLParameter> mlParameters = baseMLSearchAction.getMLParameters(fakeRestRequest);
         assertTrue(mlParameters.isEmpty());
     }
 
     @Test
-    public void testGetMLParametersWithValidInput() throws IOException {
-        XContentBuilder xContentBuilder = XContentFactory
-            .jsonBuilder()
-            .startObject()
-            .startObject(ML_PARAMETERS)
-            .field("paramName1", "value1")
-            .field("paramName2", 123)
-            .endObject()
-            .endObject();
+    public void testGetMLParametersWithInvalidJsonInput() throws IOException {
+        thrown.expect(IllegalArgumentException.class);
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .put("ml_parameters", "{paramName1\":\"value1\",\"paramName2\":123}")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
 
-        Map<String, String> param = ImmutableMap.of();
-        FakeRestRequest fakeRestRequest = buildFakeRestRequest(param, xContentBuilder);
+        baseMLSearchAction.getMLParameters(fakeRestRequest);
+    }
+
+    @Test
+    public void testGetMLParametersWithValidInput() throws IOException {
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .put("ml_parameters", "{\"paramName1\":\"value1\",\"paramName2\":123}")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
 
         List<MLParameter> mlParameters = baseMLSearchAction.getMLParameters(fakeRestRequest);
         assertFalse(mlParameters.isEmpty());
         assertEquals(2, mlParameters.size());
 
-        MLParameter mlParam2 = mlParameters.get(0);
-        assertNotNull(mlParam2);
-        assertEquals("paramName2", mlParam2.getName());
-        assertEquals(123, mlParam2.getValue());
-
-        MLParameter mlParam1 = mlParameters.get(1);
+        MLParameter mlParam1 = mlParameters.get(0);
         assertNotNull(mlParam1);
         assertEquals("paramName1", mlParam1.getName());
         assertEquals("value1", mlParam1.getValue());
+
+        MLParameter mlParam2 = mlParameters.get(1);
+        assertNotNull(mlParam2);
+        assertEquals("paramName2", mlParam2.getName());
+        assertEquals(123, mlParam2.getValue());
+    }
+
+    @Test
+    public void testGetMLParametersWithoutBrace() throws IOException {
+        Map<String, String> param = ImmutableMap
+            .<String, String>builder()
+            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put("index", "index1,index2")
+            .put("ml_parameters", "\"paramName1\":\"value1\",\"paramName2\":123")
+            .build();
+        FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
+
+        List<MLParameter> mlParameters = baseMLSearchAction.getMLParameters(fakeRestRequest);
+        assertFalse(mlParameters.isEmpty());
+        assertEquals(2, mlParameters.size());
+
+        MLParameter mlParam1 = mlParameters.get(0);
+        assertNotNull(mlParam1);
+        assertEquals("paramName1", mlParam1.getName());
+        assertEquals("value1", mlParam1.getValue());
+
+        MLParameter mlParam2 = mlParameters.get(1);
+        assertNotNull(mlParam2);
+        assertEquals("paramName2", mlParam2.getName());
+        assertEquals(123, mlParam2.getValue());
     }
 
     @Test
