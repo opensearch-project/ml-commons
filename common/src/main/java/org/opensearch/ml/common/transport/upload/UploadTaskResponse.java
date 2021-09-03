@@ -10,7 +10,7 @@
  *
  */
 
-package org.opensearch.ml.common.transport.prediction;
+package org.opensearch.ml.common.transport.upload;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -24,8 +24,6 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -36,61 +34,44 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLPredictionTaskResponse extends ActionResponse implements ToXContentObject {
-    String taskId;
-
-    String status;
-
-    @ToString.Exclude
-    DataFrame predictionResult;
+public class UploadTaskResponse extends ActionResponse implements ToXContentObject {
+    String modelId;
 
     @Builder
-    public MLPredictionTaskResponse(String taskId, String status, DataFrame predictionResult) {
-        this.taskId = taskId;
-        this.status = status;
-        this.predictionResult = predictionResult;
+    public UploadTaskResponse(String modelId) {
+        this.modelId = modelId;
     }
 
-    public MLPredictionTaskResponse(StreamInput in) throws IOException {
+    public UploadTaskResponse(StreamInput in) throws IOException {
         super(in);
-        this.taskId = in.readString();
-        this.status = in.readString();
-        this.predictionResult = DataFrameBuilder.load(in);
+        this.modelId = in.readString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(taskId);
-        out.writeString(status);
-        predictionResult.writeTo(out);
+        out.writeString(modelId);
     }
 
-    public static MLPredictionTaskResponse fromActionResponse(ActionResponse actionResponse) {
-        if (actionResponse instanceof MLPredictionTaskResponse) {
-            return (MLPredictionTaskResponse) actionResponse;
+    public static UploadTaskResponse fromActionResponse(ActionResponse actionResponse) {
+        if (actionResponse instanceof UploadTaskResponse) {
+            return (UploadTaskResponse) actionResponse;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionResponse.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLPredictionTaskResponse(input);
+                return new UploadTaskResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionResponse into UploadTaskResponse", e);
         }
     }
 
     @Override
     public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
         builder.startObject();
-        builder.field("task_id", taskId);
-        builder.field("status", status);
-
-        builder.startObject("prediction_result");
-        predictionResult.toXContent(builder);
-        builder.endObject();
-
+        builder.field("model_id", this.modelId);
         builder.endObject();
         return builder;
     }
