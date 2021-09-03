@@ -16,21 +16,21 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.IntConsumer;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.common.ParsingException;
 import org.opensearch.common.Strings;
-import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.MLParameter;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.search.RestSearchAction;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
@@ -115,36 +115,27 @@ public class BaseMLSearchAction extends RestSearchAction {
      * @return MLParameter list
      */
     @VisibleForTesting
-    List<MLParameter> getMLParameters(RestRequest request) throws IOException {
+    List<MLParameter> getMLParameters(RestRequest request) {
+        String parametersStr = request.param(ML_PARAMETERS);
         List<MLParameter> parameters = new ArrayList<>();
-        if (request.hasContent()) {
-            XContentParser parser = request.contentParser();
-            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-            while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-                String fieldName = parser.currentName();
-                parser.nextToken();
-                if (ML_PARAMETERS.equals(fieldName)) {
-                    Map<String, Object> uiMetadata = parser.map();
-                    parameters = uiMetadata
-                        .entrySet()
-                        .stream()
-                        .map(e -> new MLParameter(e.getKey(), e.getValue()))
-                        .collect(Collectors.toList());
-                    break;
-                }
-            }
+        if (Strings.isNullOrEmpty(parametersStr)) {
+            return parameters;
+        }
+
+        if (parametersStr.charAt(0) != '{' && parametersStr.charAt(parametersStr.length() - 1) != '}') {
+            parametersStr = "{" + parametersStr + "}";
+        }
+
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            // Convert Map to JSON
+            Map<String, Object> map = mapper.readValue(parametersStr, new TypeReference<Map<String, Object>>() {
+            });
+            parameters = map.entrySet().stream().map(e -> new MLParameter(e.getKey(), e.getValue())).collect(Collectors.toList());
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("invalid ml_parameter: expected key=\"value\" or key=value [" + parametersStr + "]", e);
         }
 
         return parameters;
-    }
-
-    private void ensureExpectedToken(XContentParser.Token expected, XContentParser.Token actual, XContentParser parser) {
-        if (actual != expected) {
-            throw new ParsingException(
-                parser.getTokenLocation(),
-                String.format(Locale.ROOT, "Failed to parse object: expecting token of type [%s] but found [%s]", expected, actual),
-                new Object[0]
-            );
-        }
     }
 }
