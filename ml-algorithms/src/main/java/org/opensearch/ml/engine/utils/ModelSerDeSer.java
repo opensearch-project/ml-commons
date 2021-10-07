@@ -25,14 +25,15 @@ import java.io.ObjectOutputStream;
 public class ModelSerDeSer {
     // Welcome list includes OpenSearch ml plugin classes, JDK common classes and Tribuo libraries.
     public static final String[] ACCEPT_CLASS_PATTERNS = {
-        "*org.opensearch.ml.*",
-            "*java.lang.*",
-            "*java.util.*",
-            "*java.time.*",
-            "*org.tribuo.*",
-            "*com.oracle.labs.*",
-            "[*"
+        "java.lang.*",
+        "java.util.*",
+        "java.time.*",
+        "org.opensearch.ml.*",
+        "*org.tribuo.*",
+        "com.oracle.labs.*",
+        "[*"
     };
+
     public static byte[] serialize(Object model) {
         byte[] res = new byte[0];
         try {
