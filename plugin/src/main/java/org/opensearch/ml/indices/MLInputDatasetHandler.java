@@ -74,8 +74,7 @@ public class MLInputDatasetHandler {
 
         client.search(searchRequest, ActionListener.wrap(r -> {
             if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
-                // todo: add specific exception
-                listener.onFailure(new RuntimeException("No document found"));
+                listener.onFailure(new IllegalArgumentException("No document found"));
                 return;
             }
             SearchHits hits = r.getHits();
