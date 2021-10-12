@@ -50,7 +50,6 @@ dependencies {
     compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
     compile group: 'com.google.guava', name: 'guava', version:'29.0-jre'
-    //compile group: 'ml.combust.mleap', name: 'mleap-runtime_2.12', version:'0.17.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
@@ -239,11 +238,6 @@ configurations.all {
     resolutionStrategy.force 'junit:junit:4.12'
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
-    resolutionStrategy.force 'commons-io:commons-io:2.11.0'
-    resolutionStrategy.force 'org.scala-lang:scala-library:2.12.13'
-    resolutionStrategy.force 'org.scala-lang:scala-reflect:2.12.13'
-    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.5.1'
-    resolutionStrategy.force 'org.apache.commons:commons-math3:3.6.1'
 }
 
 spotless {
