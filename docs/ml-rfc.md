@@ -1,6 +1,6 @@
-# RFC: Machine Learning Framework
+# RFC: ML Commons
 ## Introduction
-Machine Learning Framework for OpenSearch is a new solution that makes it easy to develop new machine learning features. It allows engineers to leverage existing open-source machine learning algorithms, and reduce the efforts to build any new machine learning feature. It also removes the necessity from engineers to manage the machine learning tasks which will help to speed the feature developing process.
+The goal of ML Commons for OpenSearch is to ease the development of machine learning features by providing a set of common ML algorithms. The algorithms will be provided by standard programming intefaces in OpenSearch like transport calls or rest apis. So developers can use them just as libraries to build ML features, without having to worry about things like job distribution, security handling, or resource management.
 
 ## Problem Statement
 Machine learning helps to automate data analytics workflow and provide deeper and more comprehensive insights to the customers. Anomaly Detection, K-NN are machine learning features already available in OpenSearch. And we observe more and more machine learning features required to be supported in OpenSearch to power end users’ business needs. For instance:
@@ -17,7 +17,7 @@ But until today, the challenge is significant to build a new machine learning fe
 
   
 ## Solution 
-The solution is to introduce a new Machine Learning Framework inside the OpenSearch cluster, and all ML jobs only run and are managed in it. Existing functionalities: security, node communication, node management, can be leveraged.  The major functionalities in this solution include:
+The solution is to introduce a new Machine Learning Commons inside the OpenSearch cluster, and all ML jobs only run and are managed in it. Existing functionalities: security, node communication, node management, can be leveraged.  The major functionalities in this solution include:
 
 * **Unified Client Interfaces:** clients can use common interfaces for training and inference tasks, and then follow the algorithm interface to give right input parameters, such as input data, hyperparameters.  A client library will be built for easy use.
 * **ML Plugin:** ML plugin will help to initiate the ML nodes, and choose the right nodes and allocate the resources for each request, and manage machine learning tasks with monitoring and failure handing supports, and store the model results; it will be the bridge for the communication between OpenSearch process and ML engine.
@@ -27,9 +27,9 @@ The solution is to introduce a new Machine Learning Framework inside the OpenSea
 
 ### Forecasting with PPL in OpenSearch Dashboard 
 
-Let’s say that we need one new feature in OpenSearch to generate a forecasting dashboard based on log data, e.g. cpu load, traffic pattern.  To achieve this, one alternative solution to integrate the PPL query with ML framework: 
+Let’s say that we need one new feature in OpenSearch to generate a forecasting dashboard based on log data, e.g. cpu load, traffic pattern.  To achieve this, one alternative solution to integrate the PPL query with ML Commons: 
 
-* Add Forecasting algorithm support in ML framework
+* Add Forecasting algorithm support in ML Commons
 * Implement Forecasting PPL command by wrapping the ML Forecasting Interface
 ![](./images/opensearch-ml-ppl-seq.png)
 
@@ -101,7 +101,7 @@ A common client library will be also built for easy use. You can find more detai
 
 ## Request for Comments: ##
 
-We would like comments and feedback on the proposal for building Machine Learning Framework [here](https://github.com/opensearch-project/machine-learning/issues/20). Some specific questions we’re seeking feedback include
+We would like comments and feedback on the proposal for building Machine Learning Commons [here](https://github.com/opensearch-project/machine-learning/issues/20). Some specific questions we’re seeking feedback include
 
 * What problems would you like to be able to use machine learning to solve? How would you expect to be able to use machine learning for solving those problems?
 * What kind of new features would you like to add in this project?
