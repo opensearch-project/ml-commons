@@ -12,8 +12,6 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -54,6 +52,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 public class IntegTestUtils extends OpenSearchIntegTestCase {
+    public static final String ML_MODEL = ".plugins-ml-model";
     public static final String TESTING_DATA = "{\n"
         + "\"k1\":1.1,\n"
         + "\"k2\":1.2,\n"
