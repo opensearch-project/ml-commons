@@ -32,10 +32,7 @@ import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
-
 @OpenSearchIntegTestCase.ClusterScope(transportClientRatio = 0.9)
-@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 @Ignore("Test cases in this class are flaky, something is off with waitModelAvailable(taskId) method."
     + " This issue will be tracked in an issue and will be fixed later")
 public class PredictionITTests extends OpenSearchIntegTestCase {

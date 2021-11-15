@@ -47,10 +47,7 @@ import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
-
 @OpenSearchIntegTestCase.ClusterScope(transportClientRatio = 0.9)
-@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 public class TrainingITTests extends OpenSearchIntegTestCase {
     @Before
     public void initTestingData() throws ExecutionException, InterruptedException {
