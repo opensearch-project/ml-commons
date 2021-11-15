@@ -59,6 +59,8 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
         assertNotNull(response);
 
         List<MLStatsNodeResponse> responseList = response.getNodes();
+        // TODO: the responseList size here is not a fixed value. Comment out this assertion until this flaky test is fixed
+        // assertEquals(1, responseList.size());
         assertNotNull(responseList);
 
         MLStatsNodeResponse nodeResponse = responseList.get(0);
