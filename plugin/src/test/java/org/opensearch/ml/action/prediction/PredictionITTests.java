@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionRequestValidationException;
@@ -32,7 +33,9 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(transportClientRatio = 0.9)
-public class PredictionIT extends OpenSearchIntegTestCase {
+@Ignore("Test cases in this class are flaky, something is off with waitModelAvailable(taskId) method."
+    + " This issue will be tracked in an issue and will be fixed later")
+public class PredictionITTests extends OpenSearchIntegTestCase {
     private String taskId;
 
     @Before
