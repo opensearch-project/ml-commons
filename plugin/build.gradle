@@ -23,7 +23,7 @@ plugins {
 }
 
 ext {
-    opensearchVersion = '1.0.0'
+    opensearchVersion = "${opensearch_version}"
     isSnapshot = "true" == System.getProperty("build.snapshot", "true")
 }
 
