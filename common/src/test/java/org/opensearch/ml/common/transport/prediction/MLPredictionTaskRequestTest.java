@@ -157,4 +157,22 @@ public class MLPredictionTaskRequestTest {
         };
         MLPredictionTaskRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void fromActionRequest_Success_WithNullParameters() throws IOException {
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
+            .algorithm("algo")
+            .parameters(null)
+            .inputDataset(DataFrameInputDataset.builder()
+                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+                    put("key1", 2.0D); }})))
+                .build())
+            .build();
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        request.writeTo(bytesStreamOutput);
+        request = new MLPredictionTaskRequest(bytesStreamOutput.bytes().streamInput());
+        assertEquals("algo", request.getAlgorithm());
+        assertEquals(0, request.getParameters().size());
+        assertNull(request.getModelId());
+    }
 }

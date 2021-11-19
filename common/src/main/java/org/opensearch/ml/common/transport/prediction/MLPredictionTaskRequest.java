@@ -16,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -93,7 +94,7 @@ public class MLPredictionTaskRequest extends ActionRequest {
         super.writeTo(out);
         out.writeInt(this.version);
         out.writeString(this.algorithm);
-        out.writeList(this.parameters);
+        out.writeList(this.parameters == null ? new ArrayList<>() : this.parameters);
         out.writeOptionalString(this.modelId);
         this.inputDataset.writeTo(out);
     }
