@@ -1,0 +1,7 @@
+.gradle/
+build/
+.idea/
+client/build/
+common/build/
+ml-algorithms/build/
+plugin/build/
