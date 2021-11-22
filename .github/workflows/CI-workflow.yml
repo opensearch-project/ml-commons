@@ -1,9 +1,10 @@
-name: Build and Test ML
+name: Build and Test ml-commons
+# This workflow is triggered on pull requests and push to any branches
 on:
-  push:
+  pull_request:
     branches:
       - "*"
-  pull_request:
+  push:
     branches:
       - "*"
 
