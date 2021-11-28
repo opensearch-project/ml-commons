@@ -21,6 +21,7 @@ public class MLAlgoMetaData {
     private String version;
     private boolean predictable;
     private boolean trainable;
+    private boolean executable;
 
     private MLAlgoMetaData(Builder builder) {
         this.name = builder.name;
@@ -28,6 +29,7 @@ public class MLAlgoMetaData {
         this.version = builder.version;
         this.predictable = builder.predictable;
         this.trainable = builder.trainable;
+        this.executable = builder.executable;
     }
 
     public static Builder builder() {
@@ -40,6 +42,7 @@ public class MLAlgoMetaData {
         private String version;
         private boolean predictable;
         private boolean trainable;
+        private boolean executable;
 
         public MLAlgoMetaData build() {
             return new MLAlgoMetaData(this);
@@ -67,6 +70,11 @@ public class MLAlgoMetaData {
 
         public Builder trainable(boolean trainable) {
             this.trainable = trainable;
+            return this;
+        }
+
+        public Builder executable(boolean trainable) {
+            this.executable = executable;
             return this;
         }
     }

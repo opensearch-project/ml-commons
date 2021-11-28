@@ -22,6 +22,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -37,6 +38,7 @@ import lombok.experimental.FieldDefaults;
  */
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@InputDataSet(MLInputDataType.SEARCH_QUERY)
 public class SearchQueryInputDataset extends MLInputDataset {
 
     SearchSourceBuilder searchSourceBuilder;

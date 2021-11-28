@@ -22,7 +22,7 @@ import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -46,7 +46,7 @@ import java.util.Optional;
  * https://github.com/opensearch-project/ml-commons/issues/67
  * https://github.com/oracle/tribuo/issues/158
  */
-@MLAlgorithm("kmeans")
+@Function(FunctionName.KMEANS)
 public class KMeans implements MLAlgo {
     private static final KMeansParams.DistanceType DEFAULT_DISTANCE_TYPE = KMeansParams.DistanceType.EUCLIDEAN;
     private static int DEFAULT_CENTROIDS = 2;
@@ -136,6 +136,7 @@ public class KMeans implements MLAlgo {
                 .version("1.0")
                 .predictable(true)
                 .trainable(true)
+                .executable(false)
                 .build();
     }
 }

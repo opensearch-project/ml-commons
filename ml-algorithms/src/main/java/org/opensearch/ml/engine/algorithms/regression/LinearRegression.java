@@ -22,7 +22,7 @@ import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -48,7 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@MLAlgorithm("linear_regression")
+@Function(FunctionName.LINEAR_REGRESSION)
 public class LinearRegression implements MLAlgo {
 
     private static final LinearRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LinearRegressionParams.ObjectiveType.SQUARED_LOSS;
@@ -210,7 +210,7 @@ public class LinearRegression implements MLAlgo {
         LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, DEFAULT_INTERVAL, DEFAULT_BATCH_SIZE, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
         Model model = new Model();
-        model.setName("LinearRegression");
+        model.setName(FunctionName.LINEAR_REGRESSION.getName());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 
@@ -224,6 +224,7 @@ public class LinearRegression implements MLAlgo {
                 .version("1.0")
                 .predictable(true)
                 .trainable(true)
+                .executable(false)
                 .build();
     }
 }

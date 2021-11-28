@@ -20,7 +20,7 @@ import org.opensearch.ml.common.parameter.MLOutput;
 /**
  * This is machine learning algorithms interface.
  */
-public interface MLAlgo extends Predictable, Trainable {
+public interface MLAlgo extends Predictable, Trainable, MetaData {
 
     /**
      * Predict with given features and model (optional).

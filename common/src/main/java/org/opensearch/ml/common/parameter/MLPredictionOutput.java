@@ -7,6 +7,7 @@ import lombok.ToString;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameType;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
@@ -15,6 +16,7 @@ import java.io.IOException;
 
 @Getter
 @Setter
+@MLAlgoOutput(MLOutputType.PREDICTION)
 public class MLPredictionOutput extends MLOutput{
 
     private static final MLOutputType OUTPUT_TYPE = MLOutputType.PREDICTION;

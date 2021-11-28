@@ -9,13 +9,13 @@ import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
-@MLAlgorithm("sample_algo")
+@Function(FunctionName.SAMPLE_ALGO)
 public class SampleAlgo implements MLAlgo {
     private static final int DEFAULT_SAMPLE_PARAM = -1;
     private int sampleParam;
@@ -41,7 +41,7 @@ public class SampleAlgo implements MLAlgo {
     @Override
     public Model train(DataFrame dataFrame) {
         Model model = new Model();
-        model.setName("SampleAlgo");
+        model.setName(FunctionName.SAMPLE_ALGO.getName());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize("This is a sample testing model with parameter: " + sampleParam));
         return model;
@@ -54,6 +54,7 @@ public class SampleAlgo implements MLAlgo {
                 .version("1.0")
                 .predictable(true)
                 .trainable(true)
+                .executable(false)
                 .build();
     }
 }

@@ -17,10 +17,12 @@ import lombok.Getter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.ml.common.annotation.MLAlgoOutput;
 
 import java.io.IOException;
 
 @Getter
+@MLAlgoOutput(MLOutputType.TRAINING)
 public class MLTrainingOutput extends MLOutput{
 
     private static final MLOutputType OUTPUT_TYPE = MLOutputType.TRAINING;

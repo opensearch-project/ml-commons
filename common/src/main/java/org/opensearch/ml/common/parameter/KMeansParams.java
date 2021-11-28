@@ -9,12 +9,14 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.annotation.MLAlgoParameter;
 
 import java.io.IOException;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
+@MLAlgoParameter(algorithms={FunctionName.KMEANS})
 public class KMeansParams implements MLAlgoParams {
 
     public static final String PARSE_FIELD_NAME = FunctionName.KMEANS.getName();

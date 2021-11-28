@@ -17,7 +17,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
@@ -42,8 +41,7 @@ public class MLEngineTest {
         algoNames.add(FunctionName.KMEANS.getName());
         algoNames.add(FunctionName.LINEAR_REGRESSION.getName());
         algoNames.add(FunctionName.SAMPLE_ALGO.getName());
-        MLCommonsClassLoader.loadClassMapping(MLCommonsClassLoader.class, "/ml-commons-config.yml");
-        MLCommonsClassLoader.loadClassMapping(MLEngine.class, "/ml-algorithm-config.yml");
+        algoNames.add(FunctionName.LOCAL_SAMPLE_CALCULATOR.getName());
     }
 
     @Test
@@ -76,7 +74,7 @@ public class MLEngineTest {
     @Test
     public void trainLinearRegression() {
         Model model = trainLinearRegressionModel();
-        Assert.assertEquals("LinearRegression", model.getName());
+        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.getName(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }

@@ -56,7 +56,6 @@ public class MLPredictionTaskRequestTest {
                     put("key1", 2.0D);
                 }})))
                 .build();
-        MLCommonsClassLoader.loadClassMapping(MLCommonsClassLoader.class, "/ml-commons-config.yml");
     }
 
     @Test

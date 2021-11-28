@@ -11,16 +11,22 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
+import lombok.NoArgsConstructor;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.parameter.SampleAlgoOutput;
-import org.opensearch.ml.engine.Executable;
+import org.opensearch.ml.engine.ExecutableFunction;
+import org.opensearch.ml.engine.MLAlgoMetaData;
+import org.opensearch.ml.engine.annotation.Function;
 
 import java.util.Comparator;
 import java.util.List;
 
-public class LocalSampleCalculator implements Executable {
+@NoArgsConstructor
+@Function(FunctionName.LOCAL_SAMPLE_CALCULATOR)
+public class LocalSampleCalculator implements ExecutableFunction {
 
     private LocalSampleCalculatorInput sampleCalculatorInput;
     public LocalSampleCalculator(Input input) {
@@ -49,4 +55,14 @@ public class LocalSampleCalculator implements Executable {
         }
     }
 
+    @Override
+    public MLAlgoMetaData getMetaData() {
+        return MLAlgoMetaData.builder().name(FunctionName.LOCAL_SAMPLE_CALCULATOR.getName())
+                .description("Sample local calculator.")
+                .version("1.0")
+                .predictable(false)
+                .trainable(false)
+                .executable(true)
+                .build();
+    }
 }

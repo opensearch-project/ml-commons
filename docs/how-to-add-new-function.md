@@ -18,8 +18,12 @@ public enum FunctionName {
 
 ### Step 2: add input class 
 Create new class `org.opensearch.ml.common.parameter.SampleAlgoParams` in `common` package by implementing `MLAlgoParams` interface. 
-Must define `NamedXContentRegistry.Entry` in `SampleAlgoParams`.
+
+Must define `NamedXContentRegistry.Entry` in `SampleAlgoParams`. 
+
+Must add `@MLAlgoParameter` annotation with new algorithm name.
 ```
+@MLAlgoParameter(algorithms={FunctionName.SAMPLE_ALGO}) // must add this annotation
 public class SampleAlgoParams implements MLAlgoParams {
     public static final String PARSE_FIELD_NAME = FunctionName.SAMPLE_ALGO.getName();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
@@ -43,6 +47,7 @@ Register `SampleAlgoParams.XCONTENT_REGISTRY` in `MachineLearningPlugin.getNamed
                 );
     }
 ```
+
 ### Step 3: add output class
 Add new enum in `org.opensearch.ml.common.parameter.MLOutputType`:
 ```    
@@ -54,34 +59,34 @@ Add new enum in `org.opensearch.ml.common.parameter.MLOutputType`:
 ```
 Create new class `org.opensearch.ml.common.parameter.SampleAlgoOutput` in `common` package by extending abstract class `MLOutput`.
 
+Must add `@MLAlgoOutput` annotation with new output type.
+
+```
+@Getter
+@MLAlgoOutput(MLOutputType.SAMPLE_ALGO) // must add this annotation
+public class SampleAlgoOutput extends MLOutput{
+    ...
+    private Double sampleResult;
+    ...    
+}
+```
+
 ### Step 4: add implementation
 Create new class `org.opensearch.ml.engine.algorithms.sample.SampleAlgo` in `ml-algorithms` package by implementing interface `MLAlgo`.
 Override `train`, `predict` methods.
 
-### Step 5: configure new algorithm
-Add new input/output to config file `common/src/main/resources/ml-commons-config.yml` 
-
-Key is input/output enum name, value is class name.
+Must add `@Function` annotation with new ML algorithm name.
 ```
-ml_algo_param_class:
-  sample_algo: org.opensearch.ml.common.parameter.SampleAlgoParams
-  ...
-
-ml_output_class:
-  sample_algo: org.opensearch.ml.common.parameter.SampleAlgoOutput
-  ...
+@Function(FunctionName.SAMPLE_ALGO) // must add this annotation
+public class SampleAlgo implements MLAlgo {
+    ...
+    private int sampleParam;
+    ...
+}
 ```
 
-Add new ML algorithm to config file `ml-algorithms/src/main/resources/ml-algorithm-config.yml`
 
-Key is ML algorithm enum name added to `FunctionName` in Step 1, value is class name.
-```
-ml_algo_class:
-  sample_algo: org.opensearch.ml.engine.algorithms.sample.SampleAlgo
-  ...
-```
-
-### Step 6: Run and test
+### Step 5: Run and test
 Run `./gradlew run` and test sample algorithm.
 
 Train with sample data
@@ -198,7 +203,9 @@ public class LocalSampleCalculatorOutput implements Output{
 Create new class `ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/sample/LocalSampleCalculator` in `ml-algorithms` package 
 by implementing interface `Executable`. Override `execute` method.
 
+Must add `@Function` annotation with new function name.
 ```
+@Function(FunctionName.LOCAL_SAMPLE_CALCULATOR) // must add this annotation
 public class LocalSampleCalculator implements Executable {
     @Override
     public Output execute(Input input) {
@@ -208,15 +215,7 @@ public class LocalSampleCalculator implements Executable {
 }
 ```
 
-### Step 5: configure new function
-Add new function to config file `ml-algorithms/src/main/resources/ml-algorithm-config.yml`
-
-Key is the new function name `local_sample_calculator` added to `FunctionName` in Step 1, value is class name.
-```
-executable_function_class:
-  local_sample_calculator: org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator
-```
-### Step 6: Run and test
+### Step 5: Run and test
 Run `./gradlew run` and test this sample calculator.
 
 ```

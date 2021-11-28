@@ -15,6 +15,7 @@ import java.io.IOException;
 
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.dataframe.DataFrame;
 
 import lombok.AccessLevel;
@@ -30,6 +31,7 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
  */
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@InputDataSet(MLInputDataType.DATA_FRAME)
 public class DataFrameInputDataset extends MLInputDataset {
     DataFrame dataFrame;
 

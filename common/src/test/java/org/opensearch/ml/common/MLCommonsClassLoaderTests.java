@@ -28,7 +28,6 @@ import static org.junit.Assert.assertTrue;
 
 public class MLCommonsClassLoaderTests {
 
-    private String commonConfigFile = "/ml-commons-config.yml";
     private SampleAlgoParams params;
     private StreamInput streamInput;
 
@@ -37,7 +36,7 @@ public class MLCommonsClassLoaderTests {
 
     @Before
     public void setUp() throws IOException {
-        MLCommonsClassLoader.loadClassMapping(MLCommonsClassLoader.class, commonConfigFile);
+        MLCommonsClassLoader.loadClassMapping();
 
         params = new SampleAlgoParams(11);
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
@@ -59,7 +58,7 @@ public class MLCommonsClassLoaderTests {
     }
 
     @Test
-    public void testClassLoader_WrongType() throws IOException {
+    public void testClassLoader_WrongType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Can't find class for type TEST");
 

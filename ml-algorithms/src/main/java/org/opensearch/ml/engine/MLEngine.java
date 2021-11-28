@@ -18,12 +18,14 @@ import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.Output;
-import org.opensearch.ml.common.MLCommonsClassLoader;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.reflections.Reflections;
 
 import java.lang.reflect.InvocationTargetException;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Set;
 
 /**
@@ -31,15 +33,12 @@ import java.util.Set;
  */
 public class MLEngine {
     private static final String ALGO_PACKAGE_NAME = "org.opensearch.ml.engine.algorithms";
-    static {
-        MLCommonsClassLoader.loadClassMapping(MLEngine.class, "/ml-algorithm-config.yml");
-    }
 
     public static MLOutput predict(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
         if (algoName == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }
-        MLAlgo mlAlgo = MLCommonsClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
+        MLAlgo mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
         if (mlAlgo == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
@@ -50,7 +49,7 @@ public class MLEngine {
         if (algoName == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }
-        MLAlgo mlAlgo = MLCommonsClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
+        MLAlgo mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
         if (mlAlgo == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
@@ -61,7 +60,7 @@ public class MLEngine {
         if (input == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }
-        Executable function = MLCommonsClassLoader.initInstance(input.getFunctionName(), input, Input.class);
+        Executable function = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
         if (function == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + input.getFunctionName());
         }
@@ -71,11 +70,13 @@ public class MLEngine {
     public static MLEngineMetaData getMetaData() {
         MLEngineMetaData engineMetaData = new MLEngineMetaData();
         Reflections reflections = new Reflections(ALGO_PACKAGE_NAME);
-        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLAlgorithm.class);
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(Function.class);
         try {
             for (Class c : classes) {
-                MLAlgo algo = (MLAlgo) c.getDeclaredConstructor().newInstance();
-                engineMetaData.addAlgoMetaData(algo.getMetaData());
+                Object algo = c.getDeclaredConstructor().newInstance();
+                if (algo instanceof  MetaData) {
+                    engineMetaData.addAlgoMetaData(((MetaData)algo).getMetaData());
+                }
             }
         } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             throw new MetaDataException("Failed to get ML engine meta data.", e.getCause());

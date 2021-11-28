@@ -18,6 +18,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.Model;
@@ -73,7 +74,7 @@ public class LinearRegressionTest {
         parameters.setTarget( "price");
         LinearRegression regression = new LinearRegression(parameters);
         Model model = regression.train(trainDataFrame);
-        Assert.assertEquals("LinearRegression", model.getName());
+        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.getName(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
