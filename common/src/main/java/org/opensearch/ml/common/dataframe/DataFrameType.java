@@ -15,7 +15,7 @@ package org.opensearch.ml.common.dataframe;
 import lombok.Getter;
 
 public enum DataFrameType {
-    DEFAULT("DEFAULT");
+    DEFAULT("default");
 
     @Getter
     private final String name;

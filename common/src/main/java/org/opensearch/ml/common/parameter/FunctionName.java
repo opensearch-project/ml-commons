@@ -2,7 +2,7 @@ package org.opensearch.ml.common.parameter;
 
 import lombok.Getter;
 
-public enum MLAlgoName {
+public enum FunctionName {
     LINEAR_REGRESSION("linear_regression"),
     KMEANS("kmeans"),
     SAMPLE_ALGO("sample_algo"),
@@ -11,7 +11,7 @@ public enum MLAlgoName {
     @Getter
     private final String name;
 
-    MLAlgoName(String name) {
+    FunctionName(String name) {
         this.name = name;
     }
 
@@ -19,8 +19,8 @@ public enum MLAlgoName {
         return name;
     }
 
-    public static MLAlgoName fromString(String name){
-        for(MLAlgoName e : MLAlgoName.values()){
+    public static FunctionName fromString(String name){
+        for(FunctionName e : FunctionName.values()){
             if(e.name.equals(name)) return e;
         }
         return null;

@@ -34,7 +34,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.KMeansParams;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -50,7 +50,7 @@ public class MLPredictionTaskRequestTest {
     @Before
     public void setUp() {
         mlInput = MLInput.builder()
-                .algorithm(MLAlgoName.KMEANS)
+                .algorithm(FunctionName.KMEANS)
                 .parameters(KMeansParams.builder().centroids(1).build())
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
@@ -68,7 +68,7 @@ public class MLPredictionTaskRequestTest {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
         request = new MLPredictionTaskRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals(MLAlgoName.KMEANS, request.getMlInput().getAlgorithm());
+        assertEquals(FunctionName.KMEANS, request.getMlInput().getAlgorithm());
         KMeansParams params = (KMeansParams)request.getMlInput().getParameters();
         assertEquals(1, params.getCentroids().intValue());
         MLInputDataset inputDataset = request.getMlInput().getInputDataset();

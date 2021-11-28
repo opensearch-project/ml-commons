@@ -16,5 +16,5 @@ import org.opensearch.common.xcontent.ToXContentObject;
 
 public interface Input extends ToXContentObject, Writeable {
 
-    MLAlgoName getFunctionName();
+    FunctionName getFunctionName();
 }

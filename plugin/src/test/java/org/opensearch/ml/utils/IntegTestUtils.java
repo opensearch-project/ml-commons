@@ -39,7 +39,7 @@ import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
@@ -121,7 +121,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
 
     // Train a model.
     public static String trainModel(MLInputDataset inputDataset) throws ExecutionException, InterruptedException {
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).inputDataset(inputDataset).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
         MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
         ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
         MLTrainingTaskResponse trainingResponse = trainingFuture.actionGet();
@@ -161,7 +161,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
 
     // Predict with the model generated, and verify the prediction result.
     public static void predictAndVerifyResult(String taskId, MLInputDataset inputDataset) throws IOException {
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).inputDataset(inputDataset).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
         ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLPredictionTaskResponse predictionResponse = predictionFuture.actionGet();

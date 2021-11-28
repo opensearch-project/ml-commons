@@ -15,7 +15,7 @@ package org.opensearch.ml.engine.algorithms.clustering;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.KMeansParams;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
@@ -122,7 +122,7 @@ public class KMeans implements MLAlgo {
         KMeansTrainer trainer = new KMeansTrainer(centroids, iterations, distance, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();
-        model.setName("KMeans");
+        model.setName(FunctionName.KMEANS.getName());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
@@ -131,7 +131,7 @@ public class KMeans implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(MLAlgoName.KMEANS.getName())
+        return MLAlgoMetaData.builder().name(FunctionName.KMEANS.getName())
                 .description("A clustering algorithm.")
                 .version("1.0")
                 .predictable(true)

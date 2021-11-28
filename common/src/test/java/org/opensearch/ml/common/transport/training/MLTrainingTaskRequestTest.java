@@ -21,7 +21,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.KMeansParams;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 
 import java.io.IOException;
@@ -41,7 +41,7 @@ public class MLTrainingTaskRequestTest {
     @Before
     public void setUp() {
         mlInput = MLInput.builder()
-                .algorithm(MLAlgoName.KMEANS)
+                .algorithm(FunctionName.KMEANS)
                 .parameters(KMeansParams.builder().centroids(1).build())
                 .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
@@ -75,7 +75,7 @@ public class MLTrainingTaskRequestTest {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
         request = new MLTrainingTaskRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals(MLAlgoName.KMEANS, request.getMlInput().getAlgorithm());
+        assertEquals(FunctionName.KMEANS, request.getMlInput().getAlgorithm());
         assertEquals(1, ((KMeansParams) request.getMlInput().getParameters()).getCentroids().intValue());
         assertEquals(MLInputDataType.DATA_FRAME, request.getMlInput().getInputDataset().getInputDataType());
     }

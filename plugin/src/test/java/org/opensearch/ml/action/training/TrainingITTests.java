@@ -38,7 +38,7 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
@@ -103,7 +103,7 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
 
     // Train a model without dataset.
     public void testTrainingWithoutDataset() {
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
         MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
         expectThrows(ActionRequestValidationException.class, () -> {
             ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
@@ -116,7 +116,7 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
         SearchSourceBuilder searchSourceBuilder = generateSearchSourceBuilder();
         searchSourceBuilder.query(QueryBuilders.matchQuery("noSuchName", ""));
         MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).inputDataset(inputDataset).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
         MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
 
         ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);

@@ -23,7 +23,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
@@ -88,7 +88,7 @@ public class MachineLearningNodeClientTest {
 
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
         MLInput mlInput = MLInput.builder()
-                .algorithm(MLAlgoName.KMEANS)
+                .algorithm(FunctionName.KMEANS)
                 .inputDataset(input)
                 .build();
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
@@ -114,7 +114,7 @@ public class MachineLearningNodeClientTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("input data set can't be null");
         MLInput mlInput = MLInput.builder()
-                .algorithm(MLAlgoName.KMEANS)
+                .algorithm(FunctionName.KMEANS)
                 .build();
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
@@ -137,7 +137,7 @@ public class MachineLearningNodeClientTest {
 
         ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
         MLInput mlInput = MLInput.builder()
-                .algorithm(MLAlgoName.KMEANS)
+                .algorithm(FunctionName.KMEANS)
                 .inputDataset(input)
                 .build();
         machineLearningNodeClient.train(mlInput, trainingActionListener);
@@ -164,7 +164,7 @@ public class MachineLearningNodeClientTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("input data set can't be null");
         MLInput mlInput = MLInput.builder()
-                .algorithm(MLAlgoName.KMEANS)
+                .algorithm(FunctionName.KMEANS)
                 .build();
         machineLearningNodeClient.train(mlInput, trainingActionListener);
     }

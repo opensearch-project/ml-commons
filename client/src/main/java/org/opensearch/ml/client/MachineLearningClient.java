@@ -65,9 +65,9 @@ public interface MachineLearningClient {
     void train(MLInput mlInput, ActionListener<MLOutput> listener);
 
     /**
-     * Execute ML algorithm.
+     * Execute function and return ActionFuture.
      * @param input input data
-     * @return output
+     * @return ActionFuture of output
      */
     default ActionFuture<Output> execute(Input input) {
         PlainActionFuture<Output> actionFuture = PlainActionFuture.newFuture();
@@ -76,7 +76,7 @@ public interface MachineLearningClient {
     }
 
     /**
-     * Execute ML algorithm
+     * Execute function and return output in listener
      * @param input input data
      * @param listener action listener
      */

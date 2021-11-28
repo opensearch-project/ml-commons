@@ -17,7 +17,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 @Data
 public class KMeansParams implements MLAlgoParams {
 
-    public static final String PARSE_FIELD_NAME = "kmeans";
+    public static final String PARSE_FIELD_NAME = FunctionName.KMEANS.getName();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             MLAlgoParams.class,
             new ParseField(PARSE_FIELD_NAME),

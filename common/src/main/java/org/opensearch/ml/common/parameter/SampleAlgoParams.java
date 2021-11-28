@@ -25,8 +25,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Data
 public class SampleAlgoParams implements MLAlgoParams {
-
-    public static final String PARSE_FIELD_NAME = "sample_algo";
+    public static final String PARSE_FIELD_NAME = FunctionName.SAMPLE_ALGO.getName();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             MLAlgoParams.class,
             new ParseField(PARSE_FIELD_NAME),

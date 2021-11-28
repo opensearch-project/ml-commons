@@ -46,7 +46,7 @@ public class MLInput implements Input {
     public static final String INPUT_DATA_FIELD = "input_data";
 
     // Algorithm name
-    private MLAlgoName algorithm;
+    private FunctionName algorithm;
     // ML algorithm parameters
     private MLAlgoParams parameters;
     // Input data to train model, run trained model to predict or run ML algorithms(no-model-based) directly.
@@ -55,7 +55,7 @@ public class MLInput implements Input {
     private int version = 1;
 
     @Builder
-    public MLInput(MLAlgoName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
         this.algorithm = algorithm;
         this.parameters = parameters;
         if (inputDataset != null) {
@@ -66,7 +66,7 @@ public class MLInput implements Input {
     }
 
     public MLInput(StreamInput in) throws IOException {
-        this.algorithm = in.readEnum(MLAlgoName.class);
+        this.algorithm = in.readEnum(FunctionName.class);
         if (in.readBoolean()) {
             this.parameters = MLCommonsClassLoader.initInstance(algorithm, in, StreamInput.class);
         }
@@ -120,7 +120,7 @@ public class MLInput implements Input {
     }
 
     public static MLInput parse(XContentParser parser, String algorithmName) throws IOException {
-        MLAlgoName algorithm = MLAlgoName.fromString(algorithmName);
+        FunctionName algorithm = FunctionName.fromString(algorithmName);
         MLAlgoParams mlParameters = null;
         SearchSourceBuilder searchSourceBuilder = null;
         List<String> sourceIndices = new ArrayList<>();
@@ -166,7 +166,7 @@ public class MLInput implements Input {
     }
 
     @Override
-    public MLAlgoName getFunctionName() {
+    public FunctionName getFunctionName() {
         return this.algorithm;
     }
 }

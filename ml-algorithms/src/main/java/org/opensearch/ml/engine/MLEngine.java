@@ -14,7 +14,7 @@ package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.Output;
@@ -35,7 +35,7 @@ public class MLEngine {
         MLCommonsClassLoader.loadClassMapping(MLEngine.class, "/ml-algorithm-config.yml");
     }
 
-    public static MLOutput predict(MLAlgoName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
+    public static MLOutput predict(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
         if (algoName == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }
@@ -46,7 +46,7 @@ public class MLEngine {
         return mlAlgo.predict(dataFrame, model);
     }
 
-    public static Model train(MLAlgoName algoName, MLAlgoParams parameters, DataFrame dataFrame) {
+    public static Model train(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame) {
         if (algoName == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }

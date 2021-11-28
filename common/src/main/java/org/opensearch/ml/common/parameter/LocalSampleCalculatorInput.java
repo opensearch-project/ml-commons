@@ -28,7 +28,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Getter
 public class LocalSampleCalculatorInput implements Input {
-    public static final String PARSE_FIELD_NAME = "local_sample_calculator";
+    public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.getName();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             Input.class,
             new ParseField(PARSE_FIELD_NAME),
@@ -81,8 +81,8 @@ public class LocalSampleCalculatorInput implements Input {
     }
 
     @Override
-    public MLAlgoName getFunctionName() {
-        return MLAlgoName.LOCAL_SAMPLE_CALCULATOR;
+    public FunctionName getFunctionName() {
+        return FunctionName.LOCAL_SAMPLE_CALCULATOR;
     }
 
     public LocalSampleCalculatorInput(StreamInput in) throws IOException {

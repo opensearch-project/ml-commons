@@ -17,6 +17,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
@@ -57,7 +58,7 @@ public class KMeansTest {
     @Test
     public void train() {
         Model model = kMeans.train(trainDataFrame);
-        Assert.assertEquals("KMeans", model.getName());
+        Assert.assertEquals(FunctionName.KMEANS.getName(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }

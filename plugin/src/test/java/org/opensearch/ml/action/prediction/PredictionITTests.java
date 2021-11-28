@@ -23,7 +23,7 @@ import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -83,14 +83,14 @@ public class PredictionITTests extends OpenSearchIntegTestCase {
     }
 
     public void testPredictionWithoutModelId() throws IOException {
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).inputDataset(DATA_FRAME_INPUT_DATASET).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(DATA_FRAME_INPUT_DATASET).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest("", mlInput);
         ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(ResourceNotFoundException.class, () -> predictionFuture.actionGet());
     }
 
     public void testPredictionWithoutDataset() throws IOException {
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
         ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(ActionRequestValidationException.class, () -> predictionFuture.actionGet());
@@ -98,7 +98,7 @@ public class PredictionITTests extends OpenSearchIntegTestCase {
 
     public void testPredictionWithEmptyDataset() throws IOException {
         MLInputDataset emptySearchInputDataset = generateEmptyDataset();
-        MLInput mlInput = MLInput.builder().algorithm(MLAlgoName.KMEANS).inputDataset(emptySearchInputDataset).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(emptySearchInputDataset).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
         ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(IllegalArgumentException.class, () -> predictionFuture.actionGet());

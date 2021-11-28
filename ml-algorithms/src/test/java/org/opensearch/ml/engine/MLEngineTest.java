@@ -21,11 +21,10 @@ import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
@@ -40,9 +39,9 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        algoNames.add(MLAlgoName.KMEANS.getName());
-        algoNames.add(MLAlgoName.LINEAR_REGRESSION.getName());
-        algoNames.add(MLAlgoName.SAMPLE_ALGO.getName());
+        algoNames.add(FunctionName.KMEANS.getName());
+        algoNames.add(FunctionName.LINEAR_REGRESSION.getName());
+        algoNames.add(FunctionName.SAMPLE_ALGO.getName());
         MLCommonsClassLoader.loadClassMapping(MLCommonsClassLoader.class, "/ml-commons-config.yml");
         MLCommonsClassLoader.loadClassMapping(MLEngine.class, "/ml-algorithm-config.yml");
     }
@@ -51,7 +50,7 @@ public class MLEngineTest {
     public void predictKMeans() {
         Model model = trainKMeansModel();
         DataFrame predictionDataFrame = constructKMeansDataFrame(10);
-        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(MLAlgoName.KMEANS, null, predictionDataFrame, model);
+        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(FunctionName.KMEANS, null, predictionDataFrame, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(10, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
@@ -61,7 +60,7 @@ public class MLEngineTest {
     public void predictLinearRegression() {
         Model model = trainLinearRegressionModel();
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
-        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(MLAlgoName.LINEAR_REGRESSION, null, predictionDataFrame, model);
+        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(FunctionName.LINEAR_REGRESSION, null, predictionDataFrame, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
@@ -69,7 +68,7 @@ public class MLEngineTest {
     @Test
     public void trainKMeans() {
         Model model = trainKMeansModel();
-        Assert.assertEquals("KMeans", model.getName());
+        Assert.assertEquals(FunctionName.KMEANS.getName(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
@@ -100,7 +99,7 @@ public class MLEngineTest {
     public void predictWithoutModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
-        MLEngine.predict(MLAlgoName.LINEAR_REGRESSION, null, null, null);
+        MLEngine.predict(FunctionName.LINEAR_REGRESSION, null, null, null);
     }
 
     @Test
@@ -116,7 +115,7 @@ public class MLEngineTest {
                 .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
                 .build();
         DataFrame trainDataFrame = constructKMeansDataFrame(100);
-        return MLEngine.train(MLAlgoName.KMEANS, parameters, trainDataFrame);
+        return MLEngine.train(FunctionName.KMEANS, parameters, trainDataFrame);
     }
 
     private Model trainLinearRegressionModel() {
@@ -132,6 +131,6 @@ public class MLEngineTest {
         DataFrame trainDataFrame = constructLinearRegressionTrainDataFrame();
 
 
-        return MLEngine.train(MLAlgoName.LINEAR_REGRESSION, parameters, trainDataFrame);
+        return MLEngine.train(FunctionName.LINEAR_REGRESSION, parameters, trainDataFrame);
     }
 }

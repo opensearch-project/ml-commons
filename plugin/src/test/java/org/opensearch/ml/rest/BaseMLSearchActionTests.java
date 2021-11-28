@@ -27,6 +27,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.query.QueryStringQueryBuilder;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -105,11 +106,11 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetAlgorithmWithValidInput() {
-        Map<String, String> param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, "kmeans").build();
+        Map<String, String> param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, FunctionName.KMEANS.getName()).build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
         String algorithm = baseMLSearchAction.getAlgorithm(fakeRestRequest);
         assertFalse(Strings.isNullOrEmpty(algorithm));
-        assertEquals(algorithm, "kmeans");
+        assertEquals(algorithm, FunctionName.KMEANS.getName());
     }
 
     @Test
@@ -143,7 +144,7 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
     public void testGetSearchQueryWithoutSearchInput() throws IOException {
         Map<String, String> param = ImmutableMap
             .<String, String>builder()
-            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put(PARAMETER_ALGORITHM, FunctionName.KMEANS.getName())
             .put("index", "index1,index2")
             .build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
@@ -199,7 +200,7 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
     public void testGetSearchQueryWithSearchParams() throws IOException {
         Map<String, String> param = ImmutableMap
             .<String, String>builder()
-            .put(PARAMETER_ALGORITHM, "kmeans")
+            .put(PARAMETER_ALGORITHM, FunctionName.KMEANS.getName())
             .put("index", "index1,index2")
             .put("q", "user:dilbert")
             .build();

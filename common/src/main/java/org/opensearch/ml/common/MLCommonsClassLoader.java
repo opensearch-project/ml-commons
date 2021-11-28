@@ -20,7 +20,7 @@ import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutputType;
 
@@ -57,15 +57,15 @@ public class MLCommonsClassLoader {
                 if (currentToken == XContentParser.Token.FIELD_NAME) {
                     String key = parser.currentName();
                     if ("ml_algo_param_class".equals(key)) {
-                        parseMLAlgoParams(parser, parameterClassMap, k -> MLAlgoName.fromString(k));
+                        parseMLAlgoParams(parser, parameterClassMap, k -> FunctionName.fromString(k));
                     } else if ("ml_input_data_set_class".equals(key)) {
                         parseMLAlgoParams(parser, parameterClassMap, k -> MLInputDataType.fromString(k));
                     } else if ("ml_output_class".equals(key)) {
                         parseMLAlgoParams(parser, parameterClassMap, k -> MLOutputType.fromString(k));
                     } else if ("ml_algo_class".equals(key)) {
-                        parseMLAlgoParams(parser, mlAlgoClassMap, k -> MLAlgoName.fromString(k));
+                        parseMLAlgoParams(parser, mlAlgoClassMap, k -> FunctionName.fromString(k));
                     } else if ("executable_function_class".equals(key)) {
-                        parseMLAlgoParams(parser, mlAlgoClassMap, k -> MLAlgoName.fromString(k));
+                        parseMLAlgoParams(parser, mlAlgoClassMap, k -> FunctionName.fromString(k));
                     }
                 } else {
                     parser.nextToken();
