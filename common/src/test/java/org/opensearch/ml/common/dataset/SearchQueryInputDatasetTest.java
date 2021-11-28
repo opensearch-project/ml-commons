@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import static org.junit.Assert.assertEquals;
@@ -33,7 +34,7 @@ public class SearchQueryInputDatasetTest {
     public void writeTo_Success() throws IOException {
         SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset.builder()
             .indices(Arrays.asList("index1"))
-            .searchSourceBuilder(new SearchSourceBuilder().size(1))
+            .searchSourceBuilder(new SearchSourceBuilder().query(new MatchAllQueryBuilder()).size(1))
             .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         searchQueryInputDataset.writeTo(bytesStreamOutput);
@@ -43,6 +44,7 @@ public class SearchQueryInputDatasetTest {
         searchQueryInputDataset = new SearchQueryInputDataset(streamInput);
         assertEquals(1, searchQueryInputDataset.getIndices().size());
         assertEquals(1, searchQueryInputDataset.getSearchSourceBuilder().size());
+        assertEquals(new MatchAllQueryBuilder(), searchQueryInputDataset.getSearchSourceBuilder().query());
     }
 
     @Test

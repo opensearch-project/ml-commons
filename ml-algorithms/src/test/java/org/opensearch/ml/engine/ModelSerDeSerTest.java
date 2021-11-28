@@ -15,12 +15,12 @@ package org.opensearch.ml.engine;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.tribuo.clustering.kmeans.KMeansModel;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import static org.junit.Assert.assertFalse;
@@ -43,7 +43,8 @@ public class ModelSerDeSerTest {
 
     @Test
     public void testModelSerDeSerKMeans() {
-        KMeans kMeans = new KMeans(new ArrayList<>());
+        KMeansParams params = KMeansParams.builder().build();
+        KMeans kMeans = new KMeans(params);
         Model model = kMeans.train(constructKMeansDataFrame(100));
 
         KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.content);

@@ -11,26 +11,22 @@
 
 package org.opensearch.ml.client;
 
-import java.util.List;
-import java.util.Objects;
-
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
-
-import org.opensearch.common.Strings;
-import org.opensearch.ml.common.dataframe.DataFrame;
-
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.parameter.MLParameter;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor
@@ -39,49 +35,57 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     NodeClient client;
 
     @Override
-    public void predict(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, String modelId,
-                        ActionListener<DataFrame> listener) {
-        if(Strings.isNullOrEmpty(algorithm)) {
-            throw new IllegalArgumentException("algorithm name can't be null or empty");
-        }
-        if(Objects.isNull(inputData)) {
-            throw new IllegalArgumentException("input data set can't be null");
-        }
+    public void predict(String modelId, MLInput mlInput,
+                        ActionListener<MLOutput> listener) {
+        validateMLInput(mlInput, true);
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder()
-            .algorithm(algorithm)
-            .modelId(modelId)
-            .parameters(parameters)
-            .inputDataset(inputData)
+            .mlInput(mlInput)
             .build();
 
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
-            MLPredictionTaskResponse mlPredictionTaskResponse =
+            MLPredictionTaskResponse predictionResponse =
                     MLPredictionTaskResponse
                             .fromActionResponse(response);
-            listener.onResponse(mlPredictionTaskResponse.getPredictionResult());
+            listener.onResponse(predictionResponse.getOutput());
         }, listener::onFailure));
 
     }
 
     @Override
-    public void train(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, ActionListener<String> listener) {
-        if(Strings.isNullOrEmpty(algorithm)) {
-            throw new IllegalArgumentException("algorithm name can't be null or empty");
-        }
-        if(Objects.isNull(inputData)) {
-            throw new IllegalArgumentException("input data set can't be null");
-        }
-
+    public void train(MLInput mlInput, ActionListener<MLOutput> listener) {
+        validateMLInput(mlInput, true);
         MLTrainingTaskRequest trainingTaskRequest = MLTrainingTaskRequest.builder()
-                .algorithm(algorithm)
-                .inputDataset(inputData)
-                .parameters(parameters)
+                .mlInput(mlInput)
                 .build();
 
         client.execute(MLTrainingTaskAction.INSTANCE, trainingTaskRequest, ActionListener.wrap(response -> {
-            listener.onResponse(MLTrainingTaskResponse.fromActionResponse(response).getTaskId());
+            listener.onResponse(MLTrainingTaskResponse.fromActionResponse(response).getOutput());
         }, listener::onFailure));
+    }
+
+    @Override
+    public void execute(MLInput mlInput, ActionListener<MLOutput> listener) {
+        validateMLInput(mlInput, false);
+        MLExecuteTaskRequest executeTaskRequest = MLExecuteTaskRequest.builder()
+                .mlInput(mlInput)
+                .build();
+
+        client.execute(MLExecuteTaskAction.INSTANCE, executeTaskRequest, ActionListener.wrap(response -> {
+            listener.onResponse(MLExecuteTaskResponse.fromActionResponse(response).getOutput());
+        }, listener::onFailure));
+    }
+
+    private void validateMLInput(MLInput mlInput, boolean requireInput) {
+        if (mlInput == null) {
+            throw new IllegalArgumentException("ML Input can't be null");
+        }
+        if(mlInput.getAlgorithm() == null) {
+            throw new IllegalArgumentException("algorithm name can't be null or empty");
+        }
+        if(requireInput && mlInput.getInputDataset() == null) {
+            throw new IllegalArgumentException("input data set can't be null");
+        }
     }
 
 }

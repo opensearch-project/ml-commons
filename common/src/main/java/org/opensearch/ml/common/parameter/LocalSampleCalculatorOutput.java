@@ -1,0 +1,42 @@
+package org.opensearch.ml.common.parameter;
+
+import lombok.Builder;
+import lombok.Getter;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.XContentBuilder;
+
+import java.io.IOException;
+
+@Getter
+public class LocalSampleCalculatorOutput extends MLOutput{
+
+    private Double result;
+
+    @Builder
+    public LocalSampleCalculatorOutput(Double totalSum) {
+        super(MLOutputType.SAMPLE_ALGO);
+        this.result = totalSum;
+    }
+
+    public LocalSampleCalculatorOutput(StreamInput in) throws IOException {
+        super(MLOutputType.SAMPLE_ALGO);
+        result = in.readOptionalDouble();
+    }
+
+    @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        out.writeOptionalDouble(result);
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
+        if (result != null) {
+            builder.field("result", result);
+        }
+        builder.endObject();
+        return builder;
+    }
+}

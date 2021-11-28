@@ -12,22 +12,27 @@
 
 package org.opensearch.ml.common.dataframe;
 
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Iterator;
-
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
-
 import lombok.AccessLevel;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentParser;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class Row implements Iterable<ColumnValue>, Writeable {
+public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
     ColumnValue[] values;
 
     Row(int size) {
@@ -35,7 +40,7 @@ public class Row implements Iterable<ColumnValue>, Writeable {
         Arrays.fill(this.values, new NullValue());
     }
 
-    private Row(ColumnValue[] values) {
+    public Row(ColumnValue[] values) {
         this.values = values;
     }
 
@@ -91,13 +96,78 @@ public class Row implements Iterable<ColumnValue>, Writeable {
         return new Row(newValues);
     }
 
-    public void toXContent(final XContentBuilder builder) throws IOException {
+    public static Row parse(XContentParser parser) throws IOException {
+        List<ColumnValue> values = new ArrayList<>();
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case "values":
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+                        if (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                            String columnTypeField = parser.currentName();
+                            if (!"column_type".equals(columnTypeField)) {
+                                throw new IllegalArgumentException("wrong column value, expect column_type field but got " + columnTypeField);
+                            }
+                            parser.nextToken();
+                            String columnType = parser.text();
+
+                            parser.nextToken();
+                            String valueField = parser.currentName();
+                            if (!"value".equals(valueField)) {
+                                throw new IllegalArgumentException("wrong column value, expect value field but got " + valueField);
+                            }
+                            parser.nextToken();
+                            switch (columnType) {
+                                case "NULL":
+                                    values.add(new NullValue());
+                                    break;
+                                case "BOOLEAN":
+                                    values.add(new BooleanValue(parser.booleanValue()));
+                                    break;
+                                case "STRING":
+                                    values.add(new StringValue(parser.text()));
+                                    break;
+                                case "INTEGER":
+                                    values.add(new IntValue(parser.intValue()));
+                                    break;
+                                case "DOUBLE":
+                                    values.add(new DoubleValue(parser.doubleValue()));
+                                    break;
+                                default:
+                                    break;
+                            }
+                            parser.skipChildren();
+                            parser.nextToken();
+                        }
+                    }
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return new Row(values.toArray(new ColumnValue[0]));
+    }
+
+    public XContentBuilder toXContent(XContentBuilder builder) throws IOException {
+        return toXContent(builder, EMPTY_PARAMS);
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.startArray("values");
-        for(ColumnValue value : values) {
-            value.toXContent(builder);
+        for (ColumnValue value : values) {
+            value.toXContent(builder, params);
         }
         builder.endArray();
         builder.endObject();
+        return builder;
     }
 }

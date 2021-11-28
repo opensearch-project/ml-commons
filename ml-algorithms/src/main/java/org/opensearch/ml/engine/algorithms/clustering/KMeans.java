@@ -14,7 +14,10 @@ package org.opensearch.ml.engine.algorithms.clustering;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.parameter.MLParameter;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
@@ -33,77 +36,67 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+/**
+ * Tribuo Kmean can only run with Java8. We see such error when run with Java11
+ * access denied ("java.lang.RuntimePermission" "modifyThreadGroup")
+ * Check more details in these Github issues
+ * https://github.com/opensearch-project/ml-commons/issues/67
+ * https://github.com/oracle/tribuo/issues/158
+ */
 @MLAlgorithm("kmeans")
 public class KMeans implements MLAlgo {
-    public static final String K = "k";
-    public static final String ITERATIONS = "iterations";
-    public static final String DISTANCE_TYPE = "distance_type";
-    public static final String NUM_THREADS = "num_threads";
-    public static final String SEED = "seed";
+    private static final KMeansParams.DistanceType DEFAULT_DISTANCE_TYPE = KMeansParams.DistanceType.EUCLIDEAN;
+    private static int DEFAULT_CENTROIDS = 2;
+    private static int DEFAULT_ITERATIONS = 10;
 
-    //The number of clusters.
-    private int k = 2;
-    //The number of iterations.
-    private int iterations = 10;
-    //The distance function.
-    private KMeansTrainer.Distance distanceType = KMeansTrainer.Distance.EUCLIDEAN;
     //The number of threads.
+    private KMeansParams parameters;
+
     private int numThreads = Runtime.getRuntime().availableProcessors() + 1; //Assume cpu-bound.
     //The random seed.
     private long seed = System.currentTimeMillis();
+    private KMeansTrainer.Distance distance;
 
     public KMeans() {}
 
-    public KMeans(List<MLParameter> parameters) {
-        parameters.forEach(mlParameter ->
-        {
-            if (mlParameter.getName().equalsIgnoreCase(K)) {
-                k = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(ITERATIONS)) {
-                iterations = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(DISTANCE_TYPE)) {
-                int type = (int) mlParameter.getValue();
-                switch (type) {
-                    case 0:
-                        distanceType = KMeansTrainer.Distance.EUCLIDEAN;
-                        break;
-                    case 1:
-                        distanceType = KMeansTrainer.Distance.COSINE;
-                        break;
-                    case 2:
-                        distanceType = KMeansTrainer.Distance.L1;
-                        break;
-                    default:
-                        distanceType = KMeansTrainer.Distance.EUCLIDEAN;
-                        break;
-                }
-            } else if (mlParameter.getName().equalsIgnoreCase(NUM_THREADS)) {
-                numThreads = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(SEED)) {
-                seed = (long) mlParameter.getValue();
-            }
-        });
+    public KMeans(KMeansParams parameters) {
 
+        this.parameters = parameters == null ? KMeansParams.builder().build() : parameters;
         validateParameters();
+        createDistance();
     }
 
     private void validateParameters() {
-        if (k <= 0) {
+
+        if (parameters.getCentroids() != null && parameters.getCentroids() <= 0) {
             throw new IllegalArgumentException("K should be positive.");
         }
 
-        if (iterations <= 0) {
+        if (parameters.getIterations() != null && parameters.getIterations() <= 0) {
             throw new IllegalArgumentException("Iterations should be positive.");
         }
 
-        if (numThreads <= 0) {
-            throw new IllegalArgumentException("NumThreads should be positive.");
+    }
+
+    private void createDistance() {
+        KMeansParams.DistanceType distanceType = Optional.ofNullable(parameters.getDistanceType()).orElse(DEFAULT_DISTANCE_TYPE);
+        switch (distanceType) {
+            case COSINE:
+                distance = KMeansTrainer.Distance.COSINE;
+                break;
+            case L1:
+                distance = KMeansTrainer.Distance.L1;
+                break;
+            default:
+                distance = KMeansTrainer.Distance.EUCLIDEAN;
+                break;
         }
     }
 
     @Override
-    public DataFrame predict(DataFrame dataFrame, Model model) {
+    public MLOutput predict(DataFrame dataFrame, Model model) {
         if (model == null) {
             throw new IllegalArgumentException("No model found for KMeans prediction.");
         }
@@ -117,14 +110,16 @@ public class KMeans implements MLAlgo {
         List<Map<String, Object>> listClusterID = new ArrayList<>();
         predictions.forEach(e -> listClusterID.add(Collections.singletonMap("Cluster ID", e.getOutput().getID())));
 
-        return DataFrameBuilder.load(listClusterID);
+        return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(listClusterID)).build();
     }
 
     @Override
     public Model train(DataFrame dataFrame) {
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
-        KMeansTrainer trainer = new KMeansTrainer(k, iterations, distanceType, numThreads, seed);
+        Integer centroids = Optional.ofNullable(parameters.getCentroids()).orElse(DEFAULT_CENTROIDS);
+        Integer iterations = Optional.ofNullable(parameters.getIterations()).orElse(DEFAULT_ITERATIONS);
+        KMeansTrainer trainer = new KMeansTrainer(centroids, iterations, distance, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();
         model.setName("KMeans");
@@ -136,7 +131,7 @@ public class KMeans implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name("kmeans")
+        return MLAlgoMetaData.builder().name(MLAlgoName.KMEANS.name())
                 .description("A clustering algorithm.")
                 .version("1.0")
                 .predictable(true)

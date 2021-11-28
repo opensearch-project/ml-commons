@@ -12,11 +12,9 @@
 
 package org.opensearch.ml.common.transport.training;
 
-import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
-import lombok.experimental.FieldDefaults;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
@@ -24,6 +22,7 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.ml.common.parameter.MLOutput;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,27 +30,23 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 @Getter
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class MLTrainingTaskResponse extends ActionResponse implements ToXContentObject {
-    String status;
-    String taskId;
+    MLOutput output;
 
     @Builder
-    public MLTrainingTaskResponse(String status, String taskId) {
-        this.status = status;
-        this.taskId = taskId;
+    public MLTrainingTaskResponse(MLOutput output) {
+        this.output = output;
     }
 
     public MLTrainingTaskResponse(StreamInput in) throws IOException {
-        this.status = in.readString();
-        this.taskId = in.readString();
+        super(in);
+        output = MLOutput.fromStream(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(status);
-        out.writeString(taskId);
+        output.writeTo(out);
     }
 
     public static MLTrainingTaskResponse fromActionResponse(ActionResponse actionResponse) {
@@ -71,11 +66,7 @@ public class MLTrainingTaskResponse extends ActionResponse implements ToXContent
     }
 
     @Override
-    public XContentBuilder toXContent(final XContentBuilder xContentBuilder, final Params params) throws IOException {
-        xContentBuilder.startObject();
-        xContentBuilder.field("TaskId", taskId);
-        xContentBuilder.field("Status", status);
-        xContentBuilder.endObject();
-        return xContentBuilder;
+    public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
+        return output.toXContent(builder, params);
     }
 }

@@ -74,7 +74,9 @@ public class DefaultDataFrameTest {
         assertEquals(1, defaultDataFrame.size());
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         defaultDataFrame.writeTo(bytesStreamOutput);
-        defaultDataFrame = new DefaultDataFrame(bytesStreamOutput.bytes().streamInput(), true);
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        assertEquals(DataFrameType.DEFAULT, streamInput.readEnum(DataFrameType.class));
+        defaultDataFrame = new DefaultDataFrame(streamInput);
         assertEquals(1, defaultDataFrame.size());
         assertEquals(4, defaultDataFrame.iterator().next().size());
     }
@@ -86,6 +88,7 @@ public class DefaultDataFrameTest {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         assertEquals(DataFrameType.DEFAULT, streamInput.readEnum(DataFrameType.class));
         defaultDataFrame = new DefaultDataFrame(streamInput);
+        assertEquals(DataFrameType.DEFAULT, defaultDataFrame.getDataFrameType());
         assertEquals(1, defaultDataFrame.size());
         assertEquals(4, defaultDataFrame.iterator().next().size());
     }

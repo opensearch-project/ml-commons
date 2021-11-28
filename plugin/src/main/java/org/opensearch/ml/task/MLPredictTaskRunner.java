@@ -39,6 +39,13 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
@@ -109,6 +116,40 @@ public class MLPredictTaskRunner extends MLTaskRunner {
     }
 
     /**
+     * Execute algirithm and return result.
+     * TODO: 1. support backend task run; 2. support dispatch task to remote node
+     * @param request MLExecuteTaskRequest
+     * @param transportService transport service
+     * @param listener Action listener
+     */
+    public void execute(MLExecuteTaskRequest request, TransportService transportService, ActionListener<MLExecuteTaskResponse> listener) {
+        MLInput mlInput = request.getMlInput();
+        MLAlgoName algorithm = mlInput.getAlgorithm();
+        MLAlgoParams parameters = mlInput.getParameters();
+
+        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+            ActionListener<DataFrame> dataFrameActionListener = ActionListener.wrap(dataFrame -> {
+                MLOutput mlOutput = MLEngine.execute(algorithm, parameters, dataFrame);
+                listener.onResponse(MLExecuteTaskResponse.builder().output(mlOutput).build());
+            }, e -> {
+                log.error("Failed to generate DataFrame from search query", e);
+                listener.onFailure(e);
+            });
+            mlInputDatasetHandler
+                .parseSearchQueryInput(
+                    mlInput.getInputDataset(),
+                    new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
+                );
+        } else {
+            DataFrame dataFrame = mlInputDatasetHandler.parseDataFrameInput(mlInput.getInputDataset());
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> {
+                MLOutput mlOutput = MLEngine.execute(algorithm, parameters, dataFrame);
+                listener.onResponse(MLExecuteTaskResponse.builder().output(mlOutput).build());
+            });
+        }
+    }
+
+    /**
      * Start prediction task
      * @param request MLPredictionTaskRequest
      * @param listener Action listener
@@ -121,7 +162,8 @@ public class MLPredictTaskRunner extends MLTaskRunner {
             .createTime(Instant.now())
             .state(MLTaskState.CREATED)
             .build();
-        if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+        MLInput mlInput = request.getMlInput();
+        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { predict(mlTask, dataFrame, request, listener); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
@@ -132,11 +174,11 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                 });
             mlInputDatasetHandler
                 .parseSearchQueryInput(
-                    request.getInputDataset(),
+                    mlInput.getInputDataset(),
                     new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
                 );
         } else {
-            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(request.getInputDataset());
+            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(mlInput.getInputDataset());
             threadPool.executor(TASK_THREAD_POOL).execute(() -> { predict(mlTask, inputDataFrame, request, listener); });
         }
     }
@@ -151,6 +193,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
 
+        MLInput mlInput = request.getMlInput();
         // search model by model id.
         Model model = new Model();
         if (request.getModelId() != null) {
@@ -192,10 +235,14 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                 model.setContent(decoded);
 
                 // run predict
-                DataFrame forecastsResults = null;
+                MLOutput output;
                 try {
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
-                    forecastsResults = MLEngine.predict(request.getAlgorithm(), request.getParameters(), inputDataFrame, model);
+                    output = MLEngine.predict(mlInput.getAlgorithm(), mlInput.getParameters(), inputDataFrame, model);
+                    if (output instanceof MLPredictionOutput) {
+                        ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
+                        ((MLPredictionOutput) output).setStatus(mlTaskManager.get(mlTask.getTaskId()).getState().name());
+                    }
 
                     // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                     handleMLTaskComplete(mlTask);
@@ -206,12 +253,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                     return;
                 }
 
-                MLPredictionTaskResponse response = MLPredictionTaskResponse
-                    .builder()
-                    .taskId(mlTask.getTaskId())
-                    .status(mlTaskManager.get(mlTask.getTaskId()).getState().name())
-                    .predictionResult(forecastsResults)
-                    .build();
+                MLPredictionTaskResponse response = MLPredictionTaskResponse.builder().output(output).build();
                 listener.onResponse(response);
             }, searchException -> {
                 log.error("Search model failed", searchException);

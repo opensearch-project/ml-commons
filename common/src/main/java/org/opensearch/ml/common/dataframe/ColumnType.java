@@ -19,6 +19,23 @@ public enum ColumnType {
     BOOLEAN,
     NULL;
 
+    public static ColumnType fromString(String type) {
+        switch (type) {
+            case "STRING":
+                return STRING;
+            case "INTEGER":
+                return INTEGER;
+            case "DOUBLE":
+                return DOUBLE;
+            case "BOOLEAN":
+                return BOOLEAN;
+            case "NULL":
+                return NULL;
+            default:
+                return  null;
+        }
+    }
+
     public static ColumnType from(Object object) {
         if(object instanceof Integer) {
             return INTEGER;

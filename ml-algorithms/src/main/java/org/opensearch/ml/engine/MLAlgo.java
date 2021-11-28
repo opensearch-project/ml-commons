@@ -13,19 +13,34 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLOutput;
 
 
 /**
  * This is machine learning algorithms interface.
  */
 public interface MLAlgo {
+
     /**
      * Predict with given features and model (optional).
      * @param dataFrame features data
      * @param model the java serialized model
      * @return predicted results
      */
-    DataFrame predict(DataFrame dataFrame, Model model);
+    default MLOutput predict(DataFrame dataFrame, Model model) {
+        throw new RuntimeException("Unsupported predict.");
+    }
+
+    /**
+     * Execute algorithm with given params and input data frame.
+     * @param params ML algorithm parameter
+     * @param dataFrame input data frame
+     * @return execution result
+     */
+    default MLOutput execute(MLAlgoParams params, DataFrame dataFrame) {
+        throw new RuntimeException("Unsupported execute.");
+    }
 
     /**
      * Train model with given features.

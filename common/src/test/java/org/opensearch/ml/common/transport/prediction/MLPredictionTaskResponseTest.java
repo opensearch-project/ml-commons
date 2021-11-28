@@ -12,23 +12,22 @@
 
 package org.opensearch.ml.common.transport.prediction;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Collections;
-import java.util.HashMap;
-
 import org.junit.Test;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.Strings;
-import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Collections;
+import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -39,42 +38,51 @@ public class MLPredictionTaskResponseTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLPredictionOutput output = MLPredictionOutput.builder()
                 .taskId("taskId")
                 .status("Success")
                 .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
                 .build();
+        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+                .output(output)
+                .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         response.writeTo(bytesStreamOutput);
-        assertEquals(35, bytesStreamOutput.size());
         response = new MLPredictionTaskResponse(bytesStreamOutput.bytes().streamInput());
-        assertEquals("taskId", response.getTaskId());
-        assertEquals("Success", response.getStatus());
-        assertEquals(1, response.getPredictionResult().size());
+        MLPredictionOutput mlPredictionOutput = (MLPredictionOutput)response.getOutput();
+        assertEquals("taskId", mlPredictionOutput.getTaskId());
+        assertEquals("Success", mlPredictionOutput.getStatus());
+        assertEquals(1, mlPredictionOutput.getPredictionResult().size());
     }
 
     @Test
     public void fromActionResponse_WithMLPredictionTaskResponse() {
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLPredictionOutput output = MLPredictionOutput.builder()
                 .taskId("taskId")
                 .status("Success")
                 .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
+                .build();
+        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+                .output(output)
                 .build();
         assertSame(response, MLPredictionTaskResponse.fromActionResponse(response));
     }
 
     @Test
     public void fromActionResponse_WithNonMLPredictionTaskResponse() {
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLPredictionOutput output = MLPredictionOutput.builder()
                 .taskId("taskId")
                 .status("Success")
                 .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
                     put("key1", 2.0D);
                 }})))
+                .build();
+        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+                .output(output)
                 .build();
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -84,9 +92,12 @@ public class MLPredictionTaskResponseTest {
         };
         MLPredictionTaskResponse result = MLPredictionTaskResponse.fromActionResponse(actionResponse);
         assertNotSame(response, result);
-        assertEquals(response.getTaskId(), result.getTaskId());
-        assertEquals(response.getStatus(), result.getStatus());
-        assertEquals(response.getPredictionResult().size(), result.getPredictionResult().size());
+
+        MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) response.getOutput();
+        MLPredictionOutput resultMlPredictionOutput = (MLPredictionOutput) result.getOutput();
+        assertEquals(mlPredictionOutput.getTaskId(), resultMlPredictionOutput.getTaskId());
+        assertEquals(mlPredictionOutput.getStatus(), resultMlPredictionOutput.getStatus());
+        assertEquals(mlPredictionOutput.getPredictionResult().size(), resultMlPredictionOutput.getPredictionResult().size());
     }
 
     @Test(expected = UncheckedIOException.class)
@@ -104,12 +115,15 @@ public class MLPredictionTaskResponseTest {
 
     @Test
     public void toXContentTest() throws IOException {
+        MLPredictionOutput output = MLPredictionOutput.builder()
+                .taskId("b5009b99-268f-476d-a676-379a30f82457")
+                .status("Success")
+                .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+                    put("Cluster ID", 0);
+                }})))
+                .build();
         MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
-            .taskId("b5009b99-268f-476d-a676-379a30f82457")
-            .status("Success")
-            .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                put("Cluster ID", 0);
-            }})))
+            .output(output)
             .build();
 
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);

@@ -1,0 +1,84 @@
+package org.opensearch.ml.common.parameter;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameType;
+import org.opensearch.ml.common.dataframe.DefaultDataFrame;
+
+import java.io.IOException;
+
+@Getter
+@Setter
+public class MLPredictionOutput extends MLOutput{
+
+    public static final String TASK_ID_FIELD = "task_id";
+    public static final String STATUS_FIELD = "status";
+    public static final String PREDICTION_RESULT_FIELD = "prediction_result";
+
+    String taskId;
+    String status;
+
+    @ToString.Exclude
+    DataFrame predictionResult;
+
+    @Builder
+    public MLPredictionOutput(String taskId, String status, DataFrame predictionResult) {
+        super(MLOutputType.PREDICTION);
+        this.taskId = taskId;
+        this.status = status;
+        this.predictionResult = predictionResult;
+    }
+
+    public MLPredictionOutput(StreamInput in) throws IOException {
+        super(MLOutputType.PREDICTION);
+        this.taskId = in.readOptionalString();
+        this.status = in.readOptionalString();
+        if (in.readBoolean()) {
+            DataFrameType dataFrameType = in.readEnum(DataFrameType.class);
+            switch (dataFrameType) {
+                default:
+                    predictionResult = new DefaultDataFrame(in);
+                    break;
+            }
+        }
+    }
+
+    @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        out.writeOptionalString(taskId);
+        out.writeOptionalString(status);
+        if (predictionResult != null) {
+            out.writeBoolean(true);
+            predictionResult.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
+        if (taskId != null) {
+            builder.field(TASK_ID_FIELD, taskId);
+        }
+        if (status != null){
+            builder.field(STATUS_FIELD, status);
+        }
+
+        if (predictionResult != null) {
+            builder.startObject(PREDICTION_RESULT_FIELD);
+            predictionResult.toXContent(builder, params);
+            builder.endObject();
+        }
+
+        builder.endObject();
+        return builder;
+    }
+}

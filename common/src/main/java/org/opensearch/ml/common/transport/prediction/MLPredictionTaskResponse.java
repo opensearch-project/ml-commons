@@ -12,11 +12,9 @@
 
 package org.opensearch.ml.common.transport.prediction;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
+import lombok.Builder;
+import lombok.Getter;
+import lombok.ToString;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
@@ -24,46 +22,32 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.parameter.MLOutput;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.ToString;
-import lombok.experimental.FieldDefaults;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 @Getter
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class MLPredictionTaskResponse extends ActionResponse implements ToXContentObject {
-    String taskId;
 
-    String status;
-
-    @ToString.Exclude
-    DataFrame predictionResult;
+    MLOutput output;
 
     @Builder
-    public MLPredictionTaskResponse(String taskId, String status, DataFrame predictionResult) {
-        this.taskId = taskId;
-        this.status = status;
-        this.predictionResult = predictionResult;
+    public MLPredictionTaskResponse(MLOutput output) {
+        this.output = output;
     }
 
     public MLPredictionTaskResponse(StreamInput in) throws IOException {
         super(in);
-        this.taskId = in.readString();
-        this.status = in.readString();
-        this.predictionResult = DataFrameBuilder.load(in);
+        output = MLOutput.fromStream(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(taskId);
-        out.writeString(status);
-        predictionResult.writeTo(out);
-
+        output.writeTo(out);
     }
 
     public static MLPredictionTaskResponse fromActionResponse(ActionResponse actionResponse) {
@@ -84,15 +68,6 @@ public class MLPredictionTaskResponse extends ActionResponse implements ToXConte
 
     @Override
     public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
-        builder.startObject();
-        builder.field("task_id", taskId);
-        builder.field("status", status);
-
-        builder.startObject("prediction_result");
-        predictionResult.toXContent(builder);
-        builder.endObject();
-
-        builder.endObject();
-        return builder;
+        return output.toXContent(builder, params);
     }
 }

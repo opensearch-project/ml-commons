@@ -12,6 +12,26 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import lombok.Getter;
+
 public enum DataFrameType {
-    DEFAULT;
+    DEFAULT("DEFAULT");
+
+    @Getter
+    private final String name;
+
+    DataFrameType(String name) {
+        this.name = name;
+    }
+
+    public String toString() {
+        return name;
+    }
+
+    public static DataFrameType fromString(String name) {
+        for (DataFrameType e : DataFrameType.values()) {
+            if (e.name.equals(name)) return e;
+        }
+        return null;
+    }
 }

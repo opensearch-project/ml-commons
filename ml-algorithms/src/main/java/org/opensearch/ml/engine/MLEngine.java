@@ -13,17 +13,21 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.parameter.MLParameter;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.LinearRegressionParams;
+import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
-import org.opensearch.ml.engine.contants.MLAlgoNames;
-import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
+import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.engine.algorithms.sample.SampleAlgo;
+import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.reflections.Reflections;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -32,33 +36,52 @@ import java.util.Set;
 public class MLEngine {
     private static final String ALGO_PACKAGE_NAME = "org.opensearch.ml.engine.algorithms";
 
-    public static DataFrame predict(String algoName, List<MLParameter> parameters, DataFrame dataFrame, Model model) {
-        if (parameters == null) {
-            parameters = new ArrayList<>();
+    public static MLOutput predict(MLAlgoName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
+        if (algoName == null) {
+            throw new IllegalArgumentException("Algo name should not be null");
         }
-        switch (algoName.trim().toLowerCase()) {
-            case MLAlgoNames.KMEANS:
-                KMeans kMeans = new KMeans(parameters);
+        switch (algoName) {
+            case KMEANS:
+                KMeans kMeans = new KMeans((KMeansParams) parameters);
                 return kMeans.predict(dataFrame, model);
-            case MLAlgoNames.LINEAR_REGRESSION:
-                LinearRegression linearRegression = new LinearRegression(parameters);
+            case LINEAR_REGRESSION:
+                LinearRegression linearRegression = new LinearRegression((LinearRegressionParams)parameters);
                 return linearRegression.predict(dataFrame, model);
+            case SAMPLE_ALGO:
+                SampleAlgo sampleAlgo = new SampleAlgo((SampleAlgoParams) parameters);
+                return sampleAlgo.predict(dataFrame, model);
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
     }
 
-    public static Model train(String algoName, List<MLParameter> parameters, DataFrame dataFrame) {
-        if (parameters == null) {
-            parameters = new ArrayList<>();
+    public static Model train(MLAlgoName algoName, MLAlgoParams parameters, DataFrame dataFrame) {
+        if (algoName == null) {
+            throw new IllegalArgumentException("Algo name should not be null");
         }
-        switch (algoName.trim().toLowerCase()) {
-            case MLAlgoNames.KMEANS:
-                KMeans kMeans = new KMeans(parameters);
+        switch (algoName) {
+            case KMEANS:
+                KMeans kMeans = new KMeans((KMeansParams) parameters);
                 return kMeans.train(dataFrame);
-            case MLAlgoNames.LINEAR_REGRESSION:
-                LinearRegression linearRegression = new LinearRegression(parameters);
+            case LINEAR_REGRESSION:
+                LinearRegression linearRegression = new LinearRegression((LinearRegressionParams) parameters);
                 return linearRegression.train(dataFrame);
+            case SAMPLE_ALGO:
+                SampleAlgo sampleAlgo = new SampleAlgo((SampleAlgoParams) parameters);
+                return sampleAlgo.train(dataFrame);
+            default:
+                throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
+        }
+    }
+
+    public static MLOutput execute(MLAlgoName algoName, MLAlgoParams parameters, DataFrame dataFrame) {
+        if (algoName == null) {
+            throw new IllegalArgumentException("Algo name should not be null");
+        }
+        switch (algoName) {
+            case LOCAL_SAMPLE_CALCULATOR:
+                LocalSampleCalculator localSampleAlgo = new LocalSampleCalculator();
+                return localSampleAlgo.execute(parameters, dataFrame);
             default:
                 throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }

@@ -16,19 +16,16 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.parameter.MLParameter;
-import org.opensearch.ml.common.parameter.MLParameterBuilder;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
-
-import java.util.ArrayList;
-import java.util.List;
 
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 
 
 public class KMeansTest {
-    private List<MLParameter> parameters = new ArrayList<>();
+    private KMeansParams parameters;
     private KMeans kMeans;
     private DataFrame trainDataFrame;
     private DataFrame predictionDataFrame;
@@ -37,11 +34,11 @@ public class KMeansTest {
 
     @Before
     public void setUp() {
-        parameters.add(MLParameterBuilder.parameter("seed", 1L));
-        parameters.add(MLParameterBuilder.parameter("num_threads", 1));
-        parameters.add(MLParameterBuilder.parameter("distance_type", 0));
-        parameters.add(MLParameterBuilder.parameter("iterations", 10));
-        parameters.add(MLParameterBuilder.parameter("k", 2));
+        parameters = KMeansParams.builder()
+                .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
+                .iterations(10)
+                .centroids(2)
+                .build();
 
         kMeans = new KMeans(parameters);
         constructKMeansTrainDataFrame();
@@ -51,7 +48,8 @@ public class KMeansTest {
     @Test
     public void predict() {
         Model model = kMeans.train(trainDataFrame);
-        DataFrame predictions = kMeans.predict(predictionDataFrame, model);
+        MLPredictionOutput output = (MLPredictionOutput) kMeans.predict(predictionDataFrame, model);
+        DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(predictionSize, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
     }

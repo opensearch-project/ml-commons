@@ -18,30 +18,17 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.parameter.MLParameter;
-import org.opensearch.ml.common.parameter.MLParameterBuilder;
-import org.opensearch.ml.engine.contants.MLAlgoNames;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.LinearRegressionParams;
+import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
-import static org.opensearch.ml.engine.algorithms.clustering.KMeans.DISTANCE_TYPE;
-import static org.opensearch.ml.engine.algorithms.clustering.KMeans.ITERATIONS;
-import static org.opensearch.ml.engine.algorithms.clustering.KMeans.K;
-import static org.opensearch.ml.engine.algorithms.clustering.KMeans.NUM_THREADS;
-import static org.opensearch.ml.engine.algorithms.clustering.KMeans.SEED;
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.BETA1;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.BETA2;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.EPSILON;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.LEARNING_RATE;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.OBJECTIVE;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.OPTIMISER;
-import static org.opensearch.ml.engine.algorithms.regression.LinearRegression.TARGET;
 
 public class MLEngineTest {
     @Rule
@@ -51,15 +38,18 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        algoNames.add(MLAlgoNames.KMEANS);
-        algoNames.add(MLAlgoNames.LINEAR_REGRESSION);
+        algoNames.add(MLAlgoName.KMEANS.name());
+        algoNames.add(MLAlgoName.LINEAR_REGRESSION.name());
+        algoNames.add(MLAlgoName.SAMPLE_ALGO.name());
+        algoNames.add(MLAlgoName.LOCAL_SAMPLE_CALCULATOR.name());
     }
 
     @Test
     public void predictKMeans() {
         Model model = trainKMeansModel();
         DataFrame predictionDataFrame = constructKMeansDataFrame(10);
-        DataFrame predictions = MLEngine.predict("kmeans", null, predictionDataFrame, model);
+        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(MLAlgoName.KMEANS, null, predictionDataFrame, model);
+        DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(10, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
     }
@@ -68,7 +58,8 @@ public class MLEngineTest {
     public void predictLinearRegression() {
         Model model = trainLinearRegressionModel();
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
-        DataFrame predictions = MLEngine.predict("linear_regression", null, predictionDataFrame, model);
+        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(MLAlgoName.LINEAR_REGRESSION, null, predictionDataFrame, model);
+        DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
 
@@ -90,25 +81,23 @@ public class MLEngineTest {
 
     @Test
     public void trainUnsupportedAlgorithm() {
-        String algoName = "unsupported_algorithm";
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported algorithm: " + algoName);
-        MLEngine.train(algoName, null, null);
+        exceptionRule.expectMessage("Algo name should not be null");
+        MLEngine.train(null, null, null);
     }
 
     @Test
     public void predictUnsupportedAlgorithm() {
-        String algoName = "unsupported_algorithm";
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported algorithm: " + algoName);
-        MLEngine.predict(algoName, null, null, null);
+        exceptionRule.expectMessage("Algo name should not be null");
+        MLEngine.predict(null, null, null, null);
     }
 
     @Test
     public void predictWithoutModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
-        MLEngine.predict("linear_regression", null, null, null);
+        MLEngine.predict(MLAlgoName.LINEAR_REGRESSION, null, null, null);
     }
 
     @Test
@@ -118,26 +107,28 @@ public class MLEngineTest {
     }
 
     private Model trainKMeansModel() {
-        List<MLParameter> parameters = new ArrayList<>();
-        parameters.add(MLParameterBuilder.parameter(SEED, 1L));
-        parameters.add(MLParameterBuilder.parameter(NUM_THREADS, 1));
-        parameters.add(MLParameterBuilder.parameter(DISTANCE_TYPE, 0));
-        parameters.add(MLParameterBuilder.parameter(ITERATIONS, 10));
-        parameters.add(MLParameterBuilder.parameter(K, 2));
+        KMeansParams parameters = KMeansParams.builder()
+                .centroids(2)
+                .iterations(10)
+                .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
+                .build();
         DataFrame trainDataFrame = constructKMeansDataFrame(100);
-        return MLEngine.train("kmeans", parameters, trainDataFrame);
+        return MLEngine.train(MLAlgoName.KMEANS, parameters, trainDataFrame);
     }
 
     private Model trainLinearRegressionModel() {
-        List<MLParameter> parameters = new ArrayList<>();
-        parameters.add(MLParameterBuilder.parameter(OBJECTIVE, 0));
-        parameters.add(MLParameterBuilder.parameter(OPTIMISER, 5));
-        parameters.add(MLParameterBuilder.parameter(LEARNING_RATE, 0.01));
-        parameters.add(MLParameterBuilder.parameter(EPSILON, 1e-6));
-        parameters.add(MLParameterBuilder.parameter(BETA1, 0.9));
-        parameters.add(MLParameterBuilder.parameter(BETA2, 0.99));
-        parameters.add(MLParameterBuilder.parameter(TARGET, "price"));
+        LinearRegressionParams parameters = LinearRegressionParams.builder()
+                .objectiveType(LinearRegressionParams.ObjectiveType.SQUARED_LOSS)
+                .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
+                .learningRate(0.01)
+                .epsilon(1e-6)
+                .beta1(0.9)
+                .beta2(0.99)
+                .target("price")
+                .build();
         DataFrame trainDataFrame = constructLinearRegressionTrainDataFrame();
-        return MLEngine.train("linear_regression", parameters, trainDataFrame);
+
+
+        return MLEngine.train(MLAlgoName.LINEAR_REGRESSION, parameters, trainDataFrame);
     }
 }

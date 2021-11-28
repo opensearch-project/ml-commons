@@ -27,8 +27,8 @@ import java.util.Map;
 @UtilityClass
 public class LinearRegressionHelper {
     public static DataFrame constructLinearRegressionTrainDataFrame() {
-        double[] feet = new double[]{1000.00, 1500.00, 2000.00, 2500.00, 3000.00, 3500.00, 4000.00, 4500.00};
-        double[] prices = new double[]{10000.00, 15000.00, 20000.00, 25000.00, 30000.00, 35000.00, 40000.00, 45000.00};
+        double[] feet = new double[]{1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0};
+        double[] prices = new double[]{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0};
         String[] columnNames = new String[]{"feet", "price"};
         ColumnMeta[] columnMetas = Arrays.stream(columnNames).map(e -> new ColumnMeta(e, ColumnType.DOUBLE)).toArray(ColumnMeta[]::new);
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -43,7 +43,7 @@ public class LinearRegressionHelper {
     }
 
     public static DataFrame constructLinearRegressionPredictionDataFrame() {
-        double[] feet = new double[]{5000, 5500};
+        double[] feet = new double[]{10, 20};
         String[] columnNames = new String[]{"feet"};
         ColumnMeta[] columnMetas = Arrays.stream(columnNames).map(e -> new ColumnMeta(e, ColumnType.DOUBLE)).toArray(ColumnMeta[]::new);
         List<Map<String, Object>> rows = new ArrayList<>();

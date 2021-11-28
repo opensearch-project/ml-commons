@@ -13,6 +13,7 @@ package org.opensearch.ml.common.dataset;
 
 import java.io.IOException;
 
+import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.dataframe.DataFrame;
 
@@ -21,6 +22,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 
 /**
  * DataFrame based input data. Client directly passes the data frame to ML plugin with this.
@@ -34,6 +36,11 @@ public class DataFrameInputDataset extends MLInputDataset {
     public DataFrameInputDataset(@NonNull DataFrame dataFrame) {
         super(MLInputDataType.DATA_FRAME);
         this.dataFrame = dataFrame;
+    }
+
+    public DataFrameInputDataset(StreamInput streaminput) throws IOException {
+        super(MLInputDataType.DATA_FRAME);
+        this.dataFrame = new DefaultDataFrame(streaminput);
     }
 
     @Override
