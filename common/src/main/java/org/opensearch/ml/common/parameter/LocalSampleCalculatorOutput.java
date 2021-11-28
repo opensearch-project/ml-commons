@@ -9,24 +9,21 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import java.io.IOException;
 
 @Getter
-public class LocalSampleCalculatorOutput extends MLOutput{
+public class LocalSampleCalculatorOutput implements Output{
 
     private Double result;
 
     @Builder
     public LocalSampleCalculatorOutput(Double totalSum) {
-        super(MLOutputType.SAMPLE_ALGO);
         this.result = totalSum;
     }
 
     public LocalSampleCalculatorOutput(StreamInput in) throws IOException {
-        super(MLOutputType.SAMPLE_ALGO);
         result = in.readOptionalDouble();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        super.writeTo(out);
         out.writeOptionalDouble(result);
     }
 

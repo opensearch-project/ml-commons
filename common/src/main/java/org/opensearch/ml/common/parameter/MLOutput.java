@@ -1,11 +1,22 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.common.parameter;
 
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.ml.common.MLCommonsClassLoader;
 
 import java.io.IOException;
 
@@ -13,7 +24,7 @@ import java.io.IOException;
  * ML output data. Must specify output type and
  */
 @RequiredArgsConstructor
-public abstract class MLOutput implements ToXContentObject, Writeable {
+public abstract class MLOutput implements Output {
     @NonNull
     MLOutputType outputType;
 
@@ -27,44 +38,11 @@ public abstract class MLOutput implements ToXContentObject, Writeable {
     }
 
     public static MLOutput fromStream(StreamInput in) throws IOException {
-        MLOutput output = null;
-        MLOutput.MLOutputType outputType = in.readEnum(MLOutput.MLOutputType.class);
-        switch (outputType) {
-            case TRAINING:
-                output = new MLTrainingOutput(in);
-                break;
-            case PREDICTION:
-                output = new MLPredictionOutput(in);
-                break;
-            case SAMPLE_ALGO:
-                output = new SampleAlgoOutput(in);
-                break;
-            default:
-                break;
-        }
+        MLOutputType outputType = in.readEnum(MLOutputType.class);
+        MLOutput output = MLCommonsClassLoader.initInstance(outputType, in, StreamInput.class);
         return output;
     }
 
-    public enum MLOutputType {
-        TRAINING("TRAINING"),
-        PREDICTION("PREDICTION"),
-        SAMPLE_ALGO("SAMPLE_ALGO");
+    abstract MLOutputType getType();
 
-        private final String name;
-
-        MLOutputType(String name) {
-            this.name = name;
-        }
-
-        public String toString() {
-            return name;
-        }
-
-        public static MLOutputType fromString(String name){
-            for(MLOutputType e : MLOutputType.values()){
-                if(e.name.equals(name)) return e;
-            }
-            return null;
-        }
-    }
 }

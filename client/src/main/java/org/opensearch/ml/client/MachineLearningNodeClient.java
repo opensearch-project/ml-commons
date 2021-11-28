@@ -16,8 +16,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -65,10 +67,9 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void execute(MLInput mlInput, ActionListener<MLOutput> listener) {
-        validateMLInput(mlInput, false);
+    public void execute(Input input, ActionListener<Output> listener) {
         MLExecuteTaskRequest executeTaskRequest = MLExecuteTaskRequest.builder()
-                .mlInput(mlInput)
+                .input(input)
                 .build();
 
         client.execute(MLExecuteTaskAction.INSTANCE, executeTaskRequest, ActionListener.wrap(response -> {

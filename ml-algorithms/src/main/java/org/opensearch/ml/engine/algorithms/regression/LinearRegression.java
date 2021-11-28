@@ -16,6 +16,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.MLAlgo;
@@ -80,8 +81,8 @@ public class LinearRegression implements MLAlgo {
      * Initialize a linear regression algorithm.
      * @param parameters the parameters for linear regression algorithm
      */
-    public LinearRegression(LinearRegressionParams parameters) {
-        this.parameters = parameters == null ? LinearRegressionParams.builder().build() : parameters;
+    public LinearRegression(MLAlgoParams parameters) {
+        this.parameters = parameters == null ? LinearRegressionParams.builder().build() : (LinearRegressionParams)parameters;
         validateParameters();
         createObjective();
         createOptimiser();
@@ -218,7 +219,7 @@ public class LinearRegression implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(MLAlgoName.LINEAR_REGRESSION.name())
+        return MLAlgoMetaData.builder().name(MLAlgoName.LINEAR_REGRESSION.getName())
                 .description("Linear regression algorithm.")
                 .version("1.0")
                 .predictable(true)

@@ -64,8 +64,6 @@ public class SearchQueryInputDataset extends MLInputDataset {
     public SearchQueryInputDataset(StreamInput streaminput) throws IOException {
         super(MLInputDataType.SEARCH_QUERY);
         String searchString = streaminput.readString();
-//        SearchModule searchModule = new SearchModule(Settings.EMPTY, false, Collections.emptyList());
-//        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(searchModule.getNamedXContents()), LoggingDeprecationHandler.INSTANCE, searchString);
         XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchString);
         this.searchSourceBuilder = SearchSourceBuilder.fromXContent(parser);
         this.indices = streaminput.readStringList();

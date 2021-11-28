@@ -17,6 +17,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
@@ -24,6 +25,7 @@ import org.opensearch.ml.common.parameter.MLAlgoName;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
@@ -38,10 +40,11 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        algoNames.add(MLAlgoName.KMEANS.name());
-        algoNames.add(MLAlgoName.LINEAR_REGRESSION.name());
-        algoNames.add(MLAlgoName.SAMPLE_ALGO.name());
-        algoNames.add(MLAlgoName.LOCAL_SAMPLE_CALCULATOR.name());
+        algoNames.add(MLAlgoName.KMEANS.getName());
+        algoNames.add(MLAlgoName.LINEAR_REGRESSION.getName());
+        algoNames.add(MLAlgoName.SAMPLE_ALGO.getName());
+        MLCommonsClassLoader.loadClassMapping(MLCommonsClassLoader.class, "/ml-commons-config.yml");
+        MLCommonsClassLoader.loadClassMapping(MLEngine.class, "/ml-algorithm-config.yml");
     }
 
     @Test

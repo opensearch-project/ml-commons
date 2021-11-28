@@ -1,0 +1,14 @@
+ml_algo_param_class:
+  linear_regression: org.opensearch.ml.common.parameter.LinearRegressionParams
+  kmeans: org.opensearch.ml.common.parameter.KMeansParams
+  sample_algo: org.opensearch.ml.common.parameter.SampleAlgoParams
+  local_sample_calculator: org.opensearch.ml.common.parameter.LocalSampleCalculatorParams
+
+ml_input_data_set_class:
+  search_query: org.opensearch.ml.common.dataset.SearchQueryInputDataset
+  data_frame: org.opensearch.ml.common.dataset.DataFrameInputDataset
+
+ml_output_class:
+  training: org.opensearch.ml.common.parameter.MLTrainingOutput
+  prediction: org.opensearch.ml.common.parameter.MLPredictionOutput
+  sample_algo: org.opensearch.ml.common.parameter.SampleAlgoOutput

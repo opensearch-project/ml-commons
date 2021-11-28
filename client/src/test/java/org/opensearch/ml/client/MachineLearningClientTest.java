@@ -18,13 +18,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLAlgoName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.MLOutputType;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
+import org.opensearch.ml.common.parameter.Output;
 
 import java.io.IOException;
 
@@ -67,8 +71,13 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void execute(MLInput mlInput, ActionListener<MLOutput> listener) {
-                listener.onResponse(new MLOutput() {
+            public void execute(Input input, ActionListener<Output> listener) {
+                listener.onResponse(new Output() {
+                    @Override
+                    public void writeTo(StreamOutput out) {
+
+                    }
+
                     @Override
                     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
                         builder.startObject();

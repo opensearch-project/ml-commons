@@ -39,11 +39,11 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.parameter.MLAlgoName;
-import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -123,30 +123,9 @@ public class MLPredictTaskRunner extends MLTaskRunner {
      * @param listener Action listener
      */
     public void execute(MLExecuteTaskRequest request, TransportService transportService, ActionListener<MLExecuteTaskResponse> listener) {
-        MLInput mlInput = request.getMlInput();
-        MLAlgoName algorithm = mlInput.getAlgorithm();
-        MLAlgoParams parameters = mlInput.getParameters();
-
-        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
-            ActionListener<DataFrame> dataFrameActionListener = ActionListener.wrap(dataFrame -> {
-                MLOutput mlOutput = MLEngine.execute(algorithm, parameters, dataFrame);
-                listener.onResponse(MLExecuteTaskResponse.builder().output(mlOutput).build());
-            }, e -> {
-                log.error("Failed to generate DataFrame from search query", e);
-                listener.onFailure(e);
-            });
-            mlInputDatasetHandler
-                .parseSearchQueryInput(
-                    mlInput.getInputDataset(),
-                    new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
-                );
-        } else {
-            DataFrame dataFrame = mlInputDatasetHandler.parseDataFrameInput(mlInput.getInputDataset());
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> {
-                MLOutput mlOutput = MLEngine.execute(algorithm, parameters, dataFrame);
-                listener.onResponse(MLExecuteTaskResponse.builder().output(mlOutput).build());
-            });
-        }
+        Input input = request.getInput();
+        Output output = MLEngine.execute(input);
+        listener.onResponse(MLExecuteTaskResponse.builder().output(output).build());
     }
 
     /**

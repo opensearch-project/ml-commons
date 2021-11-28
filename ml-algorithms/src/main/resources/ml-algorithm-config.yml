@@ -1,0 +1,7 @@
+ml_algo_class:
+  linear_regression: org.opensearch.ml.engine.algorithms.regression.LinearRegression
+  kmeans: org.opensearch.ml.engine.algorithms.clustering.KMeans
+  sample_algo: org.opensearch.ml.engine.algorithms.sample.SampleAlgo
+
+executable_function_class:
+  local_sample_calculator: org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator

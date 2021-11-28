@@ -10,20 +10,26 @@ import java.io.IOException;
 
 @Getter
 public class ModelTrainingOutput extends MLOutput{
+    private static final MLOutputType OUTPUT_TYPE = MLOutputType.TRAINING;
     private String modelId;
     private String status;
 
     @Builder
     public ModelTrainingOutput(String modelId, String status) {
-        super(MLOutputType.TRAINING);
+        super(OUTPUT_TYPE);
         this.modelId = modelId;
         this.status= status;
     }
 
     public ModelTrainingOutput(StreamInput in) throws IOException {
-        super(MLOutputType.TRAINING);
+        super(OUTPUT_TYPE);
         this.modelId = in.readOptionalString();
         this.status = in.readOptionalString();
+    }
+
+    @Override
+    public MLOutputType getType() {
+        return OUTPUT_TYPE;
     }
 
     @Override

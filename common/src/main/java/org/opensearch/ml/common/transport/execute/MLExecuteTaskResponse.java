@@ -23,6 +23,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.Output;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,10 +34,10 @@ import java.io.UncheckedIOException;
 @ToString
 public class MLExecuteTaskResponse extends ActionResponse implements ToXContentObject {
 
-    MLOutput output;
+    Output output;
 
     @Builder
-    public MLExecuteTaskResponse(MLOutput output) {
+    public MLExecuteTaskResponse(Output output) {
         this.output = output;
     }
 

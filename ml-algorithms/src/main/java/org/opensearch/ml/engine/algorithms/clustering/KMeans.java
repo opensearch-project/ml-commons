@@ -16,6 +16,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.MLAlgo;
@@ -61,9 +62,8 @@ public class KMeans implements MLAlgo {
 
     public KMeans() {}
 
-    public KMeans(KMeansParams parameters) {
-
-        this.parameters = parameters == null ? KMeansParams.builder().build() : parameters;
+    public KMeans(MLAlgoParams parameters) {
+        this.parameters = parameters == null ? KMeansParams.builder().build() : (KMeansParams)parameters;
         validateParameters();
         createDistance();
     }
@@ -131,7 +131,7 @@ public class KMeans implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(MLAlgoName.KMEANS.name())
+        return MLAlgoMetaData.builder().name(MLAlgoName.KMEANS.getName())
                 .description("A clustering algorithm.")
                 .version("1.0")
                 .predictable(true)

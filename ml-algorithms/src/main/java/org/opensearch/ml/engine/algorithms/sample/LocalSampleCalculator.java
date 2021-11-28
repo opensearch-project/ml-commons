@@ -1,61 +1,52 @@
+/*
+ *  SPDX-License-Identifier: Apache-2.0
+ *
+ *  The OpenSearch Contributors require contributions made to
+ *  this file be licensed under the Apache-2.0 license or a
+ *  compatible open source license.
+ *
+ *  Modifications Copyright OpenSearch Contributors. See
+ *  GitHub history for details.
+ */
+
 package org.opensearch.ml.engine.algorithms.sample;
 
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.parameter.LocalSampleCalculatorParams;
-import org.opensearch.ml.common.parameter.MLAlgoName;
-import org.opensearch.ml.common.parameter.MLAlgoParams;
-import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.Input;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.parameter.SampleAlgoOutput;
-import org.opensearch.ml.engine.MLAlgo;
-import org.opensearch.ml.engine.MLAlgoMetaData;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.Executable;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Comparator;
+import java.util.List;
 
-@MLAlgorithm("local_sample_calculator")
-public class LocalSampleCalculator implements MLAlgo {
+public class LocalSampleCalculator implements Executable {
 
-    public LocalSampleCalculator() {}
+    private LocalSampleCalculatorInput sampleCalculatorInput;
+    public LocalSampleCalculator(Input input) {
+        sampleCalculatorInput = (LocalSampleCalculatorInput) input;
+    }
 
     @Override
-    public MLOutput execute(MLAlgoParams params, DataFrame dataFrame) {
-        if (params == null) {
-            throw new IllegalArgumentException("params should not be null");
+    public Output execute(Input input) {
+        if (input == null || !(input instanceof LocalSampleCalculatorInput)) {
+            throw new IllegalArgumentException("wrong input");
         }
-        if (!(params instanceof LocalSampleCalculatorParams)) {
-            throw new IllegalArgumentException("wrong param type");
-        }
-        String operation = ((LocalSampleCalculatorParams) params).getOperation();
+        String operation = sampleCalculatorInput.getOperation();
+        List<Double> inputData = sampleCalculatorInput.getInputData();
         switch (operation) {
             case "sum":
-                AtomicReference<Double> sum = new AtomicReference<>((double) 0);
-                dataFrame.forEach(row -> {
-                    row.forEach(item -> sum.updateAndGet(v -> v + item.doubleValue()));
-                });
-                return new SampleAlgoOutput(sum.get());
+                double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum();
+                return new SampleAlgoOutput(sum);
             case "max":
-                AtomicReference<Double> max = new AtomicReference<>(Double.MIN_VALUE);
-                dataFrame.forEach(row -> {
-                    row.forEach(item -> {
-                        Double value = item.doubleValue();
-                        if (max.get() < value) {
-                            max.set(value);
-                        }
-                    });
-                });
-                return new SampleAlgoOutput(max.get());
+                double max = inputData.stream().max(Comparator.naturalOrder()).get();
+                return new SampleAlgoOutput(max);
+            case "min":
+                double min = inputData.stream().min(Comparator.naturalOrder()).get();
+                return new SampleAlgoOutput(min);
             default:
                 throw new IllegalArgumentException("can't support this operation " + operation);
         }
     }
 
-    @Override
-    public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(MLAlgoName.SAMPLE_ALGO.name())
-                .description("A sample algorithm.")
-                .version("1.0")
-                .predictable(true)
-                .trainable(true)
-                .build();
-    }
 }

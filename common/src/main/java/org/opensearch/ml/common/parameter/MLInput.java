@@ -1,17 +1,25 @@
+/*
+ *  SPDX-License-Identifier: Apache-2.0
+ *
+ *  The OpenSearch Contributors require contributions made to
+ *  this file be licensed under the Apache-2.0 license or a
+ *  compatible open source license.
+ *
+ *  Modifications Copyright OpenSearch Contributors. See
+ *  GitHub history for details.
+ */
+
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.NonNull;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.common.xcontent.ToXContent;
-import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameType;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
@@ -29,7 +37,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
  * ML input data: algirithm name, parameters and input data set.
  */
 @Data
-public class MLInput implements ToXContentObject, Writeable {
+public class MLInput implements Input {
 
     public static final String ALGORITHM_FIELD = "algorithm";
     public static final String ML_PARAMETERS_FIELD = "parameters";
@@ -60,37 +68,11 @@ public class MLInput implements ToXContentObject, Writeable {
     public MLInput(StreamInput in) throws IOException {
         this.algorithm = in.readEnum(MLAlgoName.class);
         if (in.readBoolean()) {
-            switch (algorithm) {
-                case KMEANS:
-                    this.parameters = new KMeansParams(in);
-                    break;
-                case LINEAR_REGRESSION:
-                    this.parameters = new LinearRegressionParams(in);
-                    break;
-                case SAMPLE_ALGO:
-                    this.parameters = new SampleAlgoParams(in);
-                    break;
-                default:
-                    break;
-            }
+            this.parameters = MLCommonsClassLoader.initInstance(algorithm, in, StreamInput.class);
         }
         if (in.readBoolean()) {
             MLInputDataType inputDataType = in.readEnum(MLInputDataType.class);
-            switch (inputDataType) {
-                case SEARCH_QUERY:
-                    this.inputDataset = new SearchQueryInputDataset(in);
-                    break;
-                case DATA_FRAME:
-                    DataFrameType dataFrameType = in.readEnum(DataFrameType.class);
-                    switch (dataFrameType) {
-                        default:
-                            this.inputDataset = new DataFrameInputDataset(in);
-                            break;
-                    }
-                    break;
-                default:
-                    break;
-            }
+            this.inputDataset = MLCommonsClassLoader.initInstance(inputDataType, in, StreamInput.class);
         }
         this.version = in.readInt();
     }
@@ -181,5 +163,10 @@ public class MLInput implements ToXContentObject, Writeable {
             return new SearchQueryInputDataset(sourceIndices, searchSourceBuilder);
         }
         return null;
+    }
+
+    @Override
+    public MLAlgoName getFunctionName() {
+        return this.algorithm;
     }
 }

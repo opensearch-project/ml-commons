@@ -45,7 +45,7 @@ import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
-import org.opensearch.ml.common.parameter.LocalSampleCalculatorParams;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -198,7 +198,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 KMeansParams.XCONTENT_REGISTRY,
                 LinearRegressionParams.XCONTENT_REGISTRY,
                 SampleAlgoParams.XCONTENT_REGISTRY,
-                LocalSampleCalculatorParams.XCONTENT_REGISTRY
+                LocalSampleCalculatorInput.XCONTENT_REGISTRY
             );
     }
 }

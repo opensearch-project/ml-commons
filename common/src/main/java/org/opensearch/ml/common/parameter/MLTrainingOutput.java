@@ -1,3 +1,15 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ *
+ * Modifications Copyright OpenSearch Contributors. See
+ * GitHub history for details.
+ *
+ */
+
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
@@ -11,6 +23,7 @@ import java.io.IOException;
 @Getter
 public class MLTrainingOutput extends MLOutput{
 
+    private static final MLOutputType OUTPUT_TYPE = MLOutputType.TRAINING;
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String STATUS_FIELD = "status";
     private String modelId;
@@ -18,15 +31,20 @@ public class MLTrainingOutput extends MLOutput{
 
     @Builder
     public MLTrainingOutput(String modelId, String status) {
-        super(MLOutputType.TRAINING);
+        super(OUTPUT_TYPE);
         this.modelId = modelId;
         this.status= status;
     }
 
     public MLTrainingOutput(StreamInput in) throws IOException {
-        super(MLOutputType.TRAINING);
+        super(OUTPUT_TYPE);
         this.modelId = in.readOptionalString();
         this.status = in.readOptionalString();
+    }
+
+    @Override
+    public MLOutputType getType() {
+        return OUTPUT_TYPE;
     }
 
     @Override

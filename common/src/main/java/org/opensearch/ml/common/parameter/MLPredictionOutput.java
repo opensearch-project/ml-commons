@@ -17,6 +17,7 @@ import java.io.IOException;
 @Setter
 public class MLPredictionOutput extends MLOutput{
 
+    private static final MLOutputType OUTPUT_TYPE = MLOutputType.PREDICTION;
     public static final String TASK_ID_FIELD = "task_id";
     public static final String STATUS_FIELD = "status";
     public static final String PREDICTION_RESULT_FIELD = "prediction_result";
@@ -29,14 +30,14 @@ public class MLPredictionOutput extends MLOutput{
 
     @Builder
     public MLPredictionOutput(String taskId, String status, DataFrame predictionResult) {
-        super(MLOutputType.PREDICTION);
+        super(OUTPUT_TYPE);
         this.taskId = taskId;
         this.status = status;
         this.predictionResult = predictionResult;
     }
 
     public MLPredictionOutput(StreamInput in) throws IOException {
-        super(MLOutputType.PREDICTION);
+        super(OUTPUT_TYPE);
         this.taskId = in.readOptionalString();
         this.status = in.readOptionalString();
         if (in.readBoolean()) {
@@ -80,5 +81,10 @@ public class MLPredictionOutput extends MLOutput{
 
         builder.endObject();
         return builder;
+    }
+
+    @Override
+    public MLOutputType getType() {
+        return OUTPUT_TYPE;
     }
 }

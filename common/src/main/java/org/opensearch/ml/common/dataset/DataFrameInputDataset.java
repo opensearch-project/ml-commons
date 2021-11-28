@@ -22,6 +22,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.ml.common.dataframe.DataFrameType;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 
 /**
@@ -38,9 +39,17 @@ public class DataFrameInputDataset extends MLInputDataset {
         this.dataFrame = dataFrame;
     }
 
-    public DataFrameInputDataset(StreamInput streaminput) throws IOException {
+    public DataFrameInputDataset(StreamInput in) throws IOException {
         super(MLInputDataType.DATA_FRAME);
-        this.dataFrame = new DefaultDataFrame(streaminput);
+        DataFrameType dataFrameType = in.readEnum(DataFrameType.class);
+        switch (dataFrameType) {
+            case DEFAULT:
+                this.dataFrame = new DefaultDataFrame(in);
+                break;
+            default:
+                this.dataFrame = null;
+                break;
+        }
     }
 
     @Override

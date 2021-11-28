@@ -2,6 +2,7 @@ package org.opensearch.ml.engine.algorithms.sample;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.MLAlgoName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.SampleAlgoOutput;
 import org.opensearch.ml.common.parameter.SampleAlgoParams;
@@ -21,8 +22,8 @@ public class SampleAlgo implements MLAlgo {
 
     public SampleAlgo(){}
 
-    public SampleAlgo(SampleAlgoParams parameters) {
-        this.sampleParam = Optional.ofNullable(parameters.getSampleParam()).orElse(DEFAULT_SAMPLE_PARAM);
+    public SampleAlgo(MLAlgoParams parameters) {
+        this.sampleParam = Optional.ofNullable(((SampleAlgoParams)parameters).getSampleParam()).orElse(DEFAULT_SAMPLE_PARAM);
     }
 
     @Override
@@ -48,7 +49,7 @@ public class SampleAlgo implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(MLAlgoName.LOCAL_SAMPLE_CALCULATOR.name())
+        return MLAlgoMetaData.builder().name(MLAlgoName.SAMPLE_ALGO.getName())
                 .description("A sample algorithm.")
                 .version("1.0")
                 .predictable(true)

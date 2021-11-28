@@ -25,6 +25,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
@@ -55,6 +56,7 @@ public class MLPredictionTaskRequestTest {
                     put("key1", 2.0D);
                 }})))
                 .build();
+        MLCommonsClassLoader.loadClassMapping(MLCommonsClassLoader.class, "/ml-commons-config.yml");
     }
 
     @Test

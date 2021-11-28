@@ -11,17 +11,18 @@ import java.io.IOException;
 @Getter
 public class SampleAlgoOutput extends MLOutput{
 
+    private static final MLOutputType OUTPUT_TYPE = MLOutputType.SAMPLE_ALGO;
     public static final String SAMPLE_RESULT_FIELD = "sample_result";
     private Double sampleResult;
 
     @Builder
     public SampleAlgoOutput(Double sampleResult) {
-        super(MLOutputType.SAMPLE_ALGO);
+        super(OUTPUT_TYPE);
         this.sampleResult = sampleResult;
     }
 
     public SampleAlgoOutput(StreamInput in) throws IOException {
-        super(MLOutputType.SAMPLE_ALGO);
+        super(OUTPUT_TYPE);
         sampleResult = in.readOptionalDouble();
     }
 
@@ -37,5 +38,10 @@ public class SampleAlgoOutput extends MLOutput{
         builder.field(SAMPLE_RESULT_FIELD, sampleResult);
         builder.endObject();
         return builder;
+    }
+
+    @Override
+    public MLOutputType getType() {
+        return OUTPUT_TYPE;
     }
 }

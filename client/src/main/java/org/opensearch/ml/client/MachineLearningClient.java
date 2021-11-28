@@ -15,8 +15,10 @@ package org.opensearch.ml.client;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.Output;
 
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.
@@ -64,19 +66,19 @@ public interface MachineLearningClient {
 
     /**
      * Execute ML algorithm.
-     * @param mlInput
-     * @return
+     * @param input input data
+     * @return output
      */
-    default ActionFuture<MLOutput> execute(MLInput mlInput) {
-        PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
-        execute(mlInput, actionFuture);
+    default ActionFuture<Output> execute(Input input) {
+        PlainActionFuture<Output> actionFuture = PlainActionFuture.newFuture();
+        execute(input, actionFuture);
         return actionFuture;
     }
 
     /**
      * Execute ML algorithm
-     * @param mlInput
-     * @param listener
+     * @param input input data
+     * @param listener action listener
      */
-    void execute(MLInput mlInput, ActionListener<MLOutput> listener);
+    void execute(Input input, ActionListener<Output> listener);
 }
