@@ -89,18 +89,6 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
         waitModelAvailable(taskId);
     }
 
-    // Train a model without algorithm.
-    public void testTrainingWithoutAlgorithm() {
-        SearchSourceBuilder searchSourceBuilder = generateSearchSourceBuilder();
-        MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
-        MLInput mlInput = MLInput.builder().inputDataset(inputDataset).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
-        expectThrows(ActionRequestValidationException.class, () -> {
-            ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
-            trainingFuture.actionGet();
-        });
-    }
-
     // Train a model without dataset.
     public void testTrainingWithoutDataset() {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();

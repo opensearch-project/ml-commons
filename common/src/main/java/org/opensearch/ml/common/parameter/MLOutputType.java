@@ -13,25 +13,8 @@
 package org.opensearch.ml.common.parameter;
 
 public enum MLOutputType {
-    TRAINING("training"),
-    PREDICTION("prediction"),
-    SAMPLE_ALGO("sample_algo"),
-    SAMPLE_CALCULATOR("sample_calculator");
-
-    private final String name;
-
-    MLOutputType(String name) {
-        this.name = name;
-    }
-
-    public String toString() {
-        return name;
-    }
-
-    public static MLOutputType fromString(String name){
-        for(MLOutputType e : MLOutputType.values()){
-            if(e.name.equals(name)) return e;
-        }
-        return null;
-    }
+    TRAINING,
+    PREDICTION,
+    SAMPLE_ALGO,
+    SAMPLE_CALCULATOR
 }

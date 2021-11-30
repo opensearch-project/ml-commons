@@ -106,11 +106,11 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
 
     @Test
     public void testGetAlgorithmWithValidInput() {
-        Map<String, String> param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, FunctionName.KMEANS.getName()).build();
+        Map<String, String> param = ImmutableMap.<String, String>builder().put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name()).build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
         String algorithm = baseMLSearchAction.getAlgorithm(fakeRestRequest);
         assertFalse(Strings.isNullOrEmpty(algorithm));
-        assertEquals(algorithm, FunctionName.KMEANS.getName());
+        assertEquals(algorithm, FunctionName.KMEANS.name());
     }
 
     @Test
@@ -144,7 +144,7 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
     public void testGetSearchQueryWithoutSearchInput() throws IOException {
         Map<String, String> param = ImmutableMap
             .<String, String>builder()
-            .put(PARAMETER_ALGORITHM, FunctionName.KMEANS.getName())
+            .put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name())
             .put("index", "index1,index2")
             .build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry()).withParams(param).build();
@@ -200,7 +200,7 @@ public class BaseMLSearchActionTests extends OpenSearchTestCase {
     public void testGetSearchQueryWithSearchParams() throws IOException {
         Map<String, String> param = ImmutableMap
             .<String, String>builder()
-            .put(PARAMETER_ALGORITHM, FunctionName.KMEANS.getName())
+            .put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name())
             .put("index", "index1,index2")
             .put("q", "user:dilbert")
             .build();

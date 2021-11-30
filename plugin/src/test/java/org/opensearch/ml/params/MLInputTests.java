@@ -19,7 +19,7 @@ public class MLInputTests extends OpenSearchTestCase {
         String query =
             "{\"input_query\":{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"k1\":1}}]}},\"size\":10},\"input_index\":[\"test_data\"]}";
         XContentParser parser = parser(query);
-        MLInput mlInput = MLInput.parse(parser, FunctionName.KMEANS.getName());
+        MLInput mlInput = MLInput.parse(parser, FunctionName.KMEANS.name());
         String expectedQuery =
             "{\"size\":10,\"query\":{\"bool\":{\"filter\":[{\"term\":{\"k1\":{\"value\":1,\"boost\":1.0}}}],\"adjust_pure_negative\":true,\"boost\":1.0}}}";
         SearchQueryInputDataset inputDataset = (SearchQueryInputDataset) mlInput.getInputDataset();
@@ -32,7 +32,7 @@ public class MLInputTests extends OpenSearchTestCase {
             + "{\"column_type\":\"BOOLEAN\",\"value\":false}]},{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":100},"
             + "{\"column_type\":\"BOOLEAN\",\"value\":true}]}]}}";
         XContentParser parser = parser(query);
-        MLInput mlInput = MLInput.parse(parser, FunctionName.KMEANS.getName());
+        MLInput mlInput = MLInput.parse(parser, FunctionName.KMEANS.name());
         DataFrameInputDataset inputDataset = (DataFrameInputDataset) mlInput.getInputDataset();
         DataFrame dataFrame = inputDataset.getDataFrame();
 

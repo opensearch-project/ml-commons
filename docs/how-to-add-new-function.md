@@ -11,7 +11,7 @@ Add new function name in `org.opensearch.ml.common.parameter.FunctionName`
 public enum FunctionName {
     ...
     //Add new sample algorithm name
-    SAMPLE_ALGO("sample_algo"),
+    SAMPLE_ALGO,
     ...
 }
 ```
@@ -53,7 +53,7 @@ Add new enum in `org.opensearch.ml.common.parameter.MLOutputType`:
 ```    
     public enum MLOutputType {
         ...
-        SAMPLE_ALGO("sample_algo"),
+        SAMPLE_ALGO,
         ...
     }
 ```
@@ -158,7 +158,7 @@ Add new function name in  `org.opensearch.ml.common.parameter.FunctionName`
 public enum FunctionName {
     ...
     // Add new enum
-    LOCAL_SAMPLE_CALCULATOR("local_sample_calculator");
+    LOCAL_SAMPLE_CALCULATOR;
 }
 ```
 

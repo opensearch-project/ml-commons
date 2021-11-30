@@ -1,6 +1,7 @@
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -8,7 +9,7 @@ import org.opensearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
-@Getter
+@Data
 public class LocalSampleCalculatorOutput implements Output{
 
     private Double result;

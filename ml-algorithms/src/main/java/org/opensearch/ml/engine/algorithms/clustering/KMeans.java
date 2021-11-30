@@ -122,7 +122,7 @@ public class KMeans implements MLAlgo {
         KMeansTrainer trainer = new KMeansTrainer(centroids, iterations, distance, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
         Model model = new Model();
-        model.setName(FunctionName.KMEANS.getName());
+        model.setName(FunctionName.KMEANS.name());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
@@ -131,7 +131,7 @@ public class KMeans implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.KMEANS.getName())
+        return MLAlgoMetaData.builder().name(FunctionName.KMEANS.name())
                 .description("A clustering algorithm.")
                 .version("1.0")
                 .predictable(true)

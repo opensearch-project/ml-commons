@@ -12,6 +12,7 @@
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import org.opensearch.common.ParseField;
 import org.opensearch.common.io.stream.StreamInput;
@@ -26,9 +27,9 @@ import java.util.List;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
-@Getter
+@Data
 public class LocalSampleCalculatorInput implements Input {
-    public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.getName();
+    public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             Input.class,
             new ParseField(PARSE_FIELD_NAME),
@@ -38,7 +39,7 @@ public class LocalSampleCalculatorInput implements Input {
     public static final String OPERATION_FIELD = "operation";
     public static final String INPUT_DATA_FIELD = "input_data";
 
-    private static LocalSampleCalculatorInput parse(XContentParser parser) throws IOException {
+    public static LocalSampleCalculatorInput parse(XContentParser parser) throws IOException {
         String operation = null;
         List<Double> inputData = new ArrayList<>();
 

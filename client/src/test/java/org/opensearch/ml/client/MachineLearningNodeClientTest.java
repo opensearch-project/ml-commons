@@ -102,7 +102,7 @@ public class MachineLearningNodeClientTest {
     @Test
     public void predict_Exception_WithNullAlgorithm() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("algorithm name can't be null or empty");
+        exceptionRule.expectMessage("algorithm can't be null");
         MLInput mlInput = MLInput.builder()
                 .inputDataset(input)
                 .build();
@@ -147,16 +147,6 @@ public class MachineLearningNodeClientTest {
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
         assertEquals(modelId, ((MLTrainingOutput)argumentCaptor.getValue()).getModelId());
         assertEquals(status, ((MLTrainingOutput)argumentCaptor.getValue()).getStatus());
-    }
-
-    @Test
-    public void train_Exception_WithNullAlgorithm() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("algorithm name can't be null or empty");
-        MLInput mlInput = MLInput.builder()
-                .inputDataset(input)
-                .build();
-        machineLearningNodeClient.train(mlInput, trainingActionListener);
     }
 
     @Test

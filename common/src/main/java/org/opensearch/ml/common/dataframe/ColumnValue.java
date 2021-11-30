@@ -17,6 +17,7 @@ import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
+import java.util.Objects;
 
 public interface ColumnValue extends Writeable, ToXContentObject {
 
@@ -53,5 +54,15 @@ public interface ColumnValue extends Writeable, ToXContentObject {
         }
         builder.endObject();
         return builder;
+    }
+
+    default boolean equals(ColumnValue other) {
+        if (this == other) {
+            return true;
+        }
+        if (this.columnType() != other.columnType()) {
+            return false;
+        }
+        return Objects.equals(this.getValue(), other.getValue());
     }
 }

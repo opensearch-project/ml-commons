@@ -58,12 +58,7 @@ public class MLTrainingTaskRequest extends ActionRequest {
         ActionRequestValidationException exception = null;
         if (mlInput == null) {
             exception = addValidationError("MLInput can't be null", exception);
-        }
-        if(mlInput.getAlgorithm() == null) {
-            exception = addValidationError("algorithm name can't be null or empty", exception);
-        }
-        //TODO: excclude any algorithm which doens't need InputDataSet here
-        if(Objects.isNull(mlInput.getInputDataset())) {
+        } else if (Objects.isNull(mlInput.getInputDataset())) {
             exception = addValidationError("input data can't be null", exception);
         }
 

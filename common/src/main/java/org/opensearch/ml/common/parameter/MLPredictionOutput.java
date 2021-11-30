@@ -1,8 +1,7 @@
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.ToString;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -14,8 +13,7 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 
 import java.io.IOException;
 
-@Getter
-@Setter
+@Data
 @MLAlgoOutput(MLOutputType.PREDICTION)
 public class MLPredictionOutput extends MLOutput{
 

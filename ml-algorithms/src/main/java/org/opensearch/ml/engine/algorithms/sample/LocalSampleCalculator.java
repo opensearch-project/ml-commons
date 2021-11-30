@@ -57,7 +57,7 @@ public class LocalSampleCalculator implements ExecutableFunction {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.LOCAL_SAMPLE_CALCULATOR.getName())
+        return MLAlgoMetaData.builder().name(FunctionName.LOCAL_SAMPLE_CALCULATOR.name())
                 .description("Sample local calculator.")
                 .version("1.0")
                 .predictable(false)

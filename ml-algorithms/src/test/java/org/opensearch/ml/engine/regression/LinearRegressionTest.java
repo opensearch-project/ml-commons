@@ -74,7 +74,7 @@ public class LinearRegressionTest {
         parameters.setTarget( "price");
         LinearRegression regression = new LinearRegression(parameters);
         Model model = regression.train(trainDataFrame);
-        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.getName(), model.getName());
+        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }

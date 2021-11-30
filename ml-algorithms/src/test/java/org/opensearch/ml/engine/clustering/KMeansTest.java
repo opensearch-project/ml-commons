@@ -58,7 +58,7 @@ public class KMeansTest {
     @Test
     public void train() {
         Model model = kMeans.train(trainDataFrame);
-        Assert.assertEquals(FunctionName.KMEANS.getName(), model.getName());
+        Assert.assertEquals(FunctionName.KMEANS.name(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }

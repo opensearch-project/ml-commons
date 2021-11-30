@@ -61,9 +61,6 @@ public class MLExecuteTaskRequest extends ActionRequest {
         if(this.mlInput == null) {
             exception = addValidationError("ML input can't be null", exception);
         }
-        if(this.mlInput.getAlgorithm() == null) {
-            exception = addValidationError("algorithm name can't be null or empty", exception);
-        }
 
         return exception;
     }

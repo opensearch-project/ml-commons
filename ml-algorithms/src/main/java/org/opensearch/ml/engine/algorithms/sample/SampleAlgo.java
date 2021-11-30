@@ -41,7 +41,7 @@ public class SampleAlgo implements MLAlgo {
     @Override
     public Model train(DataFrame dataFrame) {
         Model model = new Model();
-        model.setName(FunctionName.SAMPLE_ALGO.getName());
+        model.setName(FunctionName.SAMPLE_ALGO.name());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize("This is a sample testing model with parameter: " + sampleParam));
         return model;
@@ -49,7 +49,7 @@ public class SampleAlgo implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.SAMPLE_ALGO.getName())
+        return MLAlgoMetaData.builder().name(FunctionName.SAMPLE_ALGO.name())
                 .description("A sample algorithm.")
                 .version("1.0")
                 .predictable(true)

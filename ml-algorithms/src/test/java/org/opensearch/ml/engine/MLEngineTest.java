@@ -38,10 +38,10 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        algoNames.add(FunctionName.KMEANS.getName());
-        algoNames.add(FunctionName.LINEAR_REGRESSION.getName());
-        algoNames.add(FunctionName.SAMPLE_ALGO.getName());
-        algoNames.add(FunctionName.LOCAL_SAMPLE_CALCULATOR.getName());
+        algoNames.add(FunctionName.KMEANS.name());
+        algoNames.add(FunctionName.LINEAR_REGRESSION.name());
+        algoNames.add(FunctionName.SAMPLE_ALGO.name());
+        algoNames.add(FunctionName.LOCAL_SAMPLE_CALCULATOR.name());
     }
 
     @Test
@@ -66,7 +66,7 @@ public class MLEngineTest {
     @Test
     public void trainKMeans() {
         Model model = trainKMeansModel();
-        Assert.assertEquals(FunctionName.KMEANS.getName(), model.getName());
+        Assert.assertEquals(FunctionName.KMEANS.name(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
@@ -74,7 +74,7 @@ public class MLEngineTest {
     @Test
     public void trainLinearRegression() {
         Model model = trainLinearRegressionModel();
-        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.getName(), model.getName());
+        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
         Assert.assertEquals(1, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }

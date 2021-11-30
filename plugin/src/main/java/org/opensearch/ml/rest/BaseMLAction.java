@@ -3,6 +3,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.IntConsumer;
 
 import org.opensearch.action.search.SearchRequest;
@@ -53,7 +54,7 @@ public class BaseMLAction extends RestSearchAction {
         if (Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("Request should contain algorithm!");
         }
-        return algorithm;
+        return algorithm.toUpperCase(Locale.ROOT);
     }
 
     /**

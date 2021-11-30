@@ -12,6 +12,8 @@ import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 
 import java.io.IOException;
+import java.util.Locale;
+import java.util.Objects;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -19,7 +21,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 @MLAlgoParameter(algorithms={FunctionName.LINEAR_REGRESSION})
 public class LinearRegressionParams implements MLAlgoParams {
 
-    public static final String PARSE_FIELD_NAME = FunctionName.LINEAR_REGRESSION.getName();
+    public static final String PARSE_FIELD_NAME = FunctionName.LINEAR_REGRESSION.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             MLAlgoParams.class,
             new ParseField(PARSE_FIELD_NAME),
@@ -72,10 +74,16 @@ public class LinearRegressionParams implements MLAlgoParams {
     }
 
     public LinearRegressionParams(StreamInput in) throws IOException {
-        this.objectiveType = in.readEnum(ObjectiveType.class);
-        this.optimizerType = in.readEnum(OptimizerType.class);
+        if (in.readBoolean()) {
+            this.objectiveType = in.readEnum(ObjectiveType.class);
+        }
+        if (in.readBoolean()) {
+            this.optimizerType = in.readEnum(OptimizerType.class);
+        }
         this.learningRate = in.readOptionalDouble();
-        this.momentumType = in.readEnum(MomentumType.class);
+        if (in.readBoolean()) {
+            this.momentumType = in.readEnum(MomentumType.class);
+        }
         this.momentumFactor = in.readOptionalDouble();
         this.epsilon = in.readOptionalDouble();
         this.beta1 = in.readOptionalDouble();
@@ -87,7 +95,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         this.target = in.readOptionalString();
     }
 
-    private static MLAlgoParams parse(XContentParser parser) throws IOException {
+    public static MLAlgoParams parse(XContentParser parser) throws IOException {
         ObjectiveType objective = null;
         OptimizerType optimizerType = null;
         Double learningRate = null;
@@ -109,16 +117,16 @@ public class LinearRegressionParams implements MLAlgoParams {
 
             switch (fieldName) {
                 case OBJECTIVE_FIELD:
-                    objective = ObjectiveType.fromString(parser.text());
+                    objective = ObjectiveType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case OPTIMISER_FIELD:
-                    optimizerType = OptimizerType.fromString(parser.text());
+                    optimizerType = OptimizerType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case LEARNING_RATE_FIELD:
                     learningRate = parser.doubleValue();
                     break;
                 case MOMENTUM_TYPE_FIELD:
-                    momentumType = MomentumType.fromString(parser.text());
+                    momentumType = MomentumType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MOMENTUM_FACTOR_FIELD:
                     momentumFactor = parser.doubleValue();
@@ -162,10 +170,25 @@ public class LinearRegressionParams implements MLAlgoParams {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeEnum(objectiveType);
-        out.writeEnum(optimizerType);
+        if (objectiveType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(objectiveType);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (optimizerType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(optimizerType);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalDouble(learningRate);
-        out.writeEnum(momentumType);
+        if (momentumType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(momentumType);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalDouble(momentumFactor);
         out.writeOptionalDouble(epsilon);
         out.writeOptionalDouble(beta1);
@@ -180,97 +203,72 @@ public class LinearRegressionParams implements MLAlgoParams {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(OBJECTIVE_FIELD, objectiveType.getName());
-        builder.field(OPTIMISER_FIELD, optimizerType.getName());
-        builder.field(LEARNING_RATE_FIELD, learningRate);
-        builder.field(MOMENTUM_TYPE_FIELD, momentumType.getName());
-        builder.field(MOMENTUM_FACTOR_FIELD, momentumFactor);
-        builder.field(EPSILON_FIELD, epsilon);
-        builder.field(BETA1_FIELD, beta1);
-        builder.field(BETA2_FIELD, beta2);
-        builder.field(DECAY_RATE_FIELD, decayRate);
-        builder.field(EPOCHS_FIELD, epochs);
-        builder.field(BATCH_SIZE_FIELD, batchSize);
-        builder.field(SEED_FIELD, seed);
-        builder.field(TARGET_FIELD, target);
+        if (objectiveType != null) {
+            builder.field(OBJECTIVE_FIELD, objectiveType);
+        }
+        if (optimizerType != null) {
+            builder.field(OPTIMISER_FIELD, optimizerType);
+        }
+        if (learningRate != null) {
+            builder.field(LEARNING_RATE_FIELD, learningRate);
+        }
+        if (momentumType != null) {
+            builder.field(MOMENTUM_TYPE_FIELD, momentumType);
+        }
+        if (momentumFactor != null) {
+            builder.field(MOMENTUM_FACTOR_FIELD, momentumFactor);
+        }
+        if (epsilon != null) {
+            builder.field(EPSILON_FIELD, epsilon);
+        }
+        if (beta1 != null) {
+            builder.field(BETA1_FIELD, beta1);
+        }
+        if (beta2 != null) {
+            builder.field(BETA2_FIELD, beta2);
+        }
+        if (decayRate != null) {
+            builder.field(DECAY_RATE_FIELD, decayRate);
+        }
+        if (epochs != null) {
+            builder.field(EPOCHS_FIELD, epochs);
+        }
+        if (batchSize != null) {
+            builder.field(BATCH_SIZE_FIELD, batchSize);
+        }
+        if (seed != null) {
+            builder.field(SEED_FIELD, seed);
+        }
+        if (target != null) {
+            builder.field(TARGET_FIELD, target);
+        }
         builder.endObject();
         return builder;
     }
 
     @Override
     public int getVersion() {
-        return 0;
+        return 1;
     }
 
     public enum ObjectiveType {
-        SQUARED_LOSS("SQUARED_LOSS"),
-        ABSOLUTE_LOSS("ABSOLUTE_LOSS"),
-        HUBER("HUBER");
-        @Getter
-        private final String name;
-
-        ObjectiveType(String name) {
-            this.name = name;
-        }
-
-        public String toString() {
-            return name;
-        }
-
-        public static ObjectiveType fromString(String name) {
-            for(ObjectiveType e : ObjectiveType.values()){
-                if(e.getName().equals(name)) return e;
-            }
-            return null;
-        }
+        SQUARED_LOSS,
+        ABSOLUTE_LOSS,
+        HUBER
     }
 
     public enum MomentumType {
-        STANDARD("STANDARD"),
-        NESTEROV("NESTEROV");
-        @Getter
-        private final String name;
-
-        MomentumType(String name) {
-            this.name = name;
-        }
-
-        public String toString() {
-            return name;
-        }
-
-        public static MomentumType fromString(String name) {
-            for(MomentumType e : MomentumType.values()){
-                if(e.getName().equals(name)) return e;
-            }
-            return null;
-        }
+        STANDARD,
+        NESTEROV
     }
 
     public enum OptimizerType {
-        SIMPLE_SGD("SIMPLE_SGD"),
-        LINEAR_DECAY_SGD("LINEAR_DECAY_SGD"),
-        SQRT_DECAY_SGD("SQRT_DECAY_SGD"),
-        ADA_GRAD("ADA_GRAD"),
-        ADA_DELTA("ADA_DELTA"),
-        ADAM("ADAM"),
-        RMS_PROP("RMS_PROP");
-        @Getter
-        private final String name;
-
-        OptimizerType(String name) {
-            this.name = name;
-        }
-
-        public String toString() {
-            return name;
-        }
-
-        public static OptimizerType fromString(String name) {
-            for(OptimizerType e : OptimizerType.values()){
-                if(e.getName().equals(name)) return e;
-            }
-            return null;
-        }
+        SIMPLE_SGD,
+        LINEAR_DECAY_SGD,
+        SQRT_DECAY_SGD,
+        ADA_GRAD,
+        ADA_DELTA,
+        ADAM,
+        RMS_PROP
     }
 }

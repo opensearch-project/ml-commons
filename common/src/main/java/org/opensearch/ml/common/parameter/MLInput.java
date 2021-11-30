@@ -15,7 +15,6 @@ import lombok.Builder;
 import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.MLCommonsClassLoader;
@@ -30,6 +29,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -56,6 +56,9 @@ public class MLInput implements Input {
 
     @Builder
     public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
+        if (algorithm == null) {
+            throw new IllegalArgumentException("algorithm can't be null");
+        }
         this.algorithm = algorithm;
         this.parameters = parameters;
         if (inputDataset != null) {
@@ -98,7 +101,7 @@ public class MLInput implements Input {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(ALGORITHM_FIELD, algorithm.getName());
+        builder.field(ALGORITHM_FIELD, algorithm.name());
         if (parameters != null) {
             builder.field(ML_PARAMETERS_FIELD, parameters);
         }
@@ -109,18 +112,22 @@ public class MLInput implements Input {
                     builder.field(INPUT_QUERY_FIELD, ((SearchQueryInputDataset)inputDataset).getSearchSourceBuilder());
                     break;
                 case DATA_FRAME:
-                    builder.field(INPUT_DATA_FIELD, (ToXContent) ((DataFrameInputDataset)inputDataset).getDataFrame());
+                    builder.startObject(INPUT_DATA_FIELD);
+                    ((DataFrameInputDataset)inputDataset).getDataFrame().toXContent(builder, EMPTY_PARAMS);
+                    builder.endObject();
                     break;
                 default:
                     break;
             }
 
         }
+        builder.endObject();
         return builder;
     }
 
-    public static MLInput parse(XContentParser parser, String algorithmName) throws IOException {
-        FunctionName algorithm = FunctionName.fromString(algorithmName);
+    public static MLInput parse(XContentParser parser, String inputAlgoName) throws IOException {
+        String algorithmName = inputAlgoName.toUpperCase(Locale.ROOT);
+        FunctionName algorithm = FunctionName.valueOf(algorithmName);
         MLAlgoParams mlParameters = null;
         SearchSourceBuilder searchSourceBuilder = null;
         List<String> sourceIndices = new ArrayList<>();

@@ -13,6 +13,7 @@
 package org.opensearch.ml.common.dataframe;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -60,7 +61,7 @@ public class ColumnMeta implements Writeable, ToXContentObject {
                     name = parser.text();
                     break;
                 case COLUMN_TYPE_FIELD:
-                    columnType = ColumnType.fromString(parser.text());
+                    columnType = ColumnType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 default:
                     parser.skipChildren();

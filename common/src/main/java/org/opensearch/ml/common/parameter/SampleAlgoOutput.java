@@ -1,7 +1,7 @@
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
-import lombok.Getter;
+import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
@@ -9,7 +9,7 @@ import org.opensearch.ml.common.annotation.MLAlgoOutput;
 
 import java.io.IOException;
 
-@Getter
+@Data
 @MLAlgoOutput(MLOutputType.SAMPLE_ALGO)
 public class SampleAlgoOutput extends MLOutput{
 
@@ -37,7 +37,10 @@ public class SampleAlgoOutput extends MLOutput{
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(SAMPLE_RESULT_FIELD, sampleResult);
+        if (sampleResult != null) {
+            builder.field(SAMPLE_RESULT_FIELD, sampleResult);
+        }
+
         builder.endObject();
         return builder;
     }

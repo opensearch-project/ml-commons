@@ -63,13 +63,9 @@ public class MLPredictionTaskRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if(this.mlInput == null) {
+        if (this.mlInput == null) {
             exception = addValidationError("ML input can't be null", exception);
-        }
-        if(this.mlInput.getAlgorithm() == null) {
-            exception = addValidationError("algorithm name can't be null or empty", exception);
-        }
-        if(this.mlInput.getInputDataset() == null) {
+        } else if (this.mlInput.getInputDataset() == null) {
             exception = addValidationError("input data can't be null", exception);
         }
 

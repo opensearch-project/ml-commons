@@ -25,7 +25,6 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.index.query.MatchAllQueryBuilder;
-import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
@@ -93,14 +92,13 @@ public class MLPredictionTaskRequestTest {
     }
 
     @Test
-    public void validate_Exception_NullAlgorithmName() {
+    public void validate_Exception_NullMLInput() {
         mlInput.setAlgorithm(null);
         MLPredictionTaskRequest request = MLPredictionTaskRequest.builder()
-                .mlInput(mlInput)
                 .build();
 
         ActionRequestValidationException exception = request.validate();
-        assertEquals("Validation Failed: 1: algorithm name can't be null or empty;", exception.getMessage());
+        assertEquals("Validation Failed: 1: ML input can't be null;", exception.getMessage());
     }
 
     @Test

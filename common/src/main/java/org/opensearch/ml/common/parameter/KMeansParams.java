@@ -19,7 +19,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 @MLAlgoParameter(algorithms={FunctionName.KMEANS})
 public class KMeansParams implements MLAlgoParams {
 
-    public static final String PARSE_FIELD_NAME = FunctionName.KMEANS.getName();
+    public static final String PARSE_FIELD_NAME = FunctionName.KMEANS.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             MLAlgoParams.class,
             new ParseField(PARSE_FIELD_NAME),
@@ -53,7 +53,7 @@ public class KMeansParams implements MLAlgoParams {
         }
     }
 
-    private static MLAlgoParams parse(XContentParser parser) throws IOException {
+    public static MLAlgoParams parse(XContentParser parser) throws IOException {
         Integer k = null;
         Integer iterations = null;
         DistanceType distanceType = null;
@@ -71,7 +71,7 @@ public class KMeansParams implements MLAlgoParams {
                     iterations = parser.intValue();
                     break;
                 case DISTANCE_TYPE_FIELD:
-                    distanceType = DistanceType.fromString(parser.text());
+                    distanceType = DistanceType.valueOf(parser.text());
                     break;
                 default:
                     parser.skipChildren();
@@ -101,9 +101,15 @@ public class KMeansParams implements MLAlgoParams {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(CENTROIDS_FIELD, centroids);
-        builder.field(ITERATIONS_FIELD, iterations);
-        builder.field(DISTANCE_TYPE_FIELD, distanceType.getName());
+        if (centroids != null) {
+            builder.field(CENTROIDS_FIELD, centroids);
+        }
+        if (iterations != null) {
+            builder.field(ITERATIONS_FIELD, iterations);
+        }
+        if (distanceType != null) {
+            builder.field(DISTANCE_TYPE_FIELD, distanceType.name());
+        }
         builder.endObject();
         return builder;
     }
@@ -114,26 +120,8 @@ public class KMeansParams implements MLAlgoParams {
     }
 
     public enum DistanceType {
-        EUCLIDEAN("EUCLIDEAN"),
-        COSINE("COSINE"),
-        L1("L1");
-
-        @Getter
-        private final String name;
-
-        DistanceType(String name) {
-            this.name = name;
-        }
-
-        public String toString() {
-            return name;
-        }
-
-        public static DistanceType fromString(String name) {
-            for(DistanceType e : DistanceType.values()){
-                if(e.getName().equals(name)) return e;
-            }
-            return null;
-        }
+        EUCLIDEAN,
+        COSINE,
+        L1
     }
 }

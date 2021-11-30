@@ -81,9 +81,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         if (mlInput == null) {
             throw new IllegalArgumentException("ML Input can't be null");
         }
-        if(mlInput.getAlgorithm() == null) {
-            throw new IllegalArgumentException("algorithm name can't be null or empty");
-        }
         if(requireInput && mlInput.getInputDataset() == null) {
             throw new IllegalArgumentException("input data set can't be null");
         }

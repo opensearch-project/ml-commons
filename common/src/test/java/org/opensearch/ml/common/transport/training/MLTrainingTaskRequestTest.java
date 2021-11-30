@@ -58,16 +58,6 @@ public class MLTrainingTaskRequestTest {
     }
 
     @Test
-    public void validate_Exception_NullAlgoName() {
-        mlInput.setAlgorithm(null);
-        MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .mlInput(mlInput)
-            .build();
-        ActionRequestValidationException exception = request.validate();
-        assertEquals("Validation Failed: 1: algorithm name can't be null or empty;", exception.getMessage());
-    }
-
-    @Test
     public void writeTo() throws IOException {
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
             .mlInput(mlInput)

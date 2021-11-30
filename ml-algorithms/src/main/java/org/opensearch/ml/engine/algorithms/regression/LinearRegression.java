@@ -210,7 +210,7 @@ public class LinearRegression implements MLAlgo {
         LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, DEFAULT_INTERVAL, DEFAULT_BATCH_SIZE, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
         Model model = new Model();
-        model.setName(FunctionName.LINEAR_REGRESSION.getName());
+        model.setName(FunctionName.LINEAR_REGRESSION.name());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 
@@ -219,7 +219,7 @@ public class LinearRegression implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.LINEAR_REGRESSION.getName())
+        return MLAlgoMetaData.builder().name(FunctionName.LINEAR_REGRESSION.name())
                 .description("Linear regression algorithm.")
                 .version("1.0")
                 .predictable(true)
