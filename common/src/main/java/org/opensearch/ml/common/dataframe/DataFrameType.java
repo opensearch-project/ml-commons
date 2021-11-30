@@ -13,5 +13,5 @@
 package org.opensearch.ml.common.dataframe;
 
 public enum DataFrameType {
-    DEFAULT;
+    DEFAULT
 }

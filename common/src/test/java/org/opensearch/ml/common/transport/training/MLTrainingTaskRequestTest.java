@@ -12,20 +12,22 @@
 
 package org.opensearch.ml.common.transport.training;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Collections;
-import java.util.HashMap;
-
+import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.parameter.MLParameterBuilder;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLInput;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Collections;
+import java.util.HashMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
@@ -34,76 +36,44 @@ import static org.junit.Assert.assertSame;
 
 public class MLTrainingTaskRequestTest {
 
+    private MLInput mlInput;
+
+    @Before
+    public void setUp() {
+        mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .parameters(KMeansParams.builder().centroids(1).build())
+                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+                    put("key1", 2.0D);
+                }})))
+                .build();
+    }
+
     @Test
     public void validate_Success() {
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .algorithm("algo")
-            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-            .inputDataset(DataFrameInputDataset.builder()
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
-                .build())
-            .build();
+                .mlInput(mlInput)
+                .build();
         assertNull(request.validate());
-    }
-
-    @Test
-    public void validate_Exception_NullAlgoName() {
-        MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .algorithm(null)
-            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-            .inputDataset(DataFrameInputDataset.builder()
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
-                .build())
-            .build();
-        ActionRequestValidationException exception = request.validate();
-        assertEquals("Validation Failed: 1: algorithm name can't be null or empty;", exception.getMessage());
-    }
-
-    @Test
-    public void validate_Exception_NullDataFrame() {
-        MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .algorithm("algo")
-            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-            .inputDataset(null)
-            .build();
-        ActionRequestValidationException exception = request.validate();
-        assertEquals("Validation Failed: 1: input data can't be null;", exception.getMessage());
     }
 
     @Test
     public void writeTo() throws IOException {
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .algorithm("algo")
-            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-            .inputDataset(DataFrameInputDataset.builder()
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
-                .build())
+            .mlInput(mlInput)
             .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
-        assertEquals(40, bytesStreamOutput.size());
         request = new MLTrainingTaskRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals("algo", request.getAlgorithm());
-        assertEquals(1, request.getParameters().size());
-        assertEquals(MLInputDataType.DATA_FRAME, request.getInputDataset().getInputDataType());
+        assertEquals(FunctionName.KMEANS, request.getMlInput().getAlgorithm());
+        assertEquals(1, ((KMeansParams) request.getMlInput().getParameters()).getCentroids().intValue());
+        assertEquals(MLInputDataType.DATA_FRAME, request.getMlInput().getInputDataset().getInputDataType());
     }
 
     @Test
     public void fromActionRequest_WithMLTrainingTaskRequest() {
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .algorithm("algo")
-            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-            .inputDataset(DataFrameInputDataset.builder()
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
-                .build())
+            .mlInput(mlInput)
             .build();
         assertSame(request, MLTrainingTaskRequest.fromActionRequest(request));
     }
@@ -111,14 +81,8 @@ public class MLTrainingTaskRequestTest {
     @Test
     public void fromActionRequest_WithNonMLTrainingTaskRequest() {
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
-            .algorithm("algo")
-            .parameters(Collections.singletonList(MLParameterBuilder.parameter("k1", 1)))
-            .inputDataset(DataFrameInputDataset.builder()
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
-                .build())
-            .build();
+                .mlInput(mlInput)
+                .build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -132,9 +96,9 @@ public class MLTrainingTaskRequestTest {
         };
         MLTrainingTaskRequest result = MLTrainingTaskRequest.fromActionRequest(actionRequest);
         assertNotSame(request, result);
-        assertEquals(request.getAlgorithm(), result.getAlgorithm());
-        assertEquals(request.getParameters().size(), result.getParameters().size());
-        assertEquals(request.getInputDataset().getInputDataType(), result.getInputDataset().getInputDataType());
+        assertEquals(request.getMlInput().getAlgorithm(), result.getMlInput().getAlgorithm());
+        assertEquals(request.getMlInput().getParameters(), result.getMlInput().getParameters());
+        assertEquals(request.getMlInput().getInputDataset().getInputDataType(), result.getMlInput().getInputDataset().getInputDataType());
     }
 
     @Test(expected = UncheckedIOException.class)

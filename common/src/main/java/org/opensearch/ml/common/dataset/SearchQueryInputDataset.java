@@ -12,10 +12,18 @@
 package org.opensearch.ml.common.dataset;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.annotation.InputDataSet;
+import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.AccessLevel;
@@ -30,11 +38,19 @@ import lombok.experimental.FieldDefaults;
  */
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@InputDataSet(MLInputDataType.SEARCH_QUERY)
 public class SearchQueryInputDataset extends MLInputDataset {
 
     SearchSourceBuilder searchSourceBuilder;
 
     List<String> indices;
+
+    private static NamedXContentRegistry xContentRegistry;
+
+    static {
+        SearchModule searchModule = new SearchModule(Settings.EMPTY, false, Collections.emptyList());
+        xContentRegistry = new NamedXContentRegistry(searchModule.getNamedXContents());
+    }
 
     @Builder
     public SearchQueryInputDataset(@NonNull List<String> indices, @NonNull SearchSourceBuilder searchSourceBuilder) {
@@ -49,14 +65,16 @@ public class SearchQueryInputDataset extends MLInputDataset {
 
     public SearchQueryInputDataset(StreamInput streaminput) throws IOException {
         super(MLInputDataType.SEARCH_QUERY);
-        this.searchSourceBuilder = new SearchSourceBuilder(streaminput);
+        String searchString = streaminput.readString();
+        XContentParser parser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchString);
+        this.searchSourceBuilder = SearchSourceBuilder.fromXContent(parser);
         this.indices = streaminput.readStringList();
     }
 
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
         super.writeTo(streamOutput);
-        searchSourceBuilder.writeTo(streamOutput);
+        streamOutput.writeString(searchSourceBuilder.toString());
         streamOutput.writeStringCollection(indices);
     }
 }

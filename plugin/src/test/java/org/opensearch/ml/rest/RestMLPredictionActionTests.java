@@ -41,7 +41,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.GET, route.getMethod());
-        assertEquals("/_plugins/_ml/_predict/", route.getPath());
+        assertEquals(RestRequest.Method.POST, route.getMethod());
+        assertEquals("/_plugins/_ml/_predict/{algorithm}/{model_id}", route.getPath());
     }
 }

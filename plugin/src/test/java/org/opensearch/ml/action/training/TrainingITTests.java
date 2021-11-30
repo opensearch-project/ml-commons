@@ -23,7 +23,6 @@ import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
 import static org.opensearch.ml.utils.IntegTestUtils.waitModelAvailable;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
@@ -39,6 +38,9 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
@@ -87,20 +89,10 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
         waitModelAvailable(taskId);
     }
 
-    // Train a model without algorithm.
-    public void testTrainingWithoutAlgorithm() {
-        SearchSourceBuilder searchSourceBuilder = generateSearchSourceBuilder();
-        MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest("", new ArrayList<>(), inputDataset);
-        expectThrows(ActionRequestValidationException.class, () -> {
-            ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
-            trainingFuture.actionGet();
-        });
-    }
-
     // Train a model without dataset.
     public void testTrainingWithoutDataset() {
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest("kmeans", new ArrayList<>(), null);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
         expectThrows(ActionRequestValidationException.class, () -> {
             ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
             trainingFuture.actionGet();
@@ -112,21 +104,23 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
         SearchSourceBuilder searchSourceBuilder = generateSearchSourceBuilder();
         searchSourceBuilder.query(QueryBuilders.matchQuery("noSuchName", ""));
         MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest("kmeans", new ArrayList<>(), inputDataset);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
 
         ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
         MLTrainingTaskResponse trainingResponse = trainingFuture.actionGet();
 
         // The training taskId and status will be response to the client.
         assertNotNull(trainingResponse);
-        String taskId = trainingResponse.getTaskId();
-        String status = trainingResponse.getStatus();
-        assertNotNull(taskId);
-        assertFalse(taskId.isEmpty());
+        MLTrainingOutput modelTrainingOutput = (MLTrainingOutput) trainingResponse.getOutput();
+        String modelId = modelTrainingOutput.getModelId();
+        String status = modelTrainingOutput.getStatus();
+        assertNotNull(modelId);
+        assertFalse(modelId.isEmpty());
         assertEquals("CREATED", status);
 
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
-        QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
+        QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", modelId);
         modelSearchSourceBuilder.query(queryBuilder);
         SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL }, modelSearchSourceBuilder);
         SearchResponse modelSearchResponse = null;

@@ -34,6 +34,8 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
@@ -121,8 +123,10 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
             .build();
         // TODO: move this listener onResponse later to catch the following cases:
         // 1). search data failure, 2) train model failure, 3) persist model failure.
-        listener.onResponse(MLTrainingTaskResponse.builder().taskId(mlTask.getTaskId()).status(MLTaskState.CREATED.name()).build());
-        if (request.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+        MLTrainingOutput output = MLTrainingOutput.builder().modelId(mlTask.getTaskId()).status(MLTaskState.CREATED.name()).build();
+        listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
+        MLInput mlInput = request.getMlInput();
+        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { train(mlTask, dataFrame, request); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
@@ -132,11 +136,11 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
                 });
             mlInputDatasetHandler
                 .parseSearchQueryInput(
-                    request.getInputDataset(),
+                    mlInput.getInputDataset(),
                     new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
                 );
         } else {
-            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(request.getInputDataset());
+            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(mlInput.getInputDataset());
             threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, inputDataFrame, request); });
         }
     }
@@ -145,16 +149,16 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
         // track ML task count and add ML task into cache
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
-
+        MLInput mlInput = request.getMlInput();
         // run training
         try {
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
-            Model model = MLEngine.train(request.getAlgorithm(), request.getParameters(), inputDataFrame);
+            Model model = MLEngine.train(mlInput.getAlgorithm(), mlInput.getParameters(), inputDataFrame);
             String encodedModelContent = Base64.getEncoder().encodeToString(model.getContent());
             mlIndicesHandler.initModelIndexIfAbsent();
             Map<String, Object> source = new HashMap<>();
             source.put(TASK_ID, mlTask.getTaskId());
-            source.put(ALGORITHM, request.getAlgorithm());
+            source.put(ALGORITHM, mlInput.getAlgorithm());
             source.put(MODEL_NAME, model.getName());
             source.put(MODEL_VERSION, model.getVersion());
             source.put(MODEL_CONTENT, encodedModelContent);

@@ -13,7 +13,6 @@
 package org.opensearch.ml.utils;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
@@ -30,6 +29,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.Strings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -39,6 +39,10 @@ import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
@@ -117,17 +121,19 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
 
     // Train a model.
     public static String trainModel(MLInputDataset inputDataset) throws ExecutionException, InterruptedException {
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest("kmeans", new ArrayList<>(), inputDataset);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
         ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
         MLTrainingTaskResponse trainingResponse = trainingFuture.actionGet();
         assertNotNull(trainingResponse);
-        String taskId = trainingResponse.getTaskId();
-        String status = trainingResponse.getStatus();
-        assertNotNull(taskId);
-        assertFalse(taskId.isEmpty());
+        MLTrainingOutput modelTrainingOutput = (MLTrainingOutput) trainingResponse.getOutput();
+        String modelId = modelTrainingOutput.getModelId();
+        String status = modelTrainingOutput.getStatus();
+        assertNotNull(modelId);
+        assertFalse(modelId.isEmpty());
         assertEquals("CREATED", status);
 
-        return taskId;
+        return modelId;
     }
 
     // Wait a while (20 seconds at most) for the model to be available in the ml index.
@@ -155,12 +161,14 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
 
     // Predict with the model generated, and verify the prediction result.
     public static void predictAndVerifyResult(String taskId, MLInputDataset inputDataset) throws IOException {
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest("kmeans", new ArrayList<>(), taskId, inputDataset);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
         ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLPredictionTaskResponse predictionResponse = predictionFuture.actionGet();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         builder.startObject();
-        predictionResponse.getPredictionResult().toXContent(builder);
+        MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
+        mlPredictionOutput.getPredictionResult().toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String jsonStr = Strings.toString(builder);
         String expectedStr1 = "{\"column_metas\":[{\"name\":\"Cluster ID\",\"column_type\":\"INTEGER\"}],"

@@ -10,7 +10,9 @@
  *
  */
 
-package org.opensearch.ml.engine.annotation;
+package org.opensearch.ml.common.annotation;
+
+import org.opensearch.ml.common.parameter.FunctionName;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -19,6 +21,6 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface MLAlgorithm {
-    public String value() default "ML algorithm class";
+public @interface MLAlgoParameter {
+    FunctionName[] algorithms();
 }

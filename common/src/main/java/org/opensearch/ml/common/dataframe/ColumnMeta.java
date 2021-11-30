@@ -13,6 +13,7 @@
 package org.opensearch.ml.common.dataframe;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -24,20 +25,50 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentParser;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @Getter
 @Builder
 @RequiredArgsConstructor
 @ToString
-public class ColumnMeta implements Writeable {
+public class ColumnMeta implements Writeable, ToXContentObject {
+    private static final String NAME_FIELD = "name";
+    private static final String COLUMN_TYPE_FIELD = "column_type";
     String name;
     ColumnType columnType;
 
     ColumnMeta(StreamInput in) throws IOException {
         this.name = in.readOptionalString();
         this.columnType = in.readEnum(ColumnType.class);
+    }
+
+    public static ColumnMeta parse(XContentParser parser) throws IOException {
+        String name = null;
+        ColumnType columnType = null;
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case NAME_FIELD:
+                    name = parser.text();
+                    break;
+                case COLUMN_TYPE_FIELD:
+                    columnType = ColumnType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return new ColumnMeta(name, columnType);
     }
 
     @Override
@@ -47,9 +78,15 @@ public class ColumnMeta implements Writeable {
     }
 
     public void toXContent(final XContentBuilder builder) throws IOException {
+        toXContent(builder, EMPTY_PARAMS);
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field("name", name);
-        builder.field("column_type", columnType);
+        builder.field(NAME_FIELD, name);
+        builder.field(COLUMN_TYPE_FIELD, columnType);
         builder.endObject();
+        return builder;
     }
 }

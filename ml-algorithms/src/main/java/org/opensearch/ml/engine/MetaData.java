@@ -10,9 +10,11 @@
  *
  */
 
-package org.opensearch.ml.engine.contants;
+package org.opensearch.ml.engine;
 
-public class MLAlgoNames {
-    public static final String LINEAR_REGRESSION = "linear_regression";
-    public static final String KMEANS = "kmeans";
+
+public interface MetaData {
+
+    MLAlgoMetaData getMetaData();
+
 }

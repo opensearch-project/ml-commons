@@ -14,11 +14,15 @@ package org.opensearch.ml.engine.algorithms.regression;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.parameter.MLParameter;
+import org.opensearch.ml.common.parameter.LinearRegressionParams;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.MLAlgo;
 import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
+import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -42,43 +46,34 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-@MLAlgorithm("linear_regression")
+@Function(FunctionName.LINEAR_REGRESSION)
 public class LinearRegression implements MLAlgo {
-    public static final String OBJECTIVE = "objective";
-    public static final String OPTIMISER = "optimiser";
-    public static final String LEARNING_RATE = "learning_rate";
-    public static final String MOMENTUM_TYPE = "momentum_type";
-    public static final String MOMENTUM_FACTOR = "momentum_factor";
-    public static final String EPSILON = "epsilon";
-    public static final String BETA1 = "beta1";
-    public static final String BETA2 = "beta2";
-    public static final String DECAY_RATE = "decay_rate";
-    public static final String EPOCHS = "epochs";
-    public static final String BATCH_SIZE = "batch_size";
-    public static final String SEED = "seed";
-    public static final String TARGET = "target";
 
-    private String target;
-    private RegressionObjective objective = new SquaredLoss();
-    private int optimizerType = 0;
-    private double learningRate = 0.01;
+    private static final LinearRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LinearRegressionParams.ObjectiveType.SQUARED_LOSS;
+    private static final LinearRegressionParams.OptimizerType DEFAULT_OPTIMIZER_TYPE = LinearRegressionParams.OptimizerType.SIMPLE_SGD;
+    private static final double DEFAULT_LEARNING_RATE = 0.01;
     //Momentum
-    private SGD.Momentum momentumType = SGD.Momentum.NONE;
-    private double momentumFactor = 0.0;
+    private static final double DEFAULT_MOMENTUM_FACTOR = 0;
+    private static final LinearRegressionParams.MomentumType DEFAULT_MOMENTUM_TYPE = LinearRegressionParams.MomentumType.STANDARD;
     //AdaGrad, AdaDelta, AdaGradRDA, Adam, RMSProp
-    private double epsilon = 1e-6;
+    private static final double DEFAULT_EPSILON = 1e-6;
     //Adam
-    private double beta1 = 0.9;
-    private double beta2 = 0.99;
+    private static final double DEFAULT_BETA1 = 0.9;
+    private static final double DEFAULT_BETA2 = 0.99;
     //RMSProp
-    private double decayRate = 0.9;
+    private static final double DEFAULT_DECAY_RATE = 0.9;
 
-    private int epochs = 10;
-    private int interval = -1;
-    private int batchSize = 1;
+    private static final int DEFAULT_EPOCHS = 10;
+    private static final int DEFAULT_INTERVAL = -1;
+    private static final int DEFAULT_BATCH_SIZE = 1;
+
+    private LinearRegressionParams parameters;
+    private StochasticGradientOptimiser optimiser;
+    private RegressionObjective objective;
+
     private long seed = System.currentTimeMillis();
-    private StochasticGradientOptimiser optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentumType);
 
     public LinearRegression() {}
 
@@ -86,129 +81,113 @@ public class LinearRegression implements MLAlgo {
      * Initialize a linear regression algorithm.
      * @param parameters the parameters for linear regression algorithm
      */
-    public LinearRegression(List<MLParameter> parameters) {
-        parameters.forEach(mlParameter ->
-        {
-            if (mlParameter.getName().equalsIgnoreCase(OBJECTIVE)) {
-                int type = (int) mlParameter.getValue();
-                switch (type) {
-                    case 0:
-                        //Use default l2 loss function.
-                        break;
-                    case 1:
-                        //Use l1 loss function.
-                        objective = new AbsoluteLoss();
-                        break;
-                    case 2:
-                        //Use a mix of l1 and l2 loss function.
-                        objective = new Huber();
-                        break;
-                    default:
-                        //Use default l2 loss function.
-                        break;
-                }
-            } else if (mlParameter.getName().equalsIgnoreCase(OPTIMISER)) {
-                optimizerType = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(LEARNING_RATE)) {
-                learningRate = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(MOMENTUM_TYPE)) {
-                int type = (int) mlParameter.getValue();
-                switch (type) {
-                    case 0:
-                        momentumType = SGD.Momentum.STANDARD;
-                        break;
-                    case 1:
-                        momentumType = SGD.Momentum.NESTEROV;
-                        break;
-                    default:
-                        break;
-                }
-            } else if (mlParameter.getName().equalsIgnoreCase(MOMENTUM_FACTOR)) {
-                momentumFactor = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(EPSILON)) {
-                epsilon = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(BETA1)) {
-                beta1 = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(BETA2)) {
-                beta2 = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(DECAY_RATE)) {
-                decayRate = (double) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(EPOCHS)) {
-                epochs = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(BATCH_SIZE)) {
-                batchSize = (int) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(SEED)) {
-                seed = (long) mlParameter.getValue();
-            } else if (mlParameter.getName().equalsIgnoreCase(TARGET)) {
-                target = (String) mlParameter.getValue();
-            }
-        });
+    public LinearRegression(MLAlgoParams parameters) {
+        this.parameters = parameters == null ? LinearRegressionParams.builder().build() : (LinearRegressionParams)parameters;
+        validateParameters();
+        createObjective();
+        createOptimiser();
+    }
+
+    private void createObjective() {
+        LinearRegressionParams.ObjectiveType objectiveType = Optional.ofNullable(parameters.getObjectiveType()).orElse(DEFAULT_OBJECTIVE_TYPE);
+        switch (objectiveType) {
+            case ABSOLUTE_LOSS:
+                //Use l1 loss function.
+                objective = new AbsoluteLoss();
+                break;
+            case HUBER:
+                //Use a mix of l1 and l2 loss function.
+                objective = new Huber();
+                break;
+            default:
+                //Use default l2 loss function.
+                objective = new SquaredLoss();
+                break;
+        }
+    }
+
+
+    private void createOptimiser() {
+        LinearRegressionParams.OptimizerType optimizerType = Optional.ofNullable(parameters.getOptimizerType()).orElse(DEFAULT_OPTIMIZER_TYPE);
+        Double learningRate = Optional.ofNullable(parameters.getLearningRate()).orElse(DEFAULT_LEARNING_RATE);
+        Double momentumFactor = Optional.ofNullable(parameters.getMomentumFactor()).orElse(DEFAULT_MOMENTUM_FACTOR);
+        Double epsilon = Optional.ofNullable(parameters.getEpsilon()).orElse(DEFAULT_EPSILON);
+        Double beta1 = Optional.ofNullable(parameters.getBeta1()).orElse(DEFAULT_BETA1);
+        Double beta2 = Optional.ofNullable(parameters.getBeta2()).orElse(DEFAULT_BETA2);
+        LinearRegressionParams.MomentumType momentumType = Optional.ofNullable(parameters.getMomentumType()).orElse(DEFAULT_MOMENTUM_TYPE);
+        Double decayRate = Optional.ofNullable(parameters.getDecayRate()).orElse(DEFAULT_DECAY_RATE);
+
+        SGD.Momentum momentum;
+        switch (momentumType) {
+            case NESTEROV:
+                momentum = SGD.Momentum.NESTEROV;
+                break;
+            default:
+                momentum = SGD.Momentum.STANDARD;
+                break;
+        }
         switch (optimizerType) {
-            case 0:
-                //Use default SGD with a constant learning rate.
+            case LINEAR_DECAY_SGD:
+                optimiser = SGD.getLinearDecaySGD(learningRate, momentumFactor, momentum);
                 break;
-            case 1:
-                optimiser = SGD.getLinearDecaySGD(learningRate, momentumFactor, momentumType);
+            case SQRT_DECAY_SGD:
+                optimiser = SGD.getSqrtDecaySGD(learningRate, momentumFactor, momentum);
                 break;
-            case 2:
-                optimiser = SGD.getSqrtDecaySGD(learningRate, momentumFactor, momentumType);
-                break;
-            case 3:
+            case ADA_GRAD:
                 optimiser = new AdaGrad(learningRate, epsilon);
                 break;
-            case 4:
+            case ADA_DELTA:
                 optimiser = new AdaDelta(momentumFactor, epsilon);
                 break;
-            case 5:
+            case ADAM:
                 optimiser = new Adam(learningRate, beta1, beta2, epsilon);
                 break;
-            case 6:
+            case RMS_PROP:
                 optimiser = new RMSProp(learningRate, momentumFactor, epsilon, decayRate);
                 break;
             default:
                 //Use default SGD with a constant learning rate.
+                optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentum);
                 break;
         }
-
-        validateParameters();
     }
 
     private void validateParameters() {
-        if (learningRate < 0) {
+        if (parameters.getLearningRate() != null && parameters.getLearningRate() < 0) {
             throw new IllegalArgumentException("Learning rate should not be negative.");
         }
 
-        if (momentumFactor < 0) {
+        if (parameters.getMomentumFactor() != null && parameters.getMomentumFactor() < 0) {
             throw new IllegalArgumentException("MomentumFactor should not be negative.");
         }
 
-        if (epsilon < 0) {
+        if (parameters.getEpsilon() != null && parameters.getEpsilon() < 0) {
             throw new IllegalArgumentException("Epsilon should not be negative.");
         }
 
-        if (beta1 <= 0 || beta1 >= 1) {
+        if (parameters.getBeta1() != null && (parameters.getBeta1() <= 0 || parameters.getBeta1() >= 1)) {
             throw new IllegalArgumentException("Beta1 should be in an open interval (0,1).");
         }
 
-        if (beta2 <= 0 || beta2 >= 1) {
+        if (parameters.getBeta2() != null && (parameters.getBeta2() <= 0 || parameters.getBeta2() >= 1)) {
             throw new IllegalArgumentException("Beta2 should be in an open interval (0,1).");
         }
 
-        if (decayRate < 0) {
+        if (parameters.getDecayRate() != null && parameters.getDecayRate() < 0) {
             throw new IllegalArgumentException("DecayRate should not be negative.");
         }
 
-        if (epochs < 0) {
+        if (parameters.getEpochs() != null && parameters.getEpochs() < 0) {
             throw new IllegalArgumentException("Epochs should not be negative.");
         }
 
-        if (batchSize < 0) {
+        if (parameters.getBatchSize() != null && parameters.getBatchSize() < 0) {
             throw new IllegalArgumentException("MiniBatchSize should not be negative.");
         }
     }
 
     @Override
-    public DataFrame predict(DataFrame dataFrame, Model model) {
+    public MLOutput predict(DataFrame dataFrame, Model model) {
         if (model == null) {
             throw new IllegalArgumentException("No model found for linear regression prediction.");
         }
@@ -218,19 +197,20 @@ public class LinearRegression implements MLAlgo {
                 "Linear regression prediction data from opensearch", TribuoOutputType.REGRESSOR);
         List<Prediction<Regressor>> predictions = regressionModel.predict(predictionDataset);
         List<Map<String, Object>> listPrediction = new ArrayList<>();
-        predictions.forEach(e -> listPrediction.add(Collections.singletonMap("Prediction", e.getOutput().getValues()[0])));
+        predictions.forEach(e -> listPrediction.add(Collections.singletonMap(e.getOutput().getNames()[0], e.getOutput().getValues()[0])));
 
-        return DataFrameBuilder.load(listPrediction);
+        return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(listPrediction)).build();
     }
 
     @Override
     public Model train(DataFrame dataFrame) {
         MutableDataset<Regressor> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(),
-                "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, target);
-        LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, interval, batchSize, seed);
+                "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, parameters.getTarget());
+        Integer epochs = Optional.ofNullable(parameters.getEpochs()).orElse(DEFAULT_EPOCHS);
+        LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, DEFAULT_INTERVAL, DEFAULT_BATCH_SIZE, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
         Model model = new Model();
-        model.setName("LinearRegression");
+        model.setName(FunctionName.LINEAR_REGRESSION.name());
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 
@@ -239,11 +219,12 @@ public class LinearRegression implements MLAlgo {
 
     @Override
     public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name("linear_regression")
+        return MLAlgoMetaData.builder().name(FunctionName.LINEAR_REGRESSION.name())
                 .description("Linear regression algorithm.")
                 .version("1.0")
                 .predictable(true)
                 .trainable(true)
+                .executable(false)
                 .build();
     }
 }

@@ -26,10 +26,15 @@ import lombok.AccessLevel;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentParser;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class DefaultDataFrame extends AbstractDataFrame{
+    private static final String COLUMN_META_FIELD = "column_metas";
+    private static final String ROWS_FIELD = "rows";
     List<Row> rows;
     ColumnMeta[] columnMetas;
 
@@ -39,18 +44,14 @@ public class DefaultDataFrame extends AbstractDataFrame{
         this.rows = new ArrayList<>();
     }
 
-    DefaultDataFrame(final ColumnMeta[] columnMetas, final List<Row> rows){
+    public DefaultDataFrame(final ColumnMeta[] columnMetas, final List<Row> rows){
         super(DataFrameType.DEFAULT);
         this.columnMetas = columnMetas;
         this.rows = rows;
     }
 
-    DefaultDataFrame(StreamInput streamInput) throws IOException {
-        this(streamInput, false);
-    }
-
-    DefaultDataFrame(StreamInput streamInput, boolean readType) throws IOException {
-        super(readType ? streamInput.readEnum(DataFrameType.class) : DataFrameType.DEFAULT);
+    public DefaultDataFrame(StreamInput streamInput) throws IOException {
+        super(DataFrameType.DEFAULT);
         this.columnMetas = streamInput.readArray(ColumnMeta::new, ColumnMeta[]::new);
         this.rows = streamInput.readList(Row::new);
     }
@@ -150,18 +151,53 @@ public class DefaultDataFrame extends AbstractDataFrame{
         out.writeList(rows);
     }
 
+    public static DefaultDataFrame parse(XContentParser parser) throws IOException {
+        List<ColumnMeta> columnMetas = new ArrayList<>();
+        List<Row> rows = new ArrayList<>();
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case COLUMN_META_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        columnMetas.add(ColumnMeta.parse(parser));
+                    }
+                    break;
+                case ROWS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        rows.add(Row.parse(parser));
+                    }
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return new DefaultDataFrame(columnMetas.toArray(new ColumnMeta[0]), rows);
+    }
+
+    public XContentBuilder toXContent(XContentBuilder builder) throws IOException {
+        return toXContent(builder, EMPTY_PARAMS);
+    }
+
     @Override
-    public void toXContent(final XContentBuilder builder) throws IOException {
-        builder.startArray("column_metas");
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startArray(COLUMN_META_FIELD);
         for(ColumnMeta columnMeta : columnMetas) {
-            columnMeta.toXContent(builder);
+            columnMeta.toXContent(builder, params);
         }
         builder.endArray();
 
-        builder.startArray("rows");
+        builder.startArray(ROWS_FIELD);
         for(Row row : rows) {
-            row.toXContent(builder);
+            row.toXContent(builder, params);
         }
         builder.endArray();
+        return builder;
     }
 }

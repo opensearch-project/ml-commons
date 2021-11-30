@@ -23,6 +23,11 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
@@ -37,7 +42,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class MachineLearningNodeClientTest {
 
@@ -51,10 +55,10 @@ public class MachineLearningNodeClientTest {
     DataFrame output;
 
     @Mock
-    ActionListener<DataFrame> dataFrameActionListener;
+    ActionListener<MLOutput> dataFrameActionListener;
 
     @Mock
-    ActionListener<String> trainingActionListener;
+    ActionListener<MLOutput> trainingActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -71,69 +75,94 @@ public class MachineLearningNodeClientTest {
     public void predict() {
         doAnswer(invocation -> {
             ActionListener<MLPredictionTaskResponse> actionListener = invocation.getArgument(2);
-            actionListener.onResponse(MLPredictionTaskResponse.builder()
+            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
                     .status("Success")
                     .predictionResult(output)
                     .taskId("taskId")
+                    .build();
+            actionListener.onResponse(MLPredictionTaskResponse.builder()
+                    .output(predictionOutput)
                     .build());
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
-        ArgumentCaptor<DataFrame> dataFrameArgumentCaptor = ArgumentCaptor.forClass(DataFrame.class);
-        machineLearningNodeClient.predict("algo", null, input, null, dataFrameActionListener);
+        ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .inputDataset(input)
+                .build();
+        machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
 
         verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class),
                 any(ActionListener.class));
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
-        assertEquals(output, dataFrameArgumentCaptor.getValue());
+        assertEquals(output, ((MLPredictionOutput)dataFrameArgumentCaptor.getValue()).getPredictionResult());
     }
 
     @Test
     public void predict_Exception_WithNullAlgorithm() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("algorithm name can't be null or empty");
-        machineLearningNodeClient.predict(null, null, input, null, dataFrameActionListener);
+        exceptionRule.expectMessage("algorithm can't be null");
+        MLInput mlInput = MLInput.builder()
+                .inputDataset(input)
+                .build();
+        machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
 
     @Test
     public void predict_Exception_WithNullDataSet() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("input data set can't be null");
-        machineLearningNodeClient.predict("algo", null, (MLInputDataset) null, null, dataFrameActionListener);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .build();
+        machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
 
     @Test
     public void train() {
+        String modelId = "test_model_id";
+        String status = "InProgress";
         doAnswer(invocation -> {
             ActionListener<MLTrainingTaskResponse> actionListener = invocation.getArgument(2);
+            MLTrainingOutput output = MLTrainingOutput.builder()
+                    .status(status)
+                    .modelId(modelId)
+                    .build();
             actionListener.onResponse(MLTrainingTaskResponse.builder()
-                    .status("InProgress")
-                    .taskId("taskId")
+                    .output(output)
                     .build());
             return null;
         }).when(client).execute(eq(MLTrainingTaskAction.INSTANCE), any(), any());
 
-        ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
-
-        machineLearningNodeClient.train("algo", null, input, trainingActionListener);
+        ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .inputDataset(input)
+                .build();
+        machineLearningNodeClient.train(mlInput, trainingActionListener);
 
         verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class),
                 any(ActionListener.class));
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
-        assertEquals("taskId", argumentCaptor.getValue());
-    }
-
-    @Test
-    public void train_Exception_WithNullAlgorithm() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("algorithm name can't be null or empty");
-        machineLearningNodeClient.train(null, null, input, trainingActionListener);
+        assertEquals(modelId, ((MLTrainingOutput)argumentCaptor.getValue()).getModelId());
+        assertEquals(status, ((MLTrainingOutput)argumentCaptor.getValue()).getStatus());
     }
 
     @Test
     public void train_Exception_WithNullDataSet() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("input data set can't be null");
-        machineLearningNodeClient.train("algo", null, (MLInputDataset)null, trainingActionListener);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .build();
+        machineLearningNodeClient.train(mlInput, trainingActionListener);
+    }
+
+    @Test
+    public void train_Exception_WithNullInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("ML Input can't be null");
+        machineLearningNodeClient.train(null, trainingActionListener);
     }
 }

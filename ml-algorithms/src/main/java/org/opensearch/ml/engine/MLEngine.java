@@ -13,17 +13,19 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.parameter.MLParameter;
-import org.opensearch.ml.engine.annotation.MLAlgorithm;
-import org.opensearch.ml.engine.algorithms.clustering.KMeans;
-import org.opensearch.ml.engine.contants.MLAlgoNames;
+import org.opensearch.ml.common.parameter.Input;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.Output;
+import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
-import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.reflections.Reflections;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.List;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Set;
 
 /**
@@ -32,46 +34,49 @@ import java.util.Set;
 public class MLEngine {
     private static final String ALGO_PACKAGE_NAME = "org.opensearch.ml.engine.algorithms";
 
-    public static DataFrame predict(String algoName, List<MLParameter> parameters, DataFrame dataFrame, Model model) {
-        if (parameters == null) {
-            parameters = new ArrayList<>();
+    public static MLOutput predict(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
+        if (algoName == null) {
+            throw new IllegalArgumentException("Algo name should not be null");
         }
-        switch (algoName.trim().toLowerCase()) {
-            case MLAlgoNames.KMEANS:
-                KMeans kMeans = new KMeans(parameters);
-                return kMeans.predict(dataFrame, model);
-            case MLAlgoNames.LINEAR_REGRESSION:
-                LinearRegression linearRegression = new LinearRegression(parameters);
-                return linearRegression.predict(dataFrame, model);
-            default:
-                throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
+        MLAlgo mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
+        if (mlAlgo == null) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
+        return mlAlgo.predict(dataFrame, model);
     }
 
-    public static Model train(String algoName, List<MLParameter> parameters, DataFrame dataFrame) {
-        if (parameters == null) {
-            parameters = new ArrayList<>();
+    public static Model train(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame) {
+        if (algoName == null) {
+            throw new IllegalArgumentException("Algo name should not be null");
         }
-        switch (algoName.trim().toLowerCase()) {
-            case MLAlgoNames.KMEANS:
-                KMeans kMeans = new KMeans(parameters);
-                return kMeans.train(dataFrame);
-            case MLAlgoNames.LINEAR_REGRESSION:
-                LinearRegression linearRegression = new LinearRegression(parameters);
-                return linearRegression.train(dataFrame);
-            default:
-                throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
+        MLAlgo mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
+        if (mlAlgo == null) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
+        return mlAlgo.train(dataFrame);
+    }
+
+    public static Output execute(Input input) {
+        if (input == null) {
+            throw new IllegalArgumentException("Algo name should not be null");
+        }
+        Executable function = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
+        if (function == null) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + input.getFunctionName());
+        }
+        return function.execute(input);
     }
 
     public static MLEngineMetaData getMetaData() {
         MLEngineMetaData engineMetaData = new MLEngineMetaData();
         Reflections reflections = new Reflections(ALGO_PACKAGE_NAME);
-        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLAlgorithm.class);
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(Function.class);
         try {
             for (Class c : classes) {
-                MLAlgo algo = (MLAlgo) c.getDeclaredConstructor().newInstance();
-                engineMetaData.addAlgoMetaData(algo.getMetaData());
+                Object algo = c.getDeclaredConstructor().newInstance();
+                if (algo instanceof  MetaData) {
+                    engineMetaData.addAlgoMetaData(((MetaData)algo).getMetaData());
+                }
             }
         } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
             throw new MetaDataException("Failed to get ML engine meta data.", e.getCause());

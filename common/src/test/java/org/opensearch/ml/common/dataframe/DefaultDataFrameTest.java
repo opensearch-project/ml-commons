@@ -15,7 +15,9 @@ package org.opensearch.ml.common.dataframe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
+import org.graalvm.compiler.lir.LIRInstruction;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -23,9 +25,13 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.TestHelper;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -34,6 +40,7 @@ import static org.junit.Assert.assertTrue;
 public class DefaultDataFrameTest {
 
     DefaultDataFrame defaultDataFrame;
+    Function<XContentParser, DefaultDataFrame> function;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -67,6 +74,14 @@ public class DefaultDataFrameTest {
         List<Row> rows = new ArrayList<>();
         rows.add(row);
         defaultDataFrame = new DefaultDataFrame(columnMetas, rows);
+
+        function = parser -> {
+            try {
+                return DefaultDataFrame.parse(parser);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to parse DefaultDataFrame", e);
+            }
+        };
     }
 
     @Test
@@ -74,7 +89,9 @@ public class DefaultDataFrameTest {
         assertEquals(1, defaultDataFrame.size());
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         defaultDataFrame.writeTo(bytesStreamOutput);
-        defaultDataFrame = new DefaultDataFrame(bytesStreamOutput.bytes().streamInput(), true);
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        assertEquals(DataFrameType.DEFAULT, streamInput.readEnum(DataFrameType.class));
+        defaultDataFrame = new DefaultDataFrame(streamInput);
         assertEquals(1, defaultDataFrame.size());
         assertEquals(4, defaultDataFrame.iterator().next().size());
     }
@@ -86,6 +103,7 @@ public class DefaultDataFrameTest {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         assertEquals(DataFrameType.DEFAULT, streamInput.readEnum(DataFrameType.class));
         defaultDataFrame = new DefaultDataFrame(streamInput);
+        assertEquals(DataFrameType.DEFAULT, defaultDataFrame.getDataFrameType());
         assertEquals(1, defaultDataFrame.size());
         assertEquals(4, defaultDataFrame.iterator().next().size());
     }
@@ -174,6 +192,22 @@ public class DefaultDataFrameTest {
     }
 
     @Test
+    public void remove_Exception_InputColumnIndexNegtiveColumensLength(){
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:4");
+        defaultDataFrame.remove(-1);
+    }
+
+    @Test
+    public void remove_EmptyColumnMeta(){
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:0");
+        DefaultDataFrame dataFrame = new DefaultDataFrame(new ColumnMeta[0]);
+        DataFrame newDataFrame = dataFrame.remove(0);
+        assertEquals(0, newDataFrame.size());
+    }
+
+    @Test
     public void remove_Success(){
         DataFrame dataFrame = defaultDataFrame.remove(3);
         assertEquals(3, dataFrame.columnMetas().length);
@@ -221,5 +255,33 @@ public class DefaultDataFrameTest {
              "{\"column_type\":\"INTEGER\",\"value\":1}," +
              "{\"column_type\":\"DOUBLE\",\"value\":2.0}," +
              "{\"column_type\":\"BOOLEAN\",\"value\":true}]}]}", jsonStr);
+    }
+
+    @Test
+    public void testParse_EmptyDataFrame() throws IOException {
+        ColumnMeta[] columnMetas = new ColumnMeta[] {new ColumnMeta("test_int", ColumnType.INTEGER)};
+        DefaultDataFrame dataFrame = new DefaultDataFrame(columnMetas);
+        TestHelper.testParse(dataFrame, function, true);
+    }
+
+    @Test
+    public void testParse_DataFrame() throws IOException {
+        ColumnMeta[] columnMetas = new ColumnMeta[] {new ColumnMeta("test_int", ColumnType.INTEGER)};
+        DefaultDataFrame dataFrame = new DefaultDataFrame(columnMetas);
+        dataFrame.appendRow(new Integer[]{1});
+        dataFrame.appendRow(new Integer[]{2});
+        TestHelper.testParse(dataFrame, function, true);
+    }
+
+    @Test
+    public void testParse_WrongExtraField() throws IOException {
+        ColumnMeta[] columnMetas = new ColumnMeta[] {new ColumnMeta("test_int", ColumnType.INTEGER)};
+        DefaultDataFrame dataFrame = new DefaultDataFrame(columnMetas);
+        dataFrame.appendRow(new Integer[]{1});
+        dataFrame.appendRow(new Integer[]{2});
+        String jsonStr = "{\"wrong_field\":{\"test\":\"abc\"},\"column_metas\":[{\"name\":\"test_int\",\"column_type\":" +
+                "\"INTEGER\"}],\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":" +
+                "[{\"column_type\":\"INTEGER\",\"value\":2}]}]}";
+        TestHelper.testParseFromString(dataFrame, jsonStr, function);
     }
 }

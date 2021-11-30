@@ -14,6 +14,7 @@ package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
 import org.opensearch.common.Strings;
+import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -37,10 +38,10 @@ public class NullValueTest {
     public void testToXContent() throws IOException {
         NullValue value = new NullValue();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
-        value.toXContent(builder);
+        value.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
-        assertEquals("{\"column_type\":\"NULL\",\"value\":null}", jsonStr);
+        assertEquals("{\"column_type\":\"NULL\"}", jsonStr);
     }
 }

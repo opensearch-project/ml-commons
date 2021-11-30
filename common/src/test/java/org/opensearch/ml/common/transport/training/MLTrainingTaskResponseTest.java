@@ -19,6 +19,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.parameter.MLTrainingOutput;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
@@ -28,32 +29,35 @@ public class MLTrainingTaskResponseTest {
 
     @Test
     public void writeTo() throws IOException {
+        MLTrainingOutput output = MLTrainingOutput.builder().status("success")
+                .modelId("taskId").build();
         MLTrainingTaskResponse response = MLTrainingTaskResponse.builder()
-                .status("success")
-                .taskId("taskId")
+                .output(output)
                 .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         response.writeTo(bytesStreamOutput);
-        assertEquals(15, bytesStreamOutput.size());
         response = new MLTrainingTaskResponse(bytesStreamOutput.bytes().streamInput());
-        assertEquals("success", response.getStatus());
-        assertEquals("taskId", response.getTaskId());
+        MLTrainingOutput modelTrainingOutput = (MLTrainingOutput)response.getOutput();
+        assertEquals("success", modelTrainingOutput.getStatus());
+        assertEquals("taskId", modelTrainingOutput.getModelId());
     }
 
     @Test
     public void fromActionResponse_Success_WithMLTrainingTaskResponse() {
+        MLTrainingOutput output = MLTrainingOutput.builder().status("success")
+                .modelId("taskId").build();
         MLTrainingTaskResponse response = MLTrainingTaskResponse.builder()
-                .status("success")
-                .taskId("taskId")
+                .output(output)
                 .build();
         assertSame(response, MLTrainingTaskResponse.fromActionResponse(response));
     }
 
     @Test
     public void fromActionResponse_Success_WithNonMLTrainingTaskResponse() {
+        MLTrainingOutput output = MLTrainingOutput.builder().status("success")
+                .modelId("taskId").build();
         MLTrainingTaskResponse response = MLTrainingTaskResponse.builder()
-                .status("success")
-                .taskId("taskId")
+                .output(output)
                 .build();
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -64,8 +68,10 @@ public class MLTrainingTaskResponseTest {
 
         MLTrainingTaskResponse result = MLTrainingTaskResponse.fromActionResponse(actionResponse);
         assertNotSame(response, result);
-        assertEquals(response.getStatus(), result.getStatus());
-        assertEquals(response.getTaskId(), result.getTaskId());
+        MLTrainingOutput modelTrainingOutput = (MLTrainingOutput)response.getOutput();
+        MLTrainingOutput resultModelTrainingOutput = (MLTrainingOutput)result.getOutput();
+        assertEquals(modelTrainingOutput.getStatus(), resultModelTrainingOutput.getStatus());
+        assertEquals(modelTrainingOutput.getModelId(), resultModelTrainingOutput.getModelId());
     }
 
     @Test(expected = UncheckedIOException.class)

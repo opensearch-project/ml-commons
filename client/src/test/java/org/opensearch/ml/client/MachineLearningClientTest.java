@@ -12,17 +12,24 @@
 package org.opensearch.ml.client;
 
 
-import java.util.List;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.parameter.MLParameter;
+import org.opensearch.ml.common.parameter.Input;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.MLTrainingOutput;
+import org.opensearch.ml.common.parameter.Output;
+
+import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
@@ -36,66 +43,113 @@ public class MachineLearningClientTest {
     DataFrame input;
 
     @Mock
-    DataFrame output;
+    MLOutput output;
 
     @Mock
-    List<MLParameter> mlParameters;
+    MLAlgoParams mlParameters;
 
     @Mock
-    ActionListener<DataFrame> dataFrameActionListener;
+    ActionListener<MLOutput> dataFrameActionListener;
 
+    private String modekId = "test_model_id";
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
 
         machineLearningClient = new MachineLearningClient() {
             @Override
-            public void predict(String algorithm, List<MLParameter> parameters, MLInputDataset inputData, String modelId,
-                                ActionListener<DataFrame> listener) {
+            public void predict(String modelId,
+                                MLInput mlInput,
+                                ActionListener<MLOutput> listener) {
                 listener.onResponse(output);
             }
 
             @Override
-            public void train(String algorithm, List<MLParameter> parameters, MLInputDataset inputData,
-                              ActionListener<String> listener) {
-                listener.onResponse("taskId");
+            public void train(MLInput mlInput, ActionListener<MLOutput> listener) {
+                listener.onResponse(MLTrainingOutput.builder().modelId(modekId).build());
+            }
+
+            @Override
+            public void execute(Input input, ActionListener<Output> listener) {
+                listener.onResponse(new Output() {
+                    @Override
+                    public void writeTo(StreamOutput out) {
+
+                    }
+
+                    @Override
+                    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+                        builder.startObject();
+                        builder.field("test", "test_value");
+                        builder.endObject();
+                        return builder;
+                    }
+                });
             }
         };
     }
 
     @Test
     public void predict_WithAlgoAndInputData() {
-        assertEquals(output, machineLearningClient.predict("algo", input).actionGet());
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .dataFrame(input)
+                .build();
+        assertEquals(output, machineLearningClient.predict(null, mlInput).actionGet());
     }
 
     @Test
     public void predict_WithAlgoAndParametersAndInputData() {
-        assertEquals(output, machineLearningClient.predict("algo", mlParameters, input).actionGet());
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .parameters(mlParameters)
+                .dataFrame(input)
+                .build();
+        assertEquals(output, machineLearningClient.predict(null, mlInput).actionGet());
     }
 
     @Test
     public void predict_WithAlgoAndParametersAndInputDataAndModelId() {
-        assertEquals(output, machineLearningClient.predict("algo", mlParameters, input, "modelId").actionGet());
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .parameters(mlParameters)
+                .dataFrame(input)
+                .build();
+        assertEquals(output, machineLearningClient.predict("modelId", mlInput).actionGet());
     }
 
     @Test
     public void predict_WithAlgoAndInputDataAndListener() {
-        ArgumentCaptor<DataFrame> dataFrameArgumentCaptor = ArgumentCaptor.forClass(DataFrame.class);
-        machineLearningClient.predict("algo", input, dataFrameActionListener);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .dataFrame(input)
+                .build();
+        ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        machineLearningClient.predict(null, mlInput, dataFrameActionListener);
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
         assertEquals(output, dataFrameArgumentCaptor.getValue());
     }
 
     @Test
     public void predict_WithAlgoAndInputDataAndParametersAndListener() {
-        ArgumentCaptor<DataFrame> dataFrameArgumentCaptor = ArgumentCaptor.forClass(DataFrame.class);
-        machineLearningClient.predict("algo", mlParameters, input, dataFrameActionListener);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .parameters(mlParameters)
+                .dataFrame(input)
+                .build();
+        ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        machineLearningClient.predict(null, mlInput, dataFrameActionListener);
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
         assertEquals(output, dataFrameArgumentCaptor.getValue());
     }
 
     @Test
     public void train() {
-        assertEquals("taskId", machineLearningClient.train("algo", mlParameters, input).actionGet());
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .parameters(mlParameters)
+                .dataFrame(input)
+                .build();
+        assertEquals(modekId, ((MLTrainingOutput)machineLearningClient.train(mlInput).actionGet()).getModelId());
     }
 }

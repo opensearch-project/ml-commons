@@ -36,16 +36,23 @@ import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
 import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
 import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionTransportAction;
+import org.opensearch.ml.action.prediction.TransportExecuteTaskAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.LinearRegressionParams;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.parameter.SampleAlgoParams;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestStatsMLAction;
@@ -100,6 +107,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         return ImmutableList
             .of(
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
+                new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskExecutionAction.INSTANCE, MLPredictionTaskExecutionTransportAction.class),
@@ -172,7 +180,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestStatsMLAction restStatsMLAction = new RestStatsMLAction(mlStats);
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
-        return ImmutableList.of(restStatsMLAction, restMLTrainingAction, restMLPredictionAction);
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        return ImmutableList.of(restStatsMLAction, restMLTrainingAction, restMLPredictionAction, restMLExecuteAction);
     }
 
     @Override
@@ -180,5 +189,16 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         FixedExecutorBuilder ml = new FixedExecutorBuilder(settings, TASK_THREAD_POOL, 4, 4, "ml.task_thread_pool", false);
 
         return Collections.singletonList(ml);
+    }
+
+    @Override
+    public List<NamedXContentRegistry.Entry> getNamedXContent() {
+        return ImmutableList
+            .of(
+                KMeansParams.XCONTENT_REGISTRY,
+                LinearRegressionParams.XCONTENT_REGISTRY,
+                SampleAlgoParams.XCONTENT_REGISTRY,
+                LocalSampleCalculatorInput.XCONTENT_REGISTRY
+            );
     }
 }

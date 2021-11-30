@@ -13,15 +13,13 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.xcontent.XContentBuilder;
-
-import java.io.IOException;
+import org.opensearch.common.xcontent.ToXContentObject;
 
 /**
  * This is data interface used for data exchange between client plugins and ml plugins. Currently, only row based interface are provided,
  * since OpenSearch is using row similar based document to manage data.
  */
-public interface DataFrame extends Iterable<Row>, Writeable {
+public interface DataFrame extends Iterable<Row>, Writeable, ToXContentObject {
     /**
      * Add a new row given values array.
      * @param values input values
@@ -67,10 +65,4 @@ public interface DataFrame extends Iterable<Row>, Writeable {
      */
     DataFrame select(int[] columns);
 
-    /**
-     * Put the DataFrame content into a XContent builder.
-     * This is required to put the DataFrame into the XContent of the Rest API responses.
-     * @param builder the XContent builder
-     */
-    void toXContent(XContentBuilder builder) throws IOException;
 }

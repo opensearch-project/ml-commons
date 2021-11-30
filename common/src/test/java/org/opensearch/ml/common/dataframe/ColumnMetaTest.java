@@ -6,9 +6,12 @@ import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.TestHelper;
 
 import java.io.IOException;
+import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -16,9 +19,18 @@ import static org.junit.Assert.assertNotNull;
 public class ColumnMetaTest {
     ColumnMeta columnMeta;
 
+    Function<XContentParser, ColumnMeta> function;
+
     @Before
     public void setup() {
         columnMeta = new ColumnMeta.ColumnMetaBuilder().name("columnMetaName").columnType(ColumnType.STRING).build();
+        function = parser -> {
+            try {
+                return ColumnMeta.parse(parser);
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to parse ColumnMeta", e);
+            }
+        };
     }
 
     @Test
@@ -40,5 +52,18 @@ public class ColumnMetaTest {
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
         assertEquals("{\"name\":\"columnMetaName\",\"column_type\":\"STRING\"}", jsonStr);
+    }
+
+    @Test
+    public void testParse() throws IOException {
+        ColumnMeta columnMeta = new ColumnMeta("test", ColumnType.DOUBLE);
+        TestHelper.testParse(columnMeta, function);
+    }
+
+    @Test
+    public void testParse_WrongExtraField() throws IOException {
+        ColumnMeta columnMeta = new ColumnMeta("test", ColumnType.DOUBLE);
+        String jsonStr = "{\"name\":\"test\",\"column_type\":\"DOUBLE\",\"wrong\":\"abc\"}";
+        TestHelper.testParseFromString(columnMeta, jsonStr, function);
     }
 }
