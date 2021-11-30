@@ -13,7 +13,6 @@ package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import org.opensearch.common.ParseField;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -24,7 +23,6 @@ import org.opensearch.ml.common.annotation.MLAlgoParameter;
 
 import java.io.IOException;
 import java.util.Locale;
-import java.util.Objects;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
