@@ -116,7 +116,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
     }
 
     /**
-     * Execute algirithm and return result.
+     * Execute algorithm and return result.
      * TODO: 1. support backend task run; 2. support dispatch task to remote node
      * @param request MLExecuteTaskRequest
      * @param transportService transport service
@@ -227,7 +227,7 @@ public class MLPredictTaskRunner extends MLTaskRunner {
                     handleMLTaskComplete(mlTask);
                 } catch (Exception e) {
                     // todo need to specify what exception
-                    log.error(e);
+                    log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + model.getName(), e);
                     handlePredictFailure(mlTask, listener, e);
                     return;
                 }

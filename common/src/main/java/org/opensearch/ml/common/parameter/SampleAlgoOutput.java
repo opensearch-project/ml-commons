@@ -2,6 +2,7 @@ package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
@@ -10,6 +11,7 @@ import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import java.io.IOException;
 
 @Data
+@EqualsAndHashCode(callSuper=false)
 @MLAlgoOutput(MLOutputType.SAMPLE_ALGO)
 public class SampleAlgoOutput extends MLOutput{
 

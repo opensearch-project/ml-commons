@@ -11,6 +11,7 @@
 
 package org.opensearch.ml.common.parameter;
 
+import lombok.Builder;
 import lombok.Data;
 import org.opensearch.common.ParseField;
 import org.opensearch.common.io.stream.StreamInput;
@@ -37,6 +38,7 @@ public class SampleAlgoParams implements MLAlgoParams {
     public static final String SAMPLE_PARAM_FIELD = "sample_param";
     private Integer sampleParam;
 
+    @Builder
     public SampleAlgoParams(Integer sampleParam) {
         this.sampleParam = sampleParam;
     }
@@ -45,7 +47,7 @@ public class SampleAlgoParams implements MLAlgoParams {
         this.sampleParam = in.readOptionalInt();
     }
 
-    private static MLAlgoParams parse(XContentParser parser) throws IOException {
+    public static MLAlgoParams parse(XContentParser parser) throws IOException {
         Integer sampleParam = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -78,7 +80,9 @@ public class SampleAlgoParams implements MLAlgoParams {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(SAMPLE_PARAM_FIELD, sampleParam);
+        if (sampleParam != null) {
+            builder.field(SAMPLE_PARAM_FIELD, sampleParam);
+        }
         builder.endObject();
         return builder;
     }
