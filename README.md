@@ -11,7 +11,7 @@
 
 <!-- /TOC -->
 
-## OpenSearch Machine Learning Commons
+## OpenSearch Machine Learning Commons (Experimental, not released yet)
 
 Machine Learning Commons for OpenSearch is a new solution that make it easy to develop new machine learning feature. It allows engineers to leverage existing opensource machine learning algorithms and reduce the efforts to build any new machine learning feature. It also removes the necessity from engineers to manage the machine learning tasks which will help to speed the feature developing process.
 
@@ -41,38 +41,7 @@ This solution makes it easy to develop new machine learning features. It allows 
 
 ### How to use it for new feature development
 
-As mentioned above, new interfaces including both prediction and training will be provided to customers through Rest APIs, and to other plugins through transport action. Here are the transport action for prediction and training interfaces.
-
-* Predict Transport Action for prediction job request
-  ```
-  Request: {
-        "algorithm": "ARIMA",  //the name of algorithm
-        "parameters": {"forecasts_en":10, "seasonal"=true}, // parameters of the algorithm, can be null or empty
-        "modelId":123, //the id for trainded model.
-        "inputData": [[1.0, 2, 3.1, true, "v1"],[1.1, 4, 5.2, false, "v2"]] // internal data frame interface
-    }
-    
-    Response: {
-        "taskId": "123", //the id of the job request
-        "status": "SUCCESS", // the job execution status
-        "predictionResult": [[6.0],[7.0]] // internal data frame interface
-    }
-   ```      
-* Training Transport Action to start training job request - Async Interface
-  ```
-  Request: {
-     "algorithm": "ARIMA", //the name of algorithm
-     "parameters": {"forecasts_en":10, "seasonal"=true}, // parameters of the algorithm, can be null or empty
-     "inputData": [[1.0, 2, 3.1, true, "v1"],[1.1, 4, 5.2, false, "v2"]] // internal data frame interface
-    }
-    
-    
-    Response: {
-     "taskId": "123", //the id of the job request
-     "status": "IN_PROGRESS" // the job execution status
-    
-    }
-   ```
+See [How to add new function](docs/how-to-add-new-function.md).
 
 ## Contributing
 
