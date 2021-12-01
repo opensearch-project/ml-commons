@@ -171,7 +171,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
             handleMLTaskComplete(mlTask);
         } catch (Exception e) {
             // todo need to specify what exception
-            log.error(e);
+            log.error("Failed to train " + mlInput.getAlgorithm(), e);
             handleMLTaskFailure(mlTask, e);
         }
     }

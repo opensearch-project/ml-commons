@@ -1,8 +1,18 @@
+/*
+ *  SPDX-License-Identifier: Apache-2.0
+ *
+ *  The OpenSearch Contributors require contributions made to
+ *  this file be licensed under the Apache-2.0 license or a
+ *  compatible open source license.
+ *
+ *  Modifications Copyright OpenSearch Contributors. See
+ *  GitHub history for details.
+ */
+
 package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import org.opensearch.common.ParseField;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -13,7 +23,6 @@ import org.opensearch.ml.common.annotation.MLAlgoParameter;
 
 import java.io.IOException;
 import java.util.Locale;
-import java.util.Objects;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 

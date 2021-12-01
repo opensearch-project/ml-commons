@@ -16,7 +16,7 @@ buildscript {
     ext {
         opensearch_group = "org.opensearch"
         opensearch_version = "${opensearch_version}"
-        common_utils_version = "${opensearchBaseVersion}.0"
+        common_utils_version = "${opensearchBaseVersion}.0-SNAPSHOT"
     }
 
     repositories {

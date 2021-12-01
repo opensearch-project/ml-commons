@@ -17,10 +17,13 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 
 import java.util.HashSet;
@@ -80,14 +83,25 @@ public class MLEngineTest {
     }
 
     @Test
-    public void trainUnsupportedAlgorithm() {
+    public void trainWithoutAlgorithm() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Algo name should not be null");
         MLEngine.train(null, null, null);
     }
 
     @Test
-    public void predictUnsupportedAlgorithm() {
+    public void trainUnsupportedAlgorithm() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported algorithm: LINEAR_REGRESSION");
+        FunctionName algoName = FunctionName.LINEAR_REGRESSION;
+        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
+            MLEngine.train(algoName, null, null);
+        }
+    }
+
+    @Test
+    public void predictWithoutAlgoName() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Algo name should not be null");
         MLEngine.predict(null, null, null, null);
@@ -98,6 +112,17 @@ public class MLEngineTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
         MLEngine.predict(FunctionName.LINEAR_REGRESSION, null, null, null);
+    }
+
+    @Test
+    public void predictUnsupportedAlgorithm() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported algorithm: LINEAR_REGRESSION");
+        FunctionName algoName = FunctionName.LINEAR_REGRESSION;
+        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
+            MLEngine.predict(algoName, null, null, null);
+        }
     }
 
     @Test
