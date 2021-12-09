@@ -226,7 +226,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 KMeansParams.XCONTENT_REGISTRY,
                 LinearRegressionParams.XCONTENT_REGISTRY,
                 SampleAlgoParams.XCONTENT_REGISTRY,
-                LocalSampleCalculatorInput.XCONTENT_REGISTRY
+                LocalSampleCalculatorInput.XCONTENT_REGISTRY,
+                org.opensearch.ml.engine.algorithms.anomalylocalization.Input.XCONTENT_REGISTRY_ENTRY
             );
     }
 }
