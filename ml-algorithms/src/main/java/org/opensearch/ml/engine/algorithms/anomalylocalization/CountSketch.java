@@ -20,6 +20,8 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * Count sketch implementation.
+ *
+ * @see <a href="https://u.cs.biu.ac.il/~porat/2006/MDS/FrequentStream.pdf">Charikar, M., Chen, K., & Farach-Colton, M. (2002, July). Finding frequent items in data streams.</a>
  */
 @Log4j2
 public class CountSketch implements Counter {

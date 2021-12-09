@@ -25,7 +25,7 @@ public class HybridCounter implements Counter {
 
     protected static int SKETCH_THRESHOLD = 10_000;
 
-    private Counter counter = new Hashmap();
+    private Counter counter = new HashMapCounter();
     private int count = 0;
 
     @Override
@@ -42,10 +42,10 @@ public class HybridCounter implements Counter {
     private void updateCount() {
         this.count++;
         if (this.count == SKETCH_THRESHOLD) {
-            Map<List<String>, Double> hashmap = ((Hashmap) counter).getKeyValues();
+            Map<List<String>, Double> hashmap = ((HashMapCounter) counter).getKeyValues();
             boolean hasNegative = hashmap.values().stream().anyMatch(v -> v < 0);
             Counter newCounter;
-            if (hasNegative) {
+            if (hasNegative) { // aggregate value, avg for example, of a key can be negative
                 newCounter = new CountSketch();
             } else {
                 newCounter = new CountMinSketch();

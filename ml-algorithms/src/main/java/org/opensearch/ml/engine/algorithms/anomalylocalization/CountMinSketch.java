@@ -20,6 +20,8 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * CountMin sketch implementation.
+ *
+ * @see <a href="https://www.cs.tufts.edu/comp/150FP/archive/graham-cormode/count-min.pdf">Cormode, G., & Muthukrishnan, S. (2005). An improved data stream summary: the count-min sketch and its applications.</a>
  */
 @Log4j2
 public class CountMinSketch implements Counter {

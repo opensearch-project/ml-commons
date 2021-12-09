@@ -24,7 +24,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Data
 @Log4j2
-public class Hashmap implements Counter {
+public class HashMapCounter implements Counter {
 
     private Map<List<String>, Double> keyValues = new HashMap<>();
 

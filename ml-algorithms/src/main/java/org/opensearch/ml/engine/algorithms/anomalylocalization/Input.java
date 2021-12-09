@@ -26,7 +26,7 @@ import lombok.Data;
 @Data
 public class Input {
 
-    private final String indexName; // name of the data index
+    private final String indexName; // name pattern of the data index
     private final List<String> attributeFieldNames; // name of the field to localize/slice with
     private final List<AggregationBuilder> aggregations; // aggregate data to localize/slice on
     private final String timeFieldName; // name of the timestamp field

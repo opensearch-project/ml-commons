@@ -60,7 +60,10 @@ import static org.opensearch.search.aggregations.MultiBucketConsumerService.MAX_
 @Log4j2
 public class AnomalyLocalizerImpl implements AnomalyLocalizer {
 
+    // Localize when the change of new value over base value is over the percentage.
     protected static final double MIN_DIFF_PCT = 0.01;
+
+    // Partitions the whole data to up to this number of buckets by time.
     protected static final int MAX_TIME_BUCKETS = 8;
 
     private final Client client;
@@ -95,6 +98,9 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer {
         input.getAggregations().stream().forEach(agg -> localizeByBuckets(input, agg, output, notifyOnce(listener)));
     }
 
+    /**
+     * Bucketizes data by time and get overall aggregates.
+     */
     private void localizeByBuckets(Input input, AggregationBuilder agg, Output output, ActionListener<Output> listener) {
         LocalizationTimeBuckets timeBuckets = getTimeBuckets(input);
         getOverallAggregates(input, timeBuckets, agg, output, listener);
@@ -125,6 +131,9 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer {
         getLocalizedEntities(input, agg, result, output, listener);
     }
 
+    /**
+     * Identifies buckets of data that need localization and localizes entities in the bucket.
+     */
     private void getLocalizedEntities(Input input, AggregationBuilder agg, Output.Result result, Output output,
                                       ActionListener<Output> listener) {
         if (setBase(result, input)) {
@@ -142,6 +151,7 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer {
     }
 
     private boolean isResultComplete(Output.Result result) {
+        // When completed is null, the bucket does not localization, base bucket for example.
         return result.getBuckets().stream().allMatch(e -> e.getCompleted() == null || e.getCompleted().get() == true);
     }
 
@@ -152,6 +162,9 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer {
                 listener::onFailure));
     }
 
+    /**
+     * Keeps info from entities in the base bucket to compare entities from new buckets against.
+     */
     private void onBaseEntryResponse(SearchResponse response, Input input, AggregationBuilder agg, Output.Result result,
                                      Output.Bucket bucket, Counter counter, Output output, ActionListener<Output> listener) {
         Optional<CompositeAggregation> respAgg =
@@ -186,6 +199,9 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer {
         client.search(request, wrap(r -> onNewEntryResponse(r, input, agg, result, bucket, queue, output, listener), listener::onFailure));
     }
 
+    /**
+     * Chooses entities from the new bucket that contribute the most to the overall change.
+     */
     private void onNewEntryResponse(SearchResponse response, Input input, AggregationBuilder agg, Output.Result result,
                                     Output.Bucket outputBucket, PriorityQueue<Output.Entity> queue, Output output,
                                     ActionListener<Output> listener) {
@@ -216,6 +232,9 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer {
         }
     }
 
+    /**
+     * Updates to date entity contribution values in final output.
+     */
     private void onEntityKeysResponse(SearchResponse response, Input input, AggregationBuilder agg, Output.Result result,
                                       Output.Bucket bucket, PriorityQueue<Output.Entity> queue, Output output,
                                       ActionListener<Output> listener) {

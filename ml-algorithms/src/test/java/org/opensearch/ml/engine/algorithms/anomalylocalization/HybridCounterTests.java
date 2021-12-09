@@ -15,14 +15,17 @@ package org.opensearch.ml.engine.algorithms.anomalylocalization;
 import java.util.Arrays;
 import java.util.List;
 
+import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class HybridCounterTests {
 
+    @Test
     public void testOnCountMinSketch() {
         HybridCounter counter = new HybridCounter();
-        Hashmap hash = new Hashmap();
+        HashMapCounter hash = new HashMapCounter();
 
         double sum = 0.;
         String[] keys = new String[]{"a", "b", "c"};
@@ -46,9 +49,10 @@ public class HybridCounterTests {
         }
     }
 
+    @Test
     public void testOnCountSketch() {
         HybridCounter counter = new HybridCounter();
-        Hashmap hash = new Hashmap();
+        HashMapCounter hash = new HashMapCounter();
 
         double sum = 0.;
         String[] keys = new String[]{"a", "b", "c"};
