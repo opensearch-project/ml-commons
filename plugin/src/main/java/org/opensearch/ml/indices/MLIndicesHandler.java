@@ -28,11 +28,11 @@ public class MLIndicesHandler {
     public static final String ML_MODEL = ".plugins-ml-model";
     private static final String ML_MODEL_INDEX_MAPPING = "{\n"
         + "    \"properties\": {\n"
-        + "      \"taskId\": { \"type\": \"keyword\" },\n"
+        + "      \"task_id\": { \"type\": \"keyword\" },\n"
         + "      \"algorithm\": {\"type\": \"keyword\"},\n"
-        + "      \"modelName\" : { \"type\": \"keyword\"},\n"
-        + "      \"modelVersion\" : { \"type\": \"keyword\"},\n"
-        + "      \"modelContent\" : { \"type\": \"binary\"}\n"
+        + "      \"model_name\" : { \"type\": \"keyword\"},\n"
+        + "      \"model_version\" : { \"type\": \"keyword\"},\n"
+        + "      \"model_content\" : { \"type\": \"binary\"}\n"
         + "    }\n"
         + "}";
 

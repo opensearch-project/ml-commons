@@ -17,9 +17,9 @@ import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.SampleAlgoOutput;
 import org.opensearch.ml.common.parameter.SampleAlgoParams;
-import org.opensearch.ml.engine.MLAlgo;
-import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
@@ -27,7 +27,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Function(FunctionName.SAMPLE_ALGO)
-public class SampleAlgo implements MLAlgo {
+public class SampleAlgo implements Trainable, Predictable {
     private static final int DEFAULT_SAMPLE_PARAM = -1;
     private int sampleParam;
 
@@ -56,16 +56,5 @@ public class SampleAlgo implements MLAlgo {
         model.setVersion(1);
         model.setContent(ModelSerDeSer.serialize("This is a sample testing model with parameter: " + sampleParam));
         return model;
-    }
-
-    @Override
-    public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.SAMPLE_ALGO.name())
-                .description("A sample algorithm.")
-                .version("1.0")
-                .predictable(true)
-                .trainable(true)
-                .executable(false)
-                .build();
     }
 }

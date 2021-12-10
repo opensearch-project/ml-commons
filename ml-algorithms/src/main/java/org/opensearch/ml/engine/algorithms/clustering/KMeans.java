@@ -19,9 +19,9 @@ import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.engine.MLAlgo;
-import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
@@ -47,7 +47,7 @@ import java.util.Optional;
  * https://github.com/oracle/tribuo/issues/158
  */
 @Function(FunctionName.KMEANS)
-public class KMeans implements MLAlgo {
+public class KMeans implements Trainable, Predictable {
     private static final KMeansParams.DistanceType DEFAULT_DISTANCE_TYPE = KMeansParams.DistanceType.EUCLIDEAN;
     private static int DEFAULT_CENTROIDS = 2;
     private static int DEFAULT_ITERATIONS = 10;
@@ -127,16 +127,5 @@ public class KMeans implements MLAlgo {
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
         return model;
-    }
-
-    @Override
-    public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.KMEANS.name())
-                .description("A clustering algorithm.")
-                .version("1.0")
-                .predictable(true)
-                .trainable(true)
-                .executable(false)
-                .build();
     }
 }

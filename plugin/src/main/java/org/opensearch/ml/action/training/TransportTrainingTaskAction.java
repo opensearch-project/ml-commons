@@ -22,13 +22,14 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
+import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
 public class TransportTrainingTaskAction extends HandledTransportAction<ActionRequest, MLTrainingTaskResponse> {
-    MLTrainingTaskRunner mlTrainingTaskRunner;
+    MLTaskRunner<MLTrainingTaskRequest, MLTrainingTaskResponse> mlTrainingTaskRunner;
     TransportService transportService;
 
     @Inject
@@ -45,6 +46,6 @@ public class TransportTrainingTaskAction extends HandledTransportAction<ActionRe
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTrainingTaskResponse> listener) {
         MLTrainingTaskRequest trainingRequest = MLTrainingTaskRequest.fromActionRequest(request);
-        mlTrainingTaskRunner.runTraining(trainingRequest, transportService, listener);
+        mlTrainingTaskRunner.run(trainingRequest, transportService, listener);
     }
 }

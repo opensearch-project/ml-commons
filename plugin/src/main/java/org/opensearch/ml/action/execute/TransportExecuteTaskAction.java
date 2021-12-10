@@ -10,7 +10,7 @@
  *
  */
 
-package org.opensearch.ml.action.prediction;
+package org.opensearch.ml.action.execute;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -24,30 +24,31 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
-import org.opensearch.ml.task.MLPredictTaskRunner;
+import org.opensearch.ml.task.MLExecuteTaskRunner;
+import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class TransportExecuteTaskAction extends HandledTransportAction<ActionRequest, MLExecuteTaskResponse> {
-    MLPredictTaskRunner mlPredictTaskRunner;
+    MLTaskRunner<MLExecuteTaskRequest, MLExecuteTaskResponse> mlExecuteTaskRunner;
     TransportService transportService;
 
     @Inject
     public TransportExecuteTaskAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLPredictTaskRunner mlPredictTaskRunner
+        MLExecuteTaskRunner mlExecuteTaskRunner
     ) {
         super(MLExecuteTaskAction.NAME, transportService, actionFilters, MLExecuteTaskRequest::new);
-        this.mlPredictTaskRunner = mlPredictTaskRunner;
+        this.mlExecuteTaskRunner = mlExecuteTaskRunner;
         this.transportService = transportService;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLExecuteTaskResponse> listener) {
         MLExecuteTaskRequest mlPredictionTaskRequest = MLExecuteTaskRequest.fromActionRequest(request);
-        mlPredictTaskRunner.execute(mlPredictionTaskRequest, transportService, listener);
+        mlExecuteTaskRunner.run(mlPredictionTaskRequest, transportService, listener);
     }
 }

@@ -82,7 +82,7 @@ public class MLPredictionOutput extends MLOutput{
         if (taskId != null) {
             builder.field(TASK_ID_FIELD, taskId);
         }
-        if (status != null){
+        if (status != null) {
             builder.field(STATUS_FIELD, status);
         }
 

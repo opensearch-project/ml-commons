@@ -63,7 +63,7 @@ import org.opensearch.transport.TransportService;
  * MLPredictTaskRunner is responsible for running predict tasks.
  */
 @Log4j2
-public class MLPredictTaskRunner extends MLTaskRunner {
+public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, MLPredictionTaskResponse> {
     private final ThreadPool threadPool;
     private final ClusterService clusterService;
     private final Client client;
@@ -85,17 +85,8 @@ public class MLPredictTaskRunner extends MLTaskRunner {
         this.mlInputDatasetHandler = mlInputDatasetHandler;
     }
 
-    /**
-     * Run prediction
-     * @param request MLPredictionTaskRequest
-     * @param transportService transport service
-     * @param listener Action listener
-     */
-    public void runPrediction(
-        MLPredictionTaskRequest request,
-        TransportService transportService,
-        ActionListener<MLPredictionTaskResponse> listener
-    ) {
+    @Override
+    public void run(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLPredictionTaskResponse> listener) {
         mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute prediction task locally

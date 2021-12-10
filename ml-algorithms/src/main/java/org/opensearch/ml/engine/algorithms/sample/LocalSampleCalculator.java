@@ -17,8 +17,7 @@ import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.parameter.SampleAlgoOutput;
-import org.opensearch.ml.engine.ExecutableFunction;
-import org.opensearch.ml.engine.MLAlgoMetaData;
+import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 
 import java.util.Comparator;
@@ -26,7 +25,7 @@ import java.util.List;
 
 @NoArgsConstructor
 @Function(FunctionName.LOCAL_SAMPLE_CALCULATOR)
-public class LocalSampleCalculator implements ExecutableFunction {
+public class LocalSampleCalculator implements Executable {
 
     private LocalSampleCalculatorInput sampleCalculatorInput;
     public LocalSampleCalculator(Input input) {
@@ -53,16 +52,5 @@ public class LocalSampleCalculator implements ExecutableFunction {
             default:
                 throw new IllegalArgumentException("can't support this operation " + operation);
         }
-    }
-
-    @Override
-    public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.LOCAL_SAMPLE_CALCULATOR.name())
-                .description("Sample local calculator.")
-                .version("1.0")
-                .predictable(false)
-                .trainable(false)
-                .executable(true)
-                .build();
     }
 }
