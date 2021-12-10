@@ -32,13 +32,12 @@ import java.util.Set;
  * This is the interface to all ml algorithms.
  */
 public class MLEngine {
-    private static final String ALGO_PACKAGE_NAME = "org.opensearch.ml.engine.algorithms";
 
     public static MLOutput predict(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
         if (algoName == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }
-        MLAlgo mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
+        Predictable mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
         if (mlAlgo == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
@@ -49,7 +48,7 @@ public class MLEngine {
         if (algoName == null) {
             throw new IllegalArgumentException("Algo name should not be null");
         }
-        MLAlgo mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
+        Trainable mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
         if (mlAlgo == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
         }
@@ -67,20 +66,4 @@ public class MLEngine {
         return function.execute(input);
     }
 
-    public static MLEngineMetaData getMetaData() {
-        MLEngineMetaData engineMetaData = new MLEngineMetaData();
-        Reflections reflections = new Reflections(ALGO_PACKAGE_NAME);
-        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(Function.class);
-        try {
-            for (Class c : classes) {
-                Object algo = c.getDeclaredConstructor().newInstance();
-                if (algo instanceof  MetaData) {
-                    engineMetaData.addAlgoMetaData(((MetaData)algo).getMetaData());
-                }
-            }
-        } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-            throw new MetaDataException("Failed to get ML engine meta data.", e.getCause());
-        }
-        return engineMetaData;
-    }
 }

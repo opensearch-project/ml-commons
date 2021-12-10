@@ -37,16 +37,6 @@ public class MLEngineTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private Set<String> algoNames = new HashSet<>();
-
-    @Before
-    public void setUp() {
-        algoNames.add(FunctionName.KMEANS.name());
-        algoNames.add(FunctionName.LINEAR_REGRESSION.name());
-        algoNames.add(FunctionName.SAMPLE_ALGO.name());
-        algoNames.add(FunctionName.LOCAL_SAMPLE_CALCULATOR.name());
-    }
-
     @Test
     public void predictKMeans() {
         Model model = trainKMeansModel();
@@ -123,12 +113,6 @@ public class MLEngineTest {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
             MLEngine.predict(algoName, null, null, null);
         }
-    }
-
-    @Test
-    public void getMetaData() {
-        MLEngineMetaData metaData = MLEngine.getMetaData();
-        metaData.getAlgoMetaDataList().forEach(e -> Assert.assertTrue(algoNames.contains(e.getName())));
     }
 
     private Model trainKMeansModel() {

@@ -27,8 +27,6 @@ public interface Predictable {
      * @param model the java serialized model
      * @return predicted results
      */
-    default MLOutput predict(DataFrame dataFrame, Model model) {
-        throw new RuntimeException("Unsupported predict.");
-    }
+    MLOutput predict(DataFrame dataFrame, Model model);
 
 }

@@ -22,5 +22,6 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface MLAlgoParameter {
+    // supported algorithms. One type of parameter may support multiple algorithms.
     FunctionName[] algorithms();
 }

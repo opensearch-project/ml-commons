@@ -53,7 +53,7 @@ import org.opensearch.transport.TransportService;
  * MLTrainingTaskRunner is responsible for running training tasks.
  */
 @Log4j2
-public class MLTrainingTaskRunner extends MLTaskRunner {
+public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, MLTrainingTaskResponse> {
     private final ThreadPool threadPool;
     private final ClusterService clusterService;
     private final Client client;
@@ -78,17 +78,8 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
         this.mlInputDatasetHandler = mlInputDatasetHandler;
     }
 
-    /**
-     * Run training
-     * @param request MLTrainingTaskRequest
-     * @param transportService transport service
-     * @param listener Action listener
-     */
-    public void runTraining(
-        MLTrainingTaskRequest request,
-        TransportService transportService,
-        ActionListener<MLTrainingTaskResponse> listener
-    ) {
+    @Override
+    public void run(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTrainingTaskResponse> listener) {
         mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute training task locally
@@ -128,7 +119,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
         MLInput mlInput = request.getMlInput();
         if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
-                .wrap(dataFrame -> { train(mlTask, dataFrame, request); }, e -> {
+                .wrap(dataFrame -> { train(mlTask, dataFrame, mlInput); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
                     mlTaskManager.addIfAbsent(mlTask);
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
@@ -141,15 +132,14 @@ public class MLTrainingTaskRunner extends MLTaskRunner {
                 );
         } else {
             DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(mlInput.getInputDataset());
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, inputDataFrame, request); });
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, inputDataFrame, mlInput); });
         }
     }
 
-    private void train(MLTask mlTask, DataFrame inputDataFrame, MLTrainingTaskRequest request) {
+    private void train(MLTask mlTask, DataFrame inputDataFrame, MLInput mlInput) {
         // track ML task count and add ML task into cache
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
-        MLInput mlInput = request.getMlInput();
         // run training
         try {
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);

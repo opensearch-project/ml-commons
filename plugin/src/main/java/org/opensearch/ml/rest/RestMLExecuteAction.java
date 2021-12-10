@@ -13,6 +13,8 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
+import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
 
 import java.io.IOException;
 import java.util.List;
@@ -23,13 +25,14 @@ import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLExecuteAction extends BaseMLAction {
+public class RestMLExecuteAction extends BaseRestHandler {
     private static final String ML_EXECUTE_ACTION = "ml_execute_action";
 
     /**

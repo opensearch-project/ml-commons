@@ -25,13 +25,14 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.task.MLPredictTaskRunner;
+import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class TransportPredictionTaskAction extends HandledTransportAction<ActionRequest, MLPredictionTaskResponse> {
-    MLPredictTaskRunner mlPredictTaskRunner;
+    MLTaskRunner<MLPredictionTaskRequest, MLPredictionTaskResponse> mlPredictTaskRunner;
     TransportService transportService;
 
     @Inject
@@ -48,6 +49,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLPredictionTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
-        mlPredictTaskRunner.runPrediction(mlPredictionTaskRequest, transportService, listener);
+        mlPredictTaskRunner.run(mlPredictionTaskRequest, transportService, listener);
     }
 }

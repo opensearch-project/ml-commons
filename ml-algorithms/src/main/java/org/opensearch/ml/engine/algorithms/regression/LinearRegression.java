@@ -19,9 +19,9 @@ import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.engine.MLAlgo;
-import org.opensearch.ml.engine.MLAlgoMetaData;
 import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
@@ -49,7 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Function(FunctionName.LINEAR_REGRESSION)
-public class LinearRegression implements MLAlgo {
+public class LinearRegression implements Trainable, Predictable {
 
     private static final LinearRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LinearRegressionParams.ObjectiveType.SQUARED_LOSS;
     private static final LinearRegressionParams.OptimizerType DEFAULT_OPTIMIZER_TYPE = LinearRegressionParams.OptimizerType.SIMPLE_SGD;
@@ -215,16 +215,5 @@ public class LinearRegression implements MLAlgo {
         model.setContent(ModelSerDeSer.serialize(regressionModel));
 
         return model;
-    }
-
-    @Override
-    public MLAlgoMetaData getMetaData() {
-        return MLAlgoMetaData.builder().name(FunctionName.LINEAR_REGRESSION.name())
-                .description("Linear regression algorithm.")
-                .version("1.0")
-                .predictable(true)
-                .trainable(true)
-                .executable(false)
-                .build();
     }
 }

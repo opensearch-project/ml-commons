@@ -14,23 +14,25 @@ package org.opensearch.ml.task;
 
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
 
+import org.opensearch.action.ActionListener;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.transport.TransportService;
 
 /**
  * MLTaskRunner has common code for dispatching and running predict/training tasks.
  */
-public class MLTaskRunner {
+public abstract class MLTaskRunner<S, T> {
     protected final MLTaskManager mlTaskManager;
     protected final MLStats mlStats;
     protected final MLTaskDispatcher mlTaskDispatcher;
 
-    protected static final String TASK_ID = "taskId";
+    protected static final String TASK_ID = "task_id";
     protected static final String ALGORITHM = "algorithm";
-    protected static final String MODEL_NAME = "modelName";
-    protected static final String MODEL_VERSION = "modelVersion";
-    protected static final String MODEL_CONTENT = "modelContent";
+    protected static final String MODEL_NAME = "model_name";
+    protected static final String MODEL_VERSION = "model_version";
+    protected static final String MODEL_CONTENT = "model_content";
     protected static final String USER = "user";
 
     public MLTaskRunner(MLTaskManager mlTaskManager, MLStats mlStats, MLTaskDispatcher mlTaskDispatcher) {
@@ -54,4 +56,6 @@ public class MLTaskRunner {
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.COMPLETED);
     }
+
+    public abstract void run(S request, TransportService transportService, ActionListener<T> listener);
 }

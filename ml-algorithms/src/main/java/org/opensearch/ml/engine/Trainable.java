@@ -25,8 +25,6 @@ public interface Trainable {
      * @param dataFrame training data
      * @return the java serialized model
      */
-    default Model train(DataFrame dataFrame) {
-        throw new RuntimeException("Unsupported train.");
-    }
+    Model train(DataFrame dataFrame);
 
 }

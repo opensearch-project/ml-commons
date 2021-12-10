@@ -22,8 +22,6 @@ public interface Executable {
      * @param input input data
      * @return execution result
      */
-    default Output execute(Input input) {
-        throw new RuntimeException("Unsupported execute.");
-    }
+    Output execute(Input input);
 
 }
