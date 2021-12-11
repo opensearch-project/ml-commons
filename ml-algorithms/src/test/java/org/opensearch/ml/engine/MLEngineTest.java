@@ -13,21 +13,22 @@
 package org.opensearch.ml.engine;
 
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 
-import java.util.HashSet;
-import java.util.Set;
 
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
@@ -41,7 +42,9 @@ public class MLEngineTest {
     public void predictKMeans() {
         Model model = trainKMeansModel();
         DataFrame predictionDataFrame = constructKMeansDataFrame(10);
-        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(FunctionName.KMEANS, null, predictionDataFrame, model);
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
+        Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
+        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(mlInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(10, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
@@ -51,7 +54,9 @@ public class MLEngineTest {
     public void predictLinearRegression() {
         Model model = trainLinearRegressionModel();
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
-        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(FunctionName.LINEAR_REGRESSION, null, predictionDataFrame, model);
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
+        Input mlInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build();
+        MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(mlInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
@@ -73,35 +78,74 @@ public class MLEngineTest {
     }
 
     @Test
-    public void trainWithoutAlgorithm() {
+    public void train_NullInput() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Algo name should not be null");
-        MLEngine.train(null, null, null);
+        exceptionRule.expectMessage("Input should not be null");
+        FunctionName algoName = FunctionName.LINEAR_REGRESSION;
+        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
+            MLEngine.train(null);
+        }
     }
 
     @Test
-    public void trainUnsupportedAlgorithm() {
+    public void train_NullDataFrame() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Input data frame should not be null or empty");
+        FunctionName algoName = FunctionName.LINEAR_REGRESSION;
+        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
+            MLEngine.train(MLInput.builder().algorithm(algoName).build());
+        }
+    }
+
+    @Test
+    public void train_EmptyDataFrame() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Input data frame should not be null or empty");
+        FunctionName algoName = FunctionName.LINEAR_REGRESSION;
+        try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
+            loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
+            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructKMeansDataFrame(0)).build();
+            MLEngine.train(MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build());
+        }
+    }
+
+    @Test
+    public void train_UnsupportedAlgorithm() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Unsupported algorithm: LINEAR_REGRESSION");
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
         try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
-            MLEngine.train(algoName, null, null);
+            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructKMeansDataFrame(10)).build();
+            MLEngine.train(MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build());
         }
+    }
+
+    @Test
+    public void predictNullInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Input should not be null");
+        MLEngine.predict(null, null);
     }
 
     @Test
     public void predictWithoutAlgoName() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Algo name should not be null");
-        MLEngine.predict(null, null, null, null);
+        exceptionRule.expectMessage("algorithm can't be null");
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructKMeansDataFrame(10)).build();
+        Input mlInput = MLInput.builder().inputDataset(inputDataset).build();
+        MLEngine.predict(mlInput, null);
     }
 
     @Test
     public void predictWithoutModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
-        MLEngine.predict(FunctionName.LINEAR_REGRESSION, null, null, null);
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructLinearRegressionPredictionDataFrame()).build();
+        Input mlInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build();
+        MLEngine.predict(mlInput, null);
     }
 
     @Test
@@ -111,7 +155,9 @@ public class MLEngineTest {
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
         try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
-            MLEngine.predict(algoName, null, null, null);
+            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructLinearRegressionPredictionDataFrame()).build();
+            Input mlInput = MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build();
+            MLEngine.predict(mlInput, null);
         }
     }
 
@@ -122,7 +168,9 @@ public class MLEngineTest {
                 .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
                 .build();
         DataFrame trainDataFrame = constructKMeansDataFrame(100);
-        return MLEngine.train(FunctionName.KMEANS, parameters, trainDataFrame);
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(trainDataFrame).build();
+        Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(parameters).inputDataset(inputDataset).build();
+        return MLEngine.train(mlInput);
     }
 
     private Model trainLinearRegressionModel() {
@@ -136,8 +184,9 @@ public class MLEngineTest {
                 .target("price")
                 .build();
         DataFrame trainDataFrame = constructLinearRegressionTrainDataFrame();
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(trainDataFrame).build();
+        Input mlInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).parameters(parameters).inputDataset(inputDataset).build();
 
-
-        return MLEngine.train(FunctionName.LINEAR_REGRESSION, parameters, trainDataFrame);
+        return MLEngine.train(mlInput);
     }
 }

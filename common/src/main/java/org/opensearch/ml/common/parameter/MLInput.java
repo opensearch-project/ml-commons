@@ -54,17 +54,28 @@ public class MLInput implements Input {
 
     private int version = 1;
 
-    @Builder
+    @Builder(toBuilder = true)
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset) {
+        validate(algorithm);
+        this.algorithm = algorithm;
+        this.parameters = parameters;
+        this.inputDataset = inputDataset;
+    }
+
     public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
-        if (algorithm == null) {
-            throw new IllegalArgumentException("algorithm can't be null");
-        }
+        validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
         if (inputDataset != null) {
             this.inputDataset = inputDataset;
         } else {
             this.inputDataset = createInputDataSet(searchSourceBuilder, sourceIndices, dataFrame);
+        }
+    }
+
+    private void validate(FunctionName algorithm) {
+        if (algorithm == null) {
+            throw new IllegalArgumentException("algorithm can't be null");
         }
     }
 
@@ -176,4 +187,12 @@ public class MLInput implements Input {
     public FunctionName getFunctionName() {
         return this.algorithm;
     }
+
+    public DataFrame getDataFrame() {
+        if (inputDataset == null || !(inputDataset instanceof DataFrameInputDataset)) {
+            return null;
+        }
+        return ((DataFrameInputDataset)inputDataset).getDataFrame();
+    }
+
 }

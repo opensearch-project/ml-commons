@@ -18,7 +18,9 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.FunctionName;
@@ -40,12 +42,13 @@ public class MLTrainingTaskRequestTest {
 
     @Before
     public void setUp() {
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+            put("key1", 2.0D);
+        }}));
         mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(KMeansParams.builder().centroids(1).build())
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
+                .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
                 .build();
     }
 

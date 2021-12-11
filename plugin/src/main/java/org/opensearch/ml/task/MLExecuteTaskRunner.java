@@ -60,12 +60,6 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
      * @param transportService transport service
      * @param listener Action listener
      */
-    public void execute(MLExecuteTaskRequest request, TransportService transportService, ActionListener<MLExecuteTaskResponse> listener) {
-        Input input = request.getInput();
-        Output output = MLEngine.execute(input);
-        listener.onResponse(MLExecuteTaskResponse.builder().output(output).build());
-    }
-
     @Override
     public void run(MLExecuteTaskRequest request, TransportService transportService, ActionListener<MLExecuteTaskResponse> listener) {
         Input input = request.getInput();
