@@ -11,7 +11,14 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
+import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.opensearch.client.Client;
+import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
@@ -23,13 +30,18 @@ import org.opensearch.ml.engine.annotation.Function;
 import java.util.Comparator;
 import java.util.List;
 
+@Data
 @NoArgsConstructor
 @Function(FunctionName.LOCAL_SAMPLE_CALCULATOR)
 public class LocalSampleCalculator implements Executable {
 
-    private LocalSampleCalculatorInput sampleCalculatorInput;
-    public LocalSampleCalculator(Input input) {
-        sampleCalculatorInput = (LocalSampleCalculatorInput) input;
+    //TODO: support calculate sum/max/min value from index.
+    private Client client;
+    private Settings settings;
+
+    public LocalSampleCalculator(Client client, Settings settings) {
+        this.client = client;
+        this.settings = settings;
     }
 
     @Override
@@ -37,11 +49,12 @@ public class LocalSampleCalculator implements Executable {
         if (input == null || !(input instanceof LocalSampleCalculatorInput)) {
             throw new IllegalArgumentException("wrong input");
         }
+        LocalSampleCalculatorInput sampleCalculatorInput = (LocalSampleCalculatorInput) input;
         String operation = sampleCalculatorInput.getOperation();
         List<Double> inputData = sampleCalculatorInput.getInputData();
         switch (operation) {
             case "sum":
-                double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum();
+                double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum() ;
                 return new SampleAlgoOutput(sum);
             case "max":
                 double max = inputData.stream().max(Comparator.naturalOrder()).get();

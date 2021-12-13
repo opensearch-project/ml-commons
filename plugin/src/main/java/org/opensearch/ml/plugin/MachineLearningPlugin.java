@@ -43,6 +43,7 @@ import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
@@ -50,6 +51,8 @@ import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.rest.RestMLExecuteAction;
@@ -134,6 +137,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.client = client;
         this.threadPool = threadPool;
         this.clusterService = clusterService;
+        Settings settings = environment.settings();
 
         Map<String, MLStat<?>> stats = ImmutableMap
             .<String, MLStat<?>>builder()
@@ -174,6 +178,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler,
             mlTaskDispatcher
         );
+
+        // Register thread-safe ML objects here.
+        LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
+        MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
 
         return ImmutableList
             .of(

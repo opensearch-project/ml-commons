@@ -85,8 +85,10 @@ public class SampleAlgo implements MLAlgo {
 }
 ```
 
+### (Optional)Step 5: register function object
+You can register instance of thread-safe class in ML plugin. Refer to Example2#Step5.
 
-### Step 5: Run and test
+### Step 6: Run and test
 Run `./gradlew run` and test sample algorithm.
 
 Train with sample data
@@ -203,7 +205,7 @@ public class LocalSampleCalculatorOutput implements Output{
 Create new class `ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/sample/LocalSampleCalculator` in `ml-algorithms` package 
 by implementing interface `Executable`. Override `execute` method.
 
-Must add `@Function` annotation with new function name.
+If don't register new ML function class(refer to step 5), you must add `@Function` annotation with new function name.
 ```
 @Function(FunctionName.LOCAL_SAMPLE_CALCULATOR) // must add this annotation
 public class LocalSampleCalculator implements Executable {
@@ -215,7 +217,40 @@ public class LocalSampleCalculator implements Executable {
 }
 ```
 
-### Step 5: Run and test
+### (Optional)Step 5: register function object
+If the new function class is thread-safe, you can register it. If don't register, will create new object for each request.
+For example, we can register instance of `LocalSampleCalculator` in `MachineLearningPlugin` like this
+```
+public class MachineLearningPlugin extends Plugin implements ActionPlugin {
+    ...
+    @Override
+    public Collection<Object> createComponents(
+        Client client,
+        ClusterService clusterService,
+        ThreadPool threadPool,
+        ResourceWatcherService resourceWatcherService,
+        ScriptService scriptService,
+        NamedXContentRegistry xContentRegistry,
+        Environment environment,
+        NodeEnvironment nodeEnvironment,
+        NamedWriteableRegistry namedWriteableRegistry,
+        IndexNameExpressionResolver indexNameExpressionResolver,
+        Supplier<RepositoriesService> repositoriesServiceSupplier
+    ) {
+        ...
+        Settings settings = environment.settings();
+        ...
+        // Register thread-safe ML objects here.
+        LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
+        MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
+        ...
+    }
+    ...
+}
+```
+
+
+### Step 6: Run and test
 Run `./gradlew run` and test this sample calculator.
 
 ```

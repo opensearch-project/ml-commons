@@ -22,8 +22,10 @@ import org.opensearch.transport.TransportService;
 
 /**
  * MLTaskRunner has common code for dispatching and running predict/training tasks.
+ * @param <Request> ML task request
+ * @param <Response> ML task request
  */
-public abstract class MLTaskRunner<S, T> {
+public abstract class MLTaskRunner<Request, Response> {
     protected final MLTaskManager mlTaskManager;
     protected final MLStats mlStats;
     protected final MLTaskDispatcher mlTaskDispatcher;
@@ -57,5 +59,5 @@ public abstract class MLTaskRunner<S, T> {
         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.COMPLETED);
     }
 
-    public abstract void run(S request, TransportService transportService, ActionListener<T> listener);
+    public abstract void run(Request request, TransportService transportService, ActionListener<Response> listener);
 }

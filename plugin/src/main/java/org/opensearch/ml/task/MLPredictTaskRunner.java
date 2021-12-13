@@ -38,6 +38,7 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLInput;
@@ -208,7 +209,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 MLOutput output;
                 try {
                     mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
-                    output = MLEngine.predict(mlInput.getAlgorithm(), mlInput.getParameters(), inputDataFrame, model);
+                    output = MLEngine.predict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build(), model);
                     if (output instanceof MLPredictionOutput) {
                         ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
                         ((MLPredictionOutput) output).setStatus(mlTaskManager.get(mlTask.getTaskId()).getState().name());

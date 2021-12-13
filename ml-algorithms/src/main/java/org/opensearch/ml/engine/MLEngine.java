@@ -14,56 +14,63 @@ package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.Output;
-import org.opensearch.ml.engine.annotation.Function;
-import org.opensearch.ml.engine.exceptions.MetaDataException;
-import org.reflections.Reflections;
-
-import java.lang.reflect.InvocationTargetException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.Set;
 
 /**
  * This is the interface to all ml algorithms.
  */
 public class MLEngine {
 
-    public static MLOutput predict(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame, Model model) {
-        if (algoName == null) {
-            throw new IllegalArgumentException("Algo name should not be null");
+    public static Model train(Input input) {
+        validateMLInput(input);
+        MLInput mlInput = (MLInput) input;
+        Trainable trainable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
+        if (trainable == null) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
         }
-        Predictable mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
-        if (mlAlgo == null) {
-            throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
-        }
-        return mlAlgo.predict(dataFrame, model);
+        return trainable.train(mlInput.getDataFrame());
     }
 
-    public static Model train(FunctionName algoName, MLAlgoParams parameters, DataFrame dataFrame) {
-        if (algoName == null) {
-            throw new IllegalArgumentException("Algo name should not be null");
+    public static MLOutput predict(Input input, Model model) {
+        validateMLInput(input);
+        MLInput mlInput = (MLInput) input;
+        Predictable predictable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
+        if (predictable == null) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
         }
-        Trainable mlAlgo = MLEngineClassLoader.initInstance(algoName, parameters, MLAlgoParams.class);
-        if (mlAlgo == null) {
-            throw new IllegalArgumentException("Unsupported algorithm: " + algoName);
-        }
-        return mlAlgo.train(dataFrame);
+        return predictable.predict(mlInput.getDataFrame(), model);
     }
 
     public static Output execute(Input input) {
-        if (input == null) {
-            throw new IllegalArgumentException("Algo name should not be null");
+        validateInput(input);
+        Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
+        if (executable == null) {
+            throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
         }
-        Executable function = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
-        if (function == null) {
-            throw new IllegalArgumentException("Unsupported algorithm: " + input.getFunctionName());
-        }
-        return function.execute(input);
+        return executable.execute(input);
     }
 
+    private static void validateMLInput(Input input) {
+        validateInput(input);
+        if (!(input instanceof MLInput)) {
+            throw new IllegalArgumentException("Input should be MLInput");
+        }
+        MLInput mlInput = (MLInput) input;
+        DataFrame dataFrame = mlInput.getDataFrame();
+        if (dataFrame == null || dataFrame.size() == 0) {
+            throw new IllegalArgumentException("Input data frame should not be null or empty");
+        }
+    }
+
+    private static void validateInput(Input input) {
+        if (input == null) {
+            throw new IllegalArgumentException("Input should not be null");
+        }
+        if (input.getFunctionName() == null) {
+            throw new IllegalArgumentException("Function name should not be null");
+        }
+    }
 }

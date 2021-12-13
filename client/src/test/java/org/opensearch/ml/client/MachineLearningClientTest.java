@@ -21,6 +21,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
@@ -93,7 +94,7 @@ public class MachineLearningClientTest {
     public void predict_WithAlgoAndInputData() {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
-                .dataFrame(input)
+                .inputDataset(new DataFrameInputDataset(input))
                 .build();
         assertEquals(output, machineLearningClient.predict(null, mlInput).actionGet());
     }
@@ -103,7 +104,7 @@ public class MachineLearningClientTest {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(mlParameters)
-                .dataFrame(input)
+                .inputDataset(new DataFrameInputDataset(input))
                 .build();
         assertEquals(output, machineLearningClient.predict(null, mlInput).actionGet());
     }
@@ -113,7 +114,7 @@ public class MachineLearningClientTest {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(mlParameters)
-                .dataFrame(input)
+                .inputDataset(new DataFrameInputDataset(input))
                 .build();
         assertEquals(output, machineLearningClient.predict("modelId", mlInput).actionGet());
     }
@@ -122,7 +123,7 @@ public class MachineLearningClientTest {
     public void predict_WithAlgoAndInputDataAndListener() {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
-                .dataFrame(input)
+                .inputDataset(new DataFrameInputDataset(input))
                 .build();
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
         machineLearningClient.predict(null, mlInput, dataFrameActionListener);
@@ -135,7 +136,7 @@ public class MachineLearningClientTest {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(mlParameters)
-                .dataFrame(input)
+                .inputDataset(new DataFrameInputDataset(input))
                 .build();
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
         machineLearningClient.predict(null, mlInput, dataFrameActionListener);
@@ -148,7 +149,7 @@ public class MachineLearningClientTest {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(mlParameters)
-                .dataFrame(input)
+                .inputDataset(new DataFrameInputDataset(input))
                 .build();
         assertEquals(modekId, ((MLTrainingOutput)machineLearningClient.train(mlInput).actionGet()).getModelId());
     }

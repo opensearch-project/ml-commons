@@ -48,12 +48,13 @@ public class MLPredictionTaskRequestTest {
 
     @Before
     public void setUp() {
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+            put("key1", 2.0D);
+        }}));
         mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(KMeansParams.builder().centroids(1).build())
-                .dataFrame(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("key1", 2.0D);
-                }})))
+                .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
                 .build();
     }
 
