@@ -205,7 +205,7 @@ public class LocalSampleCalculatorOutput implements Output{
 Create new class `ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/sample/LocalSampleCalculator` in `ml-algorithms` package 
 by implementing interface `Executable`. Override `execute` method.
 
-Must add `@Function` annotation with new function name.
+If don't register new ML function class(refer to step 5), you must add `@Function` annotation with new function name.
 ```
 @Function(FunctionName.LOCAL_SAMPLE_CALCULATOR) // must add this annotation
 public class LocalSampleCalculator implements Executable {
