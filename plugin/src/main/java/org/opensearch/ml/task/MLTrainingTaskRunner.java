@@ -12,25 +12,25 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL;
-import static org.opensearch.ml.permission.AccessController.getUserStr;
+import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
 
 import java.time.Instant;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
-import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ThreadedActionListener;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -43,6 +43,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.model.MLModel;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.model.MLTaskType;
@@ -113,20 +114,19 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             .createTime(Instant.now())
             .state(MLTaskState.CREATED)
             .build();
-        // TODO: move this listener onResponse later to catch the following cases:
-        // 1). search data failure, 2) train model failure, 3) persist model failure.
-        MLTrainingOutput output = MLTrainingOutput.builder().modelId(mlTask.getTaskId()).status(MLTaskState.CREATED.name()).build();
-        listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
         MLInput mlInput = request.getMlInput();
         if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(
-                    dataFrame -> { train(mlTask, mlInput.toBuilder().inputDataset(new DataFrameInputDataset(dataFrame)).build()); },
+                    dataFrame -> {
+                        train(mlTask, mlInput.toBuilder().inputDataset(new DataFrameInputDataset(dataFrame)).build(), listener);
+                    },
                     e -> {
                         log.error("Failed to generate DataFrame from search query", e);
                         mlTaskManager.addIfAbsent(mlTask);
                         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
                         mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
+                        listener.onFailure(e);
                     }
                 );
             mlInputDatasetHandler
@@ -135,37 +135,40 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
                 );
         } else {
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, mlInput); });
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, mlInput, listener); });
         }
     }
 
-    private void train(MLTask mlTask, MLInput mlInput) {
-        // track ML task count and add ML task into cache
-        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
-        mlTaskManager.add(mlTask);
-        // run training
+    private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
         try {
+            // track ML task count and add ML task into cache
+            mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
+            mlTaskManager.add(mlTask);
+            // run training
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
             Model model = MLEngine.train(mlInput);
-            String encodedModelContent = Base64.getEncoder().encodeToString(model.getContent());
             mlIndicesHandler.initModelIndexIfAbsent();
-            Map<String, Object> source = new HashMap<>();
-            source.put(TASK_ID, mlTask.getTaskId());
-            source.put(ALGORITHM, mlInput.getAlgorithm());
-            source.put(MODEL_NAME, model.getName());
-            source.put(MODEL_VERSION, model.getVersion());
-            source.put(MODEL_CONTENT, encodedModelContent);
 
-            // put the user into model for backend role based access control.
-            source.put(USER, getUserStr(client));
+            // TODO: put the user into model for backend role based access control.
+            MLModel mlModel = new MLModel(mlInput.getAlgorithm(), model);
 
-            IndexResponse response = client.prepareIndex(ML_MODEL, "_doc").setSource(source).get();
-            log.info("mode data indexing done, result:{}", response.getResult());
-            handleMLTaskComplete(mlTask);
+            IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX)
+                .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            client.index(indexRequest, ActionListener.wrap(r -> {
+                log.info("mode data indexing done, result:{}", r.getResult());
+                handleMLTaskComplete(mlTask);
+                MLTrainingOutput output = MLTrainingOutput.builder().modelId(r.getId()).status(MLTaskState.CREATED.name()).build();
+                listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
+            }, e -> {
+                handleMLTaskFailure(mlTask, e);
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
             // todo need to specify what exception
             log.error("Failed to train " + mlInput.getAlgorithm(), e);
             handleMLTaskFailure(mlTask, e);
+            listener.onFailure(e);
         }
     }
 }

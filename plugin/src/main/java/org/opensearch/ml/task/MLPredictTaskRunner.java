@@ -12,7 +12,7 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL;
+import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
@@ -172,7 +172,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
             QueryBuilder queryBuilder = QueryBuilders.termQuery(TASK_ID, request.getModelId());
             searchSourceBuilder.query(queryBuilder);
-            SearchRequest searchRequest = new SearchRequest(new String[] { ML_MODEL }, searchSourceBuilder);
+            SearchRequest searchRequest = new SearchRequest(new String[] { ML_MODEL_INDEX }, searchSourceBuilder);
 
             // Search model.
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
