@@ -13,7 +13,6 @@
 package org.opensearch.ml.action.training;
 
 import static org.opensearch.ml.utils.IntegTestUtils.DATA_FRAME_INPUT_DATASET;
-import static org.opensearch.ml.utils.IntegTestUtils.ML_MODEL;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_DATA;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_INDEX_NAME;
 import static org.opensearch.ml.utils.IntegTestUtils.generateMLTestingData;
@@ -31,16 +30,11 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionRequestValidationException;
-import org.opensearch.action.search.SearchAction;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
-import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
-import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
@@ -107,35 +101,6 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
         MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
 
-        ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
-        MLTrainingTaskResponse trainingResponse = trainingFuture.actionGet();
-
-        // The training taskId and status will be response to the client.
-        assertNotNull(trainingResponse);
-        MLTrainingOutput modelTrainingOutput = (MLTrainingOutput) trainingResponse.getOutput();
-        String modelId = modelTrainingOutput.getModelId();
-        String status = modelTrainingOutput.getStatus();
-        assertNotNull(modelId);
-        assertFalse(modelId.isEmpty());
-        assertEquals("CREATED", status);
-
-        SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
-        QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", modelId);
-        modelSearchSourceBuilder.query(queryBuilder);
-        SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL }, modelSearchSourceBuilder);
-        SearchResponse modelSearchResponse = null;
-        int i = 0;
-        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 100) {
-            try {
-                ActionFuture<SearchResponse> searchFuture = client().execute(SearchAction.INSTANCE, modelSearchRequest);
-                modelSearchResponse = searchFuture.actionGet();
-            } catch (Exception e) {} finally {
-                // Wait 100 ms until get valid search response or timeout.
-                Thread.sleep(100);
-            }
-            i++;
-        }
-        // No model would be trained successfully with empty dataset.
-        assertNull(modelSearchResponse);
+        expectThrows(IllegalArgumentException.class, () -> client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest).actionGet());
     }
 }
