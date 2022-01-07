@@ -52,6 +52,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -227,7 +228,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 LinearRegressionParams.XCONTENT_REGISTRY,
                 SampleAlgoParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
-                org.opensearch.ml.engine.algorithms.anomalylocalization.Input.XCONTENT_REGISTRY_ENTRY
+                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY
             );
     }
 }

@@ -26,6 +26,7 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregatorFactories;
 
@@ -40,7 +41,7 @@ import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBui
  */
 @Data
 @AllArgsConstructor
-public class Input implements org.opensearch.ml.common.parameter.Input {
+public class AnomalyLocalizationInput implements Input {
 
     public static final String FIELD_INDEX_NAME = "index_name";
     public static final String FIELD_ATTTRIBUTE_FIELD_NAMES = "attribute_field_names";
@@ -58,7 +59,7 @@ public class Input implements org.opensearch.ml.common.parameter.Input {
             parser -> parse(parser)
     );
 
-    public static Input parse(XContentParser parser) throws IOException {
+    public static AnomalyLocalizationInput parse(XContentParser parser) throws IOException {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         String indexName = null;
         List<String> attributeFieldNames = new ArrayList<>();
@@ -122,9 +123,13 @@ public class Input implements org.opensearch.ml.common.parameter.Input {
                     filterQuery = Optional.of(parseInnerQueryBuilder(parser));
                     ensureExpectedToken(XContentParser.Token.END_OBJECT, parser.currentToken(), parser);
                     break;
+                default:
+                    parser.skipChildren();
+                    break;
             }
         }
-        return new Input(indexName, attributeFieldNames, aggregations, timeFieldName, startTime, endTime, minTimeInterval, numOutputs,
+        return new AnomalyLocalizationInput(indexName, attributeFieldNames, aggregations, timeFieldName, startTime, endTime,
+                minTimeInterval, numOutputs,
                 anomalyStartTime, filterQuery);
     }
 
@@ -139,7 +144,7 @@ public class Input implements org.opensearch.ml.common.parameter.Input {
     private final Optional<Long> anomalyStartTime; // time when anomaly change starts
     private final Optional<QueryBuilder> filterQuery; // filter of data
 
-    public Input(StreamInput in) throws IOException {
+    public AnomalyLocalizationInput(StreamInput in) throws IOException {
         this.indexName = in.readString();
         this.attributeFieldNames = Arrays.asList(in.readStringArray());
         this.aggregations = in.readNamedWriteableList(AggregationBuilder.class);

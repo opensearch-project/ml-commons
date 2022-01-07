@@ -25,5 +25,5 @@ public interface AnomalyLocalizer {
      * @param input    Information about aggregation and metadata.
      * @param listener Listener to localized details or exception.
      */
-    void getLocalizationResults(Input input, ActionListener<Output> listener);
+    void getLocalizationResults(AnomalyLocalizationInput input, ActionListener<Output> listener);
 }

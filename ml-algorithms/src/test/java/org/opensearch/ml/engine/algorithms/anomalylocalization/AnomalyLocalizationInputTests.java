@@ -34,11 +34,11 @@ import org.opensearch.search.aggregations.AggregationBuilders;
 
 import static org.junit.Assert.assertEquals;
 
-public class InputTests {
+public class AnomalyLocalizationInputTests {
 
     @Test
     public void testXContentFullObject() throws Exception {
-        Input input = new Input("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field"),
+        AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field"),
                 AggregationBuilders.min("min").field("field")), "@timestamp", 0L, 10L, 1L, 2, Optional.of(3L),
                 Optional.of(QueryBuilders.matchAllQuery()));
         XContentBuilder builder = XContentFactory.jsonBuilder();
@@ -48,14 +48,14 @@ public class InputTests {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 false, Collections.emptyList()).getNamedXContents()), null, json);
         parser.nextToken();
-        Input newInput = Input.parse(parser);
+        AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
 
         assertEquals(input, newInput);
     }
 
     @Test
     public void testXContentMissingAnomalyStartFilter() throws Exception {
-        Input input = new Input("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field")),
+        AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field")),
                 "@timestamp", 0L, 10L, 1L, 2, Optional.empty(), Optional.empty());
         XContentBuilder builder = XContentFactory.jsonBuilder();
         builder = input.toXContent(builder, null);
@@ -64,14 +64,14 @@ public class InputTests {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 false, Collections.emptyList()).getNamedXContents()), null, json);
         parser.nextToken();
-        Input newInput = Input.parse(parser);
+        AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
 
         assertEquals(input, newInput);
     }
 
     @Test
     public void testWriteable() throws Exception {
-        Input input = new Input("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field"),
+        AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field"),
                 AggregationBuilders.min("min").field("field")), "@timestamp", 0L, 10L, 1L, 2, Optional.of(3L),
                 Optional.of(QueryBuilders.matchAllQuery()));
 
@@ -79,7 +79,7 @@ public class InputTests {
         input.writeTo(out);
         StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(),
                 new NamedWriteableRegistry(new SearchModule(Settings.EMPTY, false, Collections.emptyList()).getNamedWriteables()));
-        Input newInput = new Input(in);
+        AnomalyLocalizationInput newInput = new AnomalyLocalizationInput(in);
 
         assertEquals(input, newInput);
     }
