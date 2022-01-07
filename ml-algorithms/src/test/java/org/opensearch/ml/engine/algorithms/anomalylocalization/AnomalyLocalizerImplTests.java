@@ -52,7 +52,7 @@ public class AnomalyLocalizerImplTests {
     private Client client;
 
     @Mock
-    private ActionListener<Output> outputListener;
+    private ActionListener<AnomalyLocalizationOutput> outputListener;
 
     private Settings settings;
 
@@ -69,16 +69,16 @@ public class AnomalyLocalizerImplTests {
     private int numOutput = 1;
 
     private Input input;
-    private Output expectedOutput;
+    private AnomalyLocalizationOutput expectedOutput;
     @Mock
     private SingleValue valueOne;
     @Mock
     private SingleValue valueTwo;
     @Mock
     private SingleValue valueThree;
-    private Output.Bucket expectedBucketOne;
-    private Output.Bucket expectedBucketTwo;
-    private Output.Entity entity;
+    private AnomalyLocalizationOutput.Bucket expectedBucketOne;
+    private AnomalyLocalizationOutput.Bucket expectedBucketTwo;
+    private AnomalyLocalizationOutput.Entity entity;
 
     @Before
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -198,17 +198,17 @@ public class AnomalyLocalizerImplTests {
                 ).
                 when(client).search(any(), any());
 
-        expectedOutput = new Output();
-        Output.Result result = new Output.Result();
-        expectedBucketOne = new Output.Bucket();
+        expectedOutput = new AnomalyLocalizationOutput();
+        AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
+        expectedBucketOne = new AnomalyLocalizationOutput.Bucket();
         expectedBucketOne.setStartTime(0);
         expectedBucketOne.setEndTime(1);
         expectedBucketOne.setOverallAggValue(0);
-        expectedBucketTwo = new Output.Bucket();
+        expectedBucketTwo = new AnomalyLocalizationOutput.Bucket();
         expectedBucketTwo.setStartTime(1);
         expectedBucketTwo.setEndTime(2);
         expectedBucketTwo.setOverallAggValue(10);
-        entity = new Output.Entity();
+        entity = new AnomalyLocalizationOutput.Entity();
         entity.setKey(Arrays.asList(bucketOneKeyValue));
         entity.setNewValue(valueTwo.value());
         entity.setBaseValue(valueOne.value());
@@ -223,9 +223,9 @@ public class AnomalyLocalizerImplTests {
     public void testGetLocalizedResultsGivenNoAnomaly() {
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
-        ArgumentCaptor<Output> outputCaptor = ArgumentCaptor.forClass(Output.class);
+        ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
         verify(outputListener).onResponse(outputCaptor.capture());
-        Output actualOutput = outputCaptor.getValue();
+        AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
         assertEquals(expectedOutput, actualOutput);
     }
 
@@ -237,9 +237,9 @@ public class AnomalyLocalizerImplTests {
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
-        ArgumentCaptor<Output> outputCaptor = ArgumentCaptor.forClass(Output.class);
+        ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
         verify(outputListener).onResponse(outputCaptor.capture());
-        Output actualOutput = outputCaptor.getValue();
+        AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
         assertEquals(expectedOutput, actualOutput);
     }
 
@@ -278,9 +278,9 @@ public class AnomalyLocalizerImplTests {
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
-        ArgumentCaptor<Output> outputCaptor = ArgumentCaptor.forClass(Output.class);
+        ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
         verify(outputListener).onResponse(outputCaptor.capture());
-        Output actualOutput = outputCaptor.getValue();
+        AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
         expectedBucketOne.setOverallAggValue(valueOne.value());
         expectedBucketTwo.setOverallAggValue(valueTwo.value());
         entity.setNewValue(valueTwo.value());
@@ -296,9 +296,9 @@ public class AnomalyLocalizerImplTests {
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
-        ArgumentCaptor<Output> outputCaptor = ArgumentCaptor.forClass(Output.class);
+        ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
         verify(outputListener).onResponse(outputCaptor.capture());
-        Output actualOutput = outputCaptor.getValue();
+        AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
         expectedBucketOne.setOverallAggValue(valueOne.value());
         expectedBucketOne.setEntities(null);
         expectedBucketTwo.setOverallAggValue(valueTwo.value());
@@ -313,9 +313,9 @@ public class AnomalyLocalizerImplTests {
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
-        ArgumentCaptor<Output> outputCaptor = ArgumentCaptor.forClass(Output.class);
+        ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
         verify(outputListener).onResponse(outputCaptor.capture());
-        Output actualOutput = outputCaptor.getValue();
+        AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
         assertEquals(expectedOutput, actualOutput);
     }
 }

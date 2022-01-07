@@ -25,6 +25,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.parameter.Output;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -39,7 +40,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
  */
 @Data
 @NoArgsConstructor
-public class Output implements org.opensearch.ml.common.parameter.Output {
+public class AnomalyLocalizationOutput implements Output {
 
     public static final String FIELD_RESULTS = "results";
     public static final String FIELD_NAME = "name";
@@ -47,7 +48,7 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
 
     private Map<String, Result> results = new HashMap<>(); // aggregation name to result.
 
-    public Output(StreamInput in) throws IOException {
+    public AnomalyLocalizationOutput(StreamInput in) throws IOException {
         this.results = in.readMap(StreamInput::readString, Result::new);
     }
 
@@ -197,13 +198,16 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
         return builder;
     }
 
-    public static Output parse(XContentParser parser) throws IOException {
-        Output output = new Output();
+    public static AnomalyLocalizationOutput parse(XContentParser parser) throws IOException {
+        AnomalyLocalizationOutput output = new AnomalyLocalizationOutput();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             switch (parser.currentName()) {
                 case FIELD_RESULTS:
                     parseResultMapEntry(parser, output);
+                    break;
+                default:
+                    parser.skipChildren();
                     break;
             }
         }
@@ -211,12 +215,12 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
         return output;
     }
 
-    private static void parseResultMapEntry(XContentParser parser, Output output) throws IOException {
+    private static void parseResultMapEntry(XContentParser parser, AnomalyLocalizationOutput output) throws IOException {
         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
             String key = null;
-            Output.Result result = new Output.Result();
+            AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
             while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                 switch (parser.currentName()) {
                     case FIELD_NAME:
@@ -226,6 +230,9 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
                     case FIELD_RESULT:
                         parseResult(parser, result);
                         break;
+                    default:
+                        parser.skipChildren();
+                        break;
                 }
             }
             ensureExpectedToken(XContentParser.Token.END_OBJECT, parser.currentToken(), parser);
@@ -234,14 +241,14 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
         ensureExpectedToken(XContentParser.Token.END_ARRAY, parser.currentToken(), parser);
     }
 
-    private static void parseResult(XContentParser parser, Output.Result result) throws IOException {
+    private static void parseResult(XContentParser parser, AnomalyLocalizationOutput.Result result) throws IOException {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             switch (parser.currentName()) {
-                case Output.Result.FIELD_BUCKETS:
+                case AnomalyLocalizationOutput.Result.FIELD_BUCKETS:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        Output.Bucket bucket = new Output.Bucket();
+                        AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();
                         parseBucket(parser, bucket);
                         result.getBuckets().add(bucket);
                     }
@@ -252,39 +259,42 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
         ensureExpectedToken(XContentParser.Token.END_OBJECT, parser.currentToken(), parser);
     }
 
-    private static void parseBucket(XContentParser parser, Output.Bucket bucket) throws IOException {
+    private static void parseBucket(XContentParser parser, AnomalyLocalizationOutput.Bucket bucket) throws IOException {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             switch (parser.currentName()) {
-                case Output.Bucket.FIELD_START_TIME:
+                case AnomalyLocalizationOutput.Bucket.FIELD_START_TIME:
                     parser.nextToken();
                     bucket.setStartTime(parser.longValue());
                     break;
-                case Output.Bucket.FIELD_END_TIME:
+                case AnomalyLocalizationOutput.Bucket.FIELD_END_TIME:
                     parser.nextToken();
                     bucket.setEndTime(parser.longValue());
                     break;
-                case Output.Bucket.FIELD_OVERALL_VALUE:
+                case AnomalyLocalizationOutput.Bucket.FIELD_OVERALL_VALUE:
                     parser.nextToken();
                     bucket.setOverallAggValue(parser.doubleValue());
                     break;
-                case Output.Bucket.FIELD_ENTITIES:
+                case AnomalyLocalizationOutput.Bucket.FIELD_ENTITIES:
                     parseEntities(parser, bucket);
+                    break;
+                default:
+                    parser.skipChildren();
                     break;
             }
         }
         ensureExpectedToken(XContentParser.Token.END_OBJECT, parser.currentToken(), parser);
     }
 
-    private static void parseEntities(XContentParser parser, Output.Bucket bucket) throws IOException {
-        List<Output.Entity> entities = new ArrayList<>();
+    private static void parseEntities(XContentParser parser, AnomalyLocalizationOutput.Bucket bucket) throws IOException {
+        List<AnomalyLocalizationOutput.Entity> entities = new ArrayList<>();
         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-            Output.Entity entity = new Output.Entity();
+            AnomalyLocalizationOutput.Entity entity = new AnomalyLocalizationOutput.Entity();
             while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                 switch (parser.currentName()) {
-                    case Output.Entity.FIELD_KEY:
+                    case AnomalyLocalizationOutput.Entity.FIELD_KEY:
                         List<String> key = new ArrayList<>();
                         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
                         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
@@ -292,17 +302,20 @@ public class Output implements org.opensearch.ml.common.parameter.Output {
                         }
                         entity.setKey(key);
                         break;
-                    case Output.Entity.FIELD_CONTRIBUTION_VALUE:
+                    case AnomalyLocalizationOutput.Entity.FIELD_CONTRIBUTION_VALUE:
                         parser.nextToken();
                         entity.setContributionValue(parser.doubleValue());
                         break;
-                    case Output.Entity.FIELD_BASE_VALUE:
+                    case AnomalyLocalizationOutput.Entity.FIELD_BASE_VALUE:
                         parser.nextToken();
                         entity.setBaseValue(parser.doubleValue());
                         break;
-                    case Output.Entity.FIELD_NEW_VALUE:
+                    case AnomalyLocalizationOutput.Entity.FIELD_NEW_VALUE:
                         parser.nextToken();
                         entity.setNewValue(parser.doubleValue());
+                        break;
+                    default:
+                        parser.skipChildren();
                         break;
                 }
             }

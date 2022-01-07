@@ -26,19 +26,19 @@ import org.opensearch.common.xcontent.XContentType;
 
 import static org.junit.Assert.assertEquals;
 
-public class OutputTests {
+public class AnomalyLocalizationOutputTests {
 
-    private Output output;
+    private AnomalyLocalizationOutput output;
 
     @Before
     public void setup() {
-        Output.Entity entity = new Output.Entity();
+        AnomalyLocalizationOutput.Entity entity = new AnomalyLocalizationOutput.Entity();
         entity.setKey(Arrays.asList("key1"));
-        Output.Bucket bucket = new Output.Bucket();
+        AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();
         bucket.setEntities(Arrays.asList(entity));
-        Output.Result result = new Output.Result();
+        AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
         result.setBuckets(Arrays.asList(bucket));
-        output = new Output();
+        output = new AnomalyLocalizationOutput();
         output.getResults().put("agg", result);
     }
 
@@ -47,7 +47,7 @@ public class OutputTests {
         BytesStreamOutput out = new BytesStreamOutput();
 
         output.writeTo(out);
-        Output newOutput = new Output(out.bytes().streamInput());
+        AnomalyLocalizationOutput newOutput = new AnomalyLocalizationOutput(out.bytes().streamInput());
 
         assertEquals(output, newOutput);
     }
@@ -60,7 +60,7 @@ public class OutputTests {
 
         String json = Strings.toString(builder);
         XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
-        Output newOutput = Output.parse(parser);
+        AnomalyLocalizationOutput newOutput = AnomalyLocalizationOutput.parse(parser);
 
         assertEquals(output, newOutput);
     }
