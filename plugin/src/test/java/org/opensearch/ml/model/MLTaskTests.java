@@ -12,29 +12,74 @@
 
 package org.opensearch.ml.model;
 
-import java.io.IOException;
-import java.time.Instant;
+import static org.junit.Assert.assertEquals;
 
-import org.junit.Assert;
+import java.io.IOException;
+import java.text.ParseException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
+import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.utils.TestHelper;
 
 public class MLTaskTests {
+    private MLTask mlTask;
+
+    @Before
+    public void setUp() throws ParseException {
+        Instant time = Instant.ofEpochSecond(1641600000);
+        mlTask = MLTask
+            .builder()
+            .taskId("dummy taskId")
+            .modelId("test_model_id")
+            .taskType(MLTaskType.PREDICTION)
+            .functionName(FunctionName.KMEANS)
+            .state(MLTaskState.RUNNING)
+            .inputType(MLInputDataType.DATA_FRAME)
+            .workerNode("node1")
+            .progress(0.0f)
+            .outputIndex("test_index")
+            .error("test_error")
+            .createTime(time.minus(1, ChronoUnit.MINUTES))
+            .lastUpdateTime(time)
+            .build();
+    }
+
     @Test
     public void testWriteTo() throws IOException {
         BytesStreamOutput output = new BytesStreamOutput();
-        Instant now = Instant.now();
-        MLTask task1 = MLTask
-            .builder()
-            .taskId("dummy taskId")
-            .taskType(MLTaskType.PREDICTION)
-            .modelId(null)
-            .createTime(now)
-            .state(MLTaskState.RUNNING)
-            .error(null)
-            .build();
-        task1.writeTo(output);
+        mlTask.writeTo(output);
         MLTask task2 = new MLTask(output.bytes().streamInput());
-        Assert.assertEquals(task1, task2);
+        assertEquals(mlTask, task2);
+    }
+
+    @Test
+    public void toXContent() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        mlTask.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String taskContent = TestHelper.xContentBuilderToString(builder);
+        assertEquals(
+            "{\"task_id\":\"dummy taskId\",\"model_id\":\"test_model_id\",\"task_type\":\"PREDICTION\","
+                + "\"function_name\":\"KMEANS\",\"state\":\"RUNNING\",\"input_type\":\"DATA_FRAME\",\"progress\":0.0,"
+                + "\"output_index\":\"test_index\",\"worker_node\":\"node1\",\"create_time\":\"2022-01-07T23:59:00.000Z\","
+                + "\"last_update_time\":\"2022-01-08T00:00:00.000Z\",\"error\":\"test_error\"}",
+            taskContent
+        );
+    }
+
+    @Test
+    public void toXContent_NullValue() throws IOException {
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        MLTask task = MLTask.builder().build();
+        task.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String taskContent = TestHelper.xContentBuilderToString(builder);
+        assertEquals("{}", taskContent);
     }
 }

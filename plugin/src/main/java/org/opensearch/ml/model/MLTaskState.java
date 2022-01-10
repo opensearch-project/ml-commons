@@ -33,5 +33,6 @@ public enum MLTaskState {
     CREATED,
     RUNNING,
     COMPLETED,
-    FAILED
+    FAILED,
+    CANCELLED
 }
