@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine;
+package org.opensearch.ml.common.parameter;
 
 import lombok.Data;
 

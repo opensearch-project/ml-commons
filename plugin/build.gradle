@@ -205,7 +205,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.utils.RestActionUtils',
         'org.opensearch.ml.task.MLTaskCache',
         'org.opensearch.ml.task.MLTaskManager',
-        'org.opensearch.ml.task.MLTrainAndPredictTaskRunner'
+        'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
+        'org.opensearch.ml.rest.RestMLGetModelAction'
 ]
 
 jacocoTestCoverageVerification {
