@@ -43,6 +43,6 @@ public class MLTrainingTaskExecutionTransportAction extends HandledTransportActi
 
     @Override
     protected void doExecute(Task task, MLTrainingTaskRequest request, ActionListener<MLTrainingTaskResponse> listener) {
-        mlTrainingTaskRunner.startTrainingTask(request, listener);
+        mlTrainingTaskRunner.createMLTaskAndTrain(request, listener);
     }
 }

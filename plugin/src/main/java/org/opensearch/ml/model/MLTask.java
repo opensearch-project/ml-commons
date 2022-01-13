@@ -47,7 +47,8 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String ERROR_FIELD = "error";
     public static final String USER_FIELD = "user";
 
-    private final String taskId;
+    @Setter
+    private String taskId;
     private final String modelId;
     private final MLTaskType taskType;
     private final FunctionName functionName;
@@ -166,10 +167,10 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(WORKER_NODE_FIELD, workerNode);
         }
         if (createTime != null) {
-            builder.field(CREATE_TIME_FIELD, createTime);
+            builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
         }
         if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime);
+            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
         if (error != null) {
             builder.field(ERROR_FIELD, error);

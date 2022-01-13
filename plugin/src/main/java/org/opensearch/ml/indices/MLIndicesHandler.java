@@ -84,6 +84,10 @@ public class MLIndicesHandler {
         }
     }
 
+    public void initModelIndexIfAbsent(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(ML_MODEL_INDEX, ML_MODEL_INDEX_MAPPING, listener);
+    }
+
     public void initMLTaskIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(ML_TASK_INDEX, ML_TASK_INDEX_MAPPING, listener);
     }
@@ -99,7 +103,10 @@ public class MLIndicesHandler {
                 } else {
                     listener.onResponse(false);
                 }
-            }, e -> listener.onFailure(e)));
+            }, e -> {
+                log.error("Failed to create index " + indexName, e);
+                listener.onFailure(e);
+            }));
         } else {
             log.info("index:{} is already created", indexName);
             listener.onResponse(true);

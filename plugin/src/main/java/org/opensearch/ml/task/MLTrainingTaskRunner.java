@@ -17,7 +17,6 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
 
 import java.time.Instant;
-import java.util.UUID;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -86,7 +85,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute training task locally
                 log.info("execute ML training request {} locally on node {}", request.toString(), node.getId());
-                startTrainingTask(request, listener);
+                createMLTaskAndTrain(request, listener);
             } else {
                 // Execute batch task remotely
                 log.info("execute ML training request {} remotely on node {}", request.toString(), node.getId());
@@ -101,20 +100,35 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         }, e -> listener.onFailure(e)));
     }
 
-    /**
-     * Start training task
-     * @param request MLTrainingTaskRequest
-     * @param listener Action listener
-     */
-    public void startTrainingTask(MLTrainingTaskRequest request, ActionListener<MLTrainingTaskResponse> listener) {
+    public void createMLTaskAndTrain(MLTrainingTaskRequest request, ActionListener<MLTrainingTaskResponse> listener) {
+        MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
+        Instant now = Instant.now();
         MLTask mlTask = MLTask
             .builder()
-            .taskId(UUID.randomUUID().toString())
             .taskType(MLTaskType.TRAINING)
-            .createTime(Instant.now())
+            .inputType(inputDataType)
+            .functionName(request.getMlInput().getFunctionName())
             .state(MLTaskState.CREATED)
+            .workerNode(clusterService.localNode().getId())
+            .createTime(now)
+            .lastUpdateTime(now)
             .build();
-        MLInput mlInput = request.getMlInput();
+
+        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(r -> {
+            mlTask.setTaskId(r.getId());
+            startTrainingTask(mlTask, request.getMlInput(), listener);
+        }, e -> { listener.onFailure(e); }));
+    }
+
+    /**
+     * Start training task
+     * @param mlTask ML Task
+     * @param listener Action listener
+     */
+    public void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
+        // track ML task count and add ML task into cache
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
+        mlTaskManager.add(mlTask);
         if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(
@@ -141,29 +155,29 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
 
     private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
         try {
-            // track ML task count and add ML task into cache
-            mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
-            mlTaskManager.add(mlTask);
             // run training
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
             Model model = MLEngine.train(mlInput);
-            mlIndicesHandler.initModelIndexIfAbsent();
-
-            // TODO: put the user into model for backend role based access control.
-            MLModel mlModel = new MLModel(mlInput.getAlgorithm(), model);
-
-            IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX)
-                .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
-                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            client.index(indexRequest, ActionListener.wrap(r -> {
-                log.info("mode data indexing done, result:{}", r.getResult());
-                handleMLTaskComplete(mlTask);
-                MLTrainingOutput output = MLTrainingOutput.builder().modelId(r.getId()).status(MLTaskState.CREATED.name()).build();
-                listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
-            }, e -> {
-                handleMLTaskFailure(mlTask, e);
-                listener.onFailure(e);
-            }));
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
+                if (!indexCreated) {
+                    listener.onFailure(new RuntimeException("No response to create ML task index"));
+                    return;
+                }
+                // TODO: put the user into model for backend role based access control.
+                MLModel mlModel = new MLModel(mlInput.getAlgorithm(), model);
+                IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX)
+                    .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
+                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                client.index(indexRequest, ActionListener.wrap(r -> {
+                    log.info("mode data indexing done, result:{}", r.getResult());
+                    handleMLTaskComplete(mlTask);
+                    MLTrainingOutput output = MLTrainingOutput.builder().modelId(r.getId()).status(MLTaskState.CREATED.name()).build();
+                    listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
+                }, e -> {
+                    handleMLTaskFailure(mlTask, e);
+                    listener.onFailure(e);
+                }));
+            }, e -> { listener.onFailure(e); }));
         } catch (Exception e) {
             // todo need to specify what exception
             log.error("Failed to train " + mlInput.getAlgorithm(), e);

@@ -68,8 +68,8 @@ public class MLTaskTests {
         assertEquals(
             "{\"task_id\":\"dummy taskId\",\"model_id\":\"test_model_id\",\"task_type\":\"PREDICTION\","
                 + "\"function_name\":\"KMEANS\",\"state\":\"RUNNING\",\"input_type\":\"DATA_FRAME\",\"progress\":0.0,"
-                + "\"output_index\":\"test_index\",\"worker_node\":\"node1\",\"create_time\":\"2022-01-07T23:59:00.000Z\","
-                + "\"last_update_time\":\"2022-01-08T00:00:00.000Z\",\"error\":\"test_error\"}",
+                + "\"output_index\":\"test_index\",\"worker_node\":\"node1\",\"create_time\":1641599940000,"
+                + "\"last_update_time\":1641600000000,\"error\":\"test_error\"}",
             taskContent
         );
     }
