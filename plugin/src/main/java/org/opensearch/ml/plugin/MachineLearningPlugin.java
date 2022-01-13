@@ -145,8 +145,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             .build();
         this.mlStats = new MLStats(stats);
 
-        mlTaskManager = new MLTaskManager();
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+        mlTaskManager = new MLTaskManager(client, mlIndicesHandler);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client);
