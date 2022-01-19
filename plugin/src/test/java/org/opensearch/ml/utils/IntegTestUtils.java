@@ -122,7 +122,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     // Train a model.
     public static String trainModel(MLInputDataset inputDataset) throws ExecutionException, InterruptedException {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, true); // TODO: support train test in sync way
         ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
         MLTrainingTaskResponse trainingResponse = trainingFuture.actionGet();
         assertNotNull(trainingResponse);

@@ -15,13 +15,17 @@ package org.opensearch.ml.task;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLTask;
@@ -41,7 +45,7 @@ public class MLTaskManagerTests {
     public void setup() {
         this.client = mock(Client.class);
         this.mlIndicesHandler = mock(MLIndicesHandler.class);
-        this.mlTaskManager = new MLTaskManager(client, mlIndicesHandler);
+        this.mlTaskManager = spy(new MLTaskManager(client, mlIndicesHandler));
         this.mlTask = MLTask
             .builder()
             .taskId("task id")
@@ -73,9 +77,9 @@ public class MLTaskManagerTests {
         expectedEx.expect(RuntimeException.class);
         expectedEx.expectMessage("Task not found");
         mlTaskManager.add(mlTask);
-        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
+        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, true);
         Assert.assertSame(mlTaskManager.get(mlTask.getTaskId()).getState(), MLTaskState.RUNNING);
-        mlTaskManager.updateTaskState("not exist", MLTaskState.RUNNING);
+        mlTaskManager.updateTaskState("not exist", MLTaskState.RUNNING, true);
     }
 
     @Test
@@ -83,9 +87,38 @@ public class MLTaskManagerTests {
         expectedEx.expect(RuntimeException.class);
         expectedEx.expectMessage("Task not found");
         mlTaskManager.add(mlTask);
-        mlTaskManager.updateTaskError(mlTask.getTaskId(), "error message");
+        mlTaskManager.updateTaskError(mlTask.getTaskId(), "error message", true);
         Assert.assertEquals("error message", mlTaskManager.get(mlTask.getTaskId()).getError());
-        mlTaskManager.updateTaskError("not exist", "error message");
+        mlTaskManager.updateTaskError("not exist", "error message", true);
+    }
+
+    @Test
+    public void testUpdateTaskStateAndError() {
+        mlTaskManager.add(mlTask);
+        String error = "error message";
+        mlTaskManager.updateTaskStateAndError(mlTask.getTaskId(), MLTaskState.FAILED, error, true);
+        ArgumentCaptor<Map> updatedFields = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Long> timeoutValue = ArgumentCaptor.forClass(Long.class);
+        verify(mlTaskManager).updateMLTask(eq(mlTask.getTaskId()), updatedFields.capture(), timeoutValue.capture());
+        Map map = updatedFields.getValue();
+        Assert.assertEquals(2, map.size());
+        Assert.assertEquals(MLTaskState.FAILED.name(), map.get("state"));
+        Assert.assertEquals(error, map.get("error"));
+        Long value = timeoutValue.getValue();
+        Assert.assertEquals(0, value.longValue());
+    }
+
+    @Test
+    public void testUpdateMLTaskWithNullOrEmptyMap() {
+        mlTaskManager.add(mlTask);
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0);
+        verify(client, never()).index(any());
+        verify(listener, times(1)).onFailure(any());
+
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), new HashMap<>(), listener, 0);
+        verify(client, never()).index(any());
+        verify(listener, times(2)).onFailure(any());
     }
 
     @Test
