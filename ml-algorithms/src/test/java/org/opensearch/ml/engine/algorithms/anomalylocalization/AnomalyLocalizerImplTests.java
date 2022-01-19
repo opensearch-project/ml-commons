@@ -68,7 +68,7 @@ public class AnomalyLocalizerImplTests {
     private long minTimeInterval = 1;
     private int numOutput = 1;
 
-    private Input input;
+    private AnomalyLocalizationInput input;
     private Output expectedOutput;
     @Mock
     private SingleValue valueOne;
@@ -87,7 +87,7 @@ public class AnomalyLocalizerImplTests {
         settings = Settings.builder().build();
         anomalyLocalizer = new AnomalyLocalizerImpl(client, settings);
 
-        input = new Input(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
                 minTimeInterval, numOutput, Optional.empty(), Optional.empty());
 
         when(valueOne.value()).thenReturn(0.);
@@ -232,7 +232,7 @@ public class AnomalyLocalizerImplTests {
     @Test
     public void testGetLocalizedResultsGivenAnomaly() {
         when(valueThree.value()).thenReturn(Double.NaN);
-        input = new Input(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
                 minTimeInterval, numOutput, Optional.of(1L), Optional.of(mock(QueryBuilder.class)));
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
@@ -245,7 +245,7 @@ public class AnomalyLocalizerImplTests {
 
     @Test(expected = RuntimeException.class)
     public void testGetLocalizedResultsForInvalidTimeRange() {
-        input = new Input(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, startTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, startTime,
                 minTimeInterval, numOutput, Optional.empty(), Optional.empty());
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
@@ -308,7 +308,7 @@ public class AnomalyLocalizerImplTests {
 
     @Test
     public void testGetLocalizedResultsFilterEntity() {
-        input = new Input(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
                 minTimeInterval, 2, Optional.empty(), Optional.empty());
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
