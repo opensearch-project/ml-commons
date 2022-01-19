@@ -12,6 +12,8 @@
 
 package org.opensearch.ml.task;
 
+import static org.mockito.Mockito.*;
+
 import java.time.Instant;
 
 import org.junit.Assert;
@@ -19,6 +21,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.action.ActionListener;
+import org.opensearch.client.Client;
+import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.model.MLTaskType;
@@ -26,13 +31,17 @@ import org.opensearch.ml.model.MLTaskType;
 public class MLTaskManagerTests {
     MLTaskManager mlTaskManager;
     MLTask mlTask;
+    Client client;
+    MLIndicesHandler mlIndicesHandler;
 
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
     @Before
     public void setup() {
-        this.mlTaskManager = new MLTaskManager();
+        this.client = mock(Client.class);
+        this.mlIndicesHandler = mock(MLIndicesHandler.class);
+        this.mlTaskManager = new MLTaskManager(client, mlIndicesHandler);
         this.mlTask = MLTask
             .builder()
             .taskId("task id")
@@ -117,4 +126,30 @@ public class MLTaskManagerTests {
         Assert.assertFalse(mlTaskManager.contains(task4.getTaskId()));
     }
 
+    @Test
+    public void testCreateMlTask_InitIndexReturnFalse() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initMLTaskIndex(any(ActionListener.class));
+
+        ActionListener listener = mock(ActionListener.class);
+        mlTaskManager.createMLTask(mlTask, listener);
+        verify(listener).onFailure(any());
+    }
+
+    @Test
+    public void testCreateMlTask_IndexException() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLTaskIndex(any(ActionListener.class));
+
+        doThrow(new RuntimeException("test")).when(client).index(any(), any());
+        ActionListener listener = mock(ActionListener.class);
+        mlTaskManager.createMLTask(mlTask, listener);
+        verify(listener).onFailure(any());
+    }
 }
