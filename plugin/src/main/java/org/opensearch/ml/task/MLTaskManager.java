@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -37,14 +39,12 @@ import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.rest.RestStatus;
 
-import com.google.common.collect.ImmutableMap;
-
 /**
  * MLTaskManager is responsible for managing MLTask.
  */
 @Log4j2
 public class MLTaskManager {
-    private final Map<String, MLTask> taskCaches;
+    private final Map<String, MLTaskCache> taskCaches;
     // todo make this value configurable in the future
     public final static int MAX_ML_TASK_PER_NODE = 10;
     private final Client client;
@@ -75,7 +75,7 @@ public class MLTaskManager {
         if (contains(taskId)) {
             throw new IllegalArgumentException("Duplicate taskId");
         }
-        taskCaches.put(taskId, mlTask);
+        taskCaches.put(taskId, new MLTaskCache(mlTask));
     }
 
     /**
@@ -86,7 +86,7 @@ public class MLTaskManager {
     public synchronized void addIfAbsent(MLTask mlTask) {
         String taskId = mlTask.getTaskId();
         if (!contains(taskId)) {
-            taskCaches.put(taskId, mlTask);
+            taskCaches.put(taskId, new MLTaskCache(mlTask));
         }
     }
 
@@ -94,25 +94,39 @@ public class MLTaskManager {
      * Update ML task state
      * @param taskId task id
      * @param state MLTaskState
+     * @param isAsyncTask is async task or not
      */
-    public synchronized void updateTaskState(String taskId, MLTaskState state) {
-        if (!contains(taskId)) {
-            throw new IllegalArgumentException("Task not found");
-        }
-        taskCaches.get(taskId).setState(state);
-        updateMLTask(taskId, ImmutableMap.of(MLTask.STATE_FIELD, state));
+    public synchronized void updateTaskState(String taskId, MLTaskState state, boolean isAsyncTask) {
+        updateTaskStateAndError(taskId, state, null, isAsyncTask);
     }
 
     /**
      * Update task error
      * @param taskId task id
      * @param error error message
+     * @param isAsyncTask is async task
      */
-    public synchronized void updateTaskError(String taskId, String error) {
+    public synchronized void updateTaskError(String taskId, String error, boolean isAsyncTask) {
+        updateTaskStateAndError(taskId, null, error, isAsyncTask);
+    }
+
+    public synchronized void updateTaskStateAndError(String taskId, MLTaskState state, String error, boolean isAsyncTask) {
         if (!contains(taskId)) {
             throw new IllegalArgumentException("Task not found");
         }
-        taskCaches.get(taskId).setError(error);
+        MLTask task = get(taskId);
+        task.setState(state);
+        task.setError(error);
+        if (isAsyncTask) {
+            Map<String, Object> updatedFields = new HashMap<>();
+            if (state != null) {
+                updatedFields.put(MLTask.STATE_FIELD, state.name());
+            }
+            if (error != null) {
+                updatedFields.put(MLTask.ERROR_FIELD, error);
+            }
+            updateMLTask(taskId, updatedFields, 0);
+        }
     }
 
     /**
@@ -144,7 +158,7 @@ public class MLTaskManager {
      */
     public MLTask get(String taskId) {
         if (contains(taskId)) {
-            return taskCaches.get(taskId);
+            return taskCaches.get(taskId).getMlTask();
         }
         return null;
     }
@@ -156,8 +170,9 @@ public class MLTaskManager {
      */
     public int getRunningTaskCount() {
         int res = 0;
-        for (Map.Entry<String, MLTask> entry : taskCaches.entrySet()) {
-            if (entry.getValue().getState() != null && entry.getValue().getState() == MLTaskState.RUNNING) {
+        for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
+            MLTask mlTask = entry.getValue().getMlTask();
+            if (mlTask.getState() != null && mlTask.getState() == MLTaskState.RUNNING) {
                 res++;
             }
         }
@@ -201,14 +216,14 @@ public class MLTaskManager {
      * @param taskId task id
      * @param updatedFields updated field and values
      */
-    public void updateMLTask(String taskId, Map<String, Object> updatedFields) {
+    public void updateMLTask(String taskId, Map<String, Object> updatedFields, long timeoutInMillis) {
         updateMLTask(taskId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
                 log.debug("Updated ML task successfully: {}, task id: {}", response.status(), taskId);
             } else {
                 log.error("Failed to update ML task {}, status: {}", taskId, response.status());
             }
-        }, e -> { log.error("Failed to update ML task: " + taskId, e); }));
+        }, e -> { log.error("Failed to update ML task: " + taskId, e); }), timeoutInMillis);
     }
 
     /**
@@ -216,14 +231,39 @@ public class MLTaskManager {
      * @param taskId task id
      * @param updatedFields updated field and values
      * @param listener action listener
+     * @param timeoutInMillis time out waiting for updating task semaphore, zero or negative means don't wait at all
      */
-    public void updateMLTask(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
+    public void updateMLTask(
+        String taskId,
+        Map<String, Object> updatedFields,
+        ActionListener<UpdateResponse> listener,
+        long timeoutInMillis
+    ) {
+        if (!taskCaches.containsKey(taskId)) {
+            listener.onFailure(new RuntimeException("Can't find task"));
+            return;
+        }
+        Semaphore semaphore = taskCaches.get(taskId).getUpdateTaskIndexSemaphore();
+        try {
+            if (semaphore != null && !semaphore.tryAcquire(timeoutInMillis, TimeUnit.MILLISECONDS)) {
+                listener.onFailure(new RuntimeException("Other updating request not finished yet"));
+                return;
+            }
+        } catch (InterruptedException e) {
+            log.error("Failed to acquire semaphore for task " + taskId, e);
+            listener.onFailure(e);
+        }
+        if (updatedFields == null || updatedFields.size() == 0) {
+            listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
+            return;
+        }
         UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
         Map<String, Object> updatedContent = new HashMap<>();
         updatedContent.putAll(updatedFields);
         updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
         updateRequest.doc(updatedContent);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        client.update(updateRequest, listener);
+        ActionListener actionListener = semaphore == null ? listener : ActionListener.runAfter(listener, () -> semaphore.release());
+        client.update(updateRequest, actionListener);
     }
 }

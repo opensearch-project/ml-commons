@@ -86,7 +86,7 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
     // Train a model without dataset.
     public void testTrainingWithoutDataset() {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, true);
         expectThrows(ActionRequestValidationException.class, () -> {
             ActionFuture<MLTrainingTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
             trainingFuture.actionGet();
@@ -99,7 +99,7 @@ public class TrainingITTests extends OpenSearchIntegTestCase {
         searchSourceBuilder.query(QueryBuilders.matchQuery("noSuchName", ""));
         MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput);
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, false);
 
         expectThrows(IllegalArgumentException.class, () -> client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest).actionGet());
     }

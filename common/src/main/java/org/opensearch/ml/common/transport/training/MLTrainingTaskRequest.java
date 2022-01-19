@@ -42,15 +42,18 @@ public class MLTrainingTaskRequest extends ActionRequest {
      * the name of algorithm
      */
     MLInput mlInput;
+    boolean async;
 
     @Builder
-    public MLTrainingTaskRequest(MLInput mlInput) {
+    public MLTrainingTaskRequest(MLInput mlInput, boolean async) {
         this.mlInput = mlInput;
+        this.async = async;
     }
 
     public MLTrainingTaskRequest(StreamInput in) throws IOException {
         super(in);
         this.mlInput = new MLInput(in);
+        this.async = in.readBoolean();
     }
 
     @Override
@@ -69,6 +72,7 @@ public class MLTrainingTaskRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         this.mlInput.writeTo(out);
+        out.writeBoolean(async);
     }
 
     public static MLTrainingTaskRequest fromActionRequest(ActionRequest actionRequest) {

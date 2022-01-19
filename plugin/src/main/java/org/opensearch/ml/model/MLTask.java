@@ -46,10 +46,12 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
     public static final String ERROR_FIELD = "error";
     public static final String USER_FIELD = "user";
+    public static final String IS_ASYNC_TASK_FIELD = "is_async";
 
     @Setter
     private String taskId;
-    private final String modelId;
+    @Setter
+    private String modelId;
     private final MLTaskType taskType;
     private final FunctionName functionName;
     @Setter
@@ -63,6 +65,7 @@ public class MLTask implements ToXContentObject, Writeable {
     @Setter
     private String error;
     private User user; // TODO: support document level access control later
+    private boolean async;
 
     @Builder
     public MLTask(
@@ -78,7 +81,8 @@ public class MLTask implements ToXContentObject, Writeable {
         Instant createTime,
         Instant lastUpdateTime,
         String error,
-        User user
+        User user,
+        boolean async
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -93,6 +97,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.lastUpdateTime = lastUpdateTime;
         this.error = error;
         this.user = user;
+        this.async = async;
     }
 
     public MLTask(StreamInput input) throws IOException {
@@ -113,6 +118,7 @@ public class MLTask implements ToXContentObject, Writeable {
         } else {
             this.user = null;
         }
+        this.async = input.readBoolean();
     }
 
     @Override
@@ -134,6 +140,7 @@ public class MLTask implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeBoolean(async);
     }
 
     @Override
@@ -178,6 +185,7 @@ public class MLTask implements ToXContentObject, Writeable {
         if (user != null) {
             builder.field(USER_FIELD, user);
         }
+        builder.field(IS_ASYNC_TASK_FIELD, async);
         return builder.endObject();
     }
 }

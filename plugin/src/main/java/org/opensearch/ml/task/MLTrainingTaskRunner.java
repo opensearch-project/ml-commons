@@ -17,6 +17,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -112,17 +113,39 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             .workerNode(clusterService.localNode().getId())
             .createTime(now)
             .lastUpdateTime(now)
+            .async(request.isAsync())
             .build();
 
-        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(r -> {
-            mlTask.setTaskId(r.getId());
+        if (request.isAsync()) {
+            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(r -> {
+                String taskId = r.getId();
+                mlTask.setTaskId(taskId);
+                if (mlTask.isAsync()) {
+                    listener.onResponse(new MLTrainingTaskResponse(new MLTrainingOutput(null, taskId, mlTask.getState().name())));
+                    ActionListener<MLTrainingTaskResponse> internalListener = ActionListener.wrap(res -> {
+                        String modelId = ((MLTrainingOutput) res.getOutput()).getModelId();
+                        log.info("ML model trained successfully, task id: {}, model id: {}", taskId, modelId);
+                        mlTask.setModelId(modelId);
+                        handleMLTaskComplete(mlTask);
+                    }, ex -> {
+                        log.error("Failed to train ML model for task " + taskId);
+                        handleMLTaskFailure(mlTask, ex);
+                    });
+                    startTrainingTask(mlTask, request.getMlInput(), internalListener);
+                } else {
+                    startTrainingTask(mlTask, request.getMlInput(), listener);
+                }
+            }, e -> { listener.onFailure(e); }));
+        } else {
+            mlTask.setTaskId(UUID.randomUUID().toString());
             startTrainingTask(mlTask, request.getMlInput(), listener);
-        }, e -> { listener.onFailure(e); }));
+        }
     }
 
     /**
      * Start training task
-     * @param mlTask ML Task
+     * @param mlTask ML task
+     * @param mlInput ML input
      * @param listener Action listener
      */
     public void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
@@ -138,8 +161,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     e -> {
                         log.error("Failed to generate DataFrame from search query", e);
                         mlTaskManager.addIfAbsent(mlTask);
-                        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.FAILED);
-                        mlTaskManager.updateTaskError(mlTask.getTaskId(), e.getMessage());
+                        handleMLTaskFailure(mlTask, e);
                         listener.onFailure(e);
                     }
                 );
@@ -156,7 +178,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
         try {
             // run training
-            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING);
+            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
             Model model = MLEngine.train(mlInput);
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {
@@ -171,7 +193,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 client.index(indexRequest, ActionListener.wrap(r -> {
                     log.info("mode data indexing done, result:{}", r.getResult());
                     handleMLTaskComplete(mlTask);
-                    MLTrainingOutput output = MLTrainingOutput.builder().modelId(r.getId()).status(MLTaskState.CREATED.name()).build();
+                    MLTrainingOutput output = new MLTrainingOutput(r.getId(), mlTask.getTaskId(), MLTaskState.COMPLETED.name());
                     listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
                 }, e -> {
                     handleMLTaskFailure(mlTask, e);

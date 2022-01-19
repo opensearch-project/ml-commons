@@ -15,6 +15,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
+import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 
 import java.io.IOException;
 import java.util.List;
@@ -66,11 +67,12 @@ public class RestMLTrainingAction extends BaseRestHandler {
     @VisibleForTesting
     MLTrainingTaskRequest getRequest(RestRequest request) throws IOException {
         String algorithm = getAlgorithm(request);
+        boolean async = isAsync(request);
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm);
 
-        return new MLTrainingTaskRequest(mlInput);
+        return new MLTrainingTaskRequest(mlInput, async);
     }
 }
