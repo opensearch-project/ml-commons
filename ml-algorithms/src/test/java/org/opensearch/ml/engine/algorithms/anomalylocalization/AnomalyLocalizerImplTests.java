@@ -61,7 +61,6 @@ public class AnomalyLocalizerImplTests {
     private String indexName = "indexName";
     private String attributeFieldNameOne = "attributeOne";
     private AggregationBuilder agg = AggregationBuilders.count("count").field("field");
-    ;
     private String timeFieldName = "timeFieldName";
     private long startTime = 0;
     private long endTime = 2;
@@ -87,7 +86,8 @@ public class AnomalyLocalizerImplTests {
         settings = Settings.builder().build();
         anomalyLocalizer = new AnomalyLocalizerImpl(client, settings);
 
-        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, endTime,
                 minTimeInterval, numOutput, Optional.empty(), Optional.empty());
 
         when(valueOne.value()).thenReturn(0.);
@@ -232,7 +232,8 @@ public class AnomalyLocalizerImplTests {
     @Test
     public void testGetLocalizedResultsGivenAnomaly() {
         when(valueThree.value()).thenReturn(Double.NaN);
-        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, endTime,
                 minTimeInterval, numOutput, Optional.of(1L), Optional.of(mock(QueryBuilder.class)));
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
@@ -245,7 +246,8 @@ public class AnomalyLocalizerImplTests {
 
     @Test(expected = RuntimeException.class)
     public void testGetLocalizedResultsForInvalidTimeRange() {
-        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, startTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, startTime,
                 minTimeInterval, numOutput, Optional.empty(), Optional.empty());
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
@@ -308,7 +310,8 @@ public class AnomalyLocalizerImplTests {
 
     @Test
     public void testGetLocalizedResultsFilterEntity() {
-        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName, startTime, endTime,
+        input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, endTime,
                 minTimeInterval, 2, Optional.empty(), Optional.empty());
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
@@ -317,6 +320,33 @@ public class AnomalyLocalizerImplTests {
         verify(outputListener).onResponse(outputCaptor.capture());
         AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
         assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test
+    public void testExecuteSucceed() {
+        AnomalyLocalizationOutput actualOutput = (AnomalyLocalizationOutput) anomalyLocalizer.execute(input);
+
+        assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testExecuteFail() {
+        doAnswer(new Answer() {
+                     public Object answer(InvocationOnMock invocation) {
+                         Object[] args = invocation.getArguments();
+                         ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
+                         listener.onFailure(new RuntimeException());
+                         return null;
+                     }
+                 }
+        ).when(client).multiSearch(any(), any());
+        anomalyLocalizer.execute(input);
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testExecuteInterrupted() {
+        Thread.currentThread().interrupt();
+        anomalyLocalizer.execute(input);
     }
 }
 
