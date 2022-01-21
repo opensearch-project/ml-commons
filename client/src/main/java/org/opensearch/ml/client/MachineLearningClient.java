@@ -46,6 +46,24 @@ public interface MachineLearningClient {
     void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener);
 
     /**
+     * Train model then predict with the same data set.
+     * @param mlInput ML input
+     * @return ActionFuture of MLOutput
+     */
+    default ActionFuture<MLOutput> trainAndPredict(MLInput mlInput) {
+        PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
+        trainAndPredict(mlInput, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Train model then predict with the same data set.
+     * @param mlInput ML input
+     * @param listener a listener to be notified of the result
+     */
+    void trainAndPredict(MLInput mlInput, ActionListener<MLOutput> listener);
+
+    /**
      *  Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
      * @param mlInput ML input
      * @return the result future

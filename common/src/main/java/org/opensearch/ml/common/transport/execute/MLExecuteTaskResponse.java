@@ -63,7 +63,7 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
                 return new MLExecuteTaskResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionResponse into MLExecuteTaskResponse", e);
         }
     }
 

@@ -82,7 +82,7 @@ public class MLExecuteTaskRequest extends ActionRequest {
                 return new MLExecuteTaskRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionRequest into MLExecuteTaskRequest", e);
         }
 
     }
