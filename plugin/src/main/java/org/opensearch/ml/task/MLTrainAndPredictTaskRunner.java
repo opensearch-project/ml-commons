@@ -156,6 +156,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
             handleMLTaskComplete(mlTask);
             MLPredictionTaskResponse response = MLPredictionTaskResponse.builder().output(output).build();
+            log.info("Train and predict task done for algorithm: {}, task id: {}", mlTask.getFunctionName(), mlTask.getTaskId());
             listener.onResponse(response);
         } catch (Exception e) {
             // todo need to specify what exception
