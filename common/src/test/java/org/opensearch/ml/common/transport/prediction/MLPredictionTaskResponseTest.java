@@ -23,6 +23,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -45,12 +46,12 @@ public class MLPredictionTaskResponseTest {
                     put("key1", 2.0D);
                 }})))
                 .build();
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLTaskResponse response = MLTaskResponse.builder()
                 .output(output)
                 .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         response.writeTo(bytesStreamOutput);
-        response = new MLPredictionTaskResponse(bytesStreamOutput.bytes().streamInput());
+        response = new MLTaskResponse(bytesStreamOutput.bytes().streamInput());
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput)response.getOutput();
         assertEquals("taskId", mlPredictionOutput.getTaskId());
         assertEquals("Success", mlPredictionOutput.getStatus());
@@ -66,10 +67,10 @@ public class MLPredictionTaskResponseTest {
                     put("key1", 2.0D);
                 }})))
                 .build();
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLTaskResponse response = MLTaskResponse.builder()
                 .output(output)
                 .build();
-        assertSame(response, MLPredictionTaskResponse.fromActionResponse(response));
+        assertSame(response, MLTaskResponse.fromActionResponse(response));
     }
 
     @Test
@@ -81,7 +82,7 @@ public class MLPredictionTaskResponseTest {
                     put("key1", 2.0D);
                 }})))
                 .build();
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLTaskResponse response = MLTaskResponse.builder()
                 .output(output)
                 .build();
         ActionResponse actionResponse = new ActionResponse() {
@@ -90,7 +91,7 @@ public class MLPredictionTaskResponseTest {
                 response.writeTo(out);
             }
         };
-        MLPredictionTaskResponse result = MLPredictionTaskResponse.fromActionResponse(actionResponse);
+        MLTaskResponse result = MLTaskResponse.fromActionResponse(actionResponse);
         assertNotSame(response, result);
 
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) response.getOutput();
@@ -110,7 +111,7 @@ public class MLPredictionTaskResponseTest {
         };
 
 
-        MLPredictionTaskResponse.fromActionResponse(actionResponse);
+        MLTaskResponse.fromActionResponse(actionResponse);
     }
 
     @Test
@@ -119,10 +120,10 @@ public class MLPredictionTaskResponseTest {
                 .taskId("b5009b99-268f-476d-a676-379a30f82457")
                 .status("Success")
                 .predictionResult(DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-                    put("Cluster ID", 0);
+                    put("ClusterID", 0);
                 }})))
                 .build();
-        MLPredictionTaskResponse response = MLPredictionTaskResponse.builder()
+        MLTaskResponse response = MLTaskResponse.builder()
             .output(output)
             .build();
 
@@ -133,7 +134,7 @@ public class MLPredictionTaskResponseTest {
         assertEquals("{\"task_id\":\"b5009b99-268f-476d-a676-379a30f82457\"," +
              "\"status\":\"Success\"," +
              "\"prediction_result\":{" +
-             "\"column_metas\":[{\"name\":\"Cluster ID\",\"column_type\":\"INTEGER\"}]," +
+             "\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}]," +
              "\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}]}}", jsonStr);
     }
 }

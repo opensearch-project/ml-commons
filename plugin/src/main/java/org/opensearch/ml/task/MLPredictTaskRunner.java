@@ -34,15 +34,15 @@ import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -58,7 +58,7 @@ import org.opensearch.transport.TransportService;
  * MLPredictTaskRunner is responsible for running predict tasks.
  */
 @Log4j2
-public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, MLPredictionTaskResponse> {
+public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, MLTaskResponse> {
     private final ThreadPool threadPool;
     private final ClusterService clusterService;
     private final Client client;
@@ -81,7 +81,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     @Override
-    public void run(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLPredictionTaskResponse> listener) {
+    public void run(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
         mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute prediction task locally
@@ -93,9 +93,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 transportService
                     .sendRequest(
                         node,
-                        MLPredictionTaskExecutionAction.NAME,
+                        MLPredictionTaskAction.NAME,
                         request,
-                        new ActionListenerResponseHandler<>(listener, MLPredictionTaskResponse::new)
+                        new ActionListenerResponseHandler<>(listener, MLTaskResponse::new)
                     );
             }
         }, e -> listener.onFailure(e)));
@@ -106,7 +106,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
      * @param request MLPredictionTaskRequest
      * @param listener Action listener
      */
-    public void startPredictionTask(MLPredictionTaskRequest request, ActionListener<MLPredictionTaskResponse> listener) {
+    public void startPredictionTask(MLPredictionTaskRequest request, ActionListener<MLTaskResponse> listener) {
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();
         MLTask mlTask = MLTask
@@ -146,7 +146,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLTask mlTask,
         DataFrame inputDataFrame,
         MLPredictionTaskRequest request,
-        ActionListener<MLPredictionTaskResponse> listener
+        ActionListener<MLTaskResponse> listener
     ) {
         // track ML task count and add ML task into cache
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
@@ -199,7 +199,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     return;
                 }
 
-                MLPredictionTaskResponse response = MLPredictionTaskResponse.builder().output(output).build();
+                MLTaskResponse response = MLTaskResponse.builder().output(output).build();
                 listener.onResponse(response);
             }, e -> {
                 log.error("Failed to predict model " + mlTask.getModelId(), e);
@@ -213,7 +213,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         }
     }
 
-    private void handlePredictFailure(MLTask mlTask, ActionListener<MLPredictionTaskResponse> listener, Exception e) {
+    private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e) {
         handleMLTaskFailure(mlTask, e);
         listener.onFailure(e);
     }

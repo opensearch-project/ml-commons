@@ -107,7 +107,7 @@ public class KMeans implements TrainAndPredictable {
         predictions = kMeansModel.predict(predictionDataset);
 
         List<Map<String, Object>> listClusterID = new ArrayList<>();
-        predictions.forEach(e -> listClusterID.add(Collections.singletonMap("Cluster ID", e.getOutput().getID())));
+        predictions.forEach(e -> listClusterID.add(Collections.singletonMap("ClusterID", e.getOutput().getID())));
 
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(listClusterID)).build();
     }
@@ -139,7 +139,7 @@ public class KMeans implements TrainAndPredictable {
 
         List<Prediction<ClusterID>> predictions = kMeansModel.predict(trainDataset);
         List<Map<String, Object>> listClusterID = new ArrayList<>();
-        predictions.forEach(e -> listClusterID.add(Collections.singletonMap("Cluster ID", e.getOutput().getID())));
+        predictions.forEach(e -> listClusterID.add(Collections.singletonMap("ClusterID", e.getOutput().getID())));
 
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(listClusterID)).build();
     }

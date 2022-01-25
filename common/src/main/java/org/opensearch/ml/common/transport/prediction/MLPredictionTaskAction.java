@@ -13,12 +13,13 @@
 package org.opensearch.ml.common.transport.prediction;
 
 import org.opensearch.action.ActionType;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 
-public class MLPredictionTaskAction extends ActionType<MLPredictionTaskResponse> {
+public class MLPredictionTaskAction extends ActionType<MLTaskResponse> {
     public static final MLPredictionTaskAction INSTANCE = new MLPredictionTaskAction();
     public static final String NAME = "cluster:admin/opensearch/ml/predict";
 
     private MLPredictionTaskAction() {
-        super(NAME, MLPredictionTaskResponse::new);
+        super(NAME, MLTaskResponse::new);
     }
 }

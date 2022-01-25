@@ -68,9 +68,9 @@ public interface MachineLearningClient {
      * @param mlInput ML input
      * @return the result future
      */
-    default ActionFuture<MLOutput> train(MLInput mlInput) {
+    default ActionFuture<MLOutput> train(MLInput mlInput, boolean asyncTask) {
         PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
-        train(mlInput, actionFuture);
+        train(mlInput, asyncTask, actionFuture);
         return actionFuture;
     }
 
@@ -80,7 +80,7 @@ public interface MachineLearningClient {
      * @param mlInput ML input
      * @param listener a listener to be notified of the result
      */
-    void train(MLInput mlInput, ActionListener<MLOutput> listener);
+    void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener);
 
     /**
      * Execute function and return ActionFuture.

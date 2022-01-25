@@ -28,12 +28,11 @@ import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
-import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
@@ -74,13 +73,13 @@ public class MachineLearningNodeClientTest {
     @Test
     public void predict() {
         doAnswer(invocation -> {
-            ActionListener<MLPredictionTaskResponse> actionListener = invocation.getArgument(2);
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
             MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
                     .status("Success")
                     .predictionResult(output)
                     .taskId("taskId")
                     .build();
-            actionListener.onResponse(MLPredictionTaskResponse.builder()
+            actionListener.onResponse(MLTaskResponse.builder()
                     .output(predictionOutput)
                     .build());
             return null;
@@ -124,12 +123,12 @@ public class MachineLearningNodeClientTest {
         String modelId = "test_model_id";
         String status = "InProgress";
         doAnswer(invocation -> {
-            ActionListener<MLTrainingTaskResponse> actionListener = invocation.getArgument(2);
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
             MLTrainingOutput output = MLTrainingOutput.builder()
                     .status(status)
                     .modelId(modelId)
                     .build();
-            actionListener.onResponse(MLTrainingTaskResponse.builder()
+            actionListener.onResponse(MLTaskResponse.builder()
                     .output(output)
                     .build());
             return null;
@@ -140,7 +139,7 @@ public class MachineLearningNodeClientTest {
                 .algorithm(FunctionName.KMEANS)
                 .inputDataset(input)
                 .build();
-        machineLearningNodeClient.train(mlInput, trainingActionListener);
+        machineLearningNodeClient.train(mlInput, false, trainingActionListener);
 
         verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class),
                 any(ActionListener.class));
@@ -156,13 +155,13 @@ public class MachineLearningNodeClientTest {
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .build();
-        machineLearningNodeClient.train(mlInput, trainingActionListener);
+        machineLearningNodeClient.train(mlInput, false, trainingActionListener);
     }
 
     @Test
     public void train_Exception_WithNullInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML Input can't be null");
-        machineLearningNodeClient.train(null, trainingActionListener);
+        machineLearningNodeClient.train(null, false, trainingActionListener);
     }
 }

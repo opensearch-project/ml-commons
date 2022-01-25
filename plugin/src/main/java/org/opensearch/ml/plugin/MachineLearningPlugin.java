@@ -35,15 +35,11 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
-import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionAction;
-import org.opensearch.ml.action.prediction.MLPredictionTaskExecutionTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
-import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
-import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
-import org.opensearch.ml.action.trainpredict.MLTrainAndPredictionTaskTransportAction;
+import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
@@ -121,11 +117,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
-                new ActionHandler<>(MLPredictionTaskExecutionAction.INSTANCE, MLPredictionTaskExecutionTransportAction.class),
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
-                // TODO: remove MLTrainingTaskExecutionTransportAction keep TransportTrainingTaskAction
-                new ActionHandler<>(MLTrainingTaskExecutionAction.INSTANCE, MLTrainingTaskExecutionTransportAction.class),
-                new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, MLTrainAndPredictionTaskTransportAction.class)
+                new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, TransportTrainAndPredictionTaskAction.class)
             );
     }
 

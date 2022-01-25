@@ -36,9 +36,9 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -89,21 +89,21 @@ public class PredictionITTests extends OpenSearchIntegTestCase {
     public void testPredictionWithoutAlgorithm() throws IOException {
         MLInput mlInput = MLInput.builder().inputDataset(DATA_FRAME_INPUT_DATASET).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
-        ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
+        ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(ActionRequestValidationException.class, () -> predictionFuture.actionGet());
     }
 
     public void testPredictionWithoutModelId() throws IOException {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(DATA_FRAME_INPUT_DATASET).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest("", mlInput);
-        ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
+        ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(ResourceNotFoundException.class, () -> predictionFuture.actionGet());
     }
 
     public void testPredictionWithoutDataset() throws IOException {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
-        ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
+        ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(ActionRequestValidationException.class, () -> predictionFuture.actionGet());
     }
 
@@ -111,7 +111,7 @@ public class PredictionITTests extends OpenSearchIntegTestCase {
         MLInputDataset emptySearchInputDataset = generateEmptyDataset();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(emptySearchInputDataset).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
-        ActionFuture<MLPredictionTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
+        ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         expectThrows(IllegalArgumentException.class, () -> predictionFuture.actionGet());
     }
 }
