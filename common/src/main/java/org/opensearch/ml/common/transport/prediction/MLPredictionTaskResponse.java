@@ -62,7 +62,7 @@ public class MLPredictionTaskResponse extends ActionResponse implements ToXConte
                 return new MLPredictionTaskResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
+            throw new UncheckedIOException("failed to parse ActionResponse into MLPredictionTaskResponse", e);
         }
     }
 

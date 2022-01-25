@@ -43,6 +43,7 @@ import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.action.training.MLTrainingTaskExecutionTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
+import org.opensearch.ml.action.trainpredict.MLTrainAndPredictionTaskTransportAction;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
@@ -51,6 +52,7 @@ import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
+import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
@@ -59,6 +61,7 @@ import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestStatsMLAction;
 import org.opensearch.ml.stats.MLStat;
@@ -69,6 +72,7 @@ import org.opensearch.ml.task.MLExecuteTaskRunner;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.task.MLTrainAndPredictTaskRunner;
 import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
@@ -94,6 +98,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLInputDatasetHandler mlInputDatasetHandler;
     private MLTrainingTaskRunner mlTrainingTaskRunner;
     private MLPredictTaskRunner mlPredictTaskRunner;
+    private MLTrainAndPredictTaskRunner mlTrainAndPredictTaskRunner;
     private MLExecuteTaskRunner mlExecuteTaskRunner;
 
     private Client client;
@@ -116,9 +121,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
                 new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
-                new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
                 new ActionHandler<>(MLPredictionTaskExecutionAction.INSTANCE, MLPredictionTaskExecutionTransportAction.class),
-                new ActionHandler<>(MLTrainingTaskExecutionAction.INSTANCE, MLTrainingTaskExecutionTransportAction.class)
+                new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
+                // TODO: remove MLTrainingTaskExecutionTransportAction keep TransportTrainingTaskAction
+                new ActionHandler<>(MLTrainingTaskExecutionAction.INSTANCE, MLTrainingTaskExecutionTransportAction.class),
+                new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, MLTrainAndPredictionTaskTransportAction.class)
             );
     }
 
@@ -171,6 +178,15 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler,
             mlTaskDispatcher
         );
+        mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
+            threadPool,
+            clusterService,
+            client,
+            mlTaskManager,
+            mlStats,
+            mlInputDatasetHandler,
+            mlTaskDispatcher
+        );
         mlExecuteTaskRunner = new MLExecuteTaskRunner(
             threadPool,
             clusterService,
@@ -196,6 +212,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,
                 mlPredictTaskRunner,
+                mlTrainAndPredictTaskRunner,
                 mlExecuteTaskRunner
             );
     }
@@ -212,9 +229,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     ) {
         RestStatsMLAction restStatsMLAction = new RestStatsMLAction(mlStats);
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
+        RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
-        return ImmutableList.of(restStatsMLAction, restMLTrainingAction, restMLPredictionAction, restMLExecuteAction);
+        return ImmutableList
+            .of(restStatsMLAction, restMLTrainingAction, restMLPredictionAction, restMLExecuteAction, restMLTrainAndPredictAction);
     }
 
     @Override

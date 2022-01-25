@@ -20,8 +20,7 @@ import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.engine.Model;
-import org.opensearch.ml.engine.Predictable;
-import org.opensearch.ml.engine.Trainable;
+import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
@@ -47,7 +46,7 @@ import java.util.Optional;
  * https://github.com/oracle/tribuo/issues/158
  */
 @Function(FunctionName.KMEANS)
-public class KMeans implements Trainable, Predictable {
+public class KMeans implements TrainAndPredictable {
     private static final KMeansParams.DistanceType DEFAULT_DISTANCE_TYPE = KMeansParams.DistanceType.EUCLIDEAN;
     private static int DEFAULT_CENTROIDS = 2;
     private static int DEFAULT_ITERATIONS = 10;
@@ -127,5 +126,21 @@ public class KMeans implements Trainable, Predictable {
         model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
         return model;
+    }
+
+    @Override
+    public MLOutput trainAndPredict(DataFrame dataFrame) {
+        MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
+                "KMeans training and predicting data from opensearch", TribuoOutputType.CLUSTERID);
+        Integer centroids = Optional.ofNullable(parameters.getCentroids()).orElse(DEFAULT_CENTROIDS);
+        Integer iterations = Optional.ofNullable(parameters.getIterations()).orElse(DEFAULT_ITERATIONS);
+        KMeansTrainer trainer = new KMeansTrainer(centroids, iterations, distance, numThreads, seed);
+        KMeansModel kMeansModel = trainer.train(trainDataset); // won't store model in index
+
+        List<Prediction<ClusterID>> predictions = kMeansModel.predict(trainDataset);
+        List<Map<String, Object>> listClusterID = new ArrayList<>();
+        predictions.forEach(e -> listClusterID.add(Collections.singletonMap("Cluster ID", e.getOutput().getID())));
+
+        return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(listClusterID)).build();
     }
 }

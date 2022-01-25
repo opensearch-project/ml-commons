@@ -66,6 +66,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void trainAndPredict(MLInput mlInput, ActionListener<MLOutput> listener) {
+                listener.onResponse(output);
+            }
+
+            @Override
             public void train(MLInput mlInput, ActionListener<MLOutput> listener) {
                 listener.onResponse(MLTrainingOutput.builder().modelId(modekId).build());
             }

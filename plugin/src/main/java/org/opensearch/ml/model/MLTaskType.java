@@ -15,5 +15,6 @@ package org.opensearch.ml.model;
 public enum MLTaskType {
     TRAINING,
     PREDICTION,
+    TRAINING_AND_PREDICTION,
     EXECUTION
 }

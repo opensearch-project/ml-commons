@@ -44,6 +44,16 @@ public class MLEngine {
         return predictable.predict(mlInput.getDataFrame(), model);
     }
 
+    public static MLOutput trainAndPredict(Input input) {
+        validateMLInput(input);
+        MLInput mlInput = (MLInput) input;
+        TrainAndPredictable trainAndPredictable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
+        if (trainAndPredictable == null) {
+            throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
+        }
+        return trainAndPredictable.trainAndPredict(mlInput.getDataFrame());
+    }
+
     public static Output execute(Input input) {
         validateInput(input);
         Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
