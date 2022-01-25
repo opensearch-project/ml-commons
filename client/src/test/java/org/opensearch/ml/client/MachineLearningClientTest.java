@@ -71,7 +71,7 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void train(MLInput mlInput, ActionListener<MLOutput> listener) {
+            public void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener) {
                 listener.onResponse(MLTrainingOutput.builder().modelId(modekId).build());
             }
 
@@ -156,6 +156,6 @@ public class MachineLearningClientTest {
                 .parameters(mlParameters)
                 .inputDataset(new DataFrameInputDataset(input))
                 .build();
-        assertEquals(modekId, ((MLTrainingOutput)machineLearningClient.train(mlInput).actionGet()).getModelId());
+        assertEquals(modekId, ((MLTrainingOutput)machineLearningClient.train(mlInput, false).actionGet()).getModelId());
     }
 }

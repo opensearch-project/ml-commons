@@ -10,7 +10,7 @@
  *
  */
 
-package org.opensearch.ml.common.transport.training;
+package org.opensearch.ml.common.transport;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -31,15 +31,16 @@ import java.io.UncheckedIOException;
 
 @Getter
 @ToString
-public class MLTrainingTaskResponse extends ActionResponse implements ToXContentObject {
+public class MLTaskResponse extends ActionResponse implements ToXContentObject {
+
     MLOutput output;
 
     @Builder
-    public MLTrainingTaskResponse(MLOutput output) {
+    public MLTaskResponse(MLOutput output) {
         this.output = output;
     }
 
-    public MLTrainingTaskResponse(StreamInput in) throws IOException {
+    public MLTaskResponse(StreamInput in) throws IOException {
         super(in);
         output = MLOutput.fromStream(in);
     }
@@ -49,19 +50,19 @@ public class MLTrainingTaskResponse extends ActionResponse implements ToXContent
         output.writeTo(out);
     }
 
-    public static MLTrainingTaskResponse fromActionResponse(ActionResponse actionResponse) {
-        if (actionResponse instanceof MLTrainingTaskResponse) {
-            return (MLTrainingTaskResponse) actionResponse;
+    public static MLTaskResponse fromActionResponse(ActionResponse actionResponse) {
+        if (actionResponse instanceof MLTaskResponse) {
+            return (MLTaskResponse) actionResponse;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionResponse.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLTrainingTaskResponse(input);
+                return new MLTaskResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLTrainingTaskResponse", e);
+            throw new UncheckedIOException("failed to parse ActionResponse into MLTaskResponse", e);
         }
     }
 

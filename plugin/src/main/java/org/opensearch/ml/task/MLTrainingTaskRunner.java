@@ -31,14 +31,14 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.ml.action.training.MLTrainingTaskExecutionAction;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
-import org.opensearch.ml.common.transport.training.MLTrainingTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -55,7 +55,7 @@ import org.opensearch.transport.TransportService;
  * MLTrainingTaskRunner is responsible for running training tasks.
  */
 @Log4j2
-public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, MLTrainingTaskResponse> {
+public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, MLTaskResponse> {
     private final ThreadPool threadPool;
     private final ClusterService clusterService;
     private final Client client;
@@ -81,7 +81,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     }
 
     @Override
-    public void run(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTrainingTaskResponse> listener) {
+    public void run(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
         mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute training task locally
@@ -93,15 +93,15 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 transportService
                     .sendRequest(
                         node,
-                        MLTrainingTaskExecutionAction.NAME,
+                        MLTrainingTaskAction.NAME,
                         request,
-                        new ActionListenerResponseHandler<>(listener, MLTrainingTaskResponse::new)
+                        new ActionListenerResponseHandler<>(listener, MLTaskResponse::new)
                     );
             }
         }, e -> listener.onFailure(e)));
     }
 
-    public void createMLTaskAndTrain(MLTrainingTaskRequest request, ActionListener<MLTrainingTaskResponse> listener) {
+    public void createMLTaskAndTrain(MLTrainingTaskRequest request, ActionListener<MLTaskResponse> listener) {
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();
         MLTask mlTask = MLTask
@@ -121,8 +121,8 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 String taskId = r.getId();
                 mlTask.setTaskId(taskId);
                 if (mlTask.isAsync()) {
-                    listener.onResponse(new MLTrainingTaskResponse(new MLTrainingOutput(null, taskId, mlTask.getState().name())));
-                    ActionListener<MLTrainingTaskResponse> internalListener = ActionListener.wrap(res -> {
+                    listener.onResponse(new MLTaskResponse(new MLTrainingOutput(null, taskId, mlTask.getState().name())));
+                    ActionListener<MLTaskResponse> internalListener = ActionListener.wrap(res -> {
                         String modelId = ((MLTrainingOutput) res.getOutput()).getModelId();
                         log.info("ML model trained successfully, task id: {}, model id: {}", taskId, modelId);
                         mlTask.setModelId(modelId);
@@ -148,7 +148,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
      * @param mlInput ML input
      * @param listener Action listener
      */
-    public void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
+    public void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         // track ML task count and add ML task into cache
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
@@ -175,7 +175,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         }
     }
 
-    private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTrainingTaskResponse> listener) {
+    private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         try {
             // run training
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
@@ -191,10 +191,10 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.wrap(r -> {
-                    log.info("mode data indexing done, result:{}", r.getResult());
+                    log.info("mode data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
                     handleMLTaskComplete(mlTask);
                     MLTrainingOutput output = new MLTrainingOutput(r.getId(), mlTask.getTaskId(), MLTaskState.COMPLETED.name());
-                    listener.onResponse(MLTrainingTaskResponse.builder().output(output).build());
+                    listener.onResponse(MLTaskResponse.builder().output(output).build());
                 }, e -> {
                     handleMLTaskFailure(mlTask, e);
                     listener.onFailure(e);

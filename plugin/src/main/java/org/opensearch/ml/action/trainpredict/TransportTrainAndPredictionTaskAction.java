@@ -17,19 +17,19 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskResponse;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.task.MLTrainAndPredictTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-public class MLTrainAndPredictionTaskTransportAction extends HandledTransportAction<ActionRequest, MLPredictionTaskResponse> {
+public class TransportTrainAndPredictionTaskAction extends HandledTransportAction<ActionRequest, MLTaskResponse> {
     private final MLTrainAndPredictTaskRunner mlTrainAndPredictTaskRunner;
     private final TransportService transportService;
 
     @Inject
-    public MLTrainAndPredictionTaskTransportAction(
+    public TransportTrainAndPredictionTaskAction(
         ActionFilters actionFilters,
         TransportService transportService,
         MLTrainAndPredictTaskRunner mlTrainAndPredictTaskRunner
@@ -40,7 +40,7 @@ public class MLTrainAndPredictionTaskTransportAction extends HandledTransportAct
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLPredictionTaskResponse> listener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLTrainingTaskRequest trainingRequest = MLTrainingTaskRequest.fromActionRequest(request);
         mlTrainAndPredictTaskRunner.startTrainAndPredictionTask(trainingRequest, listener);
     }

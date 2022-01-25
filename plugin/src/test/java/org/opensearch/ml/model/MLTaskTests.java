@@ -80,7 +80,6 @@ public class MLTaskTests {
         MLTask task = MLTask.builder().build();
         task.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        System.out.println(taskContent);
         assertEquals("{\"is_async\":false}", taskContent);
     }
 }
