@@ -45,6 +45,10 @@ public class ColumnValueBuilderTest {
         value = ColumnValueBuilder.build(true);
         assertEquals(ColumnType.BOOLEAN, value.columnType());
         assertEquals(true, value.booleanValue());
+
+        value = ColumnValueBuilder.build(2.1f);
+        assertEquals(ColumnType.FLOAT, value.columnType());
+        assertEquals(2.1f, value.floatValue(), 1e-5);
     }
 
     @Test

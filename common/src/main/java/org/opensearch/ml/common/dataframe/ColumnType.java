@@ -17,6 +17,7 @@ public enum ColumnType {
     INTEGER,
     DOUBLE,
     BOOLEAN,
+    FLOAT,
     NULL;
 
     public static ColumnType from(Object object) {
@@ -34,6 +35,10 @@ public enum ColumnType {
 
         if(object instanceof Boolean) {
             return BOOLEAN;
+        }
+
+        if(object instanceof Float) {
+            return FLOAT;
         }
 
         throw new IllegalArgumentException("unsupported type:" + object.getClass().getName());

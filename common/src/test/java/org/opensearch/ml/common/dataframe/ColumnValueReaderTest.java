@@ -80,4 +80,14 @@ public class ColumnValueReaderTest {
         assertEquals(ColumnType.BOOLEAN, value.columnType());
         assertEquals(true, value.booleanValue());
     }
+
+    @Test
+    public void read_FloatValue() throws IOException {
+        ColumnValue value = new FloatValue(2.1f);
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        value.writeTo(bytesStreamOutput);
+        value = reader.read(bytesStreamOutput.bytes().streamInput());
+        assertEquals(ColumnType.FLOAT, value.columnType());
+        assertEquals(2.1f, value.floatValue(), 1e-5);
+    }
 }
