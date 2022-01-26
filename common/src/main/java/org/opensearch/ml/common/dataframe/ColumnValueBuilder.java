@@ -45,6 +45,10 @@ public class ColumnValueBuilder {
             return new BooleanValue((Boolean)object);
         }
 
+        if(object instanceof Float) {
+            return new FloatValue((Float)object);
+        }
+
         throw new IllegalArgumentException("unsupported type:" + object.getClass().getName());
     }
 }

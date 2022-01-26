@@ -60,4 +60,12 @@ public class ColumnValueTest {
         ColumnValue value = new IntValue(1);
         value.doubleValue();
     }
+
+    @Test
+    public void wrongFloatValue() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("the value isn't Float type");
+        ColumnValue value = new IntValue(1);
+        value.floatValue();
+    }
 }

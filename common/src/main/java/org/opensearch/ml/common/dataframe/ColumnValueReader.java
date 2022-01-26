@@ -30,6 +30,8 @@ public class ColumnValueReader implements Writeable.Reader<ColumnValue> {
                 return new StringValue(in.readString());
             case BOOLEAN:
                 return new BooleanValue(in.readBoolean());
+            case FLOAT:
+                return new FloatValue(in.readFloat());
             case NULL:
                 return new NullValue();
             default:

@@ -37,6 +37,10 @@ public interface ColumnValue extends Writeable, ToXContentObject {
         throw new RuntimeException("the value isn't Double type");
     }
 
+    default float floatValue() {
+        throw new RuntimeException("the value isn't Float type");
+    }
+
     default boolean booleanValue() {
         throw new RuntimeException("the value isn't Boolean type");
     }
