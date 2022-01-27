@@ -33,6 +33,7 @@ public class ColumnValueBuilderTest {
         value = ColumnValueBuilder.build(2);
         assertEquals(ColumnType.INTEGER, value.columnType());
         assertEquals(2, value.intValue());
+        assertEquals(2.0d, value.doubleValue(), 1e-5);
 
         value = ColumnValueBuilder.build("string");
         assertEquals(ColumnType.STRING, value.columnType());
@@ -49,6 +50,17 @@ public class ColumnValueBuilderTest {
         value = ColumnValueBuilder.build(2.1f);
         assertEquals(ColumnType.FLOAT, value.columnType());
         assertEquals(2.1f, value.floatValue(), 1e-5);
+        assertEquals(2.1d, value.doubleValue(), 1e-5);
+
+        value = ColumnValueBuilder.build((short)2);
+        assertEquals(ColumnType.SHORT, value.columnType());
+        assertEquals(2, value.shortValue());
+        assertEquals(2.0d, value.doubleValue(), 1e-5);
+
+        value = ColumnValueBuilder.build((long)2);
+        assertEquals(ColumnType.LONG, value.columnType());
+        assertEquals(2, value.longValue());
+        assertEquals(2.0d, value.doubleValue(), 1e-5);
     }
 
     @Test

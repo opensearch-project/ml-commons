@@ -57,7 +57,7 @@ public class ColumnValueTest {
     public void wrongDoubleValue() {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("the value isn't Double type");
-        ColumnValue value = new IntValue(1);
+        ColumnValue value = new BooleanValue(true);
         value.doubleValue();
     }
 
@@ -67,5 +67,21 @@ public class ColumnValueTest {
         exceptionRule.expectMessage("the value isn't Float type");
         ColumnValue value = new IntValue(1);
         value.floatValue();
+    }
+
+    @Test
+    public void wrongShortValue() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("the value isn't Short type");
+        ColumnValue value = new IntValue(1);
+        value.shortValue();
+    }
+
+    @Test
+    public void wrongLongValue() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("the value isn't Long type");
+        ColumnValue value = new IntValue(1);
+        value.longValue();
     }
 }

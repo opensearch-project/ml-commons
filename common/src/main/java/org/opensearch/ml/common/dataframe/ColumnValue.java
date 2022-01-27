@@ -25,8 +25,16 @@ public interface ColumnValue extends Writeable, ToXContentObject {
 
     Object getValue();
 
+    default short shortValue() {
+        throw new RuntimeException("the value isn't Short type");
+    }
+
     default int intValue() {
         throw new RuntimeException("the value isn't Integer type");
+    }
+
+    default long longValue() {
+        throw new RuntimeException("the value isn't Long type");
     }
 
     default String stringValue() {
