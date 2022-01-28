@@ -14,15 +14,25 @@ package org.opensearch.ml.common.dataframe;
 
 public enum ColumnType {
     STRING,
+    SHORT,
     INTEGER,
+    LONG,
     DOUBLE,
     BOOLEAN,
     FLOAT,
     NULL;
 
     public static ColumnType from(Object object) {
+        if(object instanceof Short) {
+            return SHORT;
+        }
+
         if(object instanceof Integer) {
             return INTEGER;
+        }
+
+        if(object instanceof Long) {
+            return LONG;
         }
 
         if(object instanceof String) {

@@ -22,8 +22,12 @@ public class ColumnValueReader implements Writeable.Reader<ColumnValue> {
     public ColumnValue read(StreamInput in) throws IOException {
         ColumnType columnType = in.readEnum(ColumnType.class);
         switch (columnType){
+            case SHORT:
+                return new ShortValue(in.readShort());
             case INTEGER:
                 return new IntValue(in.readInt());
+            case LONG:
+                return new LongValue(in.readLong());
             case DOUBLE:
                 return new DoubleValue(in.readDouble());
             case STRING:

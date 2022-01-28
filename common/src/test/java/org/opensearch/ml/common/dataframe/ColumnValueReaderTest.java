@@ -90,4 +90,24 @@ public class ColumnValueReaderTest {
         assertEquals(ColumnType.FLOAT, value.columnType());
         assertEquals(2.1f, value.floatValue(), 1e-5);
     }
+
+    @Test
+    public void read_ShortValue() throws IOException {
+        ColumnValue value = new ShortValue((short)2);
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        value.writeTo(bytesStreamOutput);
+        value = reader.read(bytesStreamOutput.bytes().streamInput());
+        assertEquals(ColumnType.SHORT, value.columnType());
+        assertEquals(2, value.shortValue());
+    }
+
+    @Test
+    public void read_LongValue() throws IOException {
+        ColumnValue value = new LongValue((long)2);
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        value.writeTo(bytesStreamOutput);
+        value = reader.read(bytesStreamOutput.bytes().streamInput());
+        assertEquals(ColumnType.LONG, value.columnType());
+        assertEquals(2, value.longValue());
+    }
 }

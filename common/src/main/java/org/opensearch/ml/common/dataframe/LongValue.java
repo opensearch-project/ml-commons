@@ -1,35 +1,27 @@
 /*
+ * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
- *
- * The OpenSearch Contributors require contributions made to
- * this file be licensed under the Apache-2.0 license or a
- * compatible open source license.
- *
- * Modifications Copyright OpenSearch Contributors. See
- * GitHub history for details.
- *
  */
 
 package org.opensearch.ml.common.dataframe;
-
-import java.io.IOException;
-
-import org.opensearch.common.io.stream.StreamOutput;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.io.stream.StreamOutput;
+
+import java.io.IOException;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor
 @ToString
-public class IntValue implements ColumnValue {
-    int value;
+public class LongValue implements ColumnValue {
+    long value;
 
     @Override
     public ColumnType columnType() {
-        return ColumnType.INTEGER;
+        return ColumnType.LONG;
     }
 
     @Override
@@ -38,18 +30,18 @@ public class IntValue implements ColumnValue {
     }
 
     @Override
-    public int intValue() {
+    public long longValue() {
         return value;
     }
 
     @Override
     public double doubleValue() {
-        return Integer.valueOf(value).doubleValue();
+        return Long.valueOf(value).doubleValue();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeEnum(columnType());
-        out.writeInt(value);
+        out.writeLong(value);
     }
 }
