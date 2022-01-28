@@ -22,7 +22,7 @@ public class ShortValueTest {
     public void shortValue() {
         ShortValue shortValue = new ShortValue((short)2);
         assertEquals(ColumnType.SHORT, shortValue.columnType());
-        assertEquals(2, shortValue.getValue());
+        assertEquals((short)2, shortValue.getValue());
         assertEquals(2.0d, shortValue.doubleValue(), 1e-5);
     }
 
