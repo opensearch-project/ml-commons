@@ -15,6 +15,7 @@ import org.tribuo.Example;
 import org.tribuo.MutableDataset;
 import org.tribuo.Output;
 import org.tribuo.OutputFactory;
+import org.tribuo.anomaly.Event;
 import org.tribuo.clustering.ClusterID;
 import org.tribuo.datasource.ListDataSource;
 import org.tribuo.impl.ArrayExample;
@@ -64,6 +65,14 @@ public class TribuoUtil {
                 case REGRESSOR:
                     //Create single dimension tribuo regressor with name DIM-0 and value double NaN.
                     example = new ArrayExample<T>((T) new Regressor("DIM-0", Double.NaN), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    break;
+                case ANOMALY_DETECTION_LIBSVM:
+                    // Why we set default event type as EXPECTED(non-anomalous)
+                    // 1. For training data, Tribuo LibSVMAnomalyTrainer only supports EXPECTED events at training time.
+                    // 2. For prediction data, we treat the data as non-anomalous by default as Tribuo lib don't accept UNKNOWN type.
+                    Event.EventType defaultEventType = Event.EventType.EXPECTED;
+                    // TODO: support anomaly labels to evaluate prediction result
+                    example = new ArrayExample<T>((T) new Event(defaultEventType), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);

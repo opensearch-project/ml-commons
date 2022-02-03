@@ -9,5 +9,7 @@ public enum TribuoOutputType {
     //for tribuo clustering
     CLUSTERID,
     //for tribuo regression
-    REGRESSOR;
+    REGRESSOR,
+    //for anomaly detection based on libSVM
+    ANOMALY_DETECTION_LIBSVM;
 }
