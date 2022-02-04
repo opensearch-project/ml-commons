@@ -10,6 +10,7 @@ import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.common.parameter.Output;
 
 /**

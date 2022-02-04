@@ -28,15 +28,15 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.MLModel;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
+import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
-import org.opensearch.ml.engine.Model;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
-import org.opensearch.ml.model.MLModel;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.model.MLTaskType;
@@ -184,7 +184,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.wrap(r -> {
-                    log.info("mode data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
+                    log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
                     handleMLTaskComplete(mlTask);
                     MLTrainingOutput output = new MLTrainingOutput(r.getId(), mlTask.getTaskId(), MLTaskState.COMPLETED.name());
                     listener.onResponse(MLTaskResponse.builder().output(output).build());

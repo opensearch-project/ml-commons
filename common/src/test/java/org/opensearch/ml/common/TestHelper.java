@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import org.opensearch.common.Strings;
+import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.ToXContent;
@@ -42,5 +43,9 @@ public class TestHelper {
         parser.nextToken();
         T parsedObj = function.apply(parser);
         obj.equals(parsedObj);
+    }
+
+    public static String xContentBuilderToString(XContentBuilder builder) {
+        return BytesReference.bytes(builder).utf8ToString();
     }
 }

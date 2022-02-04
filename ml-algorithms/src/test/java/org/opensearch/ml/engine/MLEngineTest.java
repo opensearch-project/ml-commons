@@ -20,6 +20,7 @@ import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 
 

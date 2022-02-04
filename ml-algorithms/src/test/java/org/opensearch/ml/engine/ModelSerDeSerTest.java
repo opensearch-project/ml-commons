@@ -9,6 +9,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
@@ -40,8 +41,8 @@ public class ModelSerDeSerTest {
         KMeans kMeans = new KMeans(params);
         Model model = kMeans.train(constructKMeansDataFrame(100));
 
-        KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.content);
+        KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
         byte[] serializedModel = ModelSerDeSer.serialize(kMeansModel);
-        assertFalse(Arrays.equals(serializedModel, model.content));
+        assertFalse(Arrays.equals(serializedModel, model.getContent()));
     }
 }
