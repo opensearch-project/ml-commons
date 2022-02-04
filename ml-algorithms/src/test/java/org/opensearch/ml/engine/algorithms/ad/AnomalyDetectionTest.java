@@ -1,13 +1,6 @@
 /*
+ * Copyright OpenSearch Contributors
  * SPDX-License-Identifier: Apache-2.0
- *
- * The OpenSearch Contributors require contributions made to
- * this file be licensed under the Apache-2.0 license or a
- * compatible open source license.
- *
- * Modifications Copyright OpenSearch Contributors. See
- * GitHub history for details.
- *
  */
 
 package org.opensearch.ml.engine.algorithms.ad;
@@ -32,23 +25,12 @@ import org.opensearch.ml.engine.Model;
 import org.tribuo.Dataset;
 import org.tribuo.Example;
 import org.tribuo.Feature;
-import org.tribuo.Prediction;
 import org.tribuo.anomaly.Event;
 import org.tribuo.anomaly.example.AnomalyDataGenerator;
-import org.tribuo.anomaly.libsvm.LibSVMAnomalyModel;
-import org.tribuo.anomaly.libsvm.LibSVMAnomalyTrainer;
-import org.tribuo.anomaly.libsvm.SVMAnomalyType;
-import org.tribuo.common.libsvm.KernelType;
-import org.tribuo.common.libsvm.LibSVMModel;
-import org.tribuo.common.libsvm.SVMParameters;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 public class AnomalyDetectionTest {
 
@@ -142,7 +124,7 @@ public class AnomalyDetectionTest {
         int falsePositive = 0;
         int totalPositive = 0;
         for (Row row : predictions) {
-            String type = row.getValue(0).stringValue();
+            String type = row.getValue(1).stringValue();
             if (predictionLabels.get(i) == Event.EventType.ANOMALOUS) {
                 totalPositive++;
                 if ("ANOMALOUS".equals(type)) {

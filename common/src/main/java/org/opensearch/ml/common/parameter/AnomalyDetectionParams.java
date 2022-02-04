@@ -1,12 +1,6 @@
 /*
- *  SPDX-License-Identifier: Apache-2.0
- *
- *  The OpenSearch Contributors require contributions made to
- *  this file be licensed under the Apache-2.0 license or a
- *  compatible open source license.
- *
- *  Modifications Copyright OpenSearch Contributors. See
- *  GitHub history for details.
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.opensearch.ml.common.parameter;
@@ -22,6 +16,7 @@ import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -35,25 +30,53 @@ public class AnomalyDetectionParams implements MLAlgoParams {
             it -> parse(it)
     );
 
+    public static final String KERNEL_FIELD = "kernel";
     public static final String GAMMA_FIELD = "gamma";
     public static final String NU_FIELD = "nu";
+    public static final String COST_FIELD = "cost";
+    public static final String COEFF_FIELD = "coeff";
+    public static final String EPSILON_FIELD = "epsilon";
+    public static final String DEGREE_FIELD = "degree";
+    private ADKernelType kernelType;
     private Double gamma;
     private Double nu;
+    private Double cost;
+    private Double coeff;
+    private Double epsilon;
+    private Integer degree;
+
 
     @Builder
-    public AnomalyDetectionParams(Double gamma, Double nu) {
+    public AnomalyDetectionParams(ADKernelType kernelType, Double gamma, Double nu, Double cost, Double coeff, Double epsilon, Integer degree) {
+        this.kernelType = kernelType;
         this.gamma = gamma;
         this.nu = nu;
+        this.cost = cost;
+        this.coeff = coeff;
+        this.epsilon = epsilon;
+        this.degree = degree;
     }
 
     public AnomalyDetectionParams(StreamInput in) throws IOException {
+        if (in.readBoolean()) {
+            this.kernelType = in.readEnum(ADKernelType.class);
+        }
         this.gamma = in.readOptionalDouble();
         this.nu = in.readOptionalDouble();
+        this.cost = in.readOptionalDouble();
+        this.coeff = in.readOptionalDouble();
+        this.epsilon = in.readOptionalDouble();
+        this.degree = in.readOptionalInt();
     }
 
-    private static MLAlgoParams parse(XContentParser parser) throws IOException {
+    public static MLAlgoParams parse(XContentParser parser) throws IOException {
+        ADKernelType kernelType = null;
         Double gamma = null;
         Double nu = null;
+        Double cost = null;
+        Double coeff = null;
+        Double epsilon = null;
+        Integer degree = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -61,18 +84,33 @@ public class AnomalyDetectionParams implements MLAlgoParams {
             parser.nextToken();
 
             switch (fieldName) {
+                case KERNEL_FIELD:
+                    kernelType = ADKernelType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    break;
                 case GAMMA_FIELD:
                     gamma = parser.doubleValue();
                     break;
                 case NU_FIELD:
                     nu = parser.doubleValue();
                     break;
+                case COST_FIELD:
+                    cost = parser.doubleValue();
+                    break;
+                case COEFF_FIELD:
+                    coeff = parser.doubleValue();
+                    break;
+                case EPSILON_FIELD:
+                    epsilon = parser.doubleValue();
+                    break;
+                case DEGREE_FIELD:
+                    degree = parser.intValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new AnomalyDetectionParams(gamma, nu);
+        return new AnomalyDetectionParams(kernelType, gamma, nu, cost, coeff, epsilon, degree);
     }
 
     @Override
@@ -82,15 +120,44 @@ public class AnomalyDetectionParams implements MLAlgoParams {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        if (kernelType == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            out.writeEnum(kernelType);
+        }
         out.writeOptionalDouble(gamma);
         out.writeOptionalDouble(nu);
+        out.writeOptionalDouble(cost);
+        out.writeOptionalDouble(coeff);
+        out.writeOptionalDouble(epsilon);
+        out.writeOptionalInt(degree);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(GAMMA_FIELD, gamma);
-        builder.field(NU_FIELD, nu);
+        if (kernelType != null) {
+            builder.field(KERNEL_FIELD, kernelType);
+        }
+        if (gamma != null) {
+            builder.field(GAMMA_FIELD, gamma);
+        }
+        if (nu != null) {
+            builder.field(NU_FIELD, nu);
+        }
+        if (cost != null) {
+            builder.field(COST_FIELD, cost);
+        }
+        if (coeff != null) {
+            builder.field(COEFF_FIELD, coeff);
+        }
+        if (epsilon != null) {
+            builder.field(EPSILON_FIELD, epsilon);
+        }
+        if (degree != null) {
+            builder.field(DEGREE_FIELD, degree);
+        }
         builder.endObject();
         return builder;
     }
@@ -98,5 +165,12 @@ public class AnomalyDetectionParams implements MLAlgoParams {
     @Override
     public int getVersion() {
         return 1;
+    }
+
+    public enum ADKernelType {
+        LINEAR,
+        POLY,
+        RBF,
+        SIGMOID
     }
 }
