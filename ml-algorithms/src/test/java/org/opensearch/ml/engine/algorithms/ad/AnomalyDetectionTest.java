@@ -21,7 +21,7 @@ import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.parameter.AnomalyDetectionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.engine.Model;
+import org.opensearch.ml.common.parameter.Model;
 import org.tribuo.Dataset;
 import org.tribuo.Example;
 import org.tribuo.Feature;

@@ -32,6 +32,11 @@ public class AnomalyDetectionParamsTest {
     public void setUp() {
         params = AnomalyDetectionParams.builder()
                 .kernelType(AnomalyDetectionParams.ADKernelType.POLY)
+                .gamma(1.0)
+                .nu(0.5)
+                .cost(1.0)
+                .coeff(0.1)
+                .epsilon(0.2)
                 .degree(2)
                 .build();
     }
