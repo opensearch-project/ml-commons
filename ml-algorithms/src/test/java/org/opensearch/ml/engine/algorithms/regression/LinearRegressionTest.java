@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.regression;
+package org.opensearch.ml.engine.algorithms.regression;
 
 import org.junit.Assert;
 import org.junit.Before;

@@ -23,6 +23,7 @@ public class ModelSerDeSer {
         "java.time.*",
         "org.opensearch.ml.*",
         "*org.tribuo.*",
+        "libsvm.*",
         "com.oracle.labs.*",
         "[*"
     };

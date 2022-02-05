@@ -31,7 +31,7 @@ public class DefaultDataFrame extends AbstractDataFrame{
     List<Row> rows;
     ColumnMeta[] columnMetas;
 
-    DefaultDataFrame(final ColumnMeta[] columnMetas){
+    public DefaultDataFrame(final ColumnMeta[] columnMetas){
         super(DataFrameType.DEFAULT);
         this.columnMetas = columnMetas;
         this.rows = new ArrayList<>();
