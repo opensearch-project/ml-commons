@@ -132,8 +132,17 @@ public class Row implements Iterable<ColumnValue>, Writeable, ToXContentObject {
                                 case "STRING":
                                     values.add(new StringValue(parser.text()));
                                     break;
+                                case "SHORT":
+                                    values.add(new ShortValue(parser.shortValue()));
+                                    break;
                                 case "INTEGER":
                                     values.add(new IntValue(parser.intValue()));
+                                    break;
+                                case "LONG":
+                                    values.add(new LongValue(parser.longValue()));
+                                    break;
+                                case "FLOAT":
+                                    values.add(new FloatValue(parser.floatValue()));
                                     break;
                                 case "DOUBLE":
                                     values.add(new DoubleValue(parser.doubleValue()));

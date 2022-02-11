@@ -11,6 +11,7 @@ import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLOutputType;
 import org.reflections.Reflections;
@@ -99,8 +100,13 @@ public class MLCommonsClassLoader {
             Constructor<?> constructor = clazz.getConstructor(constructorParamClass);
             return (S) constructor.newInstance(in);
         } catch (Exception e) {
-            logger.error("Failed to init instance for type " + type, e);
-            return null;
+            Throwable cause = e.getCause();
+            if (cause instanceof MLException) {
+                throw (MLException)cause;
+            } else {
+                logger.error("Failed to init instance for type " + type, e);
+                return null;
+            }
         }
     }
 
