@@ -10,15 +10,25 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionResponse;
+import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.Output;
+import org.opensearch.ml.common.parameter.MLModel;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.common.transport.model.MLModelGetRequest;
+import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.ml.common.transport.model.MLModelGetAction;
+import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
+import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
+import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
@@ -75,6 +85,35 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
         client.execute(MLExecuteTaskAction.INSTANCE, executeTaskRequest, ActionListener.wrap(response -> {
             listener.onResponse(MLExecuteTaskResponse.fromActionResponse(response).getOutput());
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void getModel(String modelId, ActionListener<MLModel> listener) {
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder()
+                .modelId(modelId)
+                .build();
+
+        client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, ActionListener.wrap(response -> {
+            listener.onResponse(MLModelGetResponse.fromActionResponse(response).getMlModel());
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId)
+                .build();
+
+        client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+        client.execute(MLModelSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
+            listener.onResponse(searchResponse);
         }, listener::onFailure));
     }
 

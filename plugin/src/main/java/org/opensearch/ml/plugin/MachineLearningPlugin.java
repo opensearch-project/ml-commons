@@ -30,6 +30,7 @@ import org.opensearch.env.NodeEnvironment;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
+import org.opensearch.ml.action.models.SearchModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
@@ -45,6 +46,7 @@ import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
+import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
@@ -115,7 +117,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
                 new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, TransportTrainAndPredictionTaskAction.class),
                 new ActionHandler<>(MLModelGetAction.INSTANCE, GetModelTransportAction.class),
-                new ActionHandler<>(MLModelDeleteAction.INSTANCE, DeleteModelTransportAction.class)
+                new ActionHandler<>(MLModelDeleteAction.INSTANCE, DeleteModelTransportAction.class),
+                new ActionHandler<>(MLModelSearchAction.INSTANCE, SearchModelTransportAction.class)
             );
     }
 
@@ -224,6 +227,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
+        RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
         return ImmutableList
             .of(
                 restStatsMLAction,
@@ -232,7 +236,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLExecuteAction,
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
-                restMLDeleteModelAction
+                restMLDeleteModelAction,
+                restMLSearchModelAction
             );
     }
 

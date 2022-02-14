@@ -12,6 +12,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -23,6 +26,7 @@ import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.parameter.Output;
+import org.opensearch.ml.common.parameter.MLModel;
 
 import java.io.IOException;
 
@@ -45,6 +49,12 @@ public class MachineLearningClientTest {
 
     @Mock
     ActionListener<MLOutput> dataFrameActionListener;
+
+    @Mock
+    DeleteResponse deleteResponse;
+
+    @Mock
+    SearchResponse searchResponse;
 
     private String modekId = "test_model_id";
     @Before
@@ -85,6 +95,21 @@ public class MachineLearningClientTest {
                         return builder;
                     }
                 });
+            }
+
+            @Override
+            public void getModel(String modelId, ActionListener<MLModel> listener) {
+                listener.onResponse(MLModel.builder().build());
+            }
+
+            @Override
+            public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+                listener.onResponse(searchResponse);
             }
         };
     }
