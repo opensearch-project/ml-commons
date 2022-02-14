@@ -21,6 +21,8 @@ dependencies {
     compile group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.0'
     compile group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.0'
     compile group: 'commons-io', name: 'commons-io', version: '2.11.0'
+    compile files('lib/randomcutforest-parkservices-2.0.1.jar')
+    compile files('lib/randomcutforest-core-2.0.1.jar')
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.9.0'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.9.0'

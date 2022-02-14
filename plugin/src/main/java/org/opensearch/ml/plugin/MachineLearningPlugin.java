@@ -40,6 +40,7 @@ import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.parameter.RCFParams;
 import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -251,7 +252,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 AnomalyDetectionParams.XCONTENT_REGISTRY,
                 SampleAlgoParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
-                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY
+                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
+                RCFParams.XCONTENT_REGISTRY
             );
     }
 }

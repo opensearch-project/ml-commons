@@ -25,7 +25,8 @@ public class ModelSerDeSer {
         "*org.tribuo.*",
         "libsvm.*",
         "com.oracle.labs.*",
-        "[*"
+        "[*",
+        "com.amazon.randomcutforest.*"
     };
 
     public static byte[] serialize(Object model) {

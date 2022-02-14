@@ -8,6 +8,7 @@ package org.opensearch.ml.engine;
 import org.apache.commons.beanutils.BeanUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.engine.annotation.Function;
 import org.reflections.Reflections;
@@ -120,8 +121,13 @@ public class MLEngineClassLoader {
             BeanUtils.populate(instance, properties);
             return instance;
         } catch (Exception e) {
-            logger.error("Failed to init instance for type " + type, e);
-            return null;
+            Throwable cause = e.getCause();
+            if (cause instanceof MLException) {
+                throw (MLException)cause;
+            } else {
+                logger.error("Failed to init instance for type " + type, e);
+                return null;
+            }
         }
     }
 
