@@ -24,6 +24,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
@@ -63,9 +64,10 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         MLStats mlStats,
         MLIndicesHandler mlIndicesHandler,
         MLInputDatasetHandler mlInputDatasetHandler,
-        MLTaskDispatcher mlTaskDispatcher
+        MLTaskDispatcher mlTaskDispatcher,
+        MLCircuitBreakerService mlCircuitBreakerService
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher);
+        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
@@ -74,7 +76,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     }
 
     @Override
-    public void run(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
+    public void executeTask(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
         mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute training task locally

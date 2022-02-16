@@ -36,6 +36,7 @@ import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.parameter.AnomalyDetectionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
@@ -67,6 +68,7 @@ import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.task.MLTrainAndPredictTaskRunner;
 import org.opensearch.ml.task.MLTrainingTaskRunner;
+import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
@@ -141,6 +143,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.clusterService = clusterService;
         Settings settings = environment.settings();
 
+        JvmService jvmService = new JvmService(environment.settings());
+        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init();
+
         Map<String, MLStat<?>> stats = ImmutableMap
             .<String, MLStat<?>>builder()
             .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
@@ -160,7 +165,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlStats,
             mlIndicesHandler,
             mlInputDatasetHandler,
-            mlTaskDispatcher
+            mlTaskDispatcher,
+            mlCircuitBreakerService
         );
         mlPredictTaskRunner = new MLPredictTaskRunner(
             threadPool,
@@ -169,7 +175,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlTaskManager,
             mlStats,
             mlInputDatasetHandler,
-            mlTaskDispatcher
+            mlTaskDispatcher,
+            mlCircuitBreakerService
         );
         mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
             threadPool,
@@ -178,7 +185,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlTaskManager,
             mlStats,
             mlInputDatasetHandler,
-            mlTaskDispatcher
+            mlTaskDispatcher,
+            mlCircuitBreakerService
         );
         mlExecuteTaskRunner = new MLExecuteTaskRunner(
             threadPool,
@@ -187,7 +195,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlTaskManager,
             mlStats,
             mlInputDatasetHandler,
-            mlTaskDispatcher
+            mlTaskDispatcher,
+            mlCircuitBreakerService
         );
 
         // Register thread-safe ML objects here.

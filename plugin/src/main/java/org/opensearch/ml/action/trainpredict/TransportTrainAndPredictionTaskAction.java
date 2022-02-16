@@ -35,6 +35,6 @@ public class TransportTrainAndPredictionTaskAction extends HandledTransportActio
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLTrainingTaskRequest trainingRequest = MLTrainingTaskRequest.fromActionRequest(request);
-        mlTrainAndPredictTaskRunner.startTrainAndPredictionTask(trainingRequest, listener);
+        mlTrainAndPredictTaskRunner.run(trainingRequest, transportService, listener);
     }
 }
