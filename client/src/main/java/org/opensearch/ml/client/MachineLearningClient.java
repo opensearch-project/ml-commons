@@ -8,11 +8,15 @@ package org.opensearch.ml.client;
 
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.Output;
+import org.opensearch.ml.common.parameter.MLModel;
 
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.
@@ -93,4 +97,57 @@ public interface MachineLearningClient {
      * @param listener action listener
      */
     void execute(Input input, ActionListener<Output> listener);
+
+    /**
+     * Get MLModel and return ActionFuture.
+     * @param modelId id of the model
+     * @return ActionFuture of ml model
+     */
+    default ActionFuture<MLModel> getModel(String modelId) {
+        PlainActionFuture<MLModel> actionFuture = PlainActionFuture.newFuture();
+        getModel(modelId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Get MLModel and return model in listener
+     * @param modelId id of the model
+     * @param listener action listener
+     */
+    void getModel(String modelId, ActionListener<MLModel> listener);
+
+    /**
+     *  Delete the model with modelId.
+     * @param modelId ML model id
+     * @return the result future
+     */
+    default ActionFuture<DeleteResponse> deleteModel(String modelId) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteModel(modelId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Delete MLModel
+     * @param modelId id of the model
+     * @param listener action listener
+     */
+    void deleteModel(String modelId, ActionListener<DeleteResponse> listener);
+
+    /**
+     *
+     * @param searchRequest searchRequest to search the ML Model
+     * @return Action future of search response
+     */
+    default ActionFuture<SearchResponse> searchModel(SearchRequest searchRequest) {
+        PlainActionFuture<SearchResponse> actionFuture = PlainActionFuture.newFuture();
+        searchModel(searchRequest, actionFuture);
+        return actionFuture;
+    }
+    /**
+     *
+     * @param searchRequest searchRequest to search the ML Model
+     * @param listener action listener
+     */
+    void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
 }
