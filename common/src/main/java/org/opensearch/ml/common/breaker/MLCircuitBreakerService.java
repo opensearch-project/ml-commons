@@ -39,10 +39,12 @@ public class MLCircuitBreakerService {
         }
 
         breakers.remove(name);
+        log.info("Removed ML breakers " + name);
     }
 
     public void clearBreakers() {
         breakers.clear();
+        log.info("Cleared ML breakers.");
     }
 
     public CircuitBreaker getBreaker(BreakerName name) {

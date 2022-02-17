@@ -32,10 +32,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class AnomalyDetectionTest {
+public class AnomalyDetectionLibSVMTest {
 
     private AnomalyDetectionParams parameters;
-    private AnomalyDetection anomalyDetection;
+    private AnomalyDetectionLibSVM anomalyDetection;
     private DataFrame trainDataFrame;
     private DataFrame predictionDataFrame;
     private List<Event.EventType> predictionLabels;
@@ -48,7 +48,7 @@ public class AnomalyDetectionTest {
     @Before
     public void setUp() {
         parameters = AnomalyDetectionParams.builder().gamma(gamma).nu(nu).build();
-        anomalyDetection = new AnomalyDetection(parameters);
+        anomalyDetection = new AnomalyDetectionLibSVM(parameters);
 
         Pair<Dataset<Event>, Dataset<Event>> pair = AnomalyDataGenerator.gaussianAnomaly(1000, 0.3);
         Dataset<Event> data = pair.getA();
@@ -102,8 +102,8 @@ public class AnomalyDetectionTest {
     @Test
     public void train() {
         Model model = anomalyDetection.train(trainDataFrame);
-        Assert.assertEquals(FunctionName.ANOMALY_DETECTION.name(), model.getName());
-        Assert.assertEquals(AnomalyDetection.VERSION, model.getVersion());
+        Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
+        Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 

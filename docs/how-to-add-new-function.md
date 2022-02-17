@@ -72,13 +72,13 @@ public class SampleAlgoOutput extends MLOutput{
 ```
 
 ### Step 4: add implementation
-Create new class `org.opensearch.ml.engine.algorithms.sample.SampleAlgo` in `ml-algorithms` package by implementing interface `MLAlgo`.
+Create new class `org.opensearch.ml.engine.algorithms.sample.SampleAlgo` in `ml-algorithms` package by implementing interface `Trainable`, `Predictable` or `TrainAndPredictable` for unsupervised algorithm.
 Override `train`, `predict` methods.
 
 Must add `@Function` annotation with new ML algorithm name.
 ```
 @Function(FunctionName.SAMPLE_ALGO) // must add this annotation
-public class SampleAlgo implements MLAlgo {
+public class SampleAlgo implements Trainable, Predictable {
     ...
     private int sampleParam;
     ...
