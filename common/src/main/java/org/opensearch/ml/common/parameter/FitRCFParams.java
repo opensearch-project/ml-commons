@@ -21,7 +21,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Data
 @MLAlgoParameter(algorithms={FunctionName.FIT_RCF})
-public class RCFParams implements MLAlgoParams{
+public class FitRCFParams implements MLAlgoParams{
     public static final String PARSE_FIELD_NAME = FunctionName.FIT_RCF.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             MLAlgoParams.class,
@@ -49,15 +49,15 @@ public class RCFParams implements MLAlgoParams{
     private String timeZone;
 
     @Builder
-    public RCFParams(Integer numberOfTrees,
-                     Integer shingleSize,
-                     Integer sampleSize,
-                     Integer outputAfter,
-                     Double timeDecay,
-                     Double anomalyRate,
-                     String timeField,
-                     String dateFormat,
-                     String timeZone) {
+    public FitRCFParams(Integer numberOfTrees,
+                        Integer shingleSize,
+                        Integer sampleSize,
+                        Integer outputAfter,
+                        Double timeDecay,
+                        Double anomalyRate,
+                        String timeField,
+                        String dateFormat,
+                        String timeZone) {
         this.numberOfTrees = numberOfTrees;
         this.shingleSize = shingleSize;
         this.sampleSize = sampleSize;
@@ -69,7 +69,7 @@ public class RCFParams implements MLAlgoParams{
         this.timeZone = timeZone;
     }
 
-    public RCFParams(StreamInput in) throws IOException {
+    public FitRCFParams(StreamInput in) throws IOException {
         this.numberOfTrees = in.readOptionalInt();
         this.shingleSize = in.readOptionalInt();
         this.sampleSize = in.readOptionalInt();
@@ -94,7 +94,7 @@ public class RCFParams implements MLAlgoParams{
         out.writeOptionalString(timeZone);
     }
 
-    public static RCFParams parse(XContentParser parser) throws IOException {
+    public static FitRCFParams parse(XContentParser parser) throws IOException {
         Integer numberOfTrees = null;
         Integer shingleSize = null;
         Integer sampleSize = null;
@@ -143,7 +143,7 @@ public class RCFParams implements MLAlgoParams{
                     break;
             }
         }
-        return new RCFParams(numberOfTrees, shingleSize, sampleSize, outputAfter,
+        return new FitRCFParams(numberOfTrees, shingleSize, sampleSize, outputAfter,
                 timeDecay, anomalyRate, timeField, dateFormat, timeZone);
     }
 

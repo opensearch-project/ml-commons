@@ -38,11 +38,12 @@ import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.parameter.AnomalyDetectionParams;
+import org.opensearch.ml.common.parameter.BatchRCFParams;
+import org.opensearch.ml.common.parameter.FitRCFParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
-import org.opensearch.ml.common.parameter.RCFParams;
 import org.opensearch.ml.common.parameter.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -267,7 +268,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 SampleAlgoParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
                 AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
-                RCFParams.XCONTENT_REGISTRY
+                FitRCFParams.XCONTENT_REGISTRY,
+                BatchRCFParams.XCONTENT_REGISTRY
             );
     }
 }

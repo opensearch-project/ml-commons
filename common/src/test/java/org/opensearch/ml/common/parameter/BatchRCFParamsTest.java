@@ -17,29 +17,25 @@ import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
 
-public class RCFParamsTest {
+public class BatchRCFParamsTest {
 
-    RCFParams params;
-    private Function<XContentParser, RCFParams> function = parser -> {
+    BatchRCFParams params;
+    private Function<XContentParser, BatchRCFParams> function = parser -> {
         try {
-            return (RCFParams)RCFParams.parse(parser);
+            return (BatchRCFParams) BatchRCFParams.parse(parser);
         } catch (IOException e) {
-            throw new RuntimeException("failed to parse RCFParams", e);
+            throw new RuntimeException("failed to parse BatchRCFParams", e);
         }
     };
 
     @Before
     public void setUp() {
-        params = RCFParams.builder()
+        params = BatchRCFParams.builder()
                 .numberOfTrees(10)
                 .shingleSize(8)
                 .sampleSize(256)
                 .outputAfter(32)
-                .timeDecay(0.001)
-                .anomalyRate(0.005)
-                .timeField("timestamp")
-                .dateFormat("yyyy-mm-dd")
-                .timeZone("UTC")
+                .trainingDataSize(200)
                 .build();
     }
 
@@ -50,7 +46,7 @@ public class RCFParamsTest {
 
     @Test
     public void parse_EmptyRCFParams() throws IOException {
-        TestHelper.testParse(RCFParams.builder().build(), function);
+        TestHelper.testParse(BatchRCFParams.builder().build(), function);
     }
 
     @Test
@@ -60,15 +56,15 @@ public class RCFParamsTest {
 
     @Test
     public void readInputStream_Success_EmptyParams() throws IOException {
-        readInputStream(RCFParams.builder().build());
+        readInputStream(BatchRCFParams.builder().build());
     }
 
-    private void readInputStream(RCFParams params) throws IOException {
+    private void readInputStream(BatchRCFParams params) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         params.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        RCFParams parsedParams = new RCFParams(streamInput);
+        BatchRCFParams parsedParams = new BatchRCFParams(streamInput);
         assertEquals(params, parsedParams);
     }
 }

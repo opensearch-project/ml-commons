@@ -15,13 +15,13 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.Model;
-import org.opensearch.ml.common.parameter.RCFParams;
+import org.opensearch.ml.common.parameter.FitRCFParams;
 
 import java.util.concurrent.ThreadLocalRandom;
 
 public class FixedInTimeRandomCutForestTest {
 
-    private RCFParams parameters;
+    private FitRCFParams parameters;
     private FixedInTimeRandomCutForest forest;
     private DataFrame trainDataFrame;
     private DataFrame predictionDataFrame;
@@ -29,7 +29,7 @@ public class FixedInTimeRandomCutForestTest {
 
     @Before
     public void setUp() {
-        parameters = RCFParams.builder()
+        parameters = FitRCFParams.builder()
                 .numberOfTrees(10)
                 .shingleSize(8)
                 .sampleSize(100)

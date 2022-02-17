@@ -6,12 +6,12 @@
 package org.opensearch.ml.engine.utils;
 
 import lombok.experimental.UtilityClass;
-import org.apache.commons.io.serialization.ValidatingObjectInputStream;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
 @UtilityClass
@@ -30,38 +30,21 @@ public class ModelSerDeSer {
     };
 
     public static byte[] serialize(Object model) {
-        byte[] res = new byte[0];
-        try {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+             ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)) {
             objectOutputStream.writeObject(model);
             objectOutputStream.flush();
-            res = byteArrayOutputStream.toByteArray();
-            objectOutputStream.close();
-            byteArrayOutputStream.close();
+            return byteArrayOutputStream.toByteArray();
         } catch (IOException e) {
             throw new ModelSerDeSerException("Failed to serialize model.", e.getCause());
         }
-
-        return res;
     }
 
     public static Object deserialize(byte[] modelBin) {
-        Object res;
-        try {
-            ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
-            ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream);
-
-            // Validate the model class type to avoid deserialization attack.
-            validatingObjectInputStream.accept(ACCEPT_CLASS_PATTERNS);
-
-            res = validatingObjectInputStream.readObject();
-            validatingObjectInputStream.close();
-            inputStream.close();
+        try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(modelBin))) {
+            return objectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
         }
-
-        return res;
     }
 }
