@@ -40,8 +40,8 @@ import java.util.Optional;
  * Wrap Tribuo's anomaly detection based on one-class SVM (libSVM).
  *
  */
-@Function(FunctionName.ANOMALY_DETECTION)
-public class AnomalyDetection implements Trainable, Predictable {
+@Function(FunctionName.AD_LIBSVM)
+public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     public static final int VERSION = 1;
     private static double DEFAULT_GAMMA = 1.0;
     private static double DEFAULT_NU = 0.1;
@@ -49,9 +49,9 @@ public class AnomalyDetection implements Trainable, Predictable {
 
     private AnomalyDetectionParams parameters;
 
-    public AnomalyDetection() {}
+    public AnomalyDetectionLibSVM() {}
 
-    public AnomalyDetection(MLAlgoParams parameters) {
+    public AnomalyDetectionLibSVM(MLAlgoParams parameters) {
         this.parameters = parameters == null ? AnomalyDetectionParams.builder().build() : (AnomalyDetectionParams)parameters;
         validateParameters();
     }
@@ -119,7 +119,7 @@ public class AnomalyDetection implements Trainable, Predictable {
         LibSVMModel libSVMModel = trainer.train(data);
         ((LibSVMAnomalyModel)libSVMModel).getNumberOfSupportVectors();
         Model model = new Model();
-        model.setName(FunctionName.ANOMALY_DETECTION.name());
+        model.setName(FunctionName.AD_LIBSVM.name());
         model.setVersion(VERSION);
         model.setContent(ModelSerDeSer.serialize(libSVMModel));
         return model;

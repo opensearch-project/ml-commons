@@ -38,7 +38,7 @@ import org.opensearch.rest.RestStatus;
 @Log4j2
 public class MLTaskManager {
     private final Map<String, MLTaskCache> taskCaches;
-    // todo make this value configurable in the future
+    // TODO: make this value configurable as cluster setting
     public final static int MAX_ML_TASK_PER_NODE = 10;
     private final Client client;
     private final MLIndicesHandler mlIndicesHandler;

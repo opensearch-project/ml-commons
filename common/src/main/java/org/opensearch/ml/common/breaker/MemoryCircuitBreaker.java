@@ -11,7 +11,7 @@ import org.opensearch.monitor.jvm.JvmService;
  * A circuit breaker for memory usage.
  */
 public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
-
+    //TODO: make this value configurable as cluster setting
     public static final short DEFAULT_JVM_HEAP_USAGE_THRESHOLD = 85;
     private final JvmService jvmService;
 

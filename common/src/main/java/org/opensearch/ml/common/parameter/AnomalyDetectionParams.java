@@ -21,9 +21,9 @@ import java.util.Locale;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
-@MLAlgoParameter(algorithms={FunctionName.ANOMALY_DETECTION})
+@MLAlgoParameter(algorithms={FunctionName.AD_LIBSVM})
 public class AnomalyDetectionParams implements MLAlgoParams {
-    public static final String PARSE_FIELD_NAME = FunctionName.ANOMALY_DETECTION.name();
+    public static final String PARSE_FIELD_NAME = FunctionName.AD_LIBSVM.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             MLAlgoParams.class,
             new ParseField(PARSE_FIELD_NAME),
