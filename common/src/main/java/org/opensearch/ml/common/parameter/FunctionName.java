@@ -12,5 +12,6 @@ public enum FunctionName {
     SAMPLE_ALGO,
     LOCAL_SAMPLE_CALCULATOR,
     ANOMALY_LOCALIZATION,
-    FIT_RCF
+    FIT_RCF,
+    BATCH_RCF
 }

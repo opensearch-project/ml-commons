@@ -24,7 +24,7 @@ import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLOutput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.Model;
-import org.opensearch.ml.common.parameter.RCFParams;
+import org.opensearch.ml.common.parameter.FitRCFParams;
 import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
@@ -74,7 +74,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
         if (parameters == null) {
             throw new MLValidationException("Parameters can't be null");
         }
-        RCFParams rcfParams = (RCFParams) parameters;
+        FitRCFParams rcfParams = (FitRCFParams) parameters;
         if (rcfParams.getTimeField() == null) {
             throw new MLValidationException("Time field can't be null");
         }
@@ -97,7 +97,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
     @Override
     public MLOutput predict(DataFrame dataFrame, Model model) {
         if (model == null) {
-            throw new IllegalArgumentException("No model found for KMeans prediction.");
+            throw new IllegalArgumentException("No model found for FIT RCF prediction.");
         }
         ThresholdedRandomCutForestState state = (ThresholdedRandomCutForestState) ModelSerDeSer.deserialize(model.getContent());
         ThresholdedRandomCutForest forest = trcfMapper.toModel(state);
