@@ -27,6 +27,7 @@ import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
@@ -64,9 +65,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLTaskManager mlTaskManager,
         MLStats mlStats,
         MLInputDatasetHandler mlInputDatasetHandler,
-        MLTaskDispatcher mlTaskDispatcher
+        MLTaskDispatcher mlTaskDispatcher,
+        MLCircuitBreakerService mlCircuitBreakerService
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher);
+        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
@@ -74,7 +76,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     @Override
-    public void run(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
+    public void executeTask(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
         mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
             if (clusterService.localNode().getId().equals(node.getId())) {
                 // Execute prediction task locally

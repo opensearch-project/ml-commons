@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.model.MLTask;
 import org.opensearch.ml.model.MLTaskState;
 import org.opensearch.ml.stats.MLStats;
@@ -28,6 +30,7 @@ public abstract class MLTaskRunner<Request, Response> {
     protected final MLTaskManager mlTaskManager;
     protected final MLStats mlStats;
     protected final MLTaskDispatcher mlTaskDispatcher;
+    protected final MLCircuitBreakerService mlCircuitBreakerService;
 
     protected static final String TASK_ID = "task_id";
     protected static final String ALGORITHM = "algorithm";
@@ -36,10 +39,16 @@ public abstract class MLTaskRunner<Request, Response> {
     protected static final String MODEL_CONTENT = "model_content";
     protected static final String USER = "user";
 
-    public MLTaskRunner(MLTaskManager mlTaskManager, MLStats mlStats, MLTaskDispatcher mlTaskDispatcher) {
+    public MLTaskRunner(
+        MLTaskManager mlTaskManager,
+        MLStats mlStats,
+        MLTaskDispatcher mlTaskDispatcher,
+        MLCircuitBreakerService mlCircuitBreakerService
+    ) {
         this.mlTaskManager = mlTaskManager;
         this.mlStats = mlStats;
         this.mlTaskDispatcher = mlTaskDispatcher;
+        this.mlCircuitBreakerService = mlCircuitBreakerService;
     }
 
     protected void handleMLTaskFailure(MLTask mlTask, Exception e) {
@@ -70,5 +79,12 @@ public abstract class MLTaskRunner<Request, Response> {
         }
     }
 
-    public abstract void run(Request request, TransportService transportService, ActionListener<Response> listener);
+    public void run(Request request, TransportService transportService, ActionListener<Response> listener) {
+        if (mlCircuitBreakerService.isOpen()) {
+            throw new MLLimitExceededException("Circuit breaker is open");
+        }
+        executeTask(request, transportService, listener);
+    }
+
+    public abstract void executeTask(Request request, TransportService transportService, ActionListener<Response> listener);
 }

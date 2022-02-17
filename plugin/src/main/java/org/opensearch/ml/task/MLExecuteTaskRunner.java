@@ -10,6 +10,7 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
@@ -37,9 +38,10 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         MLTaskManager mlTaskManager,
         MLStats mlStats,
         MLInputDatasetHandler mlInputDatasetHandler,
-        MLTaskDispatcher mlTaskDispatcher
+        MLTaskDispatcher mlTaskDispatcher,
+        MLCircuitBreakerService mlCircuitBreakerService
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher);
+        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
@@ -54,7 +56,11 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
      * @param listener Action listener
      */
     @Override
-    public void run(MLExecuteTaskRequest request, TransportService transportService, ActionListener<MLExecuteTaskResponse> listener) {
+    public void executeTask(
+        MLExecuteTaskRequest request,
+        TransportService transportService,
+        ActionListener<MLExecuteTaskResponse> listener
+    ) {
         Input input = request.getInput();
         Output output = MLEngine.execute(input);
         MLExecuteTaskResponse response = MLExecuteTaskResponse.builder().output(output).build();
