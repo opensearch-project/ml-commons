@@ -10,7 +10,7 @@ import java.util.concurrent.Semaphore;
 import lombok.Builder;
 import lombok.Getter;
 
-import org.opensearch.ml.model.MLTask;
+import org.opensearch.ml.common.parameter.MLTask;
 
 @Getter
 public class MLTaskCache {

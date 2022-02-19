@@ -93,7 +93,7 @@ public class MLModel implements ToXContentObject {
         return builder;
     }
 
-    public static MLModel parse(XContentParser parser, String taskId) throws IOException {
+    public static MLModel parse(XContentParser parser) throws IOException {
         String name = null;
         FunctionName algorithm = null;
         Integer version = null;

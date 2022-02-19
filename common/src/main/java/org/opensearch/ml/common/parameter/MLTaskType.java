@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.model;
+package org.opensearch.ml.common.parameter;
 
 public enum MLTaskType {
     TRAINING,

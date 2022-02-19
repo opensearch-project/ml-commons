@@ -3,24 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.model;
-
-import java.io.IOException;
-import java.time.Instant;
+package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
-
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.parameter.FunctionName;
+
+import java.io.IOException;
+import java.time.Instant;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Getter
 @EqualsAndHashCode
@@ -180,5 +181,97 @@ public class MLTask implements ToXContentObject, Writeable {
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
         return builder.endObject();
+    }
+
+    public static MLTask fromStream(StreamInput in) throws IOException {
+        MLTask mlTask = new MLTask(in);
+        return mlTask;
+    }
+
+    public static MLTask parse(XContentParser parser) throws IOException {
+        String taskId = null;
+        String modelId = null;
+        MLTaskType taskType = null;
+        FunctionName functionName = null;
+        MLTaskState state = null;
+        MLInputDataType inputType = null;
+        Float progress = null;
+        String outputIndex = null;
+        String workerNode = null;
+        Instant createTime = null;
+        Instant lastUpdateTime = null;
+        String error = null;
+        User user = null;
+        boolean async = false;
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case TASK_ID_FIELD:
+                    taskId = parser.text();
+                    break;
+                case MODEL_ID_FIELD:
+                    modelId = parser.text();
+                    break;
+                case TASK_TYPE_FIELD:
+                    taskType = MLTaskType.valueOf(parser.text());
+                    break;
+                case FUNCTION_NAME_FIELD:
+                    functionName = FunctionName.valueOf(parser.text());
+                    break;
+                case STATE_FIELD:
+                    state = MLTaskState.valueOf(parser.text());
+                    break;
+                case INPUT_TYPE_FIELD:
+                    inputType = MLInputDataType.valueOf(parser.text());
+                    break;
+                case PROGRESS_FIELD:
+                    progress = parser.floatValue();
+                    break;
+                case OUTPUT_INDEX_FIELD:
+                    outputIndex = parser.text();
+                    break;
+                case WORKER_NODE_FIELD:
+                    workerNode = parser.text();
+                    break;
+                case CREATE_TIME_FIELD:
+                    createTime = Instant.parse(parser.text());
+                    break;
+                case LAST_UPDATE_TIME_FIELD:
+                    lastUpdateTime = Instant.parse(parser.text());
+                    break;
+                case ERROR_FIELD:
+                    error = parser.text();
+                    break;
+                case USER_FIELD:
+                    user = User.parse(parser);
+                    break;
+                case IS_ASYNC_TASK_FIELD:
+                    async = parser.booleanValue();
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return MLTask.builder()
+                .taskId(taskId)
+                .modelId(modelId)
+                .taskType(taskType)
+                .functionName(functionName)
+                .state(state)
+                .inputType(inputType)
+                .progress(progress)
+                .outputIndex(outputIndex)
+                .workerNode(workerNode)
+                .createTime(createTime)
+                .lastUpdateTime(lastUpdateTime)
+                .error(error)
+                .user(user)
+                .async(async)
+                .build();
     }
 }

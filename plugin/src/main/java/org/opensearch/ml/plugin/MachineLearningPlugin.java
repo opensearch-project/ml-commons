@@ -28,12 +28,15 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
+import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
+import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
+import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
@@ -50,6 +53,8 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -121,7 +126,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, TransportTrainAndPredictionTaskAction.class),
                 new ActionHandler<>(MLModelGetAction.INSTANCE, GetModelTransportAction.class),
                 new ActionHandler<>(MLModelDeleteAction.INSTANCE, DeleteModelTransportAction.class),
-                new ActionHandler<>(MLModelSearchAction.INSTANCE, SearchModelTransportAction.class)
+                new ActionHandler<>(MLModelSearchAction.INSTANCE, SearchModelTransportAction.class),
+                new ActionHandler<>(MLTaskGetAction.INSTANCE, GetTaskTransportAction.class),
+                new ActionHandler<>(MLTaskDeleteAction.INSTANCE, DeleteTaskTransportAction.class)
             );
     }
 
@@ -207,6 +214,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
+
         return ImmutableList
             .of(
                 mlStats,
@@ -216,7 +225,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlTrainingTaskRunner,
                 mlPredictTaskRunner,
                 mlTrainAndPredictTaskRunner,
-                mlExecuteTaskRunner
+                mlExecuteTaskRunner,
+                mlSearchHandler
             );
     }
 
@@ -238,6 +248,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
+        RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
+        RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
+
         return ImmutableList
             .of(
                 restStatsMLAction,
@@ -247,7 +260,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
                 restMLDeleteModelAction,
-                restMLSearchModelAction
+                restMLSearchModelAction,
+                restMLGetTaskAction,
+                restMLDeleteTaskAction
             );
     }
 

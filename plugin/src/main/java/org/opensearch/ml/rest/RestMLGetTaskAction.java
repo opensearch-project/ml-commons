@@ -6,7 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TASK_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.ml.common.transport.model.MLModelGetAction;
-import org.opensearch.ml.common.transport.model.MLModelGetRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -23,41 +23,41 @@ import org.opensearch.rest.action.RestToXContentListener;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLGetModelAction extends BaseRestHandler {
-    private static final String ML_GET_MODEL_ACTION = "ml_get_model_action";
+public class RestMLGetTaskAction extends BaseRestHandler {
+    private static final String ML_GET_Task_ACTION = "ml_get_task_action";
 
     /**
      * Constructor
      */
-    public RestMLGetModelAction() {}
+    public RestMLGetTaskAction() {}
 
     @Override
     public String getName() {
-        return ML_GET_MODEL_ACTION;
+        return ML_GET_Task_ACTION;
     }
 
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/models/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
+            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tasks/{%s}", ML_BASE_URI, PARAMETER_TASK_ID)));
     }
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLModelGetRequest mlModelGetRequest = getRequest(request);
-        return channel -> client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, new RestToXContentListener<>(channel));
+        MLTaskGetRequest mlTaskGetRequest = getRequest(request);
+        return channel -> client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, new RestToXContentListener<>(channel));
     }
 
     /**
-     * Creates a MLModelGetRequest from a RestRequest
+     * Creates a MLTaskGetRequest from a RestRequest
      *
      * @param request RestRequest
-     * @return MLModelGetRequest
+     * @return MLTaskGetRequest
      */
     @VisibleForTesting
-    MLModelGetRequest getRequest(RestRequest request) throws IOException {
-        String modelId = getParameterId(request, PARAMETER_MODEL_ID);
+    MLTaskGetRequest getRequest(RestRequest request) throws IOException {
+        String taskId = getParameterId(request, PARAMETER_TASK_ID);
 
-        return new MLModelGetRequest(modelId);
+        return new MLTaskGetRequest(taskId);
     }
 }
