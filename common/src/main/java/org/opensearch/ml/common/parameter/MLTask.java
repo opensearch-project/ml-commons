@@ -238,10 +238,10 @@ public class MLTask implements ToXContentObject, Writeable {
                     workerNode = parser.text();
                     break;
                 case CREATE_TIME_FIELD:
-                    createTime = Instant.parse(parser.text());
+                    createTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case LAST_UPDATE_TIME_FIELD:
-                    lastUpdateTime = Instant.parse(parser.text());
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case ERROR_FIELD:
                     error = parser.text();
