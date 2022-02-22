@@ -10,7 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
-import static org.opensearch.ml.utils.RestActionUtils.getModelId;
+import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
 import java.util.List;
@@ -67,7 +67,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(RestRequest request) throws IOException {
         String algorithm = getAlgorithm(request);
-        String modelId = getModelId(request);
+        String modelId = getParameterId(request, PARAMETER_MODEL_ID);
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

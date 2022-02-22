@@ -20,6 +20,9 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLTask;
+import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.parameter.MLTaskType;
 import org.opensearch.ml.utils.TestHelper;
 
 public class MLTaskTests {

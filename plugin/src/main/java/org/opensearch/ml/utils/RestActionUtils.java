@@ -18,6 +18,7 @@ public class RestActionUtils {
     public static final String PARAMETER_ALGORITHM = "algorithm";
     public static final String PARAMETER_ASYNC = "async";
     public static final String PARAMETER_MODEL_ID = "model_id";
+    public static final String PARAMETER_TASK_ID = "task_id";
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -32,17 +33,17 @@ public class RestActionUtils {
     }
 
     /**
-     * Get the model id from a RestRequest
+     * Get the Model or Task id from a RestRequest
      *
      * @param request RestRequest
-     * @return model id
+     * @return id for model or task
      */
-    public static String getModelId(RestRequest request) {
-        String modelId = request.param(PARAMETER_MODEL_ID);
-        if (Strings.isNullOrEmpty(modelId)) {
-            throw new IllegalArgumentException("Request should contain model_id!");
+    public static String getParameterId(RestRequest request, String idName) {
+        String id = request.param(idName);
+        if (Strings.isNullOrEmpty(id)) {
+            throw new IllegalArgumentException("Request should contain " + idName);
         }
-        return modelId;
+        return id;
     }
 
     /**

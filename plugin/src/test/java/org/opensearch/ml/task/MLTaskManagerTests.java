@@ -20,10 +20,10 @@ import org.mockito.ArgumentCaptor;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.ml.common.parameter.MLTask;
+import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.parameter.MLTaskType;
 import org.opensearch.ml.indices.MLIndicesHandler;
-import org.opensearch.ml.model.MLTask;
-import org.opensearch.ml.model.MLTaskState;
-import org.opensearch.ml.model.MLTaskType;
 
 public class MLTaskManagerTests {
     MLTaskManager mlTaskManager;
