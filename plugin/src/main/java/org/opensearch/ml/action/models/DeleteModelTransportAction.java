@@ -19,6 +19,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.tasks.Task;
@@ -45,19 +46,24 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
 
-        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-            @Override
-            public void onResponse(DeleteResponse deleteResponse) {
-                log.info("Completed Delete Model Request, model id:{} deleted", modelId);
-                actionListener.onResponse(deleteResponse);
-            }
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
+                @Override
+                public void onResponse(DeleteResponse deleteResponse) {
+                    log.info("Completed Delete Model Request, model id:{} deleted", modelId);
+                    actionListener.onResponse(deleteResponse);
+                }
 
-            @Override
-            public void onFailure(Exception e) {
-                log.error("Failed to delete ML model " + modelId, e);
-                actionListener.onFailure(e);
-            }
-        });
+                @Override
+                public void onFailure(Exception e) {
+                    log.error("Failed to delete ML model " + modelId, e);
+                    actionListener.onFailure(e);
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to delete ML model " + modelId, e);
+            actionListener.onFailure(e);
+        }
     }
 
 }
