@@ -165,7 +165,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (!checkUserPermissions(requestUser, resourceUser, request.getModelId())) {
                         // The backend roles of request user and resource user doesn't have intersection
                         OpenSearchException e = new OpenSearchException(
-                                "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + request.getModelId()
+                            "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + request.getModelId()
                         );
                         log.debug(e);
                         handlePredictFailure(mlTask, listener, e);
@@ -181,7 +181,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     MLOutput output;
                     try {
                         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
-                        output = MLEngine.predict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build(), model);
+                        output = MLEngine
+                            .predict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build(), model);
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
                             ((MLPredictionOutput) output).setStatus(mlTaskManager.get(mlTask.getTaskId()).getState().name());
