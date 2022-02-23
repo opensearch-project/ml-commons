@@ -21,6 +21,7 @@ import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
@@ -185,15 +186,20 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX)
                     .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(indexRequest, ActionListener.wrap(r -> {
-                    log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
-                    handleMLTaskComplete(mlTask);
-                    MLTrainingOutput output = new MLTrainingOutput(r.getId(), mlTask.getTaskId(), MLTaskState.COMPLETED.name());
-                    listener.onResponse(MLTaskResponse.builder().output(output).build());
-                }, e -> {
-                    handleMLTaskFailure(mlTask, e);
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    client.index(indexRequest, ActionListener.wrap(r -> {
+                        log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
+                        handleMLTaskComplete(mlTask);
+                        MLTrainingOutput output = new MLTrainingOutput(r.getId(), mlTask.getTaskId(), MLTaskState.COMPLETED.name());
+                        listener.onResponse(MLTaskResponse.builder().output(output).build());
+                    }, e -> {
+                        handleMLTaskFailure(mlTask, e);
+                        listener.onFailure(e);
+                    }));
+                } catch (Exception e) {
+                    log.error("Failed to save ML model", e);
                     listener.onFailure(e);
-                }));
+                }
             }, e -> { listener.onFailure(e); }));
         } catch (Exception e) {
             // todo need to specify what exception
