@@ -65,7 +65,7 @@ public class SearchModelTransportAction extends HandledTransportAction<SearchReq
      * @param <T> action listener response type
      * @return wrapped action listener
      */
-    public static <T> ActionListener wrapRestActionListener(ActionListener<T> actionListener, String generalErrorMessage) {
+    public static <T> ActionListener<T> wrapRestActionListener(ActionListener<T> actionListener, String generalErrorMessage) {
         return ActionListener.<T>wrap(r -> { actionListener.onResponse(r); }, e -> {
             log.error("Wrap exception before sending back to user", e);
             Throwable cause = Throwables.getRootCause(e);

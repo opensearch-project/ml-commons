@@ -18,6 +18,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
@@ -53,28 +54,34 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         String taskId = mlTaskGetRequest.getTaskId();
         GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
 
-        client.get(getRequest, ActionListener.wrap(r -> {
-            log.info("Completed Get Task Request, id:{}", taskId);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.get(getRequest, ActionListener.wrap(r -> {
+                log.info("Completed Get Task Request, id:{}", taskId);
 
-            if (r != null && r.isExists()) {
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLTask mlTask = MLTask.parse(parser);
-                    actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
-                } catch (Exception e) {
-                    log.error("Failed to parse ml task" + r.getId(), e);
+                if (r != null && r.isExists()) {
+                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        MLTask mlTask = MLTask.parse(parser);
+                        actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
+                    } catch (Exception e) {
+                        log.error("Failed to parse ml task" + r.getId(), e);
+                        actionListener.onFailure(e);
+                    }
+                } else {
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
+                }
+            }, e -> {
+                if (e instanceof IndexNotFoundException) {
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
+                } else {
+                    log.error("Failed to get ML task " + taskId, e);
                     actionListener.onFailure(e);
                 }
-            } else {
-                actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
-            }
-        }, e -> {
-            if (e instanceof IndexNotFoundException) {
-                actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
-            } else {
-                log.error("Failed to get ML task " + taskId, e);
-                actionListener.onFailure(e);
-            }
-        }));
+            }));
+        } catch (Exception e) {
+            log.error("Failed to get ML task " + taskId, e);
+            actionListener.onFailure(e);
+        }
+
     }
 }

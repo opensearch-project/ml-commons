@@ -17,6 +17,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.tasks.Task;
@@ -42,18 +43,23 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
 
         DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
 
-        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-            @Override
-            public void onResponse(DeleteResponse deleteResponse) {
-                log.info("Completed Delete Task Request, task id:{} deleted", taskId);
-                actionListener.onResponse(deleteResponse);
-            }
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
+                @Override
+                public void onResponse(DeleteResponse deleteResponse) {
+                    log.info("Completed Delete Task Request, task id:{} deleted", taskId);
+                    actionListener.onResponse(deleteResponse);
+                }
 
-            @Override
-            public void onFailure(Exception e) {
-                log.error("Failed to delete ML Task " + taskId, e);
-                actionListener.onFailure(e);
-            }
-        });
+                @Override
+                public void onFailure(Exception e) {
+                    log.error("Failed to delete ML Task " + taskId, e);
+                    actionListener.onFailure(e);
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to delete ML task " + taskId, e);
+            actionListener.onFailure(e);
+        }
     }
 }

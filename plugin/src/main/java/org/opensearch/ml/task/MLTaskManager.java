@@ -24,6 +24,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -191,7 +192,10 @@ public class MLTaskManager {
                 return;
             }
             IndexRequest request = new IndexRequest(ML_TASK_INDEX);
-            try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            try (
+                XContentBuilder builder = XContentFactory.jsonBuilder();
+                ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()
+            ) {
                 request.source(mlTask.toXContent(builder, ToXContent.EMPTY_PARAMS)).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(request, listener);
             } catch (Exception e) {
@@ -256,7 +260,9 @@ public class MLTaskManager {
         updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
         updateRequest.doc(updatedContent);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        ActionListener actionListener = semaphore == null ? listener : ActionListener.runAfter(listener, () -> semaphore.release());
+        ActionListener<UpdateResponse> actionListener = semaphore == null
+            ? listener
+            : ActionListener.runAfter(listener, () -> semaphore.release());
         client.update(updateRequest, actionListener);
     }
 }
