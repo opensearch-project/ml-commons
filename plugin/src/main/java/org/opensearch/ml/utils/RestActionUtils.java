@@ -12,6 +12,7 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 public class RestActionUtils {
 
@@ -19,6 +20,8 @@ public class RestActionUtils {
     public static final String PARAMETER_ASYNC = "async";
     public static final String PARAMETER_MODEL_ID = "model_id";
     public static final String PARAMETER_TASK_ID = "task_id";
+    private static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
+    private static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -62,5 +65,21 @@ public class RestActionUtils {
                 parser -> parseSearchRequest(searchRequest, request, parser, client.getNamedWriteableRegistry(), setSize)
             );
         return new SearchQueryInputDataset(Arrays.asList(searchRequest.indices()), searchRequest.source());
+    }
+
+    /**
+     * Checks to see if the request came from Kibana, if so we want to return the UI Metadata from the document.
+     * If the request came from the client then we exclude the UI Metadata from the search result.
+     *
+     * @param request rest request
+     * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
+     */
+    public static FetchSourceContext getSourceContext(RestRequest request) {
+        String userAgent = Strings.coalesceToEmpty(request.header("User-Agent"));
+        if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
+            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
+        } else {
+            return null;
+        }
     }
 }
