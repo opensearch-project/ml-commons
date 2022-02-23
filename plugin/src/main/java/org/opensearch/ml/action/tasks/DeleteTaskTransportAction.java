@@ -26,13 +26,11 @@ import org.opensearch.transport.TransportService;
 @Log4j2
 public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
-    TransportService transportService;
     Client client;
 
     @Inject
     public DeleteTaskTransportAction(TransportService transportService, ActionFilters actionFilters, Client client) {
         super(MLTaskDeleteAction.NAME, transportService, actionFilters, MLTaskDeleteRequest::new);
-        this.transportService = transportService;
         this.client = client;
     }
 

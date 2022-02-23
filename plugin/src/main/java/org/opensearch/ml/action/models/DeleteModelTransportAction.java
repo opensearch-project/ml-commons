@@ -29,13 +29,11 @@ import org.opensearch.transport.TransportService;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class DeleteModelTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
-    TransportService transportService;
     Client client;
 
     @Inject
     public DeleteModelTransportAction(TransportService transportService, ActionFilters actionFilters, Client client) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
-        this.transportService = transportService;
         this.client = client;
     }
 

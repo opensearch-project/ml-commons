@@ -141,15 +141,14 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
         // run predict
         try {
-            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
             MLOutput output = MLEngine.trainAndPredict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build());
+            // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
+            handleMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {
                 ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
                 ((MLPredictionOutput) output).setStatus(mlTaskManager.get(mlTask.getTaskId()).getState().name());
             }
 
-            // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
-            handleMLTaskComplete(mlTask);
             MLTaskResponse response = MLTaskResponse.builder().output(output).build();
             log.info("Train and predict task done for algorithm: {}, task id: {}", mlTask.getFunctionName(), mlTask.getTaskId());
             listener.onResponse(response);
@@ -158,6 +157,8 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             log.error("Failed to train and predict " + mlInput.getAlgorithm(), e);
             handlePredictFailure(mlTask, listener, e);
             return;
+        } finally {
+            mlTaskManager.remove(mlTask.getTaskId());
         }
     }
 

@@ -36,7 +36,6 @@ import org.opensearch.transport.TransportService;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class GetModelTransportAction extends HandledTransportAction<ActionRequest, MLModelGetResponse> {
 
-    TransportService transportService;
     Client client;
     NamedXContentRegistry xContentRegistry;
 
@@ -48,7 +47,6 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         NamedXContentRegistry xContentRegistry
     ) {
         super(MLModelGetAction.NAME, transportService, actionFilters, MLModelGetRequest::new);
-        this.transportService = transportService;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
     }
