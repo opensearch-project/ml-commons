@@ -237,22 +237,29 @@ public class MLTaskManager {
                 return;
             }
         } catch (InterruptedException e) {
-            log.error("Failed to acquire semaphore for task " + taskId, e);
+            log.error("Failed to acquire semaphore for ML task " + taskId, e);
+            listener.onFailure(e);
+            return; // return directly if can't get semaphore
+        }
+        try {
+            if (updatedFields == null || updatedFields.size() == 0) {
+                listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
+                return;
+            }
+            UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
+            Map<String, Object> updatedContent = new HashMap<>();
+            updatedContent.putAll(updatedFields);
+            updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
+            updateRequest.doc(updatedContent);
+            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            ActionListener<UpdateResponse> actionListener = semaphore == null
+                ? listener
+                : ActionListener.runAfter(listener, () -> semaphore.release());
+            client.update(updateRequest, actionListener);
+        } catch (Exception e) {
+            semaphore.release();
+            log.error("Failed to update ML task " + taskId, e);
             listener.onFailure(e);
         }
-        if (updatedFields == null || updatedFields.size() == 0) {
-            listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
-            return;
-        }
-        UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
-        Map<String, Object> updatedContent = new HashMap<>();
-        updatedContent.putAll(updatedFields);
-        updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
-        updateRequest.doc(updatedContent);
-        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        ActionListener<UpdateResponse> actionListener = semaphore == null
-            ? listener
-            : ActionListener.runAfter(listener, () -> semaphore.release());
-        client.update(updateRequest, actionListener);
     }
 }

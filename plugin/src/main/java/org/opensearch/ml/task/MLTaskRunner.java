@@ -52,7 +52,7 @@ public abstract class MLTaskRunner<Request, Response> {
         this.mlCircuitBreakerService = mlCircuitBreakerService;
     }
 
-    protected void handleMLTaskFailure(MLTask mlTask, Exception e) {
+    protected void handleAsyncMLTaskFailure(MLTask mlTask, Exception e) {
         // update task state to MLTaskState.FAILED
         // update task error
         if (mlTask.isAsync()) {
@@ -63,7 +63,7 @@ public abstract class MLTaskRunner<Request, Response> {
         }
     }
 
-    protected void handleMLTaskComplete(MLTask mlTask) {
+    protected void handleAsyncMLTaskComplete(MLTask mlTask) {
         // update task state to MLTaskState.COMPLETED
         if (mlTask.isAsync()) {
             Map<String, Object> updatedFields = new HashMap<>();
