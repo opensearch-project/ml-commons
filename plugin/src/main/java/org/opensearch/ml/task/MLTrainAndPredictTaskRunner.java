@@ -111,9 +111,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { trainAndPredict(mlTask, dataFrame, request, listener); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
-                    mlTaskManager.addIfAbsent(mlTask);
-                    handleMLTaskFailure(mlTask, e);
-                    listener.onFailure(e);
+                    handlePredictFailure(mlTask, listener, e);
                 });
             mlInputDatasetHandler
                 .parseSearchQueryInput(
@@ -132,33 +130,30 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         MLTrainingTaskRequest request,
         ActionListener<MLTaskResponse> listener
     ) {
+        ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
-
         MLInput mlInput = request.getMlInput();
 
-        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
-        // run predict
+        // run train and predict
         try {
+            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
             MLOutput output = MLEngine.trainAndPredict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build());
-            // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
             handleMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {
                 ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
-                ((MLPredictionOutput) output).setStatus(mlTaskManager.get(mlTask.getTaskId()).getState().name());
+                ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
             }
 
             MLTaskResponse response = MLTaskResponse.builder().output(output).build();
             log.info("Train and predict task done for algorithm: {}, task id: {}", mlTask.getFunctionName(), mlTask.getTaskId());
-            listener.onResponse(response);
+            internalListener.onResponse(response);
         } catch (Exception e) {
             // todo need to specify what exception
             log.error("Failed to train and predict " + mlInput.getAlgorithm(), e);
             handlePredictFailure(mlTask, listener, e);
             return;
-        } finally {
-            mlTaskManager.remove(mlTask.getTaskId());
         }
     }
 

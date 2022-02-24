@@ -145,29 +145,35 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
      * @param listener Action listener
      */
     public void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
+        ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
         mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
         mlTaskManager.add(mlTask);
-        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
-            ActionListener<DataFrame> dataFrameActionListener = ActionListener
-                .wrap(
-                    dataFrame -> {
-                        train(mlTask, mlInput.toBuilder().inputDataset(new DataFrameInputDataset(dataFrame)).build(), listener);
-                    },
-                    e -> {
-                        log.error("Failed to generate DataFrame from search query", e);
-                        mlTaskManager.addIfAbsent(mlTask);
-                        handleMLTaskFailure(mlTask, e);
-                        listener.onFailure(e);
-                    }
-                );
-            mlInputDatasetHandler
-                .parseSearchQueryInput(
-                    mlInput.getInputDataset(),
-                    new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
-                );
-        } else {
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, mlInput, listener); });
+        try {
+            if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+                ActionListener<DataFrame> dataFrameActionListener = ActionListener
+                    .wrap(
+                        dataFrame -> {
+                            train(mlTask, mlInput.toBuilder().inputDataset(new DataFrameInputDataset(dataFrame)).build(), internalListener);
+                        },
+                        e -> {
+                            log.error("Failed to generate DataFrame from search query", e);
+                            handleMLTaskFailure(mlTask, e);
+                            internalListener.onFailure(e);
+                        }
+                    );
+                mlInputDatasetHandler
+                    .parseSearchQueryInput(
+                        mlInput.getInputDataset(),
+                        new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
+                    );
+            } else {
+                threadPool.executor(TASK_THREAD_POOL).execute(() -> { train(mlTask, mlInput, internalListener); });
+            }
+        } catch (Exception e) {
+            log.error("Failed to train " + mlInput.getAlgorithm(), e);
+            handleMLTaskFailure(mlTask, e);
+            internalListener.onFailure(e);
         }
     }
 
