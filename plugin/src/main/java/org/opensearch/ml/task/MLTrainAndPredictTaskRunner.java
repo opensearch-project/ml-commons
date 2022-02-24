@@ -140,9 +140,8 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         try {
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
             MLOutput output = MLEngine.trainAndPredict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build());
-            handleMLTaskComplete(mlTask);
+            handleAsyncMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {
-                ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
                 ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
             }
 
@@ -158,7 +157,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     }
 
     private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e) {
-        handleMLTaskFailure(mlTask, e);
+        handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
     }
 }

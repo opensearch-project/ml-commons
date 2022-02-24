@@ -123,7 +123,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { predict(mlTask, dataFrame, request, listener); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
-                    handleMLTaskFailure(mlTask, e);
+                    handleAsyncMLTaskFailure(mlTask, e);
                     listener.onFailure(e);
                 });
             mlInputDatasetHandler
@@ -189,12 +189,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             output = MLEngine
                                 .predict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build(), model);
                             if (output instanceof MLPredictionOutput) {
-                                ((MLPredictionOutput) output).setTaskId(mlTask.getTaskId());
                                 ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                             }
 
                             // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
-                            handleMLTaskComplete(mlTask);
+                            handleAsyncMLTaskComplete(mlTask);
                         } catch (Exception e) {
                             // todo need to specify what exception
                             log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + model.getName(), e);
@@ -225,7 +224,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e) {
-        handleMLTaskFailure(mlTask, e);
+        handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
     }
 }
