@@ -65,6 +65,9 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
     // Partitions the whole data to up to this number of buckets by time.
     protected static final int MAX_TIME_BUCKETS = 8;
 
+    // The minimum number of contributor candidates.
+    protected static final int MIN_CONTRIBUTOR_CANDIDATE = 100;
+
     private final Client client;
     private final Settings settings;
 
@@ -187,11 +190,12 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
             result.getBuckets().stream().filter(e -> e.getCompleted() != null && e.getCompleted().get() == false)
                     .forEach(e -> {
                         PriorityQueue<AnomalyLocalizationOutput.Entity> queue;
+                        int queueSize = Math.max(input.getNumOutputs(), MIN_CONTRIBUTOR_CANDIDATE);
                         if (e.getOverallAggValue() > 0) {
-                            queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(input.getNumOutputs(),
+                            queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(queueSize,
                                     (a, b) -> (int) Math.signum(a.getContributionValue() - b.getContributionValue()));
                         } else {
-                            queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(input.getNumOutputs(),
+                            queue = new PriorityQueue<AnomalyLocalizationOutput.Entity>(queueSize,
                                     (a, b) -> (int) Math.signum(b.getContributionValue() - a.getContributionValue()));
                         }
                         ;
