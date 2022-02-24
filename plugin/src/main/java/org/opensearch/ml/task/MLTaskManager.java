@@ -70,18 +70,7 @@ public class MLTaskManager {
             throw new IllegalArgumentException("Duplicate taskId");
         }
         taskCaches.put(taskId, new MLTaskCache(mlTask));
-    }
-
-    /**
-     * Put ML task into cache if it's not existed in the cache.
-     *
-     * @param mlTask ML task
-     */
-    public synchronized void addIfAbsent(MLTask mlTask) {
-        String taskId = mlTask.getTaskId();
-        if (!contains(taskId)) {
-            taskCaches.put(taskId, new MLTaskCache(mlTask));
-        }
+        log.info("add ML task to cache " + taskId);
     }
 
     /**
@@ -141,6 +130,7 @@ public class MLTaskManager {
     public void remove(String taskId) {
         if (contains(taskId)) {
             taskCaches.remove(taskId);
+            log.info("remove ML task from cache " + taskId);
         }
     }
 
