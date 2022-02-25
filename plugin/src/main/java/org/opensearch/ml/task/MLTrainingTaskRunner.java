@@ -17,6 +17,7 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
@@ -190,12 +191,13 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                     .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    client.index(indexRequest, ActionListener.wrap(r -> {
+                    ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
                         log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
                         String returnedTaskId = mlTask.isAsync() ? mlTask.getTaskId() : null;
                         MLTrainingOutput output = new MLTrainingOutput(r.getId(), returnedTaskId, MLTaskState.COMPLETED.name());
                         listener.onResponse(MLTaskResponse.builder().output(output).build());
-                    }, e -> { listener.onFailure(e); }));
+                    }, e -> { listener.onFailure(e); });
+                    client.index(indexRequest, ActionListener.runBefore(indexResponseListener, () -> context.restore()));
                 } catch (Exception e) {
                     log.error("Failed to save ML model", e);
                     listener.onFailure(e);
