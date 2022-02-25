@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.task;
 
+import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -61,10 +63,12 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         TransportService transportService,
         ActionListener<MLExecuteTaskResponse> listener
     ) {
-        Input input = request.getInput();
-        Output output = MLEngine.execute(input);
-        MLExecuteTaskResponse response = MLExecuteTaskResponse.builder().output(output).build();
-        listener.onResponse(response);
+        threadPool.executor(TASK_THREAD_POOL).execute(() -> {
+            Input input = request.getInput();
+            Output output = MLEngine.execute(input);
+            MLExecuteTaskResponse response = MLExecuteTaskResponse.builder().output(output).build();
+            listener.onResponse(response);
+        });
     }
 
 }
