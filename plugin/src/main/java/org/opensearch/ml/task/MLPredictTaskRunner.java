@@ -23,6 +23,7 @@ import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -156,7 +157,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             if (request.getModelId() != null) {
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
                 try (ThreadContext.StoredContext context = threadPool.getThreadContext().stashContext()) {
-                    client.get(getRequest, ActionListener.wrap(r -> {
+                    ActionListener<GetResponse> getResponseListener = ActionListener.wrap(r -> {
                         if (r == null || !r.isExists()) {
                             internalListener.onFailure(new ResourceNotFoundException("No model found, please check the modelId."));
                             return;
@@ -206,7 +207,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     }, e -> {
                         log.error("Failed to predict model " + mlTask.getModelId(), e);
                         internalListener.onFailure(e);
-                    }));
+                    });
+                    client.get(getRequest, ActionListener.runBefore(getResponseListener, () -> context.restore()));
                 } catch (Exception e) {
                     log.error("Failed to get model " + mlTask.getModelId(), e);
                     internalListener.onFailure(e);

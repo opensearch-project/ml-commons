@@ -187,7 +187,7 @@ public class MLTaskManager {
                 ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()
             ) {
                 request.source(mlTask.toXContent(builder, ToXContent.EMPTY_PARAMS)).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(request, listener);
+                client.index(request, ActionListener.runBefore(listener, () -> context.restore()));
             } catch (Exception e) {
                 log.error("Failed to create AD task for " + mlTask.getFunctionName() + ", " + mlTask.getTaskType(), e);
                 listener.onFailure(e);
@@ -255,7 +255,11 @@ public class MLTaskManager {
             ActionListener<UpdateResponse> actionListener = semaphore == null
                 ? listener
                 : ActionListener.runAfter(listener, () -> semaphore.release());
-            client.update(updateRequest, actionListener);
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.update(updateRequest, ActionListener.runBefore(actionListener, () -> context.restore()));
+            } catch (Exception e) {
+                actionListener.onFailure(e);
+            }
         } catch (Exception e) {
             semaphore.release();
             log.error("Failed to update ML task " + taskId, e);
