@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import java.util.concurrent.Callable
 import org.opensearch.gradle.test.RestIntegTestTask
+import org.opensearch.gradle.testclusters.StandaloneRestIntegTestTask
 
 plugins {
     id 'java'
@@ -43,24 +45,12 @@ dependencies {
     compile "org.opensearch:common-utils:${common_utils_version}"
     compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
-    compile group: 'com.google.guava', name: 'guava', version:'29.0-jre'
+    implementation group: 'com.google.guava', name: 'guava', version: '31.0.1-jre'
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 
-test {
-    include '**/*Test.class'
-    systemProperty 'tests.security.manager', 'false'
-    finalizedBy jacocoTestReport
-}
-
-jacocoTestReport {
-    reports {
-        xml.enabled true
-        html.enabled true
-        csv.enabled true
-    }
-}
 
 compileJava {
     options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
@@ -81,13 +71,15 @@ loggerUsageCheck.enabled = false
 
 def _numNodes = findProperty('numNodes') as Integer ?: 1
 
-def opensearch_tmp_dir = rootProject.file('build/private/opensearch_tmp').absoluteFile
-opensearch_tmp_dir.mkdirs()
 
 test {
     include '**/*Tests.class'
     systemProperty 'tests.security.manager', 'false'
 }
+
+def opensearch_tmp_dir = rootProject.file('build/private/opensearch_tmp').absoluteFile
+opensearch_tmp_dir.mkdirs()
+
 
 task integTest(type: RestIntegTestTask) {
     description = "Run tests against a cluster"
@@ -104,6 +96,13 @@ integTest {
     systemProperty "https", System.getProperty("https")
     systemProperty "user", System.getProperty("user")
     systemProperty "password", System.getProperty("password")
+
+    // Only rest case can run with remote cluster
+    if (System.getProperty("tests.rest.cluster") != null) {
+        filter {
+            includeTestsMatching "org.opensearch.ml.rest.*IT"
+        }
+    }
 
     // The 'doFirst' delays till execution time.
     doFirst {
@@ -150,6 +149,24 @@ testClusters.integTest {
     }
 }
 
+task integTestRemote(type: RestIntegTestTask) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    systemProperty 'tests.security.manager', 'false'
+    systemProperty 'java.io.tmpdir', opensearch_tmp_dir.absolutePath
+
+    systemProperty "https", System.getProperty("https")
+    systemProperty "user", System.getProperty("user")
+    systemProperty "password", System.getProperty("password")
+
+    // Only rest case can run with remote cluster
+    if (System.getProperty("tests.rest.cluster") != null) {
+        filter {
+            includeTestsMatching "org.opensearch.ml.rest.*IT"
+        }
+    }
+}
+
 run {
     doFirst {
         // There seems to be an issue when running multi node run or integ tasks with unicast_hosts
@@ -172,6 +189,7 @@ task release(type: Copy, group: 'build') {
 jacocoTestReport {
     reports {
         xml.enabled true
+        html.enabled true
         csv.enabled false
     }
 

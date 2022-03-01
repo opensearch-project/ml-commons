@@ -34,9 +34,12 @@ This package uses the [Gradle](https://docs.gradle.org/current/userguide/usergui
 
 1. `./gradlew build` builds and tests
 2. `./gradlew :run` launches a single node cluster with ml-commons plugin installed
-3. `./gradlew :integTest` launches a single node cluster with ml-commons plugin installed and runs all integration tests except security
-4. ` ./gradlew :integTest --tests="**.test execute foo"` runs a single integration test class or method
-5. `./gradlew spotlessApply` formats code. And/or import formatting rules in `.eclipseformat.xml` with IDE.
+3. `./gradlew :integTest` launches a single node cluster with ml-commons plugin installed and runs all integration tests except security. Use `./gradlew integTest -PnumNodes=<number>` to launch multi-node cluster.
+4. ` ./gradlew :integTest --tests="<class path>.<test method>"` runs a single integration test class or method, for example `./gradlew integTest --tests="org.opensearch.ml.rest.RestMLTrainAndPredictIT.testTrainAndPredictKmeansWithEmptyParam"` or `./gradlew integTest --tests="org.opensearch.ml.rest.RestMLTrainAndPredictIT"`
+5. `./gradlew integTest -Dtests.class="<class path>"` run specific integ test class, for example `./gradlew integTest -Dtests.class="org.opensearch.ml.rest.RestMLTrainAndPredictIT"`
+6. `./gradlew integTest -Dtests.method="<method name>"` run specific integ test method, for example `./gradlew integTest -Dtests.method="testTrainAndPredictKmeans"`
+7. `./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=admin` launches integration tests against a local cluster and run tests with security. Detail steps: (1)download OpenSearch tarball to local and install by running `opensearch-tar-install.sh`; (2)build ML plugin zip with your change and install ML plugin zip; (3)restart local test cluster; (4) run this gradle command to test.  
+8. `./gradlew spotlessApply` formats code. And/or import formatting rules in `.eclipseformat.xml` with IDE.
 
 When launching a cluster using one of the above commands logs are placed in `/build/cluster/run node0/opensearch-<version>/logs`. Though the logs are teed to the console, in practices it's best to check the actual log file.
 
