@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import lombok.NonNull;
 
@@ -39,6 +40,33 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
             .indices(ImmutableList.of(irisIndex))
             .searchSourceBuilder(sourceBuilder)
             .build();
+        trainAndPredictKmeansWithIrisData(params, inputData, clusterCount -> {
+            if (clusterCount.size() == 3) {
+                for (Map.Entry<Double, Integer> entry : clusterCount.entrySet()) {
+                    assertEquals(50, entry.getValue(), 5);
+                }
+            }
+        });
+    }
+
+    public void testTrainAndPredictKmeansWithEmptyParam() throws IOException {
+        ingestIrisData(irisIndex);
+        KMeansParams params = KMeansParams.builder().build();
+        @NonNull
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(new MatchAllQueryBuilder());
+        sourceBuilder.size(1000);
+        sourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
+        MLInputDataset inputData = SearchQueryInputDataset
+            .builder()
+            .indices(ImmutableList.of(irisIndex))
+            .searchSourceBuilder(sourceBuilder)
+            .build();
+        trainAndPredictKmeansWithIrisData(params, inputData, clusterCount -> { assertEquals(2, clusterCount.size()); });
+    }
+
+    private void trainAndPredictKmeansWithIrisData(KMeansParams params, MLInputDataset inputData, Consumer<Map<Double, Integer>> function)
+        throws IOException {
         MLInput kmeansInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(params).inputDataset(inputData).build();
         Response kmeansResponse = TestHelper
             .makeRequest(
@@ -65,10 +93,6 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
                 clusterCount.put(value, ++count);
             }
         }
-        if (clusterCount.size() == 3) {
-            for (Map.Entry<Double, Integer> entry : clusterCount.entrySet()) {
-                assertEquals(50, entry.getValue(), 5);
-            }
-        }
+        function.accept(clusterCount);
     }
 }
