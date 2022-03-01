@@ -36,7 +36,8 @@ This package uses the [Gradle](https://docs.gradle.org/current/userguide/usergui
 2. `./gradlew :run` launches a single node cluster with ml-commons plugin installed
 3. `./gradlew :integTest` launches a single node cluster with ml-commons plugin installed and runs all integration tests except security
 4. ` ./gradlew :integTest --tests="**.test execute foo"` runs a single integration test class or method
-5. `./gradlew spotlessApply` formats code. And/or import formatting rules in `.eclipseformat.xml` with IDE.
+5. `./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=admin` launches integration tests against a local cluster and run tests with security
+6. `./gradlew spotlessApply` formats code. And/or import formatting rules in `.eclipseformat.xml` with IDE.
 
 When launching a cluster using one of the above commands logs are placed in `/build/cluster/run node0/opensearch-<version>/logs`. Though the logs are teed to the console, in practices it's best to check the actual log file.
 

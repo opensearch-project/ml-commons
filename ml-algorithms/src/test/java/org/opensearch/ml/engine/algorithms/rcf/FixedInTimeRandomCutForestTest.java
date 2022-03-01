@@ -50,7 +50,6 @@ public class FixedInTimeRandomCutForestTest {
         int anomalyCount = 0;
         for (int i = 0 ;i<dataSize; i++) {
             if (i % 100 == 0) {
-                System.out.println(predictions.getRow(i).getValue(1).doubleValue());
                 if (predictions.getRow(i).getValue(1).doubleValue() > 0.01) {
                     anomalyCount++;
                 }
