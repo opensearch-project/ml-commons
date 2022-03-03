@@ -78,7 +78,7 @@ public class RestStatsMLAction extends BaseRestHandler {
 
         Set<String> validStats = mlStats.getStats().keySet();
         if (isAllStatsRequested(requestedStats)) {
-            mlStatsRequest.addAll(validStats);
+            mlStatsRequest.setRetrieveAllStats(true);
         } else {
             mlStatsRequest.addAll(getStatsToBeRetrieved(request, validStats, requestedStats));
         }

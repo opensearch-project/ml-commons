@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
@@ -5,8 +10,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-
-import lombok.NonNull;
 
 import org.apache.http.HttpEntity;
 import org.opensearch.client.Response;
@@ -16,43 +19,38 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.gson.Gson;
 
 public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data";
-    private Gson gson = new Gson();
 
     public void testTrainAndPredictKmeans() throws IOException {
+        validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 0, 0);
         ingestIrisData(irisIndex);
-        KMeansParams params = KMeansParams.builder().centroids(3).build();
-        @NonNull
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.query(new MatchAllQueryBuilder());
-        sourceBuilder.size(1000);
-        sourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
-        MLInputDataset inputData = SearchQueryInputDataset
-            .builder()
-            .indices(ImmutableList.of(irisIndex))
-            .searchSourceBuilder(sourceBuilder)
-            .build();
-        trainAndPredictKmeansWithIrisData(params, inputData, clusterCount -> {
-            if (clusterCount.size() == 3) {
-                for (Map.Entry<Double, Integer> entry : clusterCount.entrySet()) {
-                    assertEquals(50, entry.getValue(), 5);
-                }
-            }
-        });
+        trainAndPredictKmeansWithCustomParam();
+        validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 1, 1);
+
+        // train with empty parameters
+        trainAndPredictKmeansWithEmptyParam();
+        validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 2, 2);
     }
 
-    public void testTrainAndPredictKmeansWithEmptyParam() throws IOException {
-        ingestIrisData(irisIndex);
+    private void trainAndPredictKmeansWithCustomParam() throws IOException {
+        KMeansParams params = KMeansParams.builder().centroids(3).build();
+        trainAndPredictKmeansWithParmas(params, clusterCount -> assertEquals(3, clusterCount.size()));
+    }
+
+    private void trainAndPredictKmeansWithEmptyParam() throws IOException {
         KMeansParams params = KMeansParams.builder().build();
-        @NonNull
+        trainAndPredictKmeansWithParmas(params, clusterCount -> assertEquals(2, clusterCount.size()));
+    }
+
+    private void trainAndPredictKmeansWithParmas(KMeansParams params, Consumer<Map<Double, Integer>> function) throws IOException {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(new MatchAllQueryBuilder());
         sourceBuilder.size(1000);
@@ -62,7 +60,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
             .indices(ImmutableList.of(irisIndex))
             .searchSourceBuilder(sourceBuilder)
             .build();
-        trainAndPredictKmeansWithIrisData(params, inputData, clusterCount -> { assertEquals(2, clusterCount.size()); });
+        trainAndPredictKmeansWithIrisData(params, inputData, function);
     }
 
     private void trainAndPredictKmeansWithIrisData(KMeansParams params, MLInputDataset inputData, Consumer<Map<Double, Integer>> function)

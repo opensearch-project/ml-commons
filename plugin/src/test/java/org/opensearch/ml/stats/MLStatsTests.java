@@ -39,16 +39,6 @@ public class MLStatsTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testStatNamesGetNames() {
-        Assert
-            .assertEquals(
-                "getNames of StatNames returns the incorrect number of stats",
-                StatNames.getNames().size(),
-                StatNames.values().length
-            );
-    }
-
-    @Test
     public void testGetStats() {
         Map<String, MLStat<?>> stats = mlStats.getStats();
 
@@ -77,6 +67,13 @@ public class MLStatsTests extends OpenSearchTestCase {
     @Test(expected = IllegalArgumentException.class)
     public void testGetStatNoExisting() {
         MLStat<?> stat = mlStats.getStat("dummy stat name");
+    }
+
+    @Test
+    public void testCreateCounterStatIfAbsent() {
+        MLStat<?> stat = mlStats.createCounterStatIfAbsent("dummy stat name");
+        stat.increment();
+        assertEquals(1L, stat.getValue());
     }
 
     @Test

@@ -56,7 +56,7 @@ public class MLTaskDispatcher {
         // DiscoveryNode[] mlNodes = getEligibleMLNodes();
         DiscoveryNode[] mlNodes = getEligibleDataNodes();
         MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(mlNodes);
-        MLStatsNodesRequest.addAll(ImmutableSet.of(ML_EXECUTING_TASK_COUNT.getName(), JVM_HEAP_USAGE.getName()));
+        MLStatsNodesRequest.addAll(ImmutableSet.of(ML_EXECUTING_TASK_COUNT, JVM_HEAP_USAGE.getName()));
 
         client.execute(MLStatsNodesAction.INSTANCE, MLStatsNodesRequest, ActionListener.wrap(mlStatsResponse -> {
             // Check JVM pressure
@@ -78,7 +78,7 @@ public class MLTaskDispatcher {
             // Check # of executing ML task
             candidateNodeResponse = candidateNodeResponse
                 .stream()
-                .filter(stat -> (Long) stat.getStatsMap().get(ML_EXECUTING_TASK_COUNT.getName()) < maxMLBatchTaskPerNode)
+                .filter(stat -> (Long) stat.getStatsMap().get(ML_EXECUTING_TASK_COUNT) < maxMLBatchTaskPerNode)
                 .collect(Collectors.toList());
             if (candidateNodeResponse.size() == 0) {
                 String errorMessage = "All nodes' executing ML task count reach limitation.";
@@ -91,8 +91,8 @@ public class MLTaskDispatcher {
             Optional<MLStatsNodeResponse> targetNode = candidateNodeResponse
                 .stream()
                 .sorted((MLStatsNodeResponse r1, MLStatsNodeResponse r2) -> {
-                    int result = ((Long) r1.getStatsMap().get(ML_EXECUTING_TASK_COUNT.getName()))
-                        .compareTo((Long) r2.getStatsMap().get(ML_EXECUTING_TASK_COUNT.getName()));
+                    int result = ((Long) r1.getStatsMap().get(ML_EXECUTING_TASK_COUNT))
+                        .compareTo((Long) r2.getStatsMap().get(ML_EXECUTING_TASK_COUNT));
                     if (result == 0) {
                         // if multiple nodes have same running task count, choose the one with least
                         // JVM heap usage.

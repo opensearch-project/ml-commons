@@ -90,14 +90,15 @@ public class MLStatsNodesTransportAction extends
     private MLStatsNodeResponse createMLStatsNodeResponse(MLStatsNodesRequest mlStatsNodesRequest) {
         Map<String, Object> statValues = new HashMap<>();
         Set<String> statsToBeRetrieved = mlStatsNodesRequest.getStatsToBeRetrieved();
+        boolean retrieveAllStats = mlStatsNodesRequest.isRetrieveAllStats();
 
-        if (statsToBeRetrieved.contains(InternalStatNames.JVM_HEAP_USAGE.getName())) {
+        if (retrieveAllStats || statsToBeRetrieved.contains(InternalStatNames.JVM_HEAP_USAGE.getName())) {
             long heapUsedPercent = jvmService.stats().getMem().getHeapUsedPercent();
             statValues.put(InternalStatNames.JVM_HEAP_USAGE.getName(), heapUsedPercent);
         }
 
         for (String statName : mlStats.getNodeStats().keySet()) {
-            if (statsToBeRetrieved.contains(statName)) {
+            if (retrieveAllStats || statsToBeRetrieved.contains(statName)) {
                 statValues.put(statName, mlStats.getStats().get(statName).getValue());
             }
         }

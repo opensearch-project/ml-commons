@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import org.opensearch.action.ActionRequest;
@@ -89,7 +90,6 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String TASK_THREAD_POOL = "OPENSEARCH_ML_TASK_THREAD_POOL";
@@ -157,10 +157,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         JvmService jvmService = new JvmService(environment.settings());
         MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init();
 
-        Map<String, MLStat<?>> stats = ImmutableMap
-            .<String, MLStat<?>>builder()
-            .put(StatNames.ML_EXECUTING_TASK_COUNT.getName(), new MLStat<>(false, new CounterSupplier()))
-            .build();
+        Map<String, MLStat<?>> stats = new ConcurrentHashMap<>();
+        stats.put(StatNames.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);

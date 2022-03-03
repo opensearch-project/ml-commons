@@ -85,7 +85,7 @@ public abstract class MLTaskRunner<Request, Response> {
 
     protected ActionListener<MLTaskResponse> wrappedCleanupListener(ActionListener<MLTaskResponse> listener, String taskId) {
         ActionListener<MLTaskResponse> internalListener = ActionListener.runAfter(listener, () -> {
-            mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).decrement();
+            mlStats.getStat(ML_EXECUTING_TASK_COUNT).decrement();
             mlTaskManager.remove(taskId);
         });
         return internalListener;

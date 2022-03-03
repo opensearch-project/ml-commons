@@ -24,9 +24,14 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
 
     @Getter
     private Set<String> statsToBeRetrieved;
+    /**
+     * If set this field as true, will retrieve all stats.
+     */
+    private boolean retrieveAllStats = false;
 
     public MLStatsNodesRequest(StreamInput in) throws IOException {
         super(in);
+        retrieveAllStats = in.readBoolean();
         statsToBeRetrieved = in.readSet(StreamInput::readString);
     }
 
@@ -48,6 +53,14 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
     public MLStatsNodesRequest(DiscoveryNode... nodes) {
         super(nodes);
         statsToBeRetrieved = new HashSet<>();
+    }
+
+    public boolean isRetrieveAllStats() {
+        return retrieveAllStats;
+    }
+
+    public void setRetrieveAllStats(boolean retrieveAllStats) {
+        this.retrieveAllStats = retrieveAllStats;
     }
 
     /**
@@ -82,6 +95,7 @@ public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeBoolean(retrieveAllStats);
         out.writeStringCollection(statsToBeRetrieved);
     }
 }
