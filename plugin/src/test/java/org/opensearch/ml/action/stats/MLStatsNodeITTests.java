@@ -45,7 +45,7 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
 
     public void testNormalCase() throws ExecutionException, InterruptedException {
         MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0]);
-        request.addStat(StatNames.ML_EXECUTING_TASK_COUNT.getName());
+        request.addStat(StatNames.ML_EXECUTING_TASK_COUNT);
 
         ActionFuture<MLStatsNodesResponse> future = client().execute(MLStatsNodesAction.INSTANCE, request);
         MLStatsNodesResponse response = future.get();

@@ -7,6 +7,10 @@ package org.opensearch.ml.task;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
+import static org.opensearch.ml.stats.StatNames.failureCountStat;
+import static org.opensearch.ml.stats.StatNames.requestCountStat;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -33,6 +37,7 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -111,7 +116,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             ActionListener<DataFrame> dataFrameActionListener = ActionListener
                 .wrap(dataFrame -> { trainAndPredict(mlTask, dataFrame, request, listener); }, e -> {
                     log.error("Failed to generate DataFrame from search query", e);
-                    handlePredictFailure(mlTask, listener, e);
+                    handlePredictFailure(mlTask, listener, e, false);
                 });
             mlInputDatasetHandler
                 .parseSearchQueryInput(
@@ -132,7 +137,9 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     ) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
-        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(ML_TOTAL_REQUEST_COUNT).increment();
+        mlStats.createCounterStatIfAbsent(requestCountStat(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT)).increment();
         mlTaskManager.add(mlTask);
         MLInput mlInput = request.getMlInput();
 
@@ -151,12 +158,16 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         } catch (Exception e) {
             // todo need to specify what exception
             log.error("Failed to train and predict " + mlInput.getAlgorithm(), e);
-            handlePredictFailure(mlTask, listener, e);
+            handlePredictFailure(mlTask, listener, e, true);
             return;
         }
     }
 
-    private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e) {
+    private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure) {
+        if (trackFailure) {
+            mlStats.createCounterStatIfAbsent(failureCountStat(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT)).increment();
+            mlStats.getStat(ML_TOTAL_FAILURE_COUNT).increment();
+        }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
     }

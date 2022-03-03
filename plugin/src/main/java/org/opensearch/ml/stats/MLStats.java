@@ -7,8 +7,11 @@ package org.opensearch.ml.stats;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import lombok.Getter;
+
+import org.opensearch.ml.stats.suppliers.CounterSupplier;
 
 /**
  * This class is the main entry-point for access to the stats that the ML plugin keeps track of.
@@ -38,6 +41,25 @@ public class MLStats {
             throw new IllegalArgumentException("Stat=\"" + key + "\" does not exist");
         }
         return stats.get(key);
+    }
+
+    /**
+     * Get stat or create counter stat if absent.
+     * @param key stat key
+     * @return existing MLStat or new MLStat
+     */
+    public MLStat<?> createCounterStatIfAbsent(String key) {
+        return createStatIfAbsent(key, () -> new MLStat<>(false, new CounterSupplier()));
+    }
+
+    /**
+     * Get stat or create if absent.
+     * @param key stat key
+     * @param supplier supplier to create MLStat
+     * @return existing MLStat or new MLStat
+     */
+    public synchronized MLStat<?> createStatIfAbsent(String key, Supplier<MLStat> supplier) {
+        return stats.computeIfAbsent(key, k -> supplier.get());
     }
 
     /**

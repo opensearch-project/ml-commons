@@ -5,35 +5,32 @@
 
 package org.opensearch.ml.stats;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Locale;
 
-import lombok.Getter;
+import org.opensearch.ml.common.parameter.FunctionName;
 
 /**
  * Enum containing names of all stats
  */
-public enum StatNames {
-    ML_EXECUTING_TASK_COUNT("ml_executing_task_count");
+public class StatNames {
+    public static String ML_EXECUTING_TASK_COUNT = "ml_executing_task_count";
+    public static String ML_TOTAL_REQUEST_COUNT = "ml_total_request_count";
+    public static String ML_TOTAL_FAILURE_COUNT = "ml_total_failure_count";
+    public static String ML_TOTAL_MODEL_COUNT = "ml_total_model_count";
 
-    @Getter
-    private String name;
-
-    StatNames(String name) {
-        this.name = name;
+    public static String requestCountStat(FunctionName functionName, ActionName actionName) {
+        return String.format("ml_%s_%s_request_count", functionName, actionName, Locale.ROOT).toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * Get set of stat names
-     *
-     * @return set of stat names
-     */
-    public static Set<String> getNames() {
-        Set<String> names = new HashSet<>();
+    public static String failureCountStat(FunctionName functionName, ActionName actionName) {
+        return String.format("ml_%s_%s_failure_count", functionName, actionName, Locale.ROOT).toLowerCase(Locale.ROOT);
+    }
 
-        for (StatNames statName : StatNames.values()) {
-            names.add(statName.getName());
-        }
-        return names;
+    public static String executingRequestCountStat(FunctionName functionName, ActionName actionName) {
+        return String.format("ml_%s_%s_executing_request_count", functionName, actionName, Locale.ROOT).toLowerCase(Locale.ROOT);
+    }
+
+    public static String modelCountStat(FunctionName functionName) {
+        return String.format("ml_%s_model_count", functionName, Locale.ROOT).toLowerCase(Locale.ROOT);
     }
 }

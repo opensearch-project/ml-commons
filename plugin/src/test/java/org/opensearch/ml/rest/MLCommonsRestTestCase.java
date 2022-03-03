@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.rest;
 
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_ENABLED;
@@ -5,6 +10,8 @@ import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTT
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_PASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_PEMCERT_FILEPATH;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
 
 import java.io.IOException;
 import java.net.URI;
@@ -18,6 +25,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.apache.http.Header;
+import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
@@ -42,6 +50,9 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.stats.ActionName;
+import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestStatus;
@@ -49,8 +60,10 @@ import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.gson.Gson;
 
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
+    protected Gson gson = new Gson();
 
     protected boolean isHttps() {
         boolean isHttps = Optional.ofNullable(System.getProperty("https")).map("true"::equalsIgnoreCase).orElse(false);
@@ -232,5 +245,45 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             );
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
         return bulkResponse;
+    }
+
+    protected void validateStats(
+        FunctionName functionName,
+        ActionName actionName,
+        int expectedTotalFailureCount,
+        int expectedTotalAlgoFailureCount,
+        int expectedTotalRequestCount,
+        int expectedTotalAlgoRequestCount
+    ) throws IOException {
+        Response statsResponse = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/stats", null, "", null);
+        HttpEntity entity = statsResponse.getEntity();
+        assertNotNull(statsResponse);
+        String entityString = TestHelper.httpEntityToString(entity);
+        Map<String, Object> map = gson.fromJson(entityString, Map.class);
+        int totalFailureCount = 0;
+        int totalAlgoFailureCount = 0;
+        int totalRequestCount = 0;
+        int totalAlgoRequestCount = 0;
+        for (String key : map.keySet()) {
+            Map<String, Object> nodeStatsMap = (Map<String, Object>) map.get(key);
+            if (nodeStatsMap.containsKey(ML_TOTAL_FAILURE_COUNT)) {
+                totalFailureCount += (Double) nodeStatsMap.get(ML_TOTAL_FAILURE_COUNT);
+            }
+            String failureCountStat = StatNames.failureCountStat(functionName, actionName);
+            if (nodeStatsMap.containsKey(failureCountStat)) {
+                totalAlgoFailureCount += (Double) nodeStatsMap.get(failureCountStat);
+            }
+            if (nodeStatsMap.containsKey(ML_TOTAL_REQUEST_COUNT)) {
+                totalRequestCount += (Double) nodeStatsMap.get(ML_TOTAL_REQUEST_COUNT);
+            }
+            String requestCountStat = StatNames.requestCountStat(functionName, actionName);
+            if (nodeStatsMap.containsKey(requestCountStat)) {
+                totalAlgoRequestCount += (Double) nodeStatsMap.get(requestCountStat);
+            }
+        }
+        assertEquals(expectedTotalFailureCount, totalFailureCount);
+        assertEquals(expectedTotalAlgoFailureCount, totalAlgoFailureCount);
+        assertEquals(expectedTotalRequestCount, totalRequestCount);
+        assertEquals(expectedTotalAlgoRequestCount, totalAlgoRequestCount);
     }
 }

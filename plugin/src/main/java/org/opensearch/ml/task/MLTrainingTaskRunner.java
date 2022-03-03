@@ -8,6 +8,12 @@ package org.opensearch.ml.task;
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_MODEL_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
+import static org.opensearch.ml.stats.StatNames.failureCountStat;
+import static org.opensearch.ml.stats.StatNames.modelCountStat;
+import static org.opensearch.ml.stats.StatNames.requestCountStat;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -43,6 +49,7 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -147,7 +154,9 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     public void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
-        mlStats.getStat(ML_EXECUTING_TASK_COUNT.getName()).increment();
+        mlStats.getStat(ML_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(ML_TOTAL_REQUEST_COUNT).increment();
+        mlStats.createCounterStatIfAbsent(requestCountStat(mlTask.getFunctionName(), ActionName.TRAIN)).increment();
         mlTaskManager.add(mlTask);
         try {
             if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
@@ -175,7 +184,12 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         }
     }
 
-    private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
+    private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
+        ActionListener<MLTaskResponse> listener = ActionListener.wrap(r -> actionListener.onResponse(r), e -> {
+            mlStats.createCounterStatIfAbsent(failureCountStat(mlTask.getFunctionName(), ActionName.TRAIN)).increment();
+            mlStats.getStat(ML_TOTAL_FAILURE_COUNT).increment();
+            actionListener.onFailure(e);
+        });
         try {
             // run training
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
@@ -187,16 +201,19 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 }
                 // TODO: put the user into model for backend role based access control.
                 MLModel mlModel = new MLModel(mlInput.getAlgorithm(), model);
-                IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX)
-                    .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS))
-                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
                         log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
+                        mlStats.getStat(ML_TOTAL_MODEL_COUNT).increment();
+                        mlStats.createCounterStatIfAbsent(modelCountStat(mlTask.getFunctionName())).increment();
                         String returnedTaskId = mlTask.isAsync() ? mlTask.getTaskId() : null;
                         MLTrainingOutput output = new MLTrainingOutput(r.getId(), returnedTaskId, MLTaskState.COMPLETED.name());
                         listener.onResponse(MLTaskResponse.builder().output(output).build());
                     }, e -> { listener.onFailure(e); });
+
+                    IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                    indexRequest.source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+                    indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     client.index(indexRequest, ActionListener.runBefore(indexResponseListener, () -> context.restore()));
                 } catch (Exception e) {
                     log.error("Failed to save ML model", e);
