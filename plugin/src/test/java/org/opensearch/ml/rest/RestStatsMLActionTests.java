@@ -114,8 +114,8 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
             .withParams(param)
             .build();
         MLStatsNodesRequest request = restAction.getRequest(fakeRestRequest);
-        Assert.assertEquals(request.getStatsToBeRetrieved().size(), 1);
-        Assert.assertTrue(request.getStatsToBeRetrieved().contains(StatNames.ML_EXECUTING_TASK_COUNT));
+        Assert.assertEquals(0, request.getStatsToBeRetrieved().size());
+        Assert.assertTrue(request.isRetrieveAllStats());
     }
 
     @Test
@@ -127,8 +127,8 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
             .withParams(param)
             .build();
         MLStatsNodesRequest request = restAction.getRequest(fakeRestRequest);
-        Assert.assertEquals(request.getStatsToBeRetrieved().size(), 1);
-        Assert.assertTrue(request.getStatsToBeRetrieved().contains(StatNames.ML_EXECUTING_TASK_COUNT));
+        Assert.assertEquals(0, request.getStatsToBeRetrieved().size());
+        Assert.assertTrue(request.isRetrieveAllStats());
     }
 
     @Test
