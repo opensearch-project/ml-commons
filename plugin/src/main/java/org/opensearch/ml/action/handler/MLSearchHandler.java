@@ -43,7 +43,7 @@ public class MLSearchHandler {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.search(request, listener);
         } catch (Exception e) {
-            log.error(e);
+            log.error("Failed to search", e);
             listener.onFailure(e);
         }
     }

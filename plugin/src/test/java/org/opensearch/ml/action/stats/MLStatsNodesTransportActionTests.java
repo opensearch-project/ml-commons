@@ -17,7 +17,6 @@ import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Test;
 import org.opensearch.Version;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -71,7 +70,6 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         );
     }
 
-    @Test
     public void testNewNodeRequest() {
         String nodeId = "nodeId1";
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(nodeId);
@@ -82,7 +80,6 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         assertEquals(mlStatsNodeRequest1.getMlStatsNodesRequest(), mlStatsNodeRequest2.getMlStatsNodesRequest());
     }
 
-    @Test
     public void testNewNodeResponse() throws IOException {
         Map<String, Object> statValues = new HashMap<>();
         DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
@@ -97,7 +94,6 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         }
     }
 
-    @Test
     public void testNodeOperation() {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));
@@ -119,7 +115,6 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         }
     }
 
-    @Test
     public void testNodeOperationWithJvmHeapUsage() {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));
@@ -141,7 +136,6 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         }
     }
 
-    @Test
     public void testNodeOperationNotSupportedStat() {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));

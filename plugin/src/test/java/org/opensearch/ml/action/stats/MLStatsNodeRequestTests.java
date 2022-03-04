@@ -11,11 +11,11 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.Assert;
-import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.test.OpenSearchTestCase;
 
-public class MLStatsNodeRequestTests {
-    @Test
+public class MLStatsNodeRequestTests extends OpenSearchTestCase {
+
     public void testSerializationDeserialization() throws IOException {
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(("testNodeId"));
         mlStatsNodesRequest.clear();

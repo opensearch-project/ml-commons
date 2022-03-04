@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.Assert;
-import org.junit.Test;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
@@ -19,7 +18,7 @@ import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLNodeUtilsTests extends OpenSearchTestCase {
-    @Test
+
     public void testIsMLNode() {
         Set<DiscoveryNodeRole> roleSet = new HashSet<>();
         roleSet.add(DiscoveryNodeRole.DATA_ROLE);

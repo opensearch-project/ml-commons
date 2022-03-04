@@ -5,15 +5,11 @@
 
 package org.opensearch.ml.model;
 
-import static org.junit.Assert.assertEquals;
-
 import java.io.IOException;
-import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
 import org.junit.Before;
-import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
@@ -24,12 +20,13 @@ import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.ml.common.parameter.MLTaskType;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.test.OpenSearchTestCase;
 
-public class MLTaskTests {
+public class MLTaskTests extends OpenSearchTestCase {
     private MLTask mlTask;
 
     @Before
-    public void setUp() throws ParseException {
+    public void setup() {
         Instant time = Instant.ofEpochSecond(1641600000);
         mlTask = MLTask
             .builder()
@@ -48,7 +45,6 @@ public class MLTaskTests {
             .build();
     }
 
-    @Test
     public void testWriteTo() throws IOException {
         BytesStreamOutput output = new BytesStreamOutput();
         mlTask.writeTo(output);
@@ -56,7 +52,6 @@ public class MLTaskTests {
         assertEquals(mlTask, task2);
     }
 
-    @Test
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlTask.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -70,7 +65,6 @@ public class MLTaskTests {
         );
     }
 
-    @Test
     public void toXContent_NullValue() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         MLTask task = MLTask.builder().build();

@@ -38,7 +38,7 @@ public class MLStats {
      */
     public MLStat<?> getStat(String key) throws IllegalArgumentException {
         if (!stats.keySet().contains(key)) {
-            throw new IllegalArgumentException("Stat=\"" + key + "\" does not exist");
+            throw new IllegalArgumentException("Stat \"" + key + "\" does not exist");
         }
         return stats.get(key);
     }

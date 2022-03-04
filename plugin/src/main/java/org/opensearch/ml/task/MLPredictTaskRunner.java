@@ -174,7 +174,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         OpenSearchException e = new OpenSearchException(
                             "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + request.getModelId()
                         );
-                        log.debug(e);
                         handlePredictFailure(mlTask, internalListener, e, false);
                         return;
                     }

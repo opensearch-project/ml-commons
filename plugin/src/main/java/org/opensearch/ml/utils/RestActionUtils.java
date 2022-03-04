@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.utils;
 
 import static org.opensearch.rest.action.search.RestSearchAction.parseSearchRequest;
@@ -39,6 +44,7 @@ public class RestActionUtils {
      * Get the Model or Task id from a RestRequest
      *
      * @param request RestRequest
+     * @param idName ID name for example "model_id"
      * @return id for model or task
      */
     public static String getParameterId(RestRequest request, String idName) {

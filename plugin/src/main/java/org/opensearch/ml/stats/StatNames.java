@@ -19,18 +19,18 @@ public class StatNames {
     public static String ML_TOTAL_MODEL_COUNT = "ml_total_model_count";
 
     public static String requestCountStat(FunctionName functionName, ActionName actionName) {
-        return String.format("ml_%s_%s_request_count", functionName, actionName, Locale.ROOT).toLowerCase(Locale.ROOT);
+        return String.format(Locale.ROOT, "ml_%s_%s_request_count", functionName, actionName).toLowerCase(Locale.ROOT);
     }
 
     public static String failureCountStat(FunctionName functionName, ActionName actionName) {
-        return String.format("ml_%s_%s_failure_count", functionName, actionName, Locale.ROOT).toLowerCase(Locale.ROOT);
+        return String.format(Locale.ROOT, "ml_%s_%s_failure_count", functionName, actionName).toLowerCase(Locale.ROOT);
     }
 
     public static String executingRequestCountStat(FunctionName functionName, ActionName actionName) {
-        return String.format("ml_%s_%s_executing_request_count", functionName, actionName, Locale.ROOT).toLowerCase(Locale.ROOT);
+        return String.format(Locale.ROOT, "ml_%s_%s_executing_request_count", functionName, actionName).toLowerCase(Locale.ROOT);
     }
 
     public static String modelCountStat(FunctionName functionName) {
-        return String.format("ml_%s_model_count", functionName, Locale.ROOT).toLowerCase(Locale.ROOT);
+        return String.format(Locale.ROOT, "ml_%s_model_count", functionName).toLowerCase(Locale.ROOT);
     }
 }

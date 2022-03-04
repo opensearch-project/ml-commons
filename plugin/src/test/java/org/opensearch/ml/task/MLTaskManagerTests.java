@@ -14,7 +14,6 @@ import java.util.Map;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.ActionListener;
@@ -24,8 +23,9 @@ import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.ml.common.parameter.MLTaskType;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.test.OpenSearchTestCase;
 
-public class MLTaskManagerTests {
+public class MLTaskManagerTests extends OpenSearchTestCase {
     MLTaskManager mlTaskManager;
     MLTask mlTask;
     Client client;
@@ -48,7 +48,6 @@ public class MLTaskManagerTests {
             .build();
     }
 
-    @Test
     public void testAdd() {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Duplicate taskId");
@@ -57,7 +56,6 @@ public class MLTaskManagerTests {
         mlTaskManager.add(mlTask);
     }
 
-    @Test
     public void testUpdateTaskState() {
         expectedEx.expect(RuntimeException.class);
         expectedEx.expectMessage("Task not found");
@@ -67,7 +65,6 @@ public class MLTaskManagerTests {
         mlTaskManager.updateTaskState("not exist", MLTaskState.RUNNING, true);
     }
 
-    @Test
     public void testUpdateTaskError() {
         expectedEx.expect(RuntimeException.class);
         expectedEx.expectMessage("Task not found");
@@ -77,7 +74,6 @@ public class MLTaskManagerTests {
         mlTaskManager.updateTaskError("not exist", "error message", true);
     }
 
-    @Test
     public void testUpdateTaskStateAndError() {
         mlTaskManager.add(mlTask);
         String error = "error message";
@@ -93,7 +89,6 @@ public class MLTaskManagerTests {
         Assert.assertEquals(0, value.longValue());
     }
 
-    @Test
     public void testUpdateMLTaskWithNullOrEmptyMap() {
         mlTaskManager.add(mlTask);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
@@ -106,7 +101,6 @@ public class MLTaskManagerTests {
         verify(listener, times(2)).onFailure(any());
     }
 
-    @Test
     public void testRemove() {
         mlTaskManager.add(mlTask);
         Assert.assertTrue(mlTaskManager.contains(mlTask.getTaskId()));
@@ -114,7 +108,6 @@ public class MLTaskManagerTests {
         Assert.assertFalse(mlTaskManager.contains(mlTask.getTaskId()));
     }
 
-    @Test
     public void testGetRunningTaskCount() {
         MLTask task1 = MLTask.builder().taskId("1").state(MLTaskState.CREATED).build();
         MLTask task2 = MLTask.builder().taskId("2").state(MLTaskState.RUNNING).build();
@@ -127,7 +120,6 @@ public class MLTaskManagerTests {
         Assert.assertEquals(mlTaskManager.getRunningTaskCount(), 1);
     }
 
-    @Test
     public void testClear() {
         MLTask task1 = MLTask.builder().taskId("1").state(MLTaskState.CREATED).build();
         MLTask task2 = MLTask.builder().taskId("2").state(MLTaskState.RUNNING).build();
@@ -144,7 +136,6 @@ public class MLTaskManagerTests {
         Assert.assertFalse(mlTaskManager.contains(task4.getTaskId()));
     }
 
-    @Test
     public void testCreateMlTask_InitIndexReturnFalse() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -157,7 +148,6 @@ public class MLTaskManagerTests {
         verify(listener).onFailure(any());
     }
 
-    @Test
     public void testCreateMlTask_IndexException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);

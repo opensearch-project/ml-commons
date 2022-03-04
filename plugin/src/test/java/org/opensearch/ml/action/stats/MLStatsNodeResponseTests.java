@@ -5,20 +5,18 @@
 
 package org.opensearch.ml.action.stats;
 
-import static org.opensearch.test.OpenSearchTestCase.buildNewFakeTransportAddress;
-
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Assert;
-import org.junit.Test;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.test.OpenSearchTestCase;
 
-public class MLStatsNodeResponseTests {
-    @Test
+public class MLStatsNodeResponseTests extends OpenSearchTestCase {
+
     public void testSerializationDeserialization() throws IOException {
         DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
         Map<String, Object> statsToValues = new HashMap<>();

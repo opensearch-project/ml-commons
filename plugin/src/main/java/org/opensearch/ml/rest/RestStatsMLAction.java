@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,7 +91,13 @@ public class RestStatsMLAction extends BaseRestHandler {
     Set<String> getStatsToBeRetrieved(RestRequest request, Set<String> validStats, List<String> requestedStats) {
         if (requestedStats.contains(MLStatsNodesRequest.ALL_STATS_KEY)) {
             throw new IllegalArgumentException(
-                String.format("Request %s contains both %s and individual stats", request.path(), MLStatsNodesRequest.ALL_STATS_KEY)
+                String
+                    .format(
+                        Locale.ROOT,
+                        "Request %s contains both %s and individual stats",
+                        request.path(),
+                        MLStatsNodesRequest.ALL_STATS_KEY
+                    )
             );
         }
 

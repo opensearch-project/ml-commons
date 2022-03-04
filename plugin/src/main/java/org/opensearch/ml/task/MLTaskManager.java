@@ -202,6 +202,7 @@ public class MLTaskManager {
      * Update ML task with default listener.
      * @param taskId task id
      * @param updatedFields updated field and values
+     * @param timeoutInMillis time out waiting for updating task semaphore, zero or negative means don't wait at all
      */
     public void updateMLTask(String taskId, Map<String, Object> updatedFields, long timeoutInMillis) {
         updateMLTask(taskId, updatedFields, ActionListener.wrap(response -> {

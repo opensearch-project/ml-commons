@@ -32,7 +32,7 @@ This package uses the [Gradle](https://docs.gradle.org/current/userguide/usergui
 
 #### Building from the command line
 
-1. `./gradlew build` builds and tests
+1. `./gradlew build` builds and tests, `./gradlew build buildDeb buildRpm` build RPM and DEB.
 2. `./gradlew :run` launches a single node cluster with ml-commons plugin installed
 3. `./gradlew :integTest` launches a single node cluster with ml-commons plugin installed and runs all integration tests except security. Use `./gradlew integTest -PnumNodes=<number>` to launch multi-node cluster.
 4. ` ./gradlew :integTest --tests="<class path>.<test method>"` runs a single integration test class or method, for example `./gradlew integTest --tests="org.opensearch.ml.rest.RestMLTrainAndPredictIT.testTrainAndPredictKmeansWithEmptyParam"` or `./gradlew integTest --tests="org.opensearch.ml.rest.RestMLTrainAndPredictIT"`
