@@ -8,8 +8,10 @@ buildscript {
 
     ext {
         opensearch_group = "org.opensearch"
-        opensearch_version = "${opensearch_version}"
-        common_utils_version = "${opensearchBaseVersion}.0-SNAPSHOT"
+        opensearch_version = System.getProperty("opensearch.version", "1.3.0-SNAPSHOT")
+        // 1.3.0 -> 1.3.0.0, and 1.3.0-SNAPSHOT -> 1.3.0.0-SNAPSHOT
+        opensearch_build = opensearch_version.replaceAll(/(\.\d)([^\d]*)$/, '$1.0$2')
+        common_utils_version = System.getProperty("common_utils.version", opensearch_build)
     }
 
     repositories {
@@ -34,9 +36,16 @@ plugins {
 
 apply plugin: "com.dorongold.task-tree"
 
+ext {
+    isSnapshot = "true" == System.getProperty("build.snapshot", "true")
+}
+
 allprojects {
     group = 'org.opensearch.ml'
-    version = "${opensearchBaseVersion}.0"
+    version = opensearch_version - "-SNAPSHOT" + ".0"
+    if (isSnapshot) {
+        version += "-SNAPSHOT"
+    }
 
     apply from: "$rootDir/build-tools/repositories.gradle"
 
