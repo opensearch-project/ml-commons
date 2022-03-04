@@ -9,7 +9,6 @@ import java.util.List;
 
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.Strings;
 import org.opensearch.rest.RestHandler;
@@ -27,20 +26,17 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         restMLPredictionAction = new RestMLPredictionAction();
     }
 
-    @Test
     public void testConstructor() {
         RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction();
         assertNotNull(mlPredictionAction);
     }
 
-    @Test
     public void testGetName() {
         String actionName = restMLPredictionAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_prediction_action", actionName);
     }
 
-    @Test
     public void testRoutes() {
         List<RestHandler.Route> routes = restMLPredictionAction.routes();
         assertNotNull(routes);

@@ -24,7 +24,6 @@ import org.apache.lucene.search.TotalHits;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.ActionListener;
@@ -40,8 +39,9 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.test.OpenSearchTestCase;
 
-public class MLInputDatasetHandlerTests {
+public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
     Client client;
     MLInputDatasetHandler mlInputDatasetHandler;
     ActionListener<DataFrame> listener;
@@ -70,7 +70,6 @@ public class MLInputDatasetHandlerTests {
 
     }
 
-    @Test
     public void testDataFrameInputDataset() {
         DataFrame testDataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
             {
@@ -82,7 +81,6 @@ public class MLInputDatasetHandlerTests {
         Assert.assertEquals(testDataFrame, result);
     }
 
-    @Test
     public void testDataFrameInputDatasetWrongType() {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Input dataset is not DATA_FRAME type.");
@@ -94,7 +92,6 @@ public class MLInputDatasetHandlerTests {
         DataFrame result = mlInputDatasetHandler.parseDataFrameInput(searchQueryInputDataset);
     }
 
-    @Test
     @SuppressWarnings("unchecked")
     public void testSearchQueryInputDatasetWithHits() {
         searchResponse = mock(SearchResponse.class);
@@ -120,7 +117,6 @@ public class MLInputDatasetHandlerTests {
         Assert.assertEquals(captor.getAllValues().size(), 1);
     }
 
-    @Test
     @SuppressWarnings("unchecked")
     public void testSearchQueryInputDatasetWithoutHits() {
         searchResponse = mock(SearchResponse.class);
@@ -141,7 +137,6 @@ public class MLInputDatasetHandlerTests {
         verify(listener, times(1)).onFailure(any());
     }
 
-    @Test
     public void testSearchQueryInputDatasetWrongType() {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Input dataset is not SEARCH_QUERY type.");

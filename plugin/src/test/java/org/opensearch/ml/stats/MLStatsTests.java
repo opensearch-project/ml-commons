@@ -12,7 +12,9 @@ import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 
@@ -21,6 +23,9 @@ public class MLStatsTests extends OpenSearchTestCase {
     private MLStats mlStats;
     private String clusterStatName1;
     private String nodeStatName1;
+
+    @Rule
+    public ExpectedException expectedEx = ExpectedException.none();
 
     @Before
     public void setup() {
@@ -38,7 +43,6 @@ public class MLStatsTests extends OpenSearchTestCase {
         mlStats = new MLStats(statsMap);
     }
 
-    @Test
     public void testGetStats() {
         Map<String, MLStat<?>> stats = mlStats.getStats();
 
@@ -53,7 +57,6 @@ public class MLStatsTests extends OpenSearchTestCase {
         }
     }
 
-    @Test
     public void testGetStat() {
         MLStat<?> stat = mlStats.getStat(clusterStatName1);
 
@@ -64,19 +67,19 @@ public class MLStatsTests extends OpenSearchTestCase {
             );
     }
 
-    @Test(expected = IllegalArgumentException.class)
     public void testGetStatNoExisting() {
-        MLStat<?> stat = mlStats.getStat("dummy stat name");
+        String wrongStat = randomAlphaOfLength(10);
+        expectedEx.expect(IllegalArgumentException.class);
+        expectedEx.expectMessage("Stat \"" + wrongStat + "\" does not exist");
+        mlStats.getStat(wrongStat);
     }
 
-    @Test
     public void testCreateCounterStatIfAbsent() {
         MLStat<?> stat = mlStats.createCounterStatIfAbsent("dummy stat name");
         stat.increment();
         assertEquals(1L, stat.getValue());
     }
 
-    @Test
     public void testGetNodeStats() {
         Map<String, MLStat<?>> stats = mlStats.getStats();
         Set<MLStat<?>> nodeStats = new HashSet<>(mlStats.getNodeStats().values());

@@ -16,7 +16,6 @@ import java.util.Set;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
@@ -47,7 +46,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         restAction = new RestStatsMLAction(mlStats);
     }
 
-    @Test
     public void testsplitCommaSeparatedParam() {
         Map<String, String> param = ImmutableMap.<String, String>builder().put("nodeId", "111,222").build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
@@ -61,7 +59,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         Assert.assertEquals(array[1], "222");
     }
 
-    @Test
     public void testIsAllStatsRequested() {
         List<String> requestedStats1 = new ArrayList<>(Arrays.asList("stat1", "stat2"));
         Assert.assertTrue(!restAction.isAllStatsRequested(requestedStats1));
@@ -71,7 +68,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         Assert.assertTrue(restAction.isAllStatsRequested(requestedStats3));
     }
 
-    @Test
     public void testStatsSetContainsAllStatsKey() {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage(MLStatsNodesRequest.ALL_STATS_KEY);
@@ -86,7 +82,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         restAction.getStatsToBeRetrieved(fakeRestRequest, validStats, requestedStats);
     }
 
-    @Test
     public void testStatsSetContainsInvalidStats() {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("unrecognized");
@@ -101,7 +96,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         restAction.getStatsToBeRetrieved(fakeRestRequest, validStats, requestedStats);
     }
 
-    @Test
     public void testGetRequestAllStats() {
         Map<String, String> param = ImmutableMap
             .<String, String>builder()
@@ -118,7 +112,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         Assert.assertTrue(request.isRetrieveAllStats());
     }
 
-    @Test
     public void testGetRequestEmptyStats() {
         Map<String, String> param = ImmutableMap.<String, String>builder().put("nodeId", "111,222").build();
         FakeRestRequest fakeRestRequest = new FakeRestRequest.Builder(xContentRegistry())
@@ -131,7 +124,6 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         Assert.assertTrue(request.isRetrieveAllStats());
     }
 
-    @Test
     public void testGetRequestSpecifyStats() {
         Map<String, String> param = ImmutableMap
             .<String, String>builder()

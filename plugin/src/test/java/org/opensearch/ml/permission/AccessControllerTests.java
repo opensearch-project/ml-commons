@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
@@ -25,7 +24,6 @@ public class AccessControllerTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
-    @Test
     public void testGetUserStr() {
         Client client = buildTestClient();
 
@@ -33,7 +31,6 @@ public class AccessControllerTests extends OpenSearchTestCase {
         assertEquals("myuser|bckrole1,bckrole2|role1,role2|myTenant", userStr);
     }
 
-    @Test
     public void testGetUser() {
         Client client = buildTestClient();
 
@@ -45,21 +42,18 @@ public class AccessControllerTests extends OpenSearchTestCase {
         assertEquals("bckrole2", backendRoleList.get(1));
     }
 
-    @Test
     public void testCheckUserPermissionsWithNullRequestUser() {
         User resourceUser = User.parse("resourceuser|bckrole1,bckrole2|role1,role2|myTenant");
         boolean hasPermission = AccessController.checkUserPermissions(null, resourceUser, "");
         assertTrue(hasPermission);
     }
 
-    @Test
     public void testCheckUserPermissionsWithNullResourceUser() {
         User requestUser = User.parse("requestuser|bckrole1,bckrole2|role1,role2|myTenant");
         boolean hasPermission = AccessController.checkUserPermissions(requestUser, null, "");
         assertTrue(hasPermission);
     }
 
-    @Test
     public void testCheckUserPermissionsWithNullBackendRoles() {
         User requestUser = User.parse("requestuser||role1,role2|myTenant");
         User resourceUser = User.parse("resourceuser||role1,role2|myTenant");
@@ -67,7 +61,6 @@ public class AccessControllerTests extends OpenSearchTestCase {
         assertFalse(hasPermission);
     }
 
-    @Test
     public void testCheckUserPermissionsWithoutMatch() {
         User requestUser = User.parse("requestuser|bckrole1,bckrole2|role1,role2|myTenant");
         User resourceUser = User.parse("resourceuser|bckrole3,bckrole4|role1,role2|myTenant");
@@ -75,7 +68,6 @@ public class AccessControllerTests extends OpenSearchTestCase {
         assertFalse(hasPermission);
     }
 
-    @Test
     public void testCheckUserPermissionsWithMatch() {
         User requestUser = User.parse("requestuser|bckrole1,bckrole2|role1,role2|myTenant");
         User resourceUser = User.parse("resourceuser|bckrole2,bckrole3|role1,role2|myTenant");

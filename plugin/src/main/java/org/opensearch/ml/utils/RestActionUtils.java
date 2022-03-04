@@ -44,6 +44,7 @@ public class RestActionUtils {
      * Get the Model or Task id from a RestRequest
      *
      * @param request RestRequest
+     * @param idName ID name for example "model_id"
      * @return id for model or task
      */
     public static String getParameterId(RestRequest request, String idName) {

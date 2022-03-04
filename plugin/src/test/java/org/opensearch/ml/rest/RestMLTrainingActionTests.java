@@ -9,7 +9,6 @@ import java.util.List;
 
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.Strings;
 import org.opensearch.rest.RestHandler;
@@ -27,20 +26,17 @@ public class RestMLTrainingActionTests extends OpenSearchTestCase {
         restMLTrainingAction = new RestMLTrainingAction();
     }
 
-    @Test
     public void testConstructor() {
         RestMLTrainingAction mlTrainingAction = new RestMLTrainingAction();
         assertNotNull(mlTrainingAction);
     }
 
-    @Test
     public void testGetName() {
         String actionName = restMLTrainingAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_training_action", actionName);
     }
 
-    @Test
     public void testRoutes() {
         List<RestHandler.Route> routes = restMLTrainingAction.routes();
         assertNotNull(routes);

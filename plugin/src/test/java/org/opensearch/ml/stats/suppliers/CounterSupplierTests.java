@@ -5,11 +5,10 @@
 
 package org.opensearch.ml.stats.suppliers;
 
-import org.junit.Test;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class CounterSupplierTests extends OpenSearchTestCase {
-    @Test
+
     public void testGetAndIncrement() {
         CounterSupplier counterSupplier = new CounterSupplier();
         assertEquals("get returns incorrect value", (Long) 0L, counterSupplier.get());

@@ -37,7 +37,8 @@ jobs:
           ./gradlew integTest -PnumNodes=3
       - name: Pull and Run Docker
         run: |
-          plugin=`ls build/distributions/*.zip`
+          plugin=`ls plugin/build/distributions/*.zip`
+          echo MLCommons plugin $plugin
           version=1.3.0-SNAPSHOT
           plugin_version=1.3.0.0-SNAPSHOT
           echo Using OpenSearch $version with MLCommons $plugin_version

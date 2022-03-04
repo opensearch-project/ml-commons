@@ -8,13 +8,12 @@ package org.opensearch.ml.stats;
 import java.util.function.Supplier;
 
 import org.junit.Assert;
-import org.junit.Test;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLStatTests extends OpenSearchTestCase {
-    @Test
+
     public void testIsClusterLevel() {
         MLStat<String> stat1 = new MLStat<>(true, new TestSupplier());
         Assert.assertTrue("isCluster returns the wrong value", stat1.isClusterLevel());
@@ -22,7 +21,6 @@ public class MLStatTests extends OpenSearchTestCase {
         Assert.assertTrue("isCluster returns the wrong value", !stat2.isClusterLevel());
     }
 
-    @Test
     public void testSetGetValue() {
         MLStat<Long> stat1 = new MLStat<>(false, new CounterSupplier());
         Assert.assertEquals("GetValue returns the incorrect value", 0L, (long) (stat1.getValue()));
@@ -40,7 +38,6 @@ public class MLStatTests extends OpenSearchTestCase {
         Assert.assertEquals("GetValue returns the incorrect value", 1L, (long) stat3.getValue());
     }
 
-    @Test
     public void testIncrementDecrement() {
         MLStat<Long> stat = new MLStat<>(false, new CounterSupplier());
 

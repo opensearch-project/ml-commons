@@ -10,13 +10,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Assert;
-import org.junit.Test;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.test.OpenSearchTestCase;
 
-public class MLStatsNodesResponseTests {
-    @Test
+public class MLStatsNodesResponseTests extends OpenSearchTestCase {
+
     public void testSerializationDeserialization() throws IOException {
         ClusterName clusterName = new ClusterName("clusterName");
         List<MLStatsNodeResponse> responseList = new ArrayList<>();
