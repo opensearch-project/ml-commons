@@ -6,9 +6,11 @@
 plugins {
     id 'java'
     id "io.freefair.lombok"
-    id 'maven-publish'
     id 'jacoco'
     id 'com.github.johnrengelman.shadow'
+    id 'maven'
+    id 'maven-publish'
+    id 'signing'
 }
 
 dependencies {
@@ -50,20 +52,39 @@ shadowJar {
     archiveClassifier.set(null)
 }
 
+task sourcesJar(type: Jar) {
+    archiveClassifier.set 'sources'
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar) {
+    archiveClassifier.set 'javadoc'
+    from javadoc.destinationDir
+    dependsOn javadoc
+}
+
 publishing {
+    repositories {
+        maven {
+            name = 'staging'
+            url = "${rootProject.buildDir}/local-staging-repo"
+        }
+    }
     publications {
-        shadow(MavenPublication) {
-            project.shadow.component(it)
+        shadow(MavenPublication) { publication ->
+            project.shadow.component(publication)
+            artifact sourcesJar
+            artifact javadocJar
 
             pom {
-                name = "OpenSearch Machine Learning Client Library"
+                name = "OpenSearch Machine Learning Client"
                 packaging = "jar"
-                url = "https://github.com/opensearch-project/machine-learning"
-                description = "OpenSearch Machine Learning Client Library"
+                url = "https://github.com/opensearch-project/ml-commons"
+                description = "OpenSearch Machine Learning Client"
                 scm {
-                    connection = "scm:git@github.com:opensearch-project/machine-learning.git"
-                    developerConnection = "scm:git@github.com:opensearch-project/machine-learning.git"
-                    url = "git@github.com:opensearch-project/machine-learning.git"
+                    connection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    developerConnection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    url = "git@github.com:opensearch-project/ml-commons.git"
                 }
                 licenses {
                     license {
@@ -73,14 +94,16 @@ publishing {
                 }
                 developers {
                     developer {
-                        id = "amazonwebservices"
-                        organization = "Amazon Web Services"
-                        organizationUrl = "https://aws.amazon.com"
+                        name = "OpenSearch"
+                        url = "https://github.com/opensearch-project/ml-commons"
                     }
                 }
             }
         }
     }
 
-
+    // TODO - enabled debug logging for the time being, remove this eventually
+    gradle.startParameter.setShowStacktrace(ShowStacktrace.ALWAYS)
+    gradle.startParameter.setLogLevel(LogLevel.DEBUG)
 }
+
