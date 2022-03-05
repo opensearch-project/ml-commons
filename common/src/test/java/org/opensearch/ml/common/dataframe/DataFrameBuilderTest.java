@@ -61,7 +61,7 @@ public class DataFrameBuilderTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void load_Exception_NullInputMapList() {
-        DataFrameBuilder.load((List) null);
+        DataFrameBuilder.load((List<Map<String, Object>>) null);
     }
 
     @Test

@@ -8,6 +8,8 @@ package org.opensearch.ml.engine.utils;
 import lombok.experimental.UtilityClass;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.common.collect.Tuple;
+import org.opensearch.ml.common.dataframe.ColumnMeta;
+import org.opensearch.ml.common.dataframe.ColumnValue;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
@@ -31,18 +33,18 @@ import java.util.stream.StreamSupport;
 
 @UtilityClass
 public class TribuoUtil {
-    public static Tuple transformDataFrame(DataFrame dataFrame) {
-        String[] featureNames = Arrays.stream(dataFrame.columnMetas()).map(e -> e.getName()).toArray(String[]::new);
+    public static Tuple<String[], double[][]> transformDataFrame(DataFrame dataFrame) {
+        String[] featureNames = Arrays.stream(dataFrame.columnMetas()).map(ColumnMeta::getName).toArray(String[]::new);
         double[][] featureValues = new double[dataFrame.size()][];
         Iterator<Row> itr = dataFrame.iterator();
         int i = 0;
         while (itr.hasNext()) {
             Row row = itr.next();
-            featureValues[i] = StreamSupport.stream(row.spliterator(), false).mapToDouble(e -> e.doubleValue()).toArray();
+            featureValues[i] = StreamSupport.stream(row.spliterator(), false).mapToDouble(ColumnValue::doubleValue).toArray();
             ++i;
         }
 
-        return new Tuple(featureNames, featureValues);
+        return new Tuple<>(featureNames, featureValues);
     }
 
     /**
@@ -60,11 +62,11 @@ public class TribuoUtil {
         for (int i=0; i<dataFrame.size(); ++i) {
             switch (outputType) {
                 case CLUSTERID:
-                    example = new ArrayExample<T>((T) new ClusterID(ClusterID.UNASSIGNED), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    example = new ArrayExample<>((T) new ClusterID(ClusterID.UNASSIGNED), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 case REGRESSOR:
                     //Create single dimension tribuo regressor with name DIM-0 and value double NaN.
-                    example = new ArrayExample<T>((T) new Regressor("DIM-0", Double.NaN), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    example = new ArrayExample<>((T) new Regressor("DIM-0", Double.NaN), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 case ANOMALY_DETECTION_LIBSVM:
                     // Why we set default event type as EXPECTED(non-anomalous)
@@ -72,7 +74,7 @@ public class TribuoUtil {
                     // 2. For prediction data, we treat the data as non-anomalous by default as Tribuo lib don't accept UNKNOWN type.
                     Event.EventType defaultEventType = Event.EventType.EXPECTED;
                     // TODO: support anomaly labels to evaluate prediction result
-                    example = new ArrayExample<T>((T) new Event(defaultEventType), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    example = new ArrayExample<>((T) new Event(defaultEventType), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);
@@ -127,7 +129,7 @@ public class TribuoUtil {
                             filter(e -> e != finalTargetIndex).
                             mapToDouble(e -> featureNamesValues.v2()[finalI][e]).
                             toArray();
-                    example = new ArrayExample<T>((T) new Regressor(target, targetValue), featureNames, featureValues);
+                    example = new ArrayExample<>((T) new Regressor(target, targetValue), featureNames, featureValues);
                     break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);

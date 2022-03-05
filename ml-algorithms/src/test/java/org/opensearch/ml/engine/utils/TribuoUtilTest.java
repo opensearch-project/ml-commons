@@ -47,14 +47,15 @@ public class TribuoUtilTest {
 
     @Test
     public void transformDataFrame() {
-        Tuple featureNamesValues = TribuoUtil.transformDataFrame(dataFrame);
-        Assert.assertArrayEquals(new String[]{"f1", "f2"}, (String[])featureNamesValues.v1());
-        Assert.assertEquals(3, ((double[][])featureNamesValues.v2()).length);
+        Tuple<String[], double[][]> featureNamesValues = TribuoUtil.transformDataFrame(dataFrame);
+        Assert.assertArrayEquals(new String[]{"f1", "f2"}, featureNamesValues.v1());
+        Assert.assertEquals(3, (featureNamesValues.v2()).length);
         for (int i=0; i<rawData.length; ++i) {
             Assert.assertArrayEquals(new double[]{0.1+i, 0.2+i}, ((double[][]) featureNamesValues.v2())[i], 0.01);
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void generateDataset() {
         MutableDataset<ClusterID> dataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(), "test", TribuoOutputType.CLUSTERID);
@@ -73,6 +74,7 @@ public class TribuoUtilTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void generateDatasetWithTarget() {
         MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f2");
@@ -95,14 +97,14 @@ public class TribuoUtilTest {
     public void generateDatasetWithEmptyTarget() {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("Empty target when generating dataset from data frame.");
-        MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, null);
+        TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, null);
     }
 
     @Test
     public void generateDatasetWithUnmatchedTarget() {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("No matched target when generating dataset from data frame.");
-        MutableDataset<Regressor> dataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f0");
+        TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(), "test", TribuoOutputType.REGRESSOR, "f0");
     }
 
     private void constructDataFrame() {

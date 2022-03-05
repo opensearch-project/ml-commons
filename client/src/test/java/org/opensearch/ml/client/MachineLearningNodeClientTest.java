@@ -60,10 +60,11 @@ public class MachineLearningNodeClientTest {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         MockitoAnnotations.openMocks(this);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void predict() {
         doAnswer(invocation -> {
@@ -112,6 +113,7 @@ public class MachineLearningNodeClientTest {
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void train() {
         String modelId = "test_model_id";

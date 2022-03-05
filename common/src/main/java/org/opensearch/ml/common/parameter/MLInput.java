@@ -132,7 +132,7 @@ public class MLInput implements Input {
 
     public static MLInput parse(XContentParser parser, String inputAlgoName) throws IOException {
         String algorithmName = inputAlgoName.toUpperCase(Locale.ROOT);
-        FunctionName algorithm = FunctionName.valueOf(algorithmName);
+        FunctionName algorithm = FunctionName.from(algorithmName);
         MLAlgoParams mlParameters = null;
         SearchSourceBuilder searchSourceBuilder = null;
         List<String> sourceIndices = new ArrayList<>();

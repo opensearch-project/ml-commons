@@ -257,12 +257,27 @@ public class LinearRegressionParams implements MLAlgoParams {
     public enum ObjectiveType {
         SQUARED_LOSS,
         ABSOLUTE_LOSS,
-        HUBER
+        HUBER;
+        public static ObjectiveType from(String value) {
+            try{
+                return ObjectiveType.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong objective type");
+            }
+        }
     }
 
     public enum MomentumType {
         STANDARD,
-        NESTEROV
+        NESTEROV;
+
+        public static MomentumType from(String value) {
+            try{
+                return MomentumType.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong momentum type");
+            }
+        }
     }
 
     public enum OptimizerType {
@@ -272,6 +287,14 @@ public class LinearRegressionParams implements MLAlgoParams {
         ADA_GRAD,
         ADA_DELTA,
         ADAM,
-        RMS_PROP
+        RMS_PROP;
+
+        public static OptimizerType from(String value) {
+            try{
+                return OptimizerType.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong optimizer type");
+            }
+        }
     }
 }

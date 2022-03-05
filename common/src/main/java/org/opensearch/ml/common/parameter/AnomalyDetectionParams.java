@@ -85,7 +85,7 @@ public class AnomalyDetectionParams implements MLAlgoParams {
 
             switch (fieldName) {
                 case KERNEL_FIELD:
-                    kernelType = ADKernelType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    kernelType = ADKernelType.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case GAMMA_FIELD:
                     gamma = parser.doubleValue();
@@ -171,6 +171,14 @@ public class AnomalyDetectionParams implements MLAlgoParams {
         LINEAR,
         POLY,
         RBF,
-        SIGMOID
+        SIGMOID;
+
+        public static ADKernelType from(String value) {
+            try{
+                return ADKernelType.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong AD kernel type");
+            }
+        }
     }
 }

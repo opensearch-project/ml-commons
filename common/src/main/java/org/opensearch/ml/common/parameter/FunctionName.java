@@ -13,5 +13,13 @@ public enum FunctionName {
     LOCAL_SAMPLE_CALCULATOR,
     ANOMALY_LOCALIZATION,
     FIT_RCF,
-    BATCH_RCF
+    BATCH_RCF;
+
+    public static FunctionName from(String value) {
+        try {
+            return FunctionName.valueOf(value);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Wrong function name");
+        }
+    }
 }

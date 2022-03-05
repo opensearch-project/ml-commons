@@ -13,7 +13,6 @@ import java.util.Set;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
@@ -93,7 +92,6 @@ public class MLStatsTests extends OpenSearchTestCase {
         }
     }
 
-    @Test
     public void testGetClusterStats() {
         Map<String, MLStat<?>> stats = mlStats.getStats();
         Set<MLStat<?>> clusterStats = new HashSet<>(mlStats.getClusterStats().values());
