@@ -64,6 +64,7 @@ public interface MachineLearningClient {
     /**
      *  Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
      * @param mlInput ML input
+     * @param asyncTask is async task or not
      * @return ActionFuture of MLOutput
      */
     default ActionFuture<MLOutput> train(MLInput mlInput, boolean asyncTask) {
