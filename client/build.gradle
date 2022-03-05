@@ -102,8 +102,5 @@ publishing {
         }
     }
 
-    // TODO - enabled debug logging for the time being, remove this eventually
-    gradle.startParameter.setShowStacktrace(ShowStacktrace.ALWAYS)
-    gradle.startParameter.setLogLevel(LogLevel.DEBUG)
 }
 
