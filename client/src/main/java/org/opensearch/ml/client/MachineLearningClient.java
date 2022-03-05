@@ -27,7 +27,7 @@ public interface MachineLearningClient {
      * Do prediction machine learning job
      * @param modelId the trained model id
      * @param mlInput ML input
-     * @return
+     * @return ActionFuture of MLOutput
      */
     default ActionFuture<MLOutput> predict(String modelId, MLInput mlInput) {
         PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
@@ -64,7 +64,8 @@ public interface MachineLearningClient {
     /**
      *  Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
      * @param mlInput ML input
-     * @return the result future
+     * @param asyncTask is async task or not
+     * @return ActionFuture of MLOutput
      */
     default ActionFuture<MLOutput> train(MLInput mlInput, boolean asyncTask) {
         PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
@@ -76,6 +77,7 @@ public interface MachineLearningClient {
     /**
      * Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
      * @param mlInput ML input
+     * @param asyncTask is async task or not
      * @param listener a listener to be notified of the result
      */
     void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener);
