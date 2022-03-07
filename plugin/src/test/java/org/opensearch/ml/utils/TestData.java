@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.utils;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
 public class TestData {
 
     public static final String IRIS_DATA = "{ \"index\" : { \"_index\" : \"iris_data\" } }\n"
@@ -307,4 +310,54 @@ public class TestData {
         + "{\"sepal_length_in_cm\":6.2,\"sepal_width_in_cm\":3.4,\"petal_length_in_cm\":5.4,\"petal_width_in_cm\":2.3,\"class\":\"Iris-virginica\"}\n"
         + "{ \"index\" : { \"_index\" : \"iris_data\" } }\n"
         + "{\"sepal_length_in_cm\":5.9,\"sepal_width_in_cm\":3.0,\"petal_length_in_cm\":5.1,\"petal_width_in_cm\":1.8,\"class\":\"Iris-virginica\"}\n";
+
+    public static final String trainModelDataJson() {
+        JsonObject column_metas_1 = new JsonObject();
+        JsonObject column_metas_2 = new JsonObject();
+        JsonArray column_metas = new JsonArray();
+        column_metas_1.addProperty("name", "total_sum");
+        column_metas_1.addProperty("column_type", "DOUBLE");
+
+        column_metas_2.addProperty("name", "is_error");
+        column_metas_2.addProperty("column_type", "BOOLEAN");
+
+        column_metas.add(column_metas_1);
+        column_metas.add(column_metas_2);
+
+        JsonObject rows_values_1 = new JsonObject();
+        JsonObject rows_values_2 = new JsonObject();
+
+        rows_values_1.addProperty("column_type", "DOUBLE");
+        rows_values_1.addProperty("value", 15);
+
+        rows_values_2.addProperty("column_type", "BOOLEAN");
+        rows_values_2.addProperty("value", false);
+
+        JsonArray rows_values = new JsonArray();
+        rows_values.add(rows_values_1);
+        rows_values.add(rows_values_2);
+
+        JsonArray rows = new JsonArray();
+        JsonObject value = new JsonObject();
+        value.add("values", rows_values);
+        rows.add(value);
+
+        JsonObject input_data = new JsonObject();
+        input_data.add("column_metas", column_metas);
+        input_data.add("rows", rows);
+
+        JsonObject parameters = new JsonObject();
+        parameters.addProperty("sample_param", 10);
+
+        JsonObject body = new JsonObject();
+        body.add("parameters", parameters);
+        body.add("input_data", input_data);
+
+        return body.toString();
+    }
+
+    public static final String matchAllSearchQuery() {
+        String matchAllQuery = "{\"query\": {" + "\"match_all\": {}" + "}" + "}";
+        return matchAllQuery;
+    }
 }
