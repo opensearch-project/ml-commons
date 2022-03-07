@@ -76,7 +76,7 @@ public class KMeansParams implements MLAlgoParams {
                     iterations = parser.intValue();
                     break;
                 case DISTANCE_TYPE_FIELD:
-                    distanceType = DistanceType.valueOf(parser.text());
+                    distanceType = DistanceType.from(parser.text());
                     break;
                 default:
                     parser.skipChildren();
@@ -127,6 +127,14 @@ public class KMeansParams implements MLAlgoParams {
     public enum DistanceType {
         EUCLIDEAN,
         COSINE,
-        L1
+        L1;
+
+        public static DistanceType from(String value) {
+            try {
+                return DistanceType.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong distance type");
+            }
+        }
     }
 }

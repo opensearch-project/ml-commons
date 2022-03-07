@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.indices;
 
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -14,7 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -86,10 +85,10 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
         expectedEx.expectMessage("Input dataset is not DATA_FRAME type.");
         SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset
             .builder()
-            .indices(Arrays.asList("index1"))
+            .indices(Collections.singletonList("index1"))
             .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
             .build();
-        DataFrame result = mlInputDatasetHandler.parseDataFrameInput(searchQueryInputDataset);
+        mlInputDatasetHandler.parseDataFrameInput(searchQueryInputDataset);
     }
 
     @SuppressWarnings("unchecked")
@@ -108,7 +107,7 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
 
         SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset
             .builder()
-            .indices(Arrays.asList("index1"))
+            .indices(Collections.singletonList("index1"))
             .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
             .build();
         mlInputDatasetHandler.parseSearchQueryInput(searchQueryInputDataset, listener);
@@ -130,7 +129,7 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
 
         SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset
             .builder()
-            .indices(Arrays.asList("index1"))
+            .indices(Collections.singletonList("index1"))
             .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
             .build();
         mlInputDatasetHandler.parseSearchQueryInput(searchQueryInputDataset, listener);

@@ -220,7 +220,7 @@ public class MLTask implements ToXContentObject, Writeable {
                     taskType = MLTaskType.valueOf(parser.text());
                     break;
                 case FUNCTION_NAME_FIELD:
-                    functionName = FunctionName.valueOf(parser.text());
+                    functionName = FunctionName.from(parser.text());
                     break;
                 case STATE_FIELD:
                     state = MLTaskState.valueOf(parser.text());

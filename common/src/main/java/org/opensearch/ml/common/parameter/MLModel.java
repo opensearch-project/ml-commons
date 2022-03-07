@@ -119,7 +119,7 @@ public class MLModel implements ToXContentObject {
                     user = User.parse(parser);
                     break;
                 case ALGORITHM:
-                    algorithm = FunctionName.valueOf(parser.text());
+                    algorithm = FunctionName.from(parser.text());
                     break;
                 default:
                     parser.skipChildren();

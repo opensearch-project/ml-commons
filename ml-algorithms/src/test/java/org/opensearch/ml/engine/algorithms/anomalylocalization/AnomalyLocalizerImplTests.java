@@ -16,8 +16,6 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchResponse;
@@ -73,9 +71,9 @@ public class AnomalyLocalizerImplTests {
     private AnomalyLocalizationOutput.Entity entity;
 
     @Before
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public void setup() {
-        MockitoAnnotations.initMocks(this);
+        MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
         anomalyLocalizer = new AnomalyLocalizerImpl(client, settings);
 
@@ -94,14 +92,12 @@ public class AnomalyLocalizerImplTests {
         when(respTwo.getAggregations()).thenReturn(new Aggregations(Arrays.asList(valueTwo)));
         MultiSearchResponse.Item itemTwo = new MultiSearchResponse.Item(respTwo, null);
         MultiSearchResponse multiSearchResponse = new MultiSearchResponse(new MultiSearchResponse.Item[]{itemOne, itemTwo}, 0);
-        doAnswer(new Answer() {
-                     public Object answer(InvocationOnMock invocation) {
-                         Object[] args = invocation.getArguments();
-                         ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
-                         listener.onResponse(multiSearchResponse);
-                         return null;
-                     }
-                 }
+        doAnswer(invocation -> {
+            Object[] args = invocation.getArguments();
+            ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
+            listener.onResponse(multiSearchResponse);
+            return null;
+        }
         ).when(client).multiSearch(any(), any());
 
         CompositeAggregation.Bucket bucketOne = mock(CompositeAggregation.Bucket.class);
@@ -144,50 +140,40 @@ public class AnomalyLocalizerImplTests {
         SearchResponse filtersResp = mock(SearchResponse.class);
         when(filtersResp.getAggregations()).thenReturn(new Aggregations(Arrays.asList(filters)));
 
-        doAnswer(new Answer() {
-                     public Object answer(InvocationOnMock invocation) {
-                         Object[] args = invocation.getArguments();
-                         ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
-                         listener.onResponse(respBucketOne);
-                         return null;
-                     }
-                 }
+        doAnswer(invocation -> {
+            Object[] args = invocation.getArguments();
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
+            listener.onResponse(respBucketOne);
+            return null;
+        }
         ).
-                doAnswer(new Answer() {
-                             public Object answer(InvocationOnMock invocation) {
-                                 Object[] args = invocation.getArguments();
-                                 ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
-                                 listener.onResponse(respBucketOne);
-                                 return null;
-                             }
-                         }
+                doAnswer(invocation -> {
+                    Object[] args = invocation.getArguments();
+                    ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
+                    listener.onResponse(respBucketOne);
+                    return null;
+                }
                 ).
-                doAnswer(new Answer() {
-                             public Object answer(InvocationOnMock invocation) {
-                                 Object[] args = invocation.getArguments();
-                                 ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
-                                 listener.onResponse(respBucketTwo);
-                                 return null;
-                             }
-                         }
+                doAnswer(invocation -> {
+                    Object[] args = invocation.getArguments();
+                    ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
+                    listener.onResponse(respBucketTwo);
+                    return null;
+                }
                 ).
-                doAnswer(new Answer() {
-                             public Object answer(InvocationOnMock invocation) {
-                                 Object[] args = invocation.getArguments();
-                                 ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
-                                 listener.onResponse(respBucketTwo);
-                                 return null;
-                             }
-                         }
+                doAnswer(invocation -> {
+                    Object[] args = invocation.getArguments();
+                    ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
+                    listener.onResponse(respBucketTwo);
+                    return null;
+                }
                 ).
-                doAnswer(new Answer() {
-                             public Object answer(InvocationOnMock invocation) {
-                                 Object[] args = invocation.getArguments();
-                                 ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
-                                 listener.onResponse(filtersResp);
-                                 return null;
-                             }
-                         }
+                doAnswer(invocation -> {
+                    Object[] args = invocation.getArguments();
+                    ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) args[1];
+                    listener.onResponse(filtersResp);
+                    return null;
+                }
                 ).
                 when(client).search(any(), any());
 
@@ -247,16 +233,14 @@ public class AnomalyLocalizerImplTests {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     public void testGetLocalizedResultsForSearchFailure() {
-        doAnswer(new Answer() {
-                     public Object answer(InvocationOnMock invocation) {
-                         Object[] args = invocation.getArguments();
-                         ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
-                         listener.onFailure(new RuntimeException());
-                         return null;
-                     }
-                 }
+        doAnswer(invocation -> {
+            Object[] args = invocation.getArguments();
+            ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
+            listener.onFailure(new RuntimeException());
+            return null;
+        }
         ).when(client).multiSearch(any(), any());
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
@@ -322,16 +306,15 @@ public class AnomalyLocalizerImplTests {
         assertEquals(expectedOutput, actualOutput);
     }
 
+    @SuppressWarnings("unchecked")
     @Test(expected = RuntimeException.class)
     public void testExecuteFail() {
-        doAnswer(new Answer() {
-                     public Object answer(InvocationOnMock invocation) {
-                         Object[] args = invocation.getArguments();
-                         ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
-                         listener.onFailure(new RuntimeException());
-                         return null;
-                     }
-                 }
+        doAnswer(invocation -> {
+            Object[] args = invocation.getArguments();
+            ActionListener<MultiSearchResponse> listener = (ActionListener<MultiSearchResponse>) args[1];
+            listener.onFailure(new RuntimeException());
+            return null;
+        }
         ).when(client).multiSearch(any(), any());
         anomalyLocalizer.execute(input);
     }
