@@ -88,22 +88,22 @@ public class AnomalyDetectionParams implements MLAlgoParams {
                     kernelType = ADKernelType.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case GAMMA_FIELD:
-                    gamma = parser.doubleValue();
+                    gamma = parser.doubleValue(false);
                     break;
                 case NU_FIELD:
-                    nu = parser.doubleValue();
+                    nu = parser.doubleValue(false);
                     break;
                 case COST_FIELD:
-                    cost = parser.doubleValue();
+                    cost = parser.doubleValue(false);
                     break;
                 case COEFF_FIELD:
-                    coeff = parser.doubleValue();
+                    coeff = parser.doubleValue(false);
                     break;
                 case EPSILON_FIELD:
-                    epsilon = parser.doubleValue();
+                    epsilon = parser.doubleValue(false);
                     break;
                 case DEGREE_FIELD:
-                    degree = parser.intValue();
+                    degree = parser.intValue(false);
                     break;
                 default:
                     parser.skipChildren();

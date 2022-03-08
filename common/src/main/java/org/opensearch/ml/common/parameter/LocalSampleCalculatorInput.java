@@ -48,7 +48,7 @@ public class LocalSampleCalculatorInput implements Input {
                 case INPUT_DATA_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        inputData.add(parser.doubleValue());
+                        inputData.add(parser.doubleValue(false));
                     }
                     break;
                 default:

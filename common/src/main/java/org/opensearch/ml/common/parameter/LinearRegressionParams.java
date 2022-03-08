@@ -126,34 +126,34 @@ public class LinearRegressionParams implements MLAlgoParams {
                     optimizerType = OptimizerType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case LEARNING_RATE_FIELD:
-                    learningRate = parser.doubleValue();
+                    learningRate = parser.doubleValue(false);
                     break;
                 case MOMENTUM_TYPE_FIELD:
                     momentumType = MomentumType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MOMENTUM_FACTOR_FIELD:
-                    momentumFactor = parser.doubleValue();
+                    momentumFactor = parser.doubleValue(false);
                     break;
                 case EPSILON_FIELD:
-                    epsilon = parser.doubleValue();
+                    epsilon = parser.doubleValue(false);
                     break;
                 case BETA1_FIELD:
-                    beta1 = parser.doubleValue();
+                    beta1 = parser.doubleValue(false);
                     break;
                 case BETA2_FIELD:
-                    beta2 = parser.doubleValue();
+                    beta2 = parser.doubleValue(false);
                     break;
                 case DECAY_RATE_FIELD:
-                    decayRate = parser.doubleValue();
+                    decayRate = parser.doubleValue(false);
                     break;
                 case EPOCHS_FIELD:
-                    epochs = parser.intValue();
+                    epochs = parser.intValue(false);
                     break;
                 case BATCH_SIZE_FIELD:
-                    batchSize = parser.intValue();
+                    batchSize = parser.intValue(false);
                     break;
                 case SEED_FIELD:
-                    seed = parser.longValue();
+                    seed = parser.longValue(false);
                     break;
                 case TARGET_FIELD:
                     target = parser.text();
