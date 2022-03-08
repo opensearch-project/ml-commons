@@ -91,22 +91,22 @@ public class BatchRCFParams implements MLAlgoParams{
 
             switch (fieldName) {
                 case NUMBER_OF_TREES:
-                    numberOfTrees = parser.intValue();
+                    numberOfTrees = parser.intValue(false);
                     break;
                 case SHINGLE_SIZE:
-                    shingleSize = parser.intValue();
+                    shingleSize = parser.intValue(false);
                     break;
                 case SAMPLE_SIZE:
-                    sampleSize = parser.intValue();
+                    sampleSize = parser.intValue(false);
                     break;
                 case OUTPUT_AFTER:
-                    outputAfter = parser.intValue();
+                    outputAfter = parser.intValue(false);
                     break;
                 case TRAINING_DATA_SIZE:
-                    trainingDataSize = parser.intValue();
+                    trainingDataSize = parser.intValue(false);
                     break;
                 case ANOMALY_SCORE_THRESHOLD:
-                    anomalyScoreThreshold = parser.doubleValue();
+                    anomalyScoreThreshold = parser.doubleValue(false);
                     break;
                 default:
                     parser.skipChildren();
