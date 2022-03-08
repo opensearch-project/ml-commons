@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.action.models;
+package org.opensearch.ml.action.tasks;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
