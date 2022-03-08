@@ -61,8 +61,6 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.engine.MLEngineClassLoader;
-import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizationInput;
-import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -215,9 +213,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
 
-        AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings);
-        MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
-
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
 
         return ImmutableList
@@ -288,7 +283,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 AnomalyDetectionParams.XCONTENT_REGISTRY,
                 SampleAlgoParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
-                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
                 FitRCFParams.XCONTENT_REGISTRY,
                 BatchRCFParams.XCONTENT_REGISTRY
             );
