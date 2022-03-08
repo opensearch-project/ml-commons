@@ -104,6 +104,12 @@ integTest {
         }
     }
 
+    if (System.getProperty("https") == null || System.getProperty("https") == "false") {
+        filter {
+            excludeTestsMatching "org.opensearch.ml.rest.SecureMLRestIT"
+        }
+    }
+
     // The 'doFirst' delays till execution time.
     doFirst {
         // Tell the test JVM if the cluster JVM is running under a debugger so that tests can
@@ -182,7 +188,7 @@ run {
 task release(type: Copy, group: 'build') {
     dependsOn allprojects*.tasks.build
     from(zipTree(project.tasks.bundlePlugin.outputs.files.getSingleFile()))
-    into "build/plugins/opensearch-machine-learning"
+    into "build/plugins/opensearch-ml"
     includeEmptyDirs = false
 }
 
