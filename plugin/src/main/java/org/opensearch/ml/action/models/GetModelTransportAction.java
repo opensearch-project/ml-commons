@@ -9,6 +9,8 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.util.Base64;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -24,6 +26,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.exception.MLIllegalArgumentException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.parameter.MLModel;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -58,6 +61,8 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            Base64.getUrlDecoder().decode(modelId);
+
             client.get(getRequest, ActionListener.wrap(r -> {
                 log.info("Completed Get Model Request, id:{}", modelId);
 
@@ -71,11 +76,11 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find model " + modelId));
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find model"));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find model " + modelId));
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find model"));
                 } else {
                     log.error("Failed to get ML model " + modelId, e);
                     actionListener.onFailure(e);
@@ -83,8 +88,11 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
             }));
         } catch (Exception e) {
             log.error("Failed to get ML model " + modelId, e);
-            actionListener.onFailure(e);
+            if (e instanceof IllegalArgumentException) {
+                actionListener.onFailure(new MLIllegalArgumentException("Invalid model id"));
+            } else {
+                actionListener.onFailure(e);
+            }
         }
-
     }
 }

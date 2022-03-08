@@ -7,6 +7,8 @@ package org.opensearch.ml.action.tasks;
 
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
 
+import java.util.Base64;
+
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -18,6 +20,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.ml.common.exception.MLIllegalArgumentException;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.tasks.Task;
@@ -42,6 +45,8 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            Base64.getUrlDecoder().decode(taskId);
+
             client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
                 @Override
                 public void onResponse(DeleteResponse deleteResponse) {
@@ -57,7 +62,11 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             });
         } catch (Exception e) {
             log.error("Failed to delete ML task " + taskId, e);
-            actionListener.onFailure(e);
+            if (e instanceof IllegalArgumentException) {
+                actionListener.onFailure(new MLIllegalArgumentException("Invalid task id"));
+            } else {
+                actionListener.onFailure(e);
+            }
         }
     }
 }

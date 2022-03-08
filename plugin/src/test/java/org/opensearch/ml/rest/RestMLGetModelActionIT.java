@@ -20,9 +20,9 @@ public class RestMLGetModelActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    public void testGetModelAPI_EmptyResources() throws IOException {
+    public void testGetModelAPI_InvalidModelId() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("Fail to find model 111222333");
+        exceptionRule.expectMessage("Invalid model id");
         TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/111222333", null, "", null);
     }
 

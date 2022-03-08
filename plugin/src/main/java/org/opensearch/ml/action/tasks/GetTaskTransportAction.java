@@ -9,6 +9,8 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.util.Base64;
+
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -22,6 +24,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.exception.MLIllegalArgumentException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
@@ -55,6 +58,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            Base64.getUrlDecoder().decode(taskId);
+
             client.get(getRequest, ActionListener.wrap(r -> {
                 log.info("Completed Get Task Request, id:{}", taskId);
 
@@ -68,11 +73,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find ML task"));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find ML task"));
                 } else {
                     log.error("Failed to get ML task " + taskId, e);
                     actionListener.onFailure(e);
@@ -80,8 +85,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             }));
         } catch (Exception e) {
             log.error("Failed to get ML task " + taskId, e);
-            actionListener.onFailure(e);
+            if (e instanceof IllegalArgumentException) {
+                actionListener.onFailure(new MLIllegalArgumentException("Invalid task id"));
+            } else {
+                actionListener.onFailure(e);
+            }
         }
-
     }
 }

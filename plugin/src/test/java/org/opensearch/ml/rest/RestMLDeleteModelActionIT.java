@@ -20,9 +20,9 @@ public class RestMLDeleteModelActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    public void testDeleteModelAPI_EmptyResources() throws IOException {
+    public void testDeleteModelAPI_InvalidModelId() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("index_not_found_exception");
+        exceptionRule.expectMessage("Invalid model id");
         TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/models/111222333", null, "", null);
     }
 

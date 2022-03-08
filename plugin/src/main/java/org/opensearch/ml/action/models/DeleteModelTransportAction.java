@@ -7,6 +7,8 @@ package org.opensearch.ml.action.models;
 
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 
+import java.util.Base64;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -20,6 +22,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.ml.common.exception.MLIllegalArgumentException;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.tasks.Task;
@@ -45,6 +48,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            Base64.getUrlDecoder().decode(modelId);
+
             client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
                 @Override
                 public void onResponse(DeleteResponse deleteResponse) {
@@ -60,8 +65,11 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             });
         } catch (Exception e) {
             log.error("Failed to delete ML model " + modelId, e);
-            actionListener.onFailure(e);
+            if (e instanceof IllegalArgumentException) {
+                actionListener.onFailure(new MLIllegalArgumentException("Invalid model id"));
+            } else {
+                actionListener.onFailure(e);
+            }
         }
     }
-
 }
