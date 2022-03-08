@@ -6,7 +6,9 @@
 package org.opensearch.ml.common.parameter;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentParser;
@@ -16,8 +18,13 @@ import java.io.IOException;
 import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.common.TestHelper.contentObjectToString;
+import static org.opensearch.ml.common.TestHelper.testParseFromString;
 
 public class LinearRegressionParamsTest {
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private Function<XContentParser, LinearRegressionParams> function = parser -> {
         try {
@@ -57,6 +64,36 @@ public class LinearRegressionParamsTest {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         LinearRegressionParams parsedParams = new LinearRegressionParams(streamInput);
         assertEquals(params, parsedParams);
+    }
+
+    @Test
+    public void parse_PassIntValueToDoubleField() throws IOException {
+        LinearRegressionParams params = LinearRegressionParams
+                .builder()
+                .objectiveType(LinearRegressionParams.ObjectiveType.ABSOLUTE_LOSS)
+                .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
+                .learningRate(0.1)
+                .momentumType(LinearRegressionParams.MomentumType.NESTEROV)
+                .momentumFactor(0.2)
+                .epsilon(3.0)
+                .beta1(0.4)
+                .beta2(0.5)
+                .decayRate(0.6)
+                .epochs(1)
+                .batchSize(2)
+                .seed(3L)
+                .target("test_target")
+                .build();
+        String paramsStr = contentObjectToString(params);
+        testParseFromString(params, paramsStr.replace("\"epsilon\":3.0,", "\"epsilon\":3,"), function);
+    }
+
+    @Test
+    public void parse_InvalidParam_InvalidDoubleValue() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Double value passed as String");
+        String paramsStr = contentObjectToString(params);
+        testParseFromString(params, paramsStr.replace("\"epsilon\":0.3,", "\"epsilon\":\"0.3\","), function);
     }
 
     @Test

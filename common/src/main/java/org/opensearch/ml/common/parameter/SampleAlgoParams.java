@@ -51,7 +51,7 @@ public class SampleAlgoParams implements MLAlgoParams {
 
             switch (fieldName) {
                 case SAMPLE_PARAM_FIELD:
-                    sampleParam = parser.intValue();
+                    sampleParam = parser.intValue(false);
                     break;
                 default:
                     parser.skipChildren();

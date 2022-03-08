@@ -45,6 +45,12 @@ public class TestHelper {
         obj.equals(parsedObj);
     }
 
+    public static String contentObjectToString(ToXContentObject obj) throws IOException {
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        obj.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        return xContentBuilderToString(builder);
+    }
+
     public static String xContentBuilderToString(XContentBuilder builder) {
         return BytesReference.bytes(builder).utf8ToString();
     }
