@@ -68,11 +68,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task " + taskId));
+                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
                 } else {
                     log.error("Failed to get ML task " + taskId, e);
                     actionListener.onFailure(e);
