@@ -113,7 +113,7 @@ public class MLModel implements ToXContentObject {
                     content = parser.text();
                     break;
                 case MODEL_VERSION:
-                    version = parser.intValue();
+                    version = parser.intValue(false);
                     break;
                 case USER:
                     user = User.parse(parser);

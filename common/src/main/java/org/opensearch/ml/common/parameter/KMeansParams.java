@@ -7,7 +7,6 @@ package org.opensearch.ml.common.parameter;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
 import org.opensearch.common.ParseField;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -70,10 +69,10 @@ public class KMeansParams implements MLAlgoParams {
 
             switch (fieldName) {
                 case CENTROIDS_FIELD:
-                    k = parser.intValue();
+                    k = parser.intValue(false);
                     break;
                 case ITERATIONS_FIELD:
-                    iterations = parser.intValue();
+                    iterations = parser.intValue(false);
                     break;
                 case DISTANCE_TYPE_FIELD:
                     distanceType = DistanceType.from(parser.text());
