@@ -93,23 +93,23 @@ public class AnomalyLocalizationInput implements Input {
                     break;
                 case FIELD_START_TIME:
                     parser.nextToken();
-                    startTime = parser.longValue();
+                    startTime = parser.longValue(false);
                     break;
                 case FIELD_END_TIME:
                     parser.nextToken();
-                    endTime = parser.longValue();
+                    endTime = parser.longValue(false);
                     break;
                 case FIELD_MIN_TIME_INTERVAL:
                     parser.nextToken();
-                    minTimeInterval = parser.longValue();
+                    minTimeInterval = parser.longValue(false);
                     break;
                 case FIELD_NUM_OUTPUTS:
                     parser.nextToken();
-                    numOutputs = parser.intValue();
+                    numOutputs = parser.intValue(false);
                     break;
                 case FIELD_ANOMALY_START_TIME:
                     parser.nextToken();
-                    anomalyStartTime = Optional.of(parser.longValue());
+                    anomalyStartTime = Optional.of(parser.longValue(false));
                     break;
                 case FIELD_FILTER_QUERY:
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
