@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.apache.http.HttpEntity;
+import org.junit.After;
+import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -27,11 +29,20 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
-    private String irisIndex = "iris_data";
+    private String irisIndex = "iris_data_train_predict_it";
+
+    @Before
+    public void setup() throws IOException {
+        ingestIrisData(irisIndex);
+    }
+
+    @After
+    public void deleteIndices() throws IOException {
+        deleteIndexWithAdminClient(irisIndex);
+    }
 
     public void testTrainAndPredictKmeans() throws IOException {
         validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 0, 0);
-        ingestIrisData(irisIndex);
         trainAndPredictKmeansWithCustomParam();
         validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 1, 1);
 

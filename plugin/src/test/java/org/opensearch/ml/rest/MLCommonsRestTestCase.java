@@ -18,11 +18,14 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.apache.http.Header;
@@ -51,17 +54,23 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.MLAlgoParams;
+import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestStatus;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
@@ -241,7 +250,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "POST",
                 "_bulk?refresh=true",
                 null,
-                TestHelper.toHttpEntity(TestData.IRIS_DATA),
+                TestHelper.toHttpEntity(TestData.IRIS_DATA.replaceAll("iris_data", indexName)),
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
@@ -253,7 +262,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         ActionName actionName,
         int expectedTotalFailureCount,
         int expectedTotalAlgoFailureCount,
-        int expectedTotalRequestCount,
+        int expectedMinumnTotalRequestCount,
         int expectedTotalAlgoRequestCount
     ) throws IOException {
         Response statsResponse = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/stats", null, "", null);
@@ -284,8 +293,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
         assertEquals(expectedTotalFailureCount, totalFailureCount);
         assertEquals(expectedTotalAlgoFailureCount, totalAlgoFailureCount);
-        // ToDo: this line makes this test flaky as other tests makes the request count not predictable
-        // assertEquals(expectedTotalRequestCount, totalRequestCount);
+        assertTrue(totalRequestCount >= expectedMinumnTotalRequestCount);
         assertEquals(expectedTotalAlgoRequestCount, totalAlgoRequestCount);
     }
 
@@ -295,5 +303,165 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         HttpEntity entity = trainModelResponse.getEntity();
         assertNotNull(trainModelResponse);
         return trainModelResponse;
+    }
+
+    public Response createIndexRole(String role, String index) throws IOException {
+        return TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/roles/" + role,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        "{\n"
+                            + "\"cluster_permissions\": [\n"
+                            + "],\n"
+                            + "\"index_permissions\": [\n"
+                            + "{\n"
+                            + "\"index_patterns\": [\n"
+                            + "\""
+                            + index
+                            + "\"\n"
+                            + "],\n"
+                            + "\"dls\": \"\",\n"
+                            + "\"fls\": [],\n"
+                            + "\"masked_fields\": [],\n"
+                            + "\"allowed_actions\": [\n"
+                            + "\"crud\",\n"
+                            + "\"indices:admin/create\"\n"
+                            + "]\n"
+                            + "}\n"
+                            + "],\n"
+                            + "\"tenant_permissions\": []\n"
+                            + "}"
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
+    }
+
+    public Response createSearchRole(String role, String index) throws IOException {
+        return TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/roles/" + role,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        "{\n"
+                            + "\"cluster_permissions\": [\n"
+                            + "],\n"
+                            + "\"index_permissions\": [\n"
+                            + "{\n"
+                            + "\"index_patterns\": [\n"
+                            + "\""
+                            + index
+                            + "\"\n"
+                            + "],\n"
+                            + "\"dls\": \"\",\n"
+                            + "\"fls\": [],\n"
+                            + "\"masked_fields\": [],\n"
+                            + "\"allowed_actions\": [\n"
+                            + "\"indices:data/read/search\"\n"
+                            + "]\n"
+                            + "}\n"
+                            + "],\n"
+                            + "\"tenant_permissions\": []\n"
+                            + "}"
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
+    }
+
+    public Response createUser(String name, String password, ArrayList<String> backendRoles) throws IOException {
+        JsonArray backendRolesString = new JsonArray();
+        for (int i = 0; i < backendRoles.size(); i++) {
+            backendRolesString.add(backendRoles.get(i));
+        }
+        return TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/internalusers/" + name,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        " {\n"
+                            + "\"password\": \""
+                            + password
+                            + "\",\n"
+                            + "\"backend_roles\": "
+                            + backendRolesString
+                            + ",\n"
+                            + "\"attributes\": {\n"
+                            + "}} "
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
+    }
+
+    public Response deleteUser(String user) throws IOException {
+        return TestHelper
+            .makeRequest(
+                client(),
+                "DELETE",
+                "/_opendistro/_security/api/internalusers/" + user,
+                null,
+                "",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
+    }
+
+    public Response createRoleMapping(String role, ArrayList<String> users) throws IOException {
+        JsonArray usersString = new JsonArray();
+        for (int i = 0; i < users.size(); i++) {
+            usersString.add(users.get(i));
+        }
+        return TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/rolesmapping/" + role,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        "{\n" + "  \"backend_roles\" : [  ],\n" + "  \"hosts\" : [  ],\n" + "  \"users\" : " + usersString + "\n" + "}"
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
+    }
+
+    public void trainAndPredict(
+        RestClient client,
+        FunctionName functionName,
+        String indexName,
+        MLAlgoParams params,
+        SearchSourceBuilder searchSourceBuilder,
+        Consumer<Map<String, Object>> function
+    ) throws IOException {
+        MLInputDataset inputData = SearchQueryInputDataset
+            .builder()
+            .indices(ImmutableList.of(indexName))
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
+        Response response = TestHelper
+            .makeRequest(
+                client,
+                "POST",
+                "/_plugins/_ml/_train_predict/" + functionName.name().toLowerCase(Locale.ROOT),
+                ImmutableMap.of(),
+                TestHelper.toHttpEntity(kmeansInput),
+                null
+            );
+        HttpEntity entity = response.getEntity();
+        assertNotNull(response);
+        String entityString = TestHelper.httpEntityToString(entity);
+        Map map = gson.fromJson(entityString, Map.class);
+        Map<String, Object> predictionResult = (Map<String, Object>) map.get("prediction_result");
+        if (function != null) {
+            function.accept(predictionResult);
+        }
     }
 }
