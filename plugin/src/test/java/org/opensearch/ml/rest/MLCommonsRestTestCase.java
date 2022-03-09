@@ -260,10 +260,10 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected void validateStats(
         FunctionName functionName,
         ActionName actionName,
-        int expectedTotalFailureCount,
-        int expectedTotalAlgoFailureCount,
-        int expectedMinumnTotalRequestCount,
-        int expectedTotalAlgoRequestCount
+        int expectedMinimumTotalFailureCount,
+        int expectedMinimumTotalAlgoFailureCount,
+        int expectedMinimumTotalRequestCount,
+        int expectedMinimumTotalAlgoRequestCount
     ) throws IOException {
         Response statsResponse = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/stats", null, "", null);
         HttpEntity entity = statsResponse.getEntity();
@@ -291,10 +291,10 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 totalAlgoRequestCount += (Double) nodeStatsMap.get(requestCountStat);
             }
         }
-        assertEquals(expectedTotalFailureCount, totalFailureCount);
-        assertEquals(expectedTotalAlgoFailureCount, totalAlgoFailureCount);
-        assertTrue(totalRequestCount >= expectedMinumnTotalRequestCount);
-        assertEquals(expectedTotalAlgoRequestCount, totalAlgoRequestCount);
+        assertTrue(totalFailureCount >= expectedMinimumTotalFailureCount);
+        assertTrue(totalAlgoFailureCount >= expectedMinimumTotalAlgoFailureCount);
+        assertTrue(totalRequestCount >= expectedMinimumTotalRequestCount);
+        assertTrue(totalAlgoRequestCount >= expectedMinimumTotalAlgoRequestCount);
     }
 
     protected Response ingestModelData() throws IOException {
@@ -462,6 +462,69 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         Map<String, Object> predictionResult = (Map<String, Object>) map.get("prediction_result");
         if (function != null) {
             function.accept(predictionResult);
+        }
+    }
+
+    public void train(
+        RestClient client,
+        FunctionName functionName,
+        String indexName,
+        MLAlgoParams params,
+        SearchSourceBuilder searchSourceBuilder,
+        Consumer<Map<String, Object>> function,
+        boolean async
+    ) throws IOException {
+        MLInputDataset inputData = SearchQueryInputDataset
+            .builder()
+            .indices(ImmutableList.of(indexName))
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
+        String endpoint = "/_plugins/_ml/_train/" + functionName.name().toLowerCase(Locale.ROOT);
+        if (async) {
+            endpoint += "?async=true";
+        }
+        Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
+        verifyResponse(function, response);
+    }
+
+    public void predict(
+        RestClient client,
+        FunctionName functionName,
+        String modelId,
+        String indexName,
+        MLAlgoParams params,
+        SearchSourceBuilder searchSourceBuilder,
+        Consumer<Map<String, Object>> function
+    ) throws IOException {
+        MLInputDataset inputData = SearchQueryInputDataset
+            .builder()
+            .indices(ImmutableList.of(indexName))
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
+        String endpoint = "/_plugins/_ml/_predict/" + functionName.name().toLowerCase(Locale.ROOT) + "/" + modelId;
+        Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
+        verifyResponse(function, response);
+    }
+
+    public void getModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/models/" + modelId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void getTask(RestClient client, String taskId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    private void verifyResponse(Consumer<Map<String, Object>> function, Response response) throws IOException {
+        HttpEntity entity = response.getEntity();
+        assertNotNull(response);
+        String entityString = TestHelper.httpEntityToString(entity);
+        Map<String, Object> map = gson.fromJson(entityString, Map.class);
+        if (function != null) {
+            function.accept(map);
         }
     }
 }

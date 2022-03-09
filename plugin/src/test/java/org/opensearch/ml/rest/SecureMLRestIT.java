@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 
 import org.apache.http.HttpHost;
 import org.junit.After;
@@ -20,6 +21,7 @@ import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
@@ -142,4 +144,54 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             }
         );
     }
+
+    public void testTrainModelWithFullAccessThenPredict() throws IOException {
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        // train model
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            String modelId = (String) trainResult.get("model_id");
+            assertNotNull(modelId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.COMPLETED.name(), status);
+            try {
+                getModel(mlFullAccessClient, modelId, model -> {
+                    String algorithm = (String) model.get("algorithm");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+            try {
+                // predict with trained model
+                predict(mlFullAccessClient, FunctionName.KMEANS, modelId, irisIndex, kMeansParams, searchSourceBuilder, predictResult -> {
+                    String predictStatus = (String) predictResult.get("status");
+                    assertEquals(MLTaskState.COMPLETED.name(), predictStatus);
+                    Map<String, Object> predictionResult = (Map<String, Object>) predictResult.get("prediction_result");
+                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                    assertTrue(rows.size() > 1);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        }, false);
+    }
+
+    public void testTrainModelInAsyncWayWithFullAccess() throws IOException {
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, KMeansParams.builder().build(), searchSourceBuilder, trainResult -> {
+            assertFalse(trainResult.containsKey("model_id"));
+            String taskId = (String) trainResult.get("task_id");
+            assertNotNull(taskId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.CREATED.name(), status);
+            try {
+                getTask(mlFullAccessClient, taskId, task -> {
+                    String algorithm = (String) task.get("function_name");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        }, true);
+    }
+
 }
