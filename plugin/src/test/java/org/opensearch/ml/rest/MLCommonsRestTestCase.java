@@ -305,6 +305,16 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return trainModelResponse;
     }
 
+    public void trainAsyncWithSample(Consumer<Map<String, Object>> consumer, boolean async) throws IOException {
+        String endpoint = "/_plugins/_ml/_train/sample_algo";
+        if (async) {
+            endpoint += "?async=true";
+        }
+        Response response = TestHelper
+            .makeRequest(client(), "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
+        verifyResponse(consumer, response);
+    }
+
     public Response createIndexRole(String role, String index) throws IOException {
         return TestHelper
             .makeRequest(

@@ -34,8 +34,8 @@ public class RestMLDeleteModelActionIT extends MLCommonsRestTestCase {
         Map map = gson.fromJson(entityString, Map.class);
         String model_id = (String) map.get("model_id");
 
-        Response getModelResponse = TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/models/" + model_id, null, "", null);
-        assertNotNull(getModelResponse);
-        assertEquals(RestStatus.OK, TestHelper.restStatus(getModelResponse));
+        Response deleteModelResponse = TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/models/" + model_id, null, "", null);
+        assertNotNull(deleteModelResponse);
+        assertEquals(RestStatus.OK, TestHelper.restStatus(deleteModelResponse));
     }
 }
