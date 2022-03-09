@@ -108,6 +108,31 @@ public class AnomalyDetectionLibSVMTest {
     }
 
     @Test
+    public void trainWithFullParams() {
+        AnomalyDetectionParams parameters = AnomalyDetectionParams.builder().gamma(gamma).nu(nu).cost(1.0).coeff(0.01).epsilon(0.001).degree(1).kernelType(AnomalyDetectionParams.ADKernelType.LINEAR).build();
+        AnomalyDetectionLibSVM anomalyDetection = new AnomalyDetectionLibSVM(parameters);
+        Model model = anomalyDetection.train(trainDataFrame);
+        Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
+        Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
+        Assert.assertNotNull(model.getContent());
+
+        parameters = parameters.toBuilder().kernelType(AnomalyDetectionParams.ADKernelType.POLY).build();
+        anomalyDetection = new AnomalyDetectionLibSVM(parameters);
+        model = anomalyDetection.train(trainDataFrame);
+        Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
+
+        parameters = parameters.toBuilder().kernelType(AnomalyDetectionParams.ADKernelType.RBF).build();
+        anomalyDetection = new AnomalyDetectionLibSVM(parameters);
+        model = anomalyDetection.train(trainDataFrame);
+        Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
+
+        parameters = parameters.toBuilder().kernelType(AnomalyDetectionParams.ADKernelType.SIGMOID).build();
+        anomalyDetection = new AnomalyDetectionLibSVM(parameters);
+        model = anomalyDetection.train(trainDataFrame);
+        Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
+    }
+
+    @Test
     public void predict_NullModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for KMeans prediction");
@@ -141,4 +166,19 @@ public class AnomalyDetectionLibSVMTest {
         Assert.assertEquals(1.0, recall, 0.01);
     }
 
+    @Test
+    public void constructor_NegativeGamma() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("gamma should be positive");
+        AnomalyDetectionParams parameters = AnomalyDetectionParams.builder().gamma(-1.0).build();
+        new AnomalyDetectionLibSVM(parameters);
+    }
+
+    @Test
+    public void constructor_NegativeNu() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("nu should be positive");
+        AnomalyDetectionParams parameters = AnomalyDetectionParams.builder().nu(-1.0).build();
+        new AnomalyDetectionLibSVM(parameters);
+    }
 }

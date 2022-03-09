@@ -34,7 +34,7 @@ public class SampleAlgo implements Trainable, Predictable {
     @Override
     public MLOutput predict(DataFrame dataFrame, Model model) {
         if (model == null) {
-            throw new IllegalArgumentException("No model found for KMeans prediction.");
+            throw new IllegalArgumentException("No model found for sample algo.");
         }
         AtomicReference<Double> sum = new AtomicReference<>((double) 0);
         dataFrame.forEach(row -> {
