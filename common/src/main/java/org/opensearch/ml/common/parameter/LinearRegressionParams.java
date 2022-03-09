@@ -59,7 +59,7 @@ public class LinearRegressionParams implements MLAlgoParams {
     private Long seed;
     private String target;
 
-    @Builder
+    @Builder(toBuilder = true)
     public LinearRegressionParams(ObjectiveType objectiveType, OptimizerType optimizerType, Double learningRate, MomentumType momentumType, Double momentumFactor, Double epsilon, Double beta1, Double beta2, Double decayRate, Integer epochs, Integer batchSize, Long seed, String target) {
         this.objectiveType = objectiveType;
         this.optimizerType = optimizerType;

@@ -15,7 +15,6 @@ import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.Model;
-import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
@@ -38,6 +37,7 @@ public class LinearRegressionTest {
                 .epsilon(1e-6)
                 .beta1(0.9)
                 .beta2(0.99)
+                .target("price")
                 .build();
         trainDataFrame = constructLinearRegressionTrainDataFrame();
         predictionDataFrame = constructLinearRegressionPredictionDataFrame();
@@ -45,7 +45,6 @@ public class LinearRegressionTest {
 
     @Test
     public void predict() {
-        parameters.setTarget("price");
         LinearRegression regression = new LinearRegression(parameters);
         Model model = regression.train(trainDataFrame);
         MLPredictionOutput output = (MLPredictionOutput)regression.predict(predictionDataFrame, model);
@@ -57,15 +56,56 @@ public class LinearRegressionTest {
     public void predictWithoutModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
-        parameters.setTarget( "price");
         LinearRegression regression = new LinearRegression(parameters);
         regression.predict(predictionDataFrame, null);
     }
 
     @Test
     public void train() {
-        parameters.setTarget( "price");
-        LinearRegression regression = new LinearRegression(parameters);
+        trainAndVerify(parameters);
+    }
+
+    @Test
+    public void trainWithLinearDecaySGD() {
+        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.LINEAR_DECAY_SGD).build();
+        trainAndVerify(newParams);
+    }
+
+    @Test
+    public void trainWithSqrtDecaySGD() {
+        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.SQRT_DECAY_SGD).build();
+        trainAndVerify(newParams);
+    }
+
+    @Test
+    public void trainWithAdaGrad() {
+        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.ADA_GRAD).build();
+        trainAndVerify(newParams);
+    }
+
+    @Test
+    public void trainWithAdaDelta() {
+        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.ADA_DELTA).build();
+        trainAndVerify(newParams);
+    }
+
+    @Test
+    public void trainWithADAM() {
+        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.ADAM)
+                .momentumType(LinearRegressionParams.MomentumType.NESTEROV)
+                .objectiveType(LinearRegressionParams.ObjectiveType.ABSOLUTE_LOSS)
+                .build();
+        trainAndVerify(newParams);
+    }
+
+    @Test
+    public void trainWithRmsProp() {
+        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.RMS_PROP).build();
+        trainAndVerify(newParams);
+    }
+
+    private void trainAndVerify(LinearRegressionParams params) {
+        LinearRegression regression = new LinearRegression(params);
         Model model = regression.train(trainDataFrame);
         Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
         Assert.assertEquals(1, model.getVersion());
@@ -76,6 +116,7 @@ public class LinearRegressionTest {
     public void trainExceptionWithoutTarget() {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("Empty target when generating dataset from data frame.");
+        parameters.setTarget(null);
         LinearRegression regression = new LinearRegression(parameters);
         Model model = regression.train(trainDataFrame);
     }
@@ -89,4 +130,73 @@ public class LinearRegressionTest {
         Model model = regression.train(trainDataFrame);
     }
 
+    @Test
+    public void constructorNegativeLearnRate() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Learning rate should not be negative");
+        new LinearRegression(parameters.toBuilder().learningRate(-0.1).build());
+    }
+
+    @Test
+    public void constructorNegativeMomentumFactor() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("MomentumFactor should not be negative");
+        new LinearRegression(parameters.toBuilder().momentumFactor(-0.1).build());
+    }
+
+    @Test
+    public void constructorNegativeEpsilon() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Epsilon should not be negative");
+        new LinearRegression(parameters.toBuilder().epsilon(-1.0).build());
+    }
+
+    @Test
+    public void constructorNegativeBeta1() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Beta1 should be in an open interval (0,1)");
+        new LinearRegression(parameters.toBuilder().beta1(-0.1).build());
+    }
+
+    @Test
+    public void constructorBigBeta1() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Beta1 should be in an open interval (0,1)");
+        new LinearRegression(parameters.toBuilder().beta1(2.0).build());
+    }
+
+    @Test
+    public void constructorNegativeBeta2() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Beta2 should be in an open interval (0,1)");
+        new LinearRegression(parameters.toBuilder().beta2(-0.1).build());
+    }
+
+    @Test
+    public void constructorBigBeta2() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Beta2 should be in an open interval (0,1)");
+        new LinearRegression(parameters.toBuilder().beta2(2.0).build());
+    }
+
+    @Test
+    public void constructorNegativeDecayRate() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("DecayRate should not be negative");
+        new LinearRegression(parameters.toBuilder().decayRate(-0.1).build());
+    }
+
+    @Test
+    public void constructorNegativeEpochs() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Epochs should not be negative");
+        new LinearRegression(parameters.toBuilder().epochs(-1).build());
+    }
+
+    @Test
+    public void constructorNegativeBatchSize() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("MiniBatchSize should not be negative");
+        new LinearRegression(parameters.toBuilder().batchSize(-1).build());
+    }
 }
