@@ -53,8 +53,6 @@ public class FixedInTimeRandomCutForestTest {
                 if (predictions.getRow(i).getValue(1).doubleValue() > 0.01) {
                     anomalyCount++;
                 }
-            } else {
-                Assert.assertEquals(0.0, predictions.getRow(i).getValue(1).doubleValue(), 0.1);
             }
         }
         Assert.assertTrue("Fewer anomaly detected: " + anomalyCount, anomalyCount > 1);// total anomalies 5

@@ -42,11 +42,11 @@ jacocoTestCoverageVerification {
         rule {
             limit {
                 counter = 'LINE'
-                minimum = 0.5 //TODO: add more test to meet the coverage bar 0.7
+                minimum = 0.94
             }
             limit {
                 counter = 'BRANCH'
-                minimum = 0.5 //TODO: add more test to meet the coverage bar 0.7
+                minimum = 0.87
             }
         }
     }
