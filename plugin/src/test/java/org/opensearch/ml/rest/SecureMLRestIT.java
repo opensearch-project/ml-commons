@@ -230,6 +230,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             try {
                 // Failed to delete model with read only client
                 deleteModel(mlReadOnlyClient, modelId, null);
+                throw new RuntimeException("Delete model for readonly user does not fail");
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(Throwables.getStackTraceAsString(e).contains("no permissions for [cluster:admin/opensearch/ml/models/delete]"));
@@ -258,6 +259,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
             try {
                 // Failed to delete task with read only client
                 deleteTask(mlReadOnlyClient, taskId, null);
+                throw new RuntimeException("Delete task for readonly user does not fail");
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
                 assertTrue(Throwables.getStackTraceAsString(e).contains("no permissions for [cluster:admin/opensearch/ml/tasks/delete]"));
