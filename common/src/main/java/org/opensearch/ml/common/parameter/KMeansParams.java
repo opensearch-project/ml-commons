@@ -42,7 +42,7 @@ public class KMeansParams implements MLAlgoParams {
     private DistanceType distanceType;
     //TODO: expose number of thread and seed?
 
-    @Builder
+    @Builder(toBuilder = true)
     public KMeansParams(Integer centroids, Integer iterations, DistanceType distanceType) {
         this.centroids = centroids;
         this.iterations = iterations;
