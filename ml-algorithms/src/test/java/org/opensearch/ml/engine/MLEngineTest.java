@@ -11,6 +11,8 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -18,11 +20,16 @@ import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.parameter.SampleAlgoOutput;
 
+
+import java.io.IOException;
+import java.util.Arrays;
 
 import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
@@ -153,6 +160,55 @@ public class MLEngineTest {
             Input mlInput = MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build();
             MLEngine.predict(mlInput, null);
         }
+    }
+
+    @Test
+    public void trainAndPredictWithKmeans() {
+        int dataSize = 100;
+        MLAlgoParams parameters = KMeansParams.builder().build();
+        DataFrame dataFrame = constructKMeansDataFrame(dataSize);
+        MLInputDataset inputData = new DataFrameInputDataset(dataFrame);
+        Input input = new MLInput(FunctionName.KMEANS, parameters, inputData);
+        MLPredictionOutput output = (MLPredictionOutput) MLEngine.trainAndPredict(input);
+        Assert.assertEquals(dataSize, output.getPredictionResult().size());
+    }
+
+    @Test
+    public void trainAndPredictWithInvalidInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Input should be MLInput");
+        Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
+        MLEngine.trainAndPredict(input);
+    }
+
+    @Test
+    public void executeLocalSampleCalculator() {
+        Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
+        SampleAlgoOutput output = (SampleAlgoOutput) MLEngine.execute(input);
+        Assert.assertEquals(3.0, output.getSampleResult(), 1e-5);
+    }
+
+    @Test
+    public void executeWithInvalidInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Function name should not be null");
+        Input input = new Input() {
+            @Override
+            public FunctionName getFunctionName() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput streamOutput) throws IOException {
+
+            }
+
+            @Override
+            public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
+                return null;
+            }
+        };
+        MLEngine.execute(input);
     }
 
     private Model trainKMeansModel() {

@@ -46,7 +46,7 @@ public class AnomalyDetectionParams implements MLAlgoParams {
     private Integer degree;
 
 
-    @Builder
+    @Builder(toBuilder = true)
     public AnomalyDetectionParams(ADKernelType kernelType, Double gamma, Double nu, Double cost, Double coeff, Double epsilon, Integer degree) {
         this.kernelType = kernelType;
         this.gamma = gamma;
