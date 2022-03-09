@@ -6,13 +6,9 @@
 package org.opensearch.ml.engine.algorithms.sample;
 
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.opensearch.client.Client;
-import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
@@ -57,7 +53,7 @@ public class LocalSampleCalculator implements Executable {
                 double min = inputData.stream().min(Comparator.naturalOrder()).get();
                 return new SampleAlgoOutput(min);
             default:
-                throw new IllegalArgumentException("can't support this operation " + operation);
+                throw new IllegalArgumentException("can't support this operation");
         }
     }
 }
