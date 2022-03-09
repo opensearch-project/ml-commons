@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 
 import org.apache.http.HttpHost;
 import org.junit.After;
@@ -20,7 +21,10 @@ import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.search.builder.SearchSourceBuilder;
+
+import com.google.common.base.Throwables;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";
@@ -129,6 +133,20 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         );
     }
 
+    public void testTrainWithReadOnlyMLAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/train]");
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        train(mlReadOnlyClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, null, false);
+    }
+
+    public void testPredictWithReadOnlyMLAccess() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/predict]");
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        predict(mlReadOnlyClient, FunctionName.KMEANS, "modelId", irisIndex, kMeansParams, searchSourceBuilder, null);
+    }
+
     public void testTrainAndPredictWithFullAccess() throws IOException {
         trainAndPredict(
             mlFullAccessClient,
@@ -141,5 +159,152 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
                 assertTrue(rows.size() > 0);
             }
         );
+    }
+
+    public void testTrainModelWithFullAccessThenPredict() throws IOException {
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        // train model
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            String modelId = (String) trainResult.get("model_id");
+            assertNotNull(modelId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.COMPLETED.name(), status);
+            try {
+                getModel(mlFullAccessClient, modelId, model -> {
+                    String algorithm = (String) model.get("algorithm");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+            try {
+                // predict with trained model
+                predict(mlFullAccessClient, FunctionName.KMEANS, modelId, irisIndex, kMeansParams, searchSourceBuilder, predictResult -> {
+                    String predictStatus = (String) predictResult.get("status");
+                    assertEquals(MLTaskState.COMPLETED.name(), predictStatus);
+                    Map<String, Object> predictionResult = (Map<String, Object>) predictResult.get("prediction_result");
+                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                    assertTrue(rows.size() > 1);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        }, false);
+    }
+
+    public void testTrainModelInAsyncWayWithFullAccess() throws IOException {
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, KMeansParams.builder().build(), searchSourceBuilder, trainResult -> {
+            assertFalse(trainResult.containsKey("model_id"));
+            String taskId = (String) trainResult.get("task_id");
+            assertNotNull(taskId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.CREATED.name(), status);
+            try {
+                getTask(mlFullAccessClient, taskId, task -> {
+                    String algorithm = (String) task.get("function_name");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        }, true);
+    }
+
+    public void testReadOnlyUser_CanGetModel_CanNotDeleteModel() throws IOException {
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        // train model with full access client
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            String modelId = (String) trainResult.get("model_id");
+            assertNotNull(modelId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.COMPLETED.name(), status);
+            try {
+                // get model with readonly client
+                getModel(mlReadOnlyClient, modelId, model -> {
+                    String algorithm = (String) model.get("algorithm");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+            try {
+                // Failed to delete model with read only client
+                deleteModel(mlReadOnlyClient, modelId, null);
+                throw new RuntimeException("Delete model for readonly user does not fail");
+            } catch (Exception e) {
+                assertEquals(ResponseException.class, e.getClass());
+                assertTrue(Throwables.getStackTraceAsString(e).contains("no permissions for [cluster:admin/opensearch/ml/models/delete]"));
+            }
+        }, false);
+    }
+
+    public void testReadOnlyUser_CanGetTask_CanNotDeleteTask() throws IOException {
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        // train model with full access client
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            assertFalse(trainResult.containsKey("model_id"));
+            String taskId = (String) trainResult.get("task_id");
+            assertNotNull(taskId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.CREATED.name(), status);
+            try {
+                // get task with readonly client
+                getTask(mlReadOnlyClient, taskId, task -> {
+                    String algorithm = (String) task.get("function_name");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+            try {
+                // Failed to delete task with read only client
+                deleteTask(mlReadOnlyClient, taskId, null);
+                throw new RuntimeException("Delete task for readonly user does not fail");
+            } catch (Exception e) {
+                assertEquals(ResponseException.class, e.getClass());
+                assertTrue(Throwables.getStackTraceAsString(e).contains("no permissions for [cluster:admin/opensearch/ml/tasks/delete]"));
+            }
+        }, true);
+    }
+
+    public void testReadOnlyUser_CanSearchModels() throws IOException {
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        // train model with full access client
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            String modelId = (String) trainResult.get("model_id");
+            assertNotNull(modelId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.COMPLETED.name(), status);
+            try {
+                // search model with readonly client
+                searchModelsWithAlgoName(mlReadOnlyClient, FunctionName.KMEANS.name(), models -> {
+                    ArrayList<Object> hits = (ArrayList) ((Map<String, Object>) models.get("hits")).get("hits");
+                    assertTrue(hits.size() > 0);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        }, false);
+    }
+
+    public void testReadOnlyUser_CanSearchTasks() throws IOException {
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        // train model with full access client
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            assertFalse(trainResult.containsKey("model_id"));
+            String taskId = (String) trainResult.get("task_id");
+            assertNotNull(taskId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.CREATED.name(), status);
+            try {
+                // search tasks with readonly client
+                searchTasksWithAlgoName(mlReadOnlyClient, FunctionName.KMEANS.name(), tasks -> {
+                    ArrayList<Object> hits = (ArrayList) ((Map<String, Object>) tasks.get("hits")).get("hits");
+                    assertTrue(hits.size() > 0);
+                });
+            } catch (IOException e) {
+                assertNull(e);
+            }
+        }, true);
     }
 }
