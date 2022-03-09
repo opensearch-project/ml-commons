@@ -518,6 +518,36 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         verifyResponse(function, response);
     }
 
+    public void deleteModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/models/" + modelId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void deleteTask(RestClient client, String taskId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/tasks/" + taskId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void searchModelsWithAlgoName(RestClient client, String algoName, Consumer<Map<String, Object>> function) throws IOException {
+        String query = String.format(Locale.ROOT, "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"algorithm\":\"%s\"}}]}}}", algoName);
+        searchModels(client, query, function);
+    }
+
+    public void searchModels(RestClient client, String query, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/models/_search", null, query, null);
+        verifyResponse(function, response);
+    }
+
+    public void searchTasksWithAlgoName(RestClient client, String algoName, Consumer<Map<String, Object>> function) throws IOException {
+        String query = String.format(Locale.ROOT, "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"function_name\":\"%s\"}}]}}}", algoName);
+        searchTasks(client, query, function);
+    }
+
+    public void searchTasks(RestClient client, String query, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/tasks/_search", null, query, null);
+        verifyResponse(function, response);
+    }
+
     private void verifyResponse(Consumer<Map<String, Object>> function, Response response) throws IOException {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
