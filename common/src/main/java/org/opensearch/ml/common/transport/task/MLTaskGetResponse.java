@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.task;
 
 import lombok.Builder;
+import lombok.Getter;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
@@ -20,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+@Getter
 public class MLTaskGetResponse extends ActionResponse implements ToXContentObject {
     MLTask mlTask;
 

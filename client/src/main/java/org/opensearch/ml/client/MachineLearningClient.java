@@ -12,11 +12,7 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.MLInput;
-import org.opensearch.ml.common.parameter.MLOutput;
-import org.opensearch.ml.common.parameter.Output;
-import org.opensearch.ml.common.parameter.MLModel;
+import org.opensearch.ml.common.parameter.*;
 
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.
@@ -119,6 +115,24 @@ public interface MachineLearningClient {
     void getModel(String modelId, ActionListener<MLModel> listener);
 
     /**
+     * Get MLTask and return ActionFuture.
+     * @param taskId id of the task
+     * @return ActionFuture of ml task
+     */
+    default ActionFuture<MLTask> getTask(String taskId) {
+        PlainActionFuture<MLTask> actionFuture = PlainActionFuture.newFuture();
+        getTask(taskId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Get MLTask and return task in listener
+     * @param taskId id of the model
+     * @param listener action listener
+     */
+    void getTask(String taskId, ActionListener<MLTask> listener);
+
+    /**
      *  Delete the model with modelId.
      * @param modelId ML model id
      * @return the result future
@@ -137,6 +151,24 @@ public interface MachineLearningClient {
     void deleteModel(String modelId, ActionListener<DeleteResponse> listener);
 
     /**
+     *  Delete the task with taskId.
+     * @param taskId ML task id
+     * @return the result future
+     */
+    default ActionFuture<DeleteResponse> deleteTask(String taskId) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteModel(taskId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Delete MLTask
+     * @param taskId id of the task
+     * @param listener action listener
+     */
+    void deleteTask(String taskId, ActionListener<DeleteResponse> listener);
+
+    /**
      *
      * @param searchRequest searchRequest to search the ML Model
      * @return Action future of search response
@@ -146,10 +178,29 @@ public interface MachineLearningClient {
         searchModel(searchRequest, actionFuture);
         return actionFuture;
     }
+
     /**
      *
      * @param searchRequest searchRequest to search the ML Model
      * @param listener action listener
      */
     void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
+
+    /**
+     *
+     * @param searchRequest searchRequest to search the ML Task
+     * @return Action future of search response
+     */
+    default ActionFuture<SearchResponse> searchTask(SearchRequest searchRequest) {
+        PlainActionFuture<SearchResponse> actionFuture = PlainActionFuture.newFuture();
+        searchTask(searchRequest, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     *
+     * @param searchRequest searchRequest to search the ML Task
+     * @param listener action listener
+     */
+    void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
 }
