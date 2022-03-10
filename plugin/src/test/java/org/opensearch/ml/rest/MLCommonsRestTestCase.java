@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -303,6 +304,17 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         HttpEntity entity = trainModelResponse.getEntity();
         assertNotNull(trainModelResponse);
         return trainModelResponse;
+    }
+
+    public void trainAsyncWithSample(Consumer<Map<String, Object>> consumer, boolean async) throws IOException, InterruptedException {
+        String endpoint = "/_plugins/_ml/_train/sample_algo";
+        if (async) {
+            endpoint += "?async=true";
+        }
+        Response response = TestHelper
+            .makeRequest(client(), "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
+        TimeUnit.SECONDS.sleep(5);
+        verifyResponse(consumer, response);
     }
 
     public Response createIndexRole(String role, String index) throws IOException {
