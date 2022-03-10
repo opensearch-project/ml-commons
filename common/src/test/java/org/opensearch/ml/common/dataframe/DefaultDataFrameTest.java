@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
-import org.graalvm.compiler.lir.LIRInstruction;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -18,8 +17,6 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
