@@ -11,9 +11,9 @@ public enum FunctionName {
     AD_LIBSVM,
     SAMPLE_ALGO,
     LOCAL_SAMPLE_CALCULATOR,
-    ANOMALY_LOCALIZATION,
     FIT_RCF,
-    BATCH_RCF;
+    BATCH_RCF,
+    ANOMALY_LOCALIZATION;
 
     public static FunctionName from(String value) {
         try {
