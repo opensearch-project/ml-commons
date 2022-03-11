@@ -62,6 +62,7 @@ Compatible with OpenSearch 1.3.0
 * add more UT and IT for rest actions ([#192](https://github.com/opensearch-project/ml-commons/pull/192))
 * add more UT to client module ([#203](https://github.com/opensearch-project/ml-commons/pull/203))
 * add more UT for task manager/runner ([#206](https://github.com/opensearch-project/ml-commons/pull/206))
+* create config and workflow files for release note ([#209](https://github.com/opensearch-project/ml-commons/pull/209))
 * use 1.3.0 docker to run CI ([#212](https://github.com/opensearch-project/ml-commons/pull/212))
 
 ### Documentation
