@@ -50,9 +50,26 @@ public class MachineLearningClientTest {
     SearchResponse searchResponse;
 
     private String modekId = "test_model_id";
+    private MLModel mlModel;
+    private MLTask mlTask;
+
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         MockitoAnnotations.openMocks(this);
+        String taskId = "taskId";
+        String modelId = "modelId";
+        mlTask = MLTask.builder()
+                .taskId(taskId)
+                .modelId(modelId)
+                .functionName(FunctionName.KMEANS)
+                .build();
+
+        String modelContent = "test content";
+        mlModel = MLModel.builder()
+                .algorithm(FunctionName.KMEANS)
+                .name("test")
+                .content(modelContent)
+                .build();
 
         machineLearningClient = new MachineLearningClient() {
             @Override
@@ -73,26 +90,8 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void execute(Input input, ActionListener<Output> listener) {
-                listener.onResponse(new Output() {
-                    @Override
-                    public void writeTo(StreamOutput out) {
-
-                    }
-
-                    @Override
-                    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-                        builder.startObject();
-                        builder.field("test", "test_value");
-                        builder.endObject();
-                        return builder;
-                    }
-                });
-            }
-
-            @Override
             public void getModel(String modelId, ActionListener<MLModel> listener) {
-                listener.onResponse(MLModel.builder().build());
+                listener.onResponse(mlModel);
             }
 
             @Override
@@ -107,7 +106,7 @@ public class MachineLearningClientTest {
 
             @Override
             public void getTask(String taskId, ActionListener<MLTask> listener) {
-                listener.onResponse(MLTask.builder().build());
+                listener.onResponse(mlTask);
             }
 
             @Override
@@ -184,5 +183,45 @@ public class MachineLearningClientTest {
                 .inputDataset(new DataFrameInputDataset(input))
                 .build();
         assertEquals(modekId, ((MLTrainingOutput)machineLearningClient.train(mlInput, false).actionGet()).getModelId());
+    }
+
+    @Test
+    public void trainAndPredict() {
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.KMEANS)
+                .parameters(mlParameters)
+                .inputDataset(new DataFrameInputDataset(input))
+                .build();
+        assertEquals(output, machineLearningClient.trainAndPredict(mlInput).actionGet());
+    }
+
+    @Test
+    public void getModel() {
+        assertEquals(mlModel, machineLearningClient.getModel("modelId").actionGet());
+    }
+
+    @Test
+    public void deleteModel() {
+        assertEquals(deleteResponse, machineLearningClient.deleteModel("modelId").actionGet());
+    }
+
+    @Test
+    public void searchModel() {
+        assertEquals(searchResponse, machineLearningClient.searchModel(new SearchRequest()).actionGet());
+    }
+
+    @Test
+    public void getTask() {
+        assertEquals(mlTask, machineLearningClient.getTask("taskId").actionGet());
+    }
+
+    @Test
+    public void deleteTask() {
+        assertEquals(deleteResponse, machineLearningClient.deleteTask("taskId").actionGet());
+    }
+
+    @Test
+    public void searchTask() {
+        assertEquals(searchResponse, machineLearningClient.searchTask(new SearchRequest()).actionGet());
     }
 }
