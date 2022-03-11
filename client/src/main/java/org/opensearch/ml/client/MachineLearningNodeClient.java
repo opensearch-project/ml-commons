@@ -14,11 +14,7 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.MLInput;
-import org.opensearch.ml.common.parameter.MLOutput;
-import org.opensearch.ml.common.parameter.Output;
-import org.opensearch.ml.common.parameter.MLModel;
+import org.opensearch.ml.common.parameter.*;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
@@ -31,6 +27,7 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.task.*;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
@@ -113,6 +110,35 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
         client.execute(MLModelSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
+            listener.onResponse(searchResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void getTask(String taskId, ActionListener<MLTask> listener) {
+        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder()
+                .taskId(taskId)
+                .build();
+
+        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, ActionListener.wrap(response -> {
+            listener.onResponse(MLTaskGetResponse.fromActionResponse(response).getMlTask());
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+        MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder()
+                .taskId(taskId)
+                .build();
+
+        client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(deleteResponse -> {
+            listener.onResponse(deleteResponse);
+        }, listener::onFailure));
+    }
+
+    @Override
+    public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+        client.execute(MLTaskSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
             listener.onResponse(searchResponse);
         }, listener::onFailure));
     }
