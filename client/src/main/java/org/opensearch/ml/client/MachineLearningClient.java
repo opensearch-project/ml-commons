@@ -79,24 +79,6 @@ public interface MachineLearningClient {
     void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener);
 
     /**
-     * Execute function and return ActionFuture.
-     * @param input input data
-     * @return ActionFuture of output
-     */
-    default ActionFuture<Output> execute(Input input) {
-        PlainActionFuture<Output> actionFuture = PlainActionFuture.newFuture();
-        execute(input, actionFuture);
-        return actionFuture;
-    }
-
-    /**
-     * Execute function and return output in listener
-     * @param input input data
-     * @param listener action listener
-     */
-    void execute(Input input, ActionListener<Output> listener);
-
-    /**
      * Get MLModel and return ActionFuture.
      * @param modelId id of the model
      * @return ActionFuture of ml model
