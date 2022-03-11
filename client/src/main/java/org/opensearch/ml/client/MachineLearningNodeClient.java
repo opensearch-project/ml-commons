@@ -16,9 +16,6 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.parameter.*;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
-import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -72,17 +69,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
                 .build();
 
         client.execute(MLTrainingTaskAction.INSTANCE, trainingTaskRequest, getMlPredictionTaskResponseActionListener(listener));
-    }
-
-    @Override
-    public void execute(Input input, ActionListener<Output> listener) {
-        MLExecuteTaskRequest executeTaskRequest = MLExecuteTaskRequest.builder()
-                .input(input)
-                .build();
-
-        client.execute(MLExecuteTaskAction.INSTANCE, executeTaskRequest, ActionListener.wrap(response -> {
-            listener.onResponse(MLExecuteTaskResponse.fromActionResponse(response).getOutput());
-        }, listener::onFailure));
     }
 
     @Override
