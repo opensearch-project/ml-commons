@@ -61,7 +61,7 @@ public class MLTask implements ToXContentObject, Writeable {
     private User user; // TODO: support document level access control later
     private boolean async;
 
-    @Builder
+    @Builder(toBuilder = true)
     public MLTask(
         String taskId,
         String modelId,
