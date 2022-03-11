@@ -209,16 +209,20 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.indices.MLInputDatasetHandler',
         'org.opensearch.ml.plugin.*',
         'org.opensearch.ml.task.MLTaskDispatcher',
-        'org.opensearch.ml.task.MLTaskRunner',
-        'org.opensearch.ml.task.MLTrainingTaskRunner',
         'org.opensearch.ml.task.MLPredictTaskRunner',
         'org.opensearch.ml.rest.RestMLTrainingAction',
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.utils.RestActionUtils',
         'org.opensearch.ml.task.MLTaskCache',
-        'org.opensearch.ml.task.MLTaskManager',
-        'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
-        'org.opensearch.ml.rest.AbstractMLSearchAction*'
+        'org.opensearch.ml.rest.AbstractMLSearchAction*',
+        'org.opensearch.ml.utils.MLNodeUtils', //0.5
+        'org.opensearch.ml.task.MLExecuteTaskRunner', //0.5
+        'org.opensearch.ml.rest.RestMLDeleteTaskAction', //0.5
+        'org.opensearch.ml.rest.RestMLGetModelAction', //0.5
+        'org.opensearch.ml.rest.RestMLExecuteAction', //0.3
+        'org.opensearch.ml.rest.RestMLDeleteModelAction', //0.5
+        'org.opensearch.ml.rest.RestMLTrainAndPredictAction', //0.3
+        'org.opensearch.ml.rest.RestMLGetTaskAction' //0.5
 ]
 
 jacocoTestCoverageVerification {
@@ -237,7 +241,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.3 //TODO: add more test to meet the coverage bar 0.7
+                minimum = 0.7
             }
         }
     }
