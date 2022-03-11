@@ -19,14 +19,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
-import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLAlgoParams;
-import org.opensearch.ml.common.parameter.MLInput;
-import org.opensearch.ml.common.parameter.MLOutput;
-import org.opensearch.ml.common.parameter.MLTrainingOutput;
-import org.opensearch.ml.common.parameter.Output;
-import org.opensearch.ml.common.parameter.MLModel;
+import org.opensearch.ml.common.parameter.*;
 
 import java.io.IOException;
 
@@ -109,6 +102,21 @@ public class MachineLearningClientTest {
 
             @Override
             public void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+                listener.onResponse(searchResponse);
+            }
+
+            @Override
+            public void getTask(String taskId, ActionListener<MLTask> listener) {
+                listener.onResponse(MLTask.builder().build());
+            }
+
+            @Override
+            public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
                 listener.onResponse(searchResponse);
             }
         };
