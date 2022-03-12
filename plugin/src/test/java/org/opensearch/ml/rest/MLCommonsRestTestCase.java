@@ -560,13 +560,13 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         verifyResponse(function, response);
     }
 
-    private void verifyResponse(Consumer<Map<String, Object>> function, Response response) throws IOException {
+    private void verifyResponse(Consumer<Map<String, Object>> verificationConsumer, Response response) throws IOException {
         HttpEntity entity = response.getEntity();
         assertNotNull(response);
         String entityString = TestHelper.httpEntityToString(entity);
         Map<String, Object> map = gson.fromJson(entityString, Map.class);
-        if (function != null) {
-            function.accept(map);
+        if (verificationConsumer != null) {
+            verificationConsumer.accept(map);
         }
     }
 }
