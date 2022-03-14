@@ -48,7 +48,7 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
-import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.ml.utils.TestData;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -122,7 +122,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
                 mlCircuitBreakerService
             )
         );
-        dataFrame = TestHelper.constructTestDataFrame(100);
+        dataFrame = TestData.constructTestDataFrame(100);
 
         MLInputDataset dataFrameInputDataSet = new DataFrameInputDataset(dataFrame);
         BatchRCFParams batchRCFParams = BatchRCFParams.builder().build();
