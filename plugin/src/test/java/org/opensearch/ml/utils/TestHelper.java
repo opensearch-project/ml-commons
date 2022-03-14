@@ -11,14 +11,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
-import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
-import org.apache.commons.math3.random.JDKRandomGenerator;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.entity.ContentType;
@@ -40,10 +36,6 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchModule;
 
@@ -147,31 +139,4 @@ public class TestHelper {
         return sb.toString();
     }
 
-    public static DataFrame constructTestDataFrame(int size) {
-        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE) };
-        DataFrame dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
-
-        Random random = new Random(1);
-        MultivariateNormalDistribution g1 = new MultivariateNormalDistribution(
-            new JDKRandomGenerator(random.nextInt()),
-            new double[] { 0.0, 0.0 },
-            new double[][] { { 2.0, 1.0 }, { 1.0, 2.0 } }
-        );
-        MultivariateNormalDistribution g2 = new MultivariateNormalDistribution(
-            new JDKRandomGenerator(random.nextInt()),
-            new double[] { 10.0, 10.0 },
-            new double[][] { { 2.0, 1.0 }, { 1.0, 2.0 } }
-        );
-        MultivariateNormalDistribution[] normalDistributions = new MultivariateNormalDistribution[] { g1, g2 };
-        for (int i = 0; i < size; ++i) {
-            int id = 0;
-            if (Math.random() < 0.5) {
-                id = 1;
-            }
-            double[] sample = normalDistributions[id].sample();
-            dataFrame.appendRow(Arrays.stream(sample).boxed().toArray(Double[]::new));
-        }
-
-        return dataFrame;
-    }
 }

@@ -5,17 +5,9 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.rest.action.search.RestSearchAction.parseSearchRequest;
-
-import java.io.IOException;
-import java.util.Arrays;
 import java.util.Locale;
-import java.util.function.IntConsumer;
 
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
-import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
@@ -25,8 +17,8 @@ public class RestActionUtils {
     public static final String PARAMETER_ASYNC = "async";
     public static final String PARAMETER_MODEL_ID = "model_id";
     public static final String PARAMETER_TASK_ID = "task_id";
-    private static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
-    private static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
+    public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
+    public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -56,25 +48,7 @@ public class RestActionUtils {
     }
 
     /**
-     * Create SearchQueryInputDataset from a RestRequest
-     *
-     * @param request RestRequest
-     * @param client node client
-     * @return SearchQueryInputDataset with indices and search source
-     * @throws IOException throw IOException when fail to parse search request
-     */
-    public static SearchQueryInputDataset buildSearchQueryInput(RestRequest request, NodeClient client) throws IOException {
-        SearchRequest searchRequest = new SearchRequest();
-        IntConsumer setSize = size -> searchRequest.source().size(size);
-        request
-            .withContentOrSourceParamParserOrNull(
-                parser -> parseSearchRequest(searchRequest, request, parser, client.getNamedWriteableRegistry(), setSize)
-            );
-        return new SearchQueryInputDataset(Arrays.asList(searchRequest.indices()), searchRequest.source());
-    }
-
-    /**
-     * Checks to see if the request came from Kibana, if so we want to return the UI Metadata from the document.
+     * Checks to see if the request came from OpenSearch Dashboards, if so we want to return the UI Metadata from the document.
      * If the request came from the client then we exclude the UI Metadata from the search result.
      *
      * @param request rest request

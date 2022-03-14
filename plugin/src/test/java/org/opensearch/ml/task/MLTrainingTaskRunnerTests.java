@@ -52,10 +52,11 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
-import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.ml.utils.TestData;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.NodeNotConnectedException;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
@@ -132,7 +133,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
             )
         );
 
-        dataFrame = TestHelper.constructTestDataFrame(100);
+        dataFrame = TestData.constructTestDataFrame(100);
 
         MLInputDataset dataFrameInputDataSet = new DataFrameInputDataset(dataFrame);
         BatchRCFParams batchRCFParams = BatchRCFParams.builder().build();
@@ -245,6 +246,18 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
         setupMocks(false, false, false, false);
         taskRunner.executeTask(requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), eq(requestWithDataFrame), any());
+    }
+
+    public void testExecuteTask_OnRemoteNode_SyncRequest_FailToSendRequest() {
+        setupMocks(false, false, false, false);
+        doThrow(new NodeNotConnectedException(remoteNode, errorMessage))
+            .when(transportService)
+            .sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), any(), any());
+        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), eq(requestWithDataFrame), any());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains(errorMessage));
     }
 
     public void testExecuteTask_FailedToDispatch() {
