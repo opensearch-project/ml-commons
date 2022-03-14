@@ -212,10 +212,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLPredictTaskRunner',
         'org.opensearch.ml.rest.RestMLTrainingAction',
         'org.opensearch.ml.rest.RestMLPredictionAction',
-        'org.opensearch.ml.utils.RestActionUtils',
         'org.opensearch.ml.task.MLTaskCache',
         'org.opensearch.ml.rest.AbstractMLSearchAction*',
-        'org.opensearch.ml.utils.MLNodeUtils', //0.5
         'org.opensearch.ml.task.MLExecuteTaskRunner', //0.5
         'org.opensearch.ml.rest.RestMLDeleteTaskAction', //0.5
         'org.opensearch.ml.rest.RestMLGetModelAction', //0.5
