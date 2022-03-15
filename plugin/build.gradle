@@ -208,13 +208,10 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.constant.CommonValue',
         'org.opensearch.ml.indices.MLInputDatasetHandler',
         'org.opensearch.ml.plugin.*',
-        'org.opensearch.ml.task.MLTaskDispatcher',
         'org.opensearch.ml.task.MLPredictTaskRunner',
         'org.opensearch.ml.rest.RestMLTrainingAction',
         'org.opensearch.ml.rest.RestMLPredictionAction',
-        'org.opensearch.ml.task.MLTaskCache',
         'org.opensearch.ml.rest.AbstractMLSearchAction*',
-        'org.opensearch.ml.task.MLExecuteTaskRunner', //0.5
         'org.opensearch.ml.rest.RestMLDeleteTaskAction', //0.5
         'org.opensearch.ml.rest.RestMLGetModelAction', //0.5
         'org.opensearch.ml.rest.RestMLExecuteAction', //0.3
