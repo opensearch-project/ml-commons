@@ -25,7 +25,6 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
-import org.opensearch.ml.utils.MLNodeUtils;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -107,17 +106,6 @@ public class MLTaskDispatcher {
             log.error("Failed to get node's task stats", exception);
             listener.onFailure(exception);
         }));
-    }
-
-    private DiscoveryNode[] getEligibleMLNodes() {
-        ClusterState state = this.clusterService.state();
-        final List<DiscoveryNode> eligibleNodes = new ArrayList<>();
-        for (DiscoveryNode node : state.nodes()) {
-            if (MLNodeUtils.isMLNode(node)) {
-                eligibleNodes.add(node);
-            }
-        }
-        return eligibleNodes.toArray(new DiscoveryNode[0]);
     }
 
     private DiscoveryNode[] getEligibleDataNodes() {
