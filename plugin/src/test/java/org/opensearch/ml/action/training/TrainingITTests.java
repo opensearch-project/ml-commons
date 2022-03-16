@@ -8,6 +8,7 @@ package org.opensearch.ml.action.training;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -33,7 +34,8 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         loadIrisData(irisIndexName);
     }
 
-    public void testTrainingWithSearchInput_Async() throws InterruptedException {
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
+    public void testTrainingWithSearchInput_Async_KMenas() throws InterruptedException {
         String taskId = trainKmeansWithIrisData(irisIndexName, true);
         assertNotNull(taskId);
 
@@ -47,20 +49,42 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
-    public void testTrainingWithSearchInput_Sync() {
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
+    public void testTrainingWithSearchInput_Sync_KMenas() {
         String modelId = trainKmeansWithIrisData(irisIndexName, false);
         assertNotNull(modelId);
         MLModel model = getModel(modelId);
         assertNotNull(model);
     }
 
-    public void testTrainingWithoutDataset() {
+    public void testTrainingWithDataFrame_Async_BatchRCF() throws InterruptedException {
+        String taskId = trainBatchRCFWithDataFrame(500, true);
+        assertNotNull(taskId);
+
+        AtomicReference<String> modelId = new AtomicReference<>();
+        waitUntil(() -> {
+            String id = getTask(taskId).getModelId();
+            modelId.set(id);
+            return id != null;
+        }, 10, TimeUnit.SECONDS);
+        MLModel model = getModel(modelId.get());
+        assertNotNull(model);
+    }
+
+    public void testTrainingWithDataFrame_Sync_BatchRCF() {
+        String modelId = trainBatchRCFWithDataFrame(500, false);
+        assertNotNull(modelId);
+        MLModel model = getModel(modelId);
+        assertNotNull(model);
+    }
+
+    public void testTrainingWithoutDataset_KMenas() {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
         trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), null, false);
     }
 
-    public void testTrainingWithEmptyDataset() {
+    public void testTrainingWithEmptyDataset_KMenas() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");
         MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);

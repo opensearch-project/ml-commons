@@ -7,6 +7,7 @@ package org.opensearch.ml.action.trainpredict;
 
 import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -33,7 +34,8 @@ public class TrainAndPredictITTests extends MLCommonsIntegTestCase {
         loadIrisData(irisIndexName);
     }
 
-    public void testTrainAndPredict() {
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
+    public void testTrainAndPredict_KMeans() {
         MLPredictionOutput mlPredictionOutput = trainAndPredictKmeansWithIrisData(irisIndexName);
         assertNotNull(mlPredictionOutput);
         DataFrame predictionResult = mlPredictionOutput.getPredictionResult();
@@ -41,13 +43,22 @@ public class TrainAndPredictITTests extends MLCommonsIntegTestCase {
         assertEquals(IRIS_DATA_SIZE, predictionResult.size());
     }
 
-    public void testTrainAndPredictWithoutDataset() {
+    public void testTrainAndPredict_BatchRCF() {
+        int size = 1000;
+        MLPredictionOutput mlPredictionOutput = trainAndPredictBatchRCFWithDataFrame(size);
+        assertNotNull(mlPredictionOutput);
+        DataFrame predictionResult = mlPredictionOutput.getPredictionResult();
+        assertNotNull(predictionResult);
+        assertEquals(size, predictionResult.size());
+    }
+
+    public void testTrainAndPredictWithoutDataset_KMeans() {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
         trainAndPredict(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), null);
     }
 
-    public void testTrainAndPredictWithEmptyDataset() {
+    public void testTrainAndPredictWithEmptyDataset_KMeans() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");
         MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);

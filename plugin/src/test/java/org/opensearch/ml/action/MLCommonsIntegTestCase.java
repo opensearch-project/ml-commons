@@ -19,8 +19,10 @@ import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.parameter.BatchRCFParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
@@ -32,6 +34,8 @@ import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
@@ -106,6 +110,11 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return trainAndPredict(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), inputDataset);
     }
 
+    public MLPredictionOutput trainAndPredictBatchRCFWithDataFrame(int dataSize) {
+        MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(dataSize));
+        return trainAndPredict(FunctionName.BATCH_RCF, BatchRCFParams.builder().build(), inputDataset);
+    }
+
     public MLPredictionOutput trainAndPredict(FunctionName functionName, MLAlgoParams params, MLInputDataset inputDataset) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputDataset).build();
         MLTrainingTaskRequest trainingRequest = MLTrainingTaskRequest.builder().mlInput(mlInput).build();
@@ -122,7 +131,12 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), inputDataset, async);
     }
 
-    public String trainModel(FunctionName functionName, KMeansParams params, MLInputDataset inputDataset, boolean async) {
+    public String trainBatchRCFWithDataFrame(int dataSize, boolean async) {
+        MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(dataSize));
+        return trainModel(FunctionName.BATCH_RCF, BatchRCFParams.builder().build(), inputDataset, async);
+    }
+
+    public String trainModel(FunctionName functionName, MLAlgoParams params, MLInputDataset inputDataset, boolean async) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputDataset).build();
         MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, async);
         ActionFuture<MLTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
@@ -140,6 +154,17 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
             assertEquals("COMPLETED", status);
         }
         return id;
+    }
+
+    public DataFrame predictAndVerify(String modelId, MLInputDataset inputDataset, FunctionName functionName, int size) {
+        MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).build();
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput);
+        ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
+        MLTaskResponse predictionResponse = predictionFuture.actionGet();
+        MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
+        DataFrame predictionResult = mlPredictionOutput.getPredictionResult();
+        assertEquals(size, predictionResult.size());
+        return predictionResult;
     }
 
     public MLTask getTask(String taskId) {
