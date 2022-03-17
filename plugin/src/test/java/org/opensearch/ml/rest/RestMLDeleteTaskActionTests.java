@@ -9,25 +9,23 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.times;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TASK_ID;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.transport.model.MLModelGetAction;
-import org.opensearch.ml.common.transport.model.MLModelGetRequest;
-import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
+import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -36,11 +34,9 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-public class RestMLGetModelActionTests extends OpenSearchTestCase {
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
+public class RestMLDeleteTaskActionTests extends OpenSearchTestCase {
 
-    private RestMLGetModelAction restMLGetModelAction;
+    private RestMLDeleteTaskAction restMLDeleteTaskAction;
 
     NodeClient client;
     private ThreadPool threadPool;
@@ -50,16 +46,15 @@ public class RestMLGetModelActionTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        restMLGetModelAction = new RestMLGetModelAction();
+        restMLDeleteTaskAction = new RestMLDeleteTaskAction();
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
         doAnswer(invocation -> {
-            ActionListener<MLModelGetResponse> actionListener = invocation.getArgument(2);
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
             return null;
-        }).when(client).execute(eq(MLModelGetAction.INSTANCE), any(), any());
-
+        }).when(client).execute(eq(MLTaskDeleteAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -70,38 +65,38 @@ public class RestMLGetModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLGetModelAction mlGetModelAction = new RestMLGetModelAction();
-        assertNotNull(mlGetModelAction);
+        RestMLDeleteTaskAction mlDeleteTaskAction = new RestMLDeleteTaskAction();
+        assertNotNull(mlDeleteTaskAction);
     }
 
     public void testGetName() {
-        String actionName = restMLGetModelAction.getName();
+        String actionName = restMLDeleteTaskAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_get_model_action", actionName);
+        assertEquals("ml_delete_task_action", actionName);
     }
 
     public void testRoutes() {
-        List<RestHandler.Route> routes = restMLGetModelAction.routes();
+        List<RestHandler.Route> routes = restMLDeleteTaskAction.routes();
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.GET, route.getMethod());
-        assertEquals("/_plugins/_ml/models/{model_id}", route.getPath());
+        assertEquals(RestRequest.Method.DELETE, route.getMethod());
+        assertEquals("/_plugins/_ml/tasks/{task_id}", route.getPath());
     }
 
     public void test_PrepareRequest() throws Exception {
         RestRequest request = getRestRequest();
-        restMLGetModelAction.handleRequest(request, channel, client);
+        restMLDeleteTaskAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<MLModelGetRequest> argumentCaptor = ArgumentCaptor.forClass(MLModelGetRequest.class);
-        verify(client, times(1)).execute(eq(MLModelGetAction.INSTANCE), argumentCaptor.capture(), any());
-        String taskId = argumentCaptor.getValue().getModelId();
+        ArgumentCaptor<MLTaskDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLTaskDeleteRequest.class);
+        verify(client, times(1)).execute(eq(MLTaskDeleteAction.INSTANCE), argumentCaptor.capture(), any());
+        String taskId = argumentCaptor.getValue().getTaskId();
         assertEquals(taskId, "test_id");
     }
 
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
-        params.put(PARAMETER_MODEL_ID, "test_id");
+        params.put(PARAMETER_TASK_ID, "test_id");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
         return request;
     }
