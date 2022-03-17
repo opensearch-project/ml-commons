@@ -214,12 +214,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLPredictTaskRunner',
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.rest.AbstractMLSearchAction*',
-        'org.opensearch.ml.rest.RestMLDeleteTaskAction', //0.5
-        'org.opensearch.ml.rest.RestMLGetModelAction', //0.5
         'org.opensearch.ml.rest.RestMLExecuteAction', //0.3
-        'org.opensearch.ml.rest.RestMLDeleteModelAction', //0.5
-        'org.opensearch.ml.rest.RestMLTrainAndPredictAction', //0.3
-        'org.opensearch.ml.rest.RestMLGetTaskAction' //0.5
+        'org.opensearch.ml.rest.RestMLTrainAndPredictAction' //0.3
 ]
 
 jacocoTestCoverageVerification {
@@ -333,3 +329,5 @@ tasks.withType(licenseHeaders.class) {
 checkstyle {
     toolVersion = '8.29'
 }
+sourceCompatibility = JavaVersion.VERSION_1_9
+targetCompatibility = JavaVersion.VERSION_1_9
