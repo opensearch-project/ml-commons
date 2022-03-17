@@ -9,6 +9,8 @@ import static org.opensearch.ml.utils.TestHelper.parser;
 
 import java.io.IOException;
 
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -16,9 +18,12 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.utils.TestData;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLInputTests extends OpenSearchTestCase {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     public void testParseKmeansInputQuery() throws IOException {
         String query =
@@ -51,6 +56,12 @@ public class MLInputTests extends OpenSearchTestCase {
         assertEquals(ColumnType.BOOLEAN, dataFrame.getRow(0).getValue(1).columnType());
         assertEquals(15.0, dataFrame.getRow(0).getValue(0).getValue());
         assertEquals(false, dataFrame.getRow(0).getValue(1).getValue());
+    }
+
+    public void testWithoutAlgorithm() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("algorithm can't be null");
+        MLInput.builder().inputDataset(new DataFrameInputDataset(TestData.constructTestDataFrame(10))).build();
     }
 
 }

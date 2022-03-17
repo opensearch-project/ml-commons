@@ -47,7 +47,7 @@ public class KMeans implements TrainAndPredictable {
     //The number of threads.
     private KMeansParams parameters;
 
-    private int numThreads = Runtime.getRuntime().availableProcessors() + 1; //Assume cpu-bound.
+    private int numThreads = Math.max(Runtime.getRuntime().availableProcessors() / 2, 1); //Assume cpu-bound.
     //The random seed.
     private long seed = System.currentTimeMillis();
     private KMeansTrainer.Distance distance;

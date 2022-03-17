@@ -35,10 +35,14 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.rest.RestStatus;
@@ -111,25 +115,33 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         return searchSourceBuilder;
     }
 
-    // Train a model.
-    public static String trainModel(MLInputDataset inputDataset) throws ExecutionException, InterruptedException {
+    /**
+     * Train model and return model id if not async request or task id for async request.
+     * @param inputDataset input data set
+     * @param async async request or not
+     * @return model id for sync request or task id for async request.
+     */
+    public static String trainModel(MLInputDataset inputDataset, boolean async) {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, true); // TODO: support train test in sync way
+        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, async);
         ActionFuture<MLTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
         MLTaskResponse trainingResponse = trainingFuture.actionGet();
         assertNotNull(trainingResponse);
         MLTrainingOutput modelTrainingOutput = (MLTrainingOutput) trainingResponse.getOutput();
-        String modelId = modelTrainingOutput.getModelId();
+        String id = async ? modelTrainingOutput.getTaskId() : modelTrainingOutput.getModelId();
         String status = modelTrainingOutput.getStatus();
-        assertNotNull(modelId);
-        assertFalse(modelId.isEmpty());
-        assertEquals("CREATED", status);
-
-        return modelId;
+        assertNotNull(id);
+        assertFalse(id.isEmpty());
+        if (async) {
+            assertEquals("CREATED", status);
+        } else {
+            assertEquals("COMPLETED", status);
+        }
+        return id;
     }
 
     // Wait a while (20 seconds at most) for the model to be available in the ml index.
-    public static SearchResponse waitModelAvailable(String taskId) throws InterruptedException {
+    public static SearchResponse waitModelAvailable1(String taskId) throws InterruptedException {
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
         modelSearchSourceBuilder.query(queryBuilder);
@@ -149,6 +161,25 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         assertNotNull(modelSearchResponse);
         assertTrue(modelSearchResponse.getHits().getTotalHits().value > 0);
         return modelSearchResponse;
+    }
+
+    public static MLTask waitModelAvailable(String taskId) throws InterruptedException {
+        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId);
+        MLTask mlTask = null;
+        int i = 0;
+        while ((mlTask == null || mlTask.getModelId() == null) && i < 500) {
+            try {
+                MLTaskGetResponse taskGetResponse = client().execute(MLTaskGetAction.INSTANCE, getTaskRequest).actionGet(5000);
+                mlTask = taskGetResponse.getMlTask();
+            } catch (Exception e) {} finally {
+                // Wait 100 ms until get valid search response or timeout.
+                Thread.sleep(100);
+            }
+            i++;
+        }
+        assertNotNull(mlTask);
+        assertNotNull(mlTask.getModelId());
+        return mlTask;
     }
 
     // Predict with the model generated, and verify the prediction result.

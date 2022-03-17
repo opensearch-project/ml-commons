@@ -38,7 +38,7 @@ public class TestData {
         MultivariateNormalDistribution[] normalDistributions = new MultivariateNormalDistribution[] { g1, g2 };
         for (int i = 0; i < size; ++i) {
             int id = 0;
-            if (Math.random() < 0.5) {
+            if (random.nextDouble() < 0.5) {
                 id = 1;
             }
             double[] sample = normalDistributions[id].sample();
@@ -48,6 +48,7 @@ public class TestData {
         return dataFrame;
     }
 
+    public static final int IRIS_DATA_SIZE = 150;
     public static final String IRIS_DATA = "{ \"index\" : { \"_index\" : \"iris_data\" } }\n"
         + "{\"sepal_length_in_cm\":5.1,\"sepal_width_in_cm\":3.5,\"petal_length_in_cm\":1.4,\"petal_width_in_cm\":0.2,\"class\":\"Iris-setosa\"}\n"
         + "{ \"index\" : { \"_index\" : \"iris_data\" } }\n"
