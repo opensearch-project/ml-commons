@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.rest;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,15 +37,11 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.MLInput;
-import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
-import org.opensearch.ml.engine.algorithms.clustering.KMeans;
-import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -45,16 +49,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
-
-import static org.mockito.Answers.RETURNS_DEEP_STUBS;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 public class RestMLTrainingActionTests extends OpenSearchTestCase {
     @Rule
@@ -79,9 +73,7 @@ public class RestMLTrainingActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
             MLTrainingOutput mlTaskResponse = new MLTrainingOutput(null, "taskId", MLTaskState.CREATED.name());
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(mlTaskResponse)
-                    .build());
+            actionListener.onResponse(MLTaskResponse.builder().output(mlTaskResponse).build());
             return null;
         }).when(client).execute(eq(MLTrainingTaskAction.INSTANCE), any(), any());
     }
@@ -134,18 +126,20 @@ public class RestMLTrainingActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name());
-        final String requestContent = "{\"parameters\":{\"centroids\":3,\"iterations\":10,\"distance_type\":" +
-                "\"COSINE\"},\"input_query\":{\"_source\":[\"petal_length_in_cm\",\"petal_width_in_cm\"]," +
-                "\"size\":10000},\"input_index\":[\"iris_data\"]}";
-        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry()).withParams(params)
-                .withContent(new BytesArray(requestContent), XContentType.JSON).build();
+        final String requestContent = "{\"parameters\":{\"centroids\":3,\"iterations\":10,\"distance_type\":"
+            + "\"COSINE\"},\"input_query\":{\"_source\":[\"petal_length_in_cm\",\"petal_width_in_cm\"],"
+            + "\"size\":10000},\"input_index\":[\"iris_data\"]}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
         return request;
     }
 
     private void verifyParsedMLInput(MLInput mlInput) {
         assertEquals(FunctionName.KMEANS, mlInput.getAlgorithm());
         assertEquals(MLInputDataType.SEARCH_QUERY, mlInput.getInputDataset().getInputDataType());
-        SearchQueryInputDataset inputDataset = (SearchQueryInputDataset)mlInput.getInputDataset();
+        SearchQueryInputDataset inputDataset = (SearchQueryInputDataset) mlInput.getInputDataset();
         assertEquals(1, inputDataset.getIndices().size());
         assertEquals("iris_data", inputDataset.getIndices().get(0));
         KMeansParams kMeansParams = (KMeansParams) mlInput.getParameters();
