@@ -37,7 +37,6 @@ import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.ml.common.parameter.MLTrainingOutput;
-import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
@@ -121,7 +120,6 @@ public class MachineLearningNodeClientTest {
         MockitoAnnotations.openMocks(this);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void predict() {
         doAnswer(invocation -> {
@@ -144,8 +142,7 @@ public class MachineLearningNodeClientTest {
                 .build();
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
 
-        verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class), any());
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
         assertEquals(output, ((MLPredictionOutput)dataFrameArgumentCaptor.getValue()).getPredictionResult());
     }
@@ -170,7 +167,6 @@ public class MachineLearningNodeClientTest {
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void train() {
         String modelId = "test_model_id";
@@ -194,8 +190,7 @@ public class MachineLearningNodeClientTest {
                 .build();
         machineLearningNodeClient.train(mlInput, false, trainingActionListener);
 
-        verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
         assertEquals(modelId, ((MLTrainingOutput)argumentCaptor.getValue()).getModelId());
         assertEquals(status, ((MLTrainingOutput)argumentCaptor.getValue()).getStatus());
@@ -240,8 +235,7 @@ public class MachineLearningNodeClientTest {
                 .build();
         machineLearningNodeClient.trainAndPredict(mlInput, trainingActionListener);
 
-        verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
         assertEquals(MLTaskState.COMPLETED.name(), ((MLPredictionOutput)argumentCaptor.getValue()).getStatus());
         assertEquals(output, ((MLPredictionOutput)argumentCaptor.getValue()).getPredictionResult());
@@ -267,8 +261,7 @@ public class MachineLearningNodeClientTest {
         ArgumentCaptor<MLModel> argumentCaptor = ArgumentCaptor.forClass(MLModel.class);
         machineLearningNodeClient.getModel("modelId", getModelActionListener);
 
-        verify(client).execute(eq(MLModelGetAction.INSTANCE), isA(MLModelGetRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLModelGetAction.INSTANCE), isA(MLModelGetRequest.class), any());
         verify(getModelActionListener).onResponse(argumentCaptor.capture());
         assertEquals(FunctionName.KMEANS, argumentCaptor.getValue().getAlgorithm());
         assertEquals(modelContent, argumentCaptor.getValue().getContent());
@@ -288,8 +281,7 @@ public class MachineLearningNodeClientTest {
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
         machineLearningNodeClient.deleteModel(modelId, deleteModelActionListener);
 
-        verify(client).execute(eq(MLModelDeleteAction.INSTANCE), isA(MLModelDeleteRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLModelDeleteAction.INSTANCE), isA(MLModelDeleteRequest.class), any());
         verify(deleteModelActionListener).onResponse(argumentCaptor.capture());
         assertEquals(modelId, argumentCaptor.getValue().getId());
     }
@@ -313,8 +305,7 @@ public class MachineLearningNodeClientTest {
         SearchRequest searchREquest = new SearchRequest();
         machineLearningNodeClient.searchModel(searchREquest, searchModelActionListener);
 
-        verify(client).execute(eq(MLModelSearchAction.INSTANCE), isA(SearchRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLModelSearchAction.INSTANCE), isA(SearchRequest.class), any());
         verify(searchModelActionListener).onResponse(argumentCaptor.capture());
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();
         assertEquals(modelContent, source.get(MLModel.MODEL_CONTENT));
@@ -341,8 +332,7 @@ public class MachineLearningNodeClientTest {
         ArgumentCaptor<MLTask> argumentCaptor = ArgumentCaptor.forClass(MLTask.class);
         machineLearningNodeClient.getTask(taskId, getTaskActionListener);
 
-        verify(client).execute(eq(MLTaskGetAction.INSTANCE), isA(MLTaskGetRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLTaskGetAction.INSTANCE), isA(MLTaskGetRequest.class), any());
         verify(getTaskActionListener).onResponse(argumentCaptor.capture());
         assertEquals(FunctionName.KMEANS, argumentCaptor.getValue().getFunctionName());
         assertEquals(modelId, argumentCaptor.getValue().getModelId());
@@ -363,8 +353,7 @@ public class MachineLearningNodeClientTest {
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
         machineLearningNodeClient.deleteTask(taskId, deleteTaskActionListener);
 
-        verify(client).execute(eq(MLTaskDeleteAction.INSTANCE), isA(MLTaskDeleteRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLTaskDeleteAction.INSTANCE), isA(MLTaskDeleteRequest.class), any());
         verify(deleteTaskActionListener).onResponse(argumentCaptor.capture());
         assertEquals(taskId, argumentCaptor.getValue().getId());
     }
@@ -389,8 +378,7 @@ public class MachineLearningNodeClientTest {
         SearchRequest searchREquest = new SearchRequest();
         machineLearningNodeClient.searchTask(searchREquest, searchTaskActionListener);
 
-        verify(client).execute(eq(MLTaskSearchAction.INSTANCE), isA(SearchRequest.class),
-                any(ActionListener.class));
+        verify(client).execute(eq(MLTaskSearchAction.INSTANCE), isA(SearchRequest.class), any());
         verify(searchTaskActionListener).onResponse(argumentCaptor.capture());
         assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value);
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();

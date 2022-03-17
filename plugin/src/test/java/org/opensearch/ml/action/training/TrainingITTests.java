@@ -5,94 +5,89 @@
 
 package org.opensearch.ml.action.training;
 
-import static org.opensearch.ml.utils.IntegTestUtils.DATA_FRAME_INPUT_DATASET;
-import static org.opensearch.ml.utils.IntegTestUtils.TESTING_DATA;
-import static org.opensearch.ml.utils.IntegTestUtils.TESTING_INDEX_NAME;
-import static org.opensearch.ml.utils.IntegTestUtils.generateMLTestingData;
-import static org.opensearch.ml.utils.IntegTestUtils.generateSearchSourceBuilder;
-import static org.opensearch.ml.utils.IntegTestUtils.trainModel;
-import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
-import static org.opensearch.ml.utils.IntegTestUtils.waitModelAvailable;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.concurrent.ExecutionException;
-
+import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Before;
-import org.junit.Ignore;
-import org.opensearch.action.ActionFuture;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
-import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLInput;
-import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
-import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
-import org.opensearch.ml.plugin.MachineLearningPlugin;
-import org.opensearch.plugins.Plugin;
-import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.MLModel;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-@OpenSearchIntegTestCase.ClusterScope(transportClientRatio = 0.9)
-public class TrainingITTests extends OpenSearchIntegTestCase {
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
+public class TrainingITTests extends MLCommonsIntegTestCase {
+    private String irisIndexName;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
     @Before
-    public void initTestingData() throws ExecutionException, InterruptedException {
-        generateMLTestingData();
+    public void setUp() throws Exception {
+        super.setUp();
+        irisIndexName = "iris_data_for_prediction_it";
+        loadIrisData(irisIndexName);
     }
 
-    @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return Collections.singletonList(MachineLearningPlugin.class);
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
+    public void testTrainingWithSearchInput_Async_KMenas() throws InterruptedException {
+        String taskId = trainKmeansWithIrisData(irisIndexName, true);
+        assertNotNull(taskId);
+
+        AtomicReference<String> modelId = new AtomicReference<>();
+        waitUntil(() -> {
+            String id = getTask(taskId).getModelId();
+            modelId.set(id);
+            return id != null;
+        }, 10, TimeUnit.SECONDS);
+        MLModel model = getModel(modelId.get());
+        assertNotNull(model);
     }
 
-    @Override
-    protected Collection<Class<? extends Plugin>> transportClientPlugins() {
-        return Collections.singletonList(MachineLearningPlugin.class);
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
+    public void testTrainingWithSearchInput_Sync_KMenas() {
+        String modelId = trainKmeansWithIrisData(irisIndexName, false);
+        assertNotNull(modelId);
+        MLModel model = getModel(modelId);
+        assertNotNull(model);
     }
 
-    public void testGeneratedTestingData() throws ExecutionException, InterruptedException {
-        verifyGeneratedTestingData(TESTING_DATA);
+    public void testTrainingWithDataFrame_Async_BatchRCF() throws InterruptedException {
+        String taskId = trainBatchRCFWithDataFrame(500, true);
+        assertNotNull(taskId);
+
+        AtomicReference<String> modelId = new AtomicReference<>();
+        waitUntil(() -> {
+            String id = getTask(taskId).getModelId();
+            modelId.set(id);
+            return id != null;
+        }, 10, TimeUnit.SECONDS);
+        MLModel model = getModel(modelId.get());
+        assertNotNull(model);
     }
 
-    @Ignore("This test case is flaky, something is off with waitModelAvailable(taskId) method."
-        + " This issue will be tracked in an issue and will be fixed later")
-    public void testTrainingWithSearchInput() throws ExecutionException, InterruptedException {
-        SearchSourceBuilder searchSourceBuilder = generateSearchSourceBuilder();
-        MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
-
-        String taskId = trainModel(inputDataset);
-
-        waitModelAvailable(taskId);
+    public void testTrainingWithDataFrame_Sync_BatchRCF() {
+        String modelId = trainBatchRCFWithDataFrame(500, false);
+        assertNotNull(modelId);
+        MLModel model = getModel(modelId);
+        assertNotNull(model);
     }
 
-    @Ignore("This test case is flaky, something is off with waitModelAvailable(taskId) method."
-        + " This issue will be tracked in an issue and will be fixed later")
-    public void testTrainingWithDataInput() throws ExecutionException, InterruptedException {
-        String taskId = trainModel(DATA_FRAME_INPUT_DATASET);
-
-        waitModelAvailable(taskId);
+    public void testTrainingWithoutDataset_KMenas() {
+        exceptionRule.expect(ActionRequestValidationException.class);
+        exceptionRule.expectMessage("input data can't be null");
+        trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), null, false);
     }
 
-    // Train a model without dataset.
-    public void testTrainingWithoutDataset() {
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, true);
-        expectThrows(ActionRequestValidationException.class, () -> {
-            ActionFuture<MLTaskResponse> trainingFuture = client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest);
-            trainingFuture.actionGet();
-        });
-    }
-
-    // Train a model with empty dataset.
-    public void testTrainingWithEmptyDataset() {
-        SearchSourceBuilder searchSourceBuilder = generateSearchSourceBuilder();
-        searchSourceBuilder.query(QueryBuilders.matchQuery("noSuchName", ""));
-        MLInputDataset inputDataset = new SearchQueryInputDataset(Collections.singletonList(TESTING_INDEX_NAME), searchSourceBuilder);
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, false);
-
-        expectThrows(IllegalArgumentException.class, () -> client().execute(MLTrainingTaskAction.INSTANCE, trainingRequest).actionGet());
+    public void testTrainingWithEmptyDataset_KMenas() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("No document found");
+        MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);
+        trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), emptySearchInputDataset, false);
     }
 }
