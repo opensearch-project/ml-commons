@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.anomalylocalization;
+package org.opensearch.ml.common.parameter;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,6 +22,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.parameter.AnomalyLocalizationInput;
 import org.opensearch.search.SearchModule;
 import org.opensearch.search.aggregations.AggregationBuilders;
 

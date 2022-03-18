@@ -10,6 +10,7 @@ import java.util.Random;
 import java.util.stream.IntStream;
 
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ml.common.parameter.Counter;
 
 /**
  * CountMin sketch implementation.

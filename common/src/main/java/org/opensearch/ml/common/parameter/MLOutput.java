@@ -32,7 +32,7 @@ public abstract class MLOutput implements Output {
 
     public static MLOutput fromStream(StreamInput in) throws IOException {
         MLOutputType outputType = in.readEnum(MLOutputType.class);
-        MLOutput output = MLCommonsClassLoader.initInstance(outputType, in, StreamInput.class);
+        MLOutput output = MLCommonsClassLoader.initMLInstance(outputType, in, StreamInput.class);
         return output;
     }
 

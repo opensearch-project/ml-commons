@@ -11,7 +11,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
-import org.opensearch.ml.common.parameter.SampleAlgoOutput;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 
 import java.util.ArrayList;
@@ -44,15 +44,15 @@ public class MLEngineClassLoaderTests {
         // set properties
         MLEngineClassLoader.deregister(FunctionName.LOCAL_SAMPLE_CALCULATOR);
         LocalSampleCalculator instance = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
-        SampleAlgoOutput output = (SampleAlgoOutput) instance.execute(input);
-        assertEquals(d1 + d2, output.getSampleResult(), 1e-6);
+        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) instance.execute(input);
+        assertEquals(d1 + d2, output.getResult(), 1e-6);
         assertEquals(client, instance.getClient());
         assertEquals(settings, instance.getSettings());
 
         // don't set properties
         instance = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class);
-        output = (SampleAlgoOutput) instance.execute(input);
-        assertEquals(d1 + d2, output.getSampleResult(), 1e-6);
+        output = (LocalSampleCalculatorOutput) instance.execute(input);
+        assertEquals(d1 + d2, output.getResult(), 1e-6);
         assertNull(instance.getClient());
         assertNull(instance.getSettings());
     }

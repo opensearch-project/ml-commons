@@ -12,8 +12,8 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.parameter.Output;
-import org.opensearch.ml.common.parameter.SampleAlgoOutput;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 
@@ -45,13 +45,13 @@ public class LocalSampleCalculator implements Executable {
         switch (operation) {
             case "sum":
                 double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum() ;
-                return new SampleAlgoOutput(sum);
+                return new LocalSampleCalculatorOutput(sum);
             case "max":
                 double max = inputData.stream().max(Comparator.naturalOrder()).get();
-                return new SampleAlgoOutput(max);
+                return new LocalSampleCalculatorOutput(max);
             case "min":
                 double min = inputData.stream().min(Comparator.naturalOrder()).get();
-                return new SampleAlgoOutput(min);
+                return new LocalSampleCalculatorOutput(min);
             default:
                 throw new IllegalArgumentException("can't support this operation");
         }

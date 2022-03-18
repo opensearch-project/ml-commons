@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.anomalylocalization;
+package org.opensearch.ml.common.parameter;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,19 +18,20 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
-import org.opensearch.ml.common.parameter.Output;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.ToString;
+import org.opensearch.ml.common.annotation.ExecuteOutput;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
  * Output of localized results.
  */
+@ExecuteOutput(algorithms={FunctionName.ANOMALY_LOCALIZATION})
 @Data
 @NoArgsConstructor
 public class AnomalyLocalizationOutput implements Output {
@@ -178,7 +179,6 @@ public class AnomalyLocalizationOutput implements Output {
     @Override
     @SneakyThrows
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) {
-        builder.startObject();
         builder.startArray(FIELD_RESULTS);
         for (Map.Entry<String, Result> entry : this.results.entrySet()) {
             builder.startObject();
@@ -187,7 +187,6 @@ public class AnomalyLocalizationOutput implements Output {
             builder.endObject();
         }
         builder.endArray();
-        builder.endObject();
         return builder;
     }
 

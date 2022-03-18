@@ -13,6 +13,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
 import org.opensearch.ml.common.parameter.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
@@ -64,10 +65,15 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         ActionListener<MLExecuteTaskResponse> listener
     ) {
         threadPool.executor(TASK_THREAD_POOL).execute(() -> {
-            Input input = request.getInput();
-            Output output = MLEngine.execute(input);
-            MLExecuteTaskResponse response = MLExecuteTaskResponse.builder().output(output).build();
-            listener.onResponse(response);
+            try {
+                Input input = request.getInput();
+                FunctionName functionName = request.getFunctionName();
+                Output output = MLEngine.execute(input);
+                MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
+                listener.onResponse(response);
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
         });
     }
 

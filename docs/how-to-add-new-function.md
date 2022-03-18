@@ -6,7 +6,7 @@ This doc explains how to add new function to `ml-commons` with two examples.
 This sample algorithm will train a dummy model first. Then user can call predict API to calculate total sum of a data frame or selected data from indices.
 
 ### Step 1: name the function
-Add new function name in `org.opensearch.ml.common.parameter.FunctionName`
+Add new function name in `common/src/main/java/org/opensearch/ml/common/parameter/FunctionName.java`
 ```
 public enum FunctionName {
     ...
@@ -17,7 +17,7 @@ public enum FunctionName {
 ```
 
 ### Step 2: add input class 
-Create new class `org.opensearch.ml.common.parameter.SampleAlgoParams` in `common` package by implementing `MLAlgoParams` interface. 
+Create new class `common/src/main/java/org/opensearch/ml/common/parameter/SampleAlgoParams.java` by implementing `MLAlgoParams` interface. 
 
 Must define `NamedXContentRegistry.Entry` in `SampleAlgoParams`. 
 
@@ -49,7 +49,7 @@ Register `SampleAlgoParams.XCONTENT_REGISTRY` in `MachineLearningPlugin.getNamed
 ```
 
 ### Step 3: add output class
-Add new enum in `org.opensearch.ml.common.parameter.MLOutputType`:
+Add new enum in `common/src/main/java/org/opensearch/ml/common/parameter/MLOutputType.java`:
 ```    
     public enum MLOutputType {
         ...
@@ -57,7 +57,7 @@ Add new enum in `org.opensearch.ml.common.parameter.MLOutputType`:
         ...
     }
 ```
-Create new class `org.opensearch.ml.common.parameter.SampleAlgoOutput` in `common` package by extending abstract class `MLOutput`.
+Create new class `common/src/main/java/org/opensearch/ml/common/parameter/SampleAlgoOutput.java` by extending abstract class `MLOutput`.
 
 Must add `@MLAlgoOutput` annotation with new output type.
 
@@ -72,7 +72,7 @@ public class SampleAlgoOutput extends MLOutput{
 ```
 
 ### Step 4: add implementation
-Create new class `org.opensearch.ml.engine.algorithms.sample.SampleAlgo` in `ml-algorithms` package by implementing interface `Trainable`, `Predictable` or `TrainAndPredictable` for unsupervised algorithm.
+Create new class `ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/sample/SampleAlgo.java` by implementing interface `Trainable`, `Predictable` or `TrainAndPredictable` for unsupervised algorithm.
 Override `train`, `predict` methods.
 
 Must add `@Function` annotation with new ML algorithm name.
@@ -150,12 +150,12 @@ POST _plugins/_ml/_predict/sample_algo/247c5947-35a1-41a7-a95b-703a1e9b2203
 ```
 
 ## Example 2 - Sample calculator with execute API
-Some function like anomaly localization has no model. We can add such function by exposing execute API only.
+Some function like anomaly localization has no model. We can add such function by implementing execute API only.
 In this example, we will add a new sample calculator which runs on local node (don't dispatch task to other node).
 The sample calculator supports calculating `sum`/`max`/`min` value from a double list.
 
 ### Step 1: name the function
-Add new function name in  `org.opensearch.ml.common.parameter.FunctionName`
+Add new function name in  `common/src/main/java/org/opensearch/ml/common/parameter/FunctionName.java`
 ```
 public enum FunctionName {
     ...
@@ -165,9 +165,12 @@ public enum FunctionName {
 ```
 
 ### Step 2: add input class
-Add new class `org.opensearch.ml.common.parameter.LocalSampleCalculatorInput` by implementing `Input`.
-Must define `NamedXContentRegistry.Entry` in `LocalSampleCalculatorInput`.
+Add new class `common/src/main/java/org/opensearch/ml/common/parameter/LocalSampleCalculatorInput.java` by implementing `Input`.
+
+Must add `@ExecuteInput` annotation with new algorithm name.
 ```
+@ExecuteInput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
+@Data
 public class LocalSampleCalculatorInput implements Input {
     public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.getName();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
@@ -180,21 +183,13 @@ public class LocalSampleCalculatorInput implements Input {
 }
 ```
 
-Register `SampleAlgoParams.XCONTENT_REGISTRY` in `MachineLearningPlugin.getNamedXContent()` method
-```
-    @Override
-    public List<NamedXContentRegistry.Entry> getNamedXContent() {
-        return ImmutableList
-                .of(
-                        ...
-                        LocalSampleCalculatorInput.XCONTENT_REGISTRY
-                );
-    }
-```
-
 ### Step 3: add output class
-Add output class `org.opensearch.ml.common.parameter.LocalSampleCalculatorOutput` by implementing `Output`.
+Add output class `common/src/main/java/org/opensearch/ml/common/parameter/LocalSampleCalculatorOutput.java` by implementing `Output`.
+
+Must add `@ExecuteOutput` annotation with new algorithm name.
 ```
+@ExecuteOutput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
+@Data
 public class LocalSampleCalculatorOutput implements Output{
     private Double result;
     ...
@@ -202,12 +197,11 @@ public class LocalSampleCalculatorOutput implements Output{
 ```
 
 ### Step 4: add implementation
-Create new class `ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/sample/LocalSampleCalculator` in `ml-algorithms` package 
-by implementing interface `Executable`. Override `execute` method.
+Create new class `ml-algorithms/src/main/java/org/opensearch/ml/engine/algorithms/sample/LocalSampleCalculator` by implementing interface `Executable`. Override `execute` method.
 
 If don't register new ML function class(refer to step 5), you must add `@Function` annotation with new function name.
 ```
-@Function(FunctionName.LOCAL_SAMPLE_CALCULATOR) // must add this annotation
+@Function(FunctionName.LOCAL_SAMPLE_CALCULATOR)
 public class LocalSampleCalculator implements Executable {
     @Override
     public Output execute(Input input) {
@@ -218,7 +212,7 @@ public class LocalSampleCalculator implements Executable {
 ```
 
 ### (Optional)Step 5: register function object
-If the new function class is thread-safe, you can register it. If don't register, will create new object for each request.
+If the new function class is thread-safe, you can register it in `MachineLearningPlugin`. If don't register, will create new object for each request.
 For example, we can register instance of `LocalSampleCalculator` in `MachineLearningPlugin` like this
 ```
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {

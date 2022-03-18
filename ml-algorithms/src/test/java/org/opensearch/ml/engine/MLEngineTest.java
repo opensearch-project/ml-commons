@@ -21,12 +21,11 @@ import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.common.parameter.SampleAlgoOutput;
-
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -184,8 +183,8 @@ public class MLEngineTest {
     @Test
     public void executeLocalSampleCalculator() {
         Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
-        SampleAlgoOutput output = (SampleAlgoOutput) MLEngine.execute(input);
-        Assert.assertEquals(3.0, output.getSampleResult(), 1e-5);
+        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) MLEngine.execute(input);
+        Assert.assertEquals(3.0, output.getResult(), 1e-5);
     }
 
     @Test
