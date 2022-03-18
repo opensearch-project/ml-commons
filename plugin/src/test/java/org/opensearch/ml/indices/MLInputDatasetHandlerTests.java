@@ -136,6 +136,40 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
         verify(listener, times(1)).onFailure(any());
     }
 
+    public void testSearchQueryInputDatasetWithNullHits() {
+        searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(null);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset
+            .builder()
+            .indices(Collections.singletonList("index1"))
+            .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
+            .build();
+        mlInputDatasetHandler.parseSearchQueryInput(searchQueryInputDataset, listener);
+        verify(listener, times(1)).onFailure(any());
+    }
+
+    public void testSearchQueryInputDatasetWithNullResponse() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = (ActionListener<SearchResponse>) invocation.getArguments()[1];
+            listener.onResponse(null);
+            return null;
+        }).when(client).search(any(), any());
+
+        SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset
+            .builder()
+            .indices(Collections.singletonList("index1"))
+            .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
+            .build();
+        mlInputDatasetHandler.parseSearchQueryInput(searchQueryInputDataset, listener);
+        verify(listener, times(1)).onFailure(any());
+    }
+
     public void testSearchQueryInputDatasetWrongType() {
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Input dataset is not SEARCH_QUERY type.");
