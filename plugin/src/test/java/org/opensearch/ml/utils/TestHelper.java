@@ -150,7 +150,7 @@ public class TestHelper {
         return sb.toString();
     }
 
-    public static RestRequest getRestRequest() {
+    public static RestRequest getKMeansRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name());
         final String requestContent = "{\"parameters\":{\"centroids\":3,\"iterations\":10,\"distance_type\":"
@@ -163,11 +163,7 @@ public class TestHelper {
         return request;
     }
 
-    private static NamedXContentRegistry getXContentRegistry() {
-        return new NamedXContentRegistry(Collections.singletonList(KMeansParams.XCONTENT_REGISTRY));
-    }
-
-    public static void verifyParsedMLInput(MLInput mlInput) {
+    public static void verifyParsedKMeansMLInput(MLInput mlInput) {
         assertEquals(FunctionName.KMEANS, mlInput.getAlgorithm());
         assertEquals(MLInputDataType.SEARCH_QUERY, mlInput.getInputDataset().getInputDataType());
         SearchQueryInputDataset inputDataset = (SearchQueryInputDataset) mlInput.getInputDataset();
@@ -175,5 +171,9 @@ public class TestHelper {
         assertEquals("iris_data", inputDataset.getIndices().get(0));
         KMeansParams kMeansParams = (KMeansParams) mlInput.getParameters();
         assertEquals(3, kMeansParams.getCentroids().intValue());
+    }
+
+    private static NamedXContentRegistry getXContentRegistry() {
+        return new NamedXContentRegistry(Collections.singletonList(KMeansParams.XCONTENT_REGISTRY));
     }
 }

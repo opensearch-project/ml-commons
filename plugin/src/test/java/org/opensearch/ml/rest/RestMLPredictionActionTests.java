@@ -9,8 +9,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
-import static org.opensearch.ml.utils.TestHelper.getRestRequest;
-import static org.opensearch.ml.utils.TestHelper.verifyParsedMLInput;
+import static org.opensearch.ml.utils.TestHelper.getKMeansRestRequest;
+import static org.opensearch.ml.utils.TestHelper.verifyParsedKMeansMLInput;
 
 import java.io.IOException;
 import java.util.List;
@@ -92,7 +92,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest(request);
 
         MLInput mlInput = mlPredictionTaskRequest.getMlInput();
-        verifyParsedMLInput(mlInput);
+        verifyParsedKMeansMLInput(mlInput);
     }
 
     public void testPrepareRequest() throws Exception {
@@ -102,11 +102,11 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
-        verifyParsedMLInput(mlInput);
+        verifyParsedKMeansMLInput(mlInput);
     }
 
     private RestRequest getRestRequest_PredictModel() {
-        RestRequest request = getRestRequest();
+        RestRequest request = getKMeansRestRequest();
         request.params().put(PARAMETER_MODEL_ID, "model_id");
         return request;
     }

@@ -8,8 +8,8 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.opensearch.ml.utils.TestHelper.getRestRequest;
-import static org.opensearch.ml.utils.TestHelper.verifyParsedMLInput;
+import static org.opensearch.ml.utils.TestHelper.getKMeansRestRequest;
+import static org.opensearch.ml.utils.TestHelper.verifyParsedKMeansMLInput;
 
 import java.io.IOException;
 import java.util.List;
@@ -92,20 +92,20 @@ public class RestMLTrainAndPredictActionTests extends OpenSearchTestCase {
     }
 
     public void testGetRequest() throws IOException {
-        RestRequest request = getRestRequest();
+        RestRequest request = getKMeansRestRequest();
         MLTrainingTaskRequest trainingTaskRequest = restMLTrainAndPredictAction.getRequest(request);
 
         MLInput mlInput = trainingTaskRequest.getMlInput();
-        verifyParsedMLInput(mlInput);
+        verifyParsedKMeansMLInput(mlInput);
     }
 
     public void testPrepareRequest() throws Exception {
-        RestRequest request = getRestRequest();
+        RestRequest request = getKMeansRestRequest();
         restMLTrainAndPredictAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLTrainingTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLTrainingTaskRequest.class);
         verify(client, times(1)).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
-        verifyParsedMLInput(mlInput);
+        verifyParsedKMeansMLInput(mlInput);
     }
 }
