@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.anomalylocalization;
+package org.opensearch.ml.common.parameter;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,8 +18,7 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.Input;
+import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregatorFactories;
 
@@ -32,6 +31,7 @@ import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBui
 /**
  * Information about aggregate, time, etc to localize.
  */
+@ExecuteInput(algorithms={FunctionName.ANOMALY_LOCALIZATION})
 @Data
 @AllArgsConstructor
 public class AnomalyLocalizationInput implements Input {

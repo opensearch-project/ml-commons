@@ -10,11 +10,13 @@ import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.ml.common.annotation.ExecuteOutput;
 
 import java.io.IOException;
 
+@ExecuteOutput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
 @Data
-public class LocalSampleCalculatorOutput implements Output{
+public class LocalSampleCalculatorOutput implements Output {
 
     private Double result;
 
@@ -34,11 +36,9 @@ public class LocalSampleCalculatorOutput implements Output{
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
         if (result != null) {
             builder.field("result", result);
         }
-        builder.endObject();
         return builder;
     }
 }

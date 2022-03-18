@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.anomalylocalization;
 
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.parameter.AnomalyLocalizationInput;
+import org.opensearch.ml.common.parameter.AnomalyLocalizationOutput;
 
 /**
  * Localizes aggregate anomalies.

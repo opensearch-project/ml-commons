@@ -13,6 +13,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.annotation.ExecuteInput;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import java.util.List;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
+@ExecuteInput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
 @Data
 public class LocalSampleCalculatorInput implements Input {
     public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.name();

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.anomalylocalization;
+package org.opensearch.ml.common.parameter;
 
 import java.util.Arrays;
 
@@ -16,6 +16,7 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.parameter.AnomalyLocalizationOutput;
 
 import static org.junit.Assert.assertEquals;
 
@@ -48,9 +49,9 @@ public class AnomalyLocalizationOutputTests {
     @Test
     public void testXContent() throws Exception {
         XContentBuilder builder = XContentFactory.jsonBuilder();
-
+        builder.startObject();
         builder = output.toXContent(builder, null);
-
+        builder.endObject();
         String json = Strings.toString(builder);
         XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
         AnomalyLocalizationOutput newOutput = AnomalyLocalizationOutput.parse(parser);
