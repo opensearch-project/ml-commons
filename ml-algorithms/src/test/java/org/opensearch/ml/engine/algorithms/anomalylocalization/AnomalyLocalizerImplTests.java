@@ -22,6 +22,8 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.ml.common.parameter.AnomalyLocalizationInput;
+import org.opensearch.ml.common.parameter.AnomalyLocalizationOutput;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.search.aggregations.Aggregations;

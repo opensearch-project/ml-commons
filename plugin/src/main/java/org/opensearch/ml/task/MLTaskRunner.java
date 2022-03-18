@@ -80,7 +80,11 @@ public abstract class MLTaskRunner<Request, Response> {
         if (mlCircuitBreakerService.isOpen()) {
             throw new MLLimitExceededException("Circuit breaker is open");
         }
-        executeTask(request, transportService, listener);
+        try {
+            executeTask(request, transportService, listener);
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     protected ActionListener<MLTaskResponse> wrappedCleanupListener(ActionListener<MLTaskResponse> listener, String taskId) {

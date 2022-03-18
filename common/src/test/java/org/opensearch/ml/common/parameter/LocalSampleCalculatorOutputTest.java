@@ -32,7 +32,9 @@ public class LocalSampleCalculatorOutputTest {
     @Test
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.endObject();
         String jsonStr = Strings.toString(builder);
         assertEquals("{\"result\":1.0}", jsonStr);
     }
@@ -41,7 +43,9 @@ public class LocalSampleCalculatorOutputTest {
     public void toXContent_EmptyOutput() throws IOException {
         LocalSampleCalculatorOutput output = LocalSampleCalculatorOutput.builder().build();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.endObject();
         String jsonStr = Strings.toString(builder);
         assertEquals("{}", jsonStr);
     }

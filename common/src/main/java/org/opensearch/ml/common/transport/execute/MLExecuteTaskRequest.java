@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.execute;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 import org.opensearch.action.ActionRequest;
@@ -16,8 +17,9 @@ import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.MLCommonsClassLoader;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.MLInput;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,21 +33,25 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @ToString
 public class MLExecuteTaskRequest extends ActionRequest {
 
+    FunctionName functionName;
     Input input;
 
     @Builder
-    public MLExecuteTaskRequest(Input input) {
+    public MLExecuteTaskRequest(@NonNull FunctionName functionName, Input input) {
+        this.functionName = functionName;
         this.input = input;
     }
 
     public MLExecuteTaskRequest(StreamInput in) throws IOException {
         super(in);
-        this.input = new MLInput(in);
+        this.functionName = in.readEnum(FunctionName.class);
+        this.input = MLCommonsClassLoader.initExecuteInputInstance(functionName, in, StreamInput.class);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeEnum(functionName);
         this.input.writeTo(out);
     }
 

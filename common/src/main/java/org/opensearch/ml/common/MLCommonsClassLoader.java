@@ -7,6 +7,8 @@ package org.opensearch.ml.common;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.opensearch.ml.common.annotation.ExecuteInput;
+import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
@@ -29,6 +31,8 @@ public class MLCommonsClassLoader {
 
     private static final Logger logger = LogManager.getLogger(MLCommonsClassLoader.class);
     private static Map<Enum<?>, Class<?>> parameterClassMap = new HashMap<>();
+    private static Map<Enum<?>, Class<?>> executeInputClassMap = new HashMap<>();
+    private static Map<Enum<?>, Class<?>> executeOutputClassMap = new HashMap<>();
 
     static {
         try {
@@ -44,6 +48,7 @@ public class MLCommonsClassLoader {
     public static void loadClassMapping() {
         loadMLAlgoParameterClassMapping();
         loadMLInputDataSetClassMapping();
+        loadExecuteInputOutputClassMapping();
     }
 
     /**
@@ -90,9 +95,55 @@ public class MLCommonsClassLoader {
         }
     }
 
+    /**
+     * Load execute input output class.
+     */
+    private static void loadExecuteInputOutputClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.common.parameter");
+
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(ExecuteInput.class);
+        // Load execute input class
+        for (Class<?> clazz : classes) {
+            ExecuteInput executeInput = clazz.getAnnotation(ExecuteInput.class);
+            FunctionName[] algorithms = executeInput.algorithms();
+            if (algorithms != null && algorithms.length > 0) {
+                for(FunctionName name : algorithms){
+                    executeInputClassMap.put(name, clazz);
+                }
+            }
+        }
+
+        // Load execute output class
+        classes = reflections.getTypesAnnotatedWith(ExecuteOutput.class);
+        for (Class<?> clazz : classes) {
+            ExecuteOutput executeOutput = clazz.getAnnotation(ExecuteOutput.class);
+            FunctionName[] algorithms = executeOutput.algorithms();
+            if (algorithms != null && algorithms.length > 0) {
+                for(FunctionName name : algorithms){
+                    executeOutputClassMap.put(name, clazz);
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    public static <T extends Enum<T>, S, I extends Object> S initInstance(T type, I in, Class<?> constructorParamClass) {
-        Class<?> clazz = parameterClassMap.get(type);
+    public static <T extends Enum<T>, S, I extends Object> S initMLInstance(T type, I in, Class<?> constructorParamClass) {
+        return init(parameterClassMap, type, in, constructorParamClass);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Enum<T>, S, I extends Object> S initExecuteInputInstance(T type, I in, Class<?> constructorParamClass) {
+        return init(executeInputClassMap, type, in, constructorParamClass);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Enum<T>, S, I extends Object> S initExecuteOutputInstance(T type, I in, Class<?> constructorParamClass) {
+        return init(executeOutputClassMap, type, in, constructorParamClass);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends Enum<T>, S, I extends Object> S init(Map<Enum<?>, Class<?>> map, T type, I in, Class<?> constructorParamClass) {
+        Class<?> clazz = map.get(type);
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
         }
