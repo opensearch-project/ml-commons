@@ -53,7 +53,7 @@ public class MLTrainingTaskRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (mlInput == null) {
-            exception = addValidationError("MLInput can't be null", exception);
+            exception = addValidationError("ML input can't be null", exception);
         } else if (Objects.isNull(mlInput.getInputDataset())) {
             exception = addValidationError("input data can't be null", exception);
         }

@@ -207,7 +207,6 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.models.*',
         'org.opensearch.ml.action.tasks.*',
         'org.opensearch.ml.action.handler.*',
-        'org.opensearch.ml.action.execute.*',
         'org.opensearch.ml.constant.CommonValue',
         'org.opensearch.ml.indices.MLInputDatasetHandler',
         'org.opensearch.ml.plugin.*',

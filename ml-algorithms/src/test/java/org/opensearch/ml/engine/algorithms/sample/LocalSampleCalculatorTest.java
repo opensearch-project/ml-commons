@@ -14,7 +14,7 @@ import org.mockito.Mock;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
-import org.opensearch.ml.common.parameter.SampleAlgoOutput;
+import org.opensearch.ml.common.parameter.LocalSampleCalculatorOutput;
 
 import java.util.Arrays;
 
@@ -36,16 +36,16 @@ public class LocalSampleCalculatorTest {
 
     @Test
     public void execute() {
-        SampleAlgoOutput output = (SampleAlgoOutput) calculator.execute(input);
-        Assert.assertEquals(6.0, output.getSampleResult().doubleValue(), 1e-5);
+        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) calculator.execute(input);
+        Assert.assertEquals(6.0, output.getResult().doubleValue(), 1e-5);
 
         input = new LocalSampleCalculatorInput("max", Arrays.asList(1.0, 2.0, 3.0));
-        output = (SampleAlgoOutput) calculator.execute(input);
-        Assert.assertEquals(3.0, output.getSampleResult().doubleValue(), 1e-5);
+        output = (LocalSampleCalculatorOutput) calculator.execute(input);
+        Assert.assertEquals(3.0, output.getResult().doubleValue(), 1e-5);
 
         input = new LocalSampleCalculatorInput("min", Arrays.asList(1.0, 2.0, 3.0));
-        output = (SampleAlgoOutput) calculator.execute(input);
-        Assert.assertEquals(1.0, output.getSampleResult().doubleValue(), 1e-5);
+        output = (LocalSampleCalculatorOutput) calculator.execute(input);
+        Assert.assertEquals(1.0, output.getResult().doubleValue(), 1e-5);
     }
 
     @Test

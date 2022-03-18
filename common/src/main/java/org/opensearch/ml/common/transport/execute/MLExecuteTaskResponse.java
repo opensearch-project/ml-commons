@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.execute;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import lombok.ToString;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.InputStreamStreamInput;
@@ -15,7 +16,8 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
-import org.opensearch.ml.common.parameter.MLOutput;
+import org.opensearch.ml.common.MLCommonsClassLoader;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.Output;
 
 import java.io.ByteArrayInputStream;
@@ -27,21 +29,32 @@ import java.io.UncheckedIOException;
 @ToString
 public class MLExecuteTaskResponse extends ActionResponse implements ToXContentObject {
 
+    FunctionName functionName;
     Output output;
 
     @Builder
-    public MLExecuteTaskResponse(Output output) {
+    public MLExecuteTaskResponse(@NonNull FunctionName functionName, Output output) {
+        this.functionName = functionName;
         this.output = output;
     }
 
     public MLExecuteTaskResponse(StreamInput in) throws IOException {
         super(in);
-        output = MLOutput.fromStream(in);
+        this.functionName = in.readEnum(FunctionName.class);
+        if (in.readBoolean()) {
+            output = MLCommonsClassLoader.initExecuteOutputInstance(functionName, in, StreamInput.class);
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        output.writeTo(out);
+        out.writeEnum(functionName);
+        if (output == null) {
+            out.writeBoolean(false);
+        } else {
+            out.writeBoolean(true);
+            output.writeTo(out);
+        }
     }
 
     public static MLExecuteTaskResponse fromActionResponse(ActionResponse actionResponse) {
@@ -62,6 +75,12 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
 
     @Override
     public XContentBuilder toXContent(final XContentBuilder builder, final Params params) throws IOException {
-        return output.toXContent(builder, params);
+        builder.startObject();
+        builder.field("function_name", functionName);
+        builder.startObject("output");
+        output.toXContent(builder, params);
+        builder.endObject();
+        builder.endObject();
+        return builder;
     }
 }

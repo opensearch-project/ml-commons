@@ -76,11 +76,11 @@ public class MLInput implements Input {
     public MLInput(StreamInput in) throws IOException {
         this.algorithm = in.readEnum(FunctionName.class);
         if (in.readBoolean()) {
-            this.parameters = MLCommonsClassLoader.initInstance(algorithm, in, StreamInput.class);
+            this.parameters = MLCommonsClassLoader.initMLInstance(algorithm, in, StreamInput.class);
         }
         if (in.readBoolean()) {
             MLInputDataType inputDataType = in.readEnum(MLInputDataType.class);
-            this.inputDataset = MLCommonsClassLoader.initInstance(inputDataType, in, StreamInput.class);
+            this.inputDataset = MLCommonsClassLoader.initMLInstance(inputDataType, in, StreamInput.class);
         }
         this.version = in.readInt();
     }
