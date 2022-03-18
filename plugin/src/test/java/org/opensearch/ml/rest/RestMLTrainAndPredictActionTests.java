@@ -8,7 +8,6 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.TestHelper.getRestRequest;
 import static org.opensearch.ml.utils.TestHelper.verifyParsedMLInput;
 
@@ -20,14 +19,15 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.parameter.*;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
+import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -35,11 +35,12 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-public class RestMLPredictionActionTests extends OpenSearchTestCase {
+public class RestMLTrainAndPredictActionTests extends OpenSearchTestCase {
+
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
-    private RestMLPredictionAction restMLPredictionAction;
+    private RestMLTrainAndPredictAction restMLTrainAndPredictAction;
 
     NodeClient client;
     private ThreadPool threadPool;
@@ -49,15 +50,18 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        restMLPredictionAction = new RestMLPredictionAction();
+        MockitoAnnotations.openMocks(this);
+        restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            MLTrainingOutput mlTaskResponse = new MLTrainingOutput(null, "taskId", MLTaskState.CREATED.name());
+            actionListener.onResponse(MLTaskResponse.builder().output(mlTaskResponse).build());
             return null;
-        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+        }).when(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -68,46 +72,40 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction();
-        assertNotNull(mlPredictionAction);
+        RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
+        assertNotNull(restMLTrainAndPredictAction);
     }
 
     public void testGetName() {
-        String actionName = restMLPredictionAction.getName();
+        String actionName = restMLTrainAndPredictAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_prediction_action", actionName);
+        assertEquals("ml_train_and_predict_action", actionName);
     }
 
     public void testRoutes() {
-        List<RestHandler.Route> routes = restMLPredictionAction.routes();
+        List<RestHandler.Route> routes = restMLTrainAndPredictAction.routes();
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/_predict/{algorithm}/{model_id}", route.getPath());
+        assertEquals("/_plugins/_ml/_train_predict/{algorithm}", route.getPath());
     }
 
     public void testGetRequest() throws IOException {
-        RestRequest request = getRestRequest_PredictModel();
-        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest(request);
+        RestRequest request = getRestRequest();
+        MLTrainingTaskRequest trainingTaskRequest = restMLTrainAndPredictAction.getRequest(request);
 
-        MLInput mlInput = mlPredictionTaskRequest.getMlInput();
+        MLInput mlInput = trainingTaskRequest.getMlInput();
         verifyParsedMLInput(mlInput);
     }
 
     public void testPrepareRequest() throws Exception {
-        RestRequest request = getRestRequest_PredictModel();
-        restMLPredictionAction.handleRequest(request, channel, client);
+        RestRequest request = getRestRequest();
+        restMLTrainAndPredictAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
-        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        ArgumentCaptor<MLTrainingTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLTrainingTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
         verifyParsedMLInput(mlInput);
-    }
-
-    private RestRequest getRestRequest_PredictModel() {
-        RestRequest request = getRestRequest();
-        request.params().put(PARAMETER_MODEL_ID, "model_id");
-        return request;
     }
 }

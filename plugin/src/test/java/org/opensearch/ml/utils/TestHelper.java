@@ -6,12 +6,15 @@
 package org.opensearch.ml.utils;
 
 import static org.apache.http.entity.ContentType.APPLICATION_JSON;
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +29,7 @@ import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.WarningsHandler;
+import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -36,8 +40,15 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchModule;
+import org.opensearch.test.rest.FakeRestRequest;
 
 public class TestHelper {
     public static XContentParser parser(String xc) throws IOException {
@@ -139,4 +150,30 @@ public class TestHelper {
         return sb.toString();
     }
 
+    public static RestRequest getRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name());
+        final String requestContent = "{\"parameters\":{\"centroids\":3,\"iterations\":10,\"distance_type\":"
+            + "\"COSINE\"},\"input_query\":{\"_source\":[\"petal_length_in_cm\",\"petal_width_in_cm\"],"
+            + "\"size\":10000},\"input_index\":[\"iris_data\"]}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private static NamedXContentRegistry getXContentRegistry() {
+        return new NamedXContentRegistry(Collections.singletonList(KMeansParams.XCONTENT_REGISTRY));
+    }
+
+    public static void verifyParsedMLInput(MLInput mlInput) {
+        assertEquals(FunctionName.KMEANS, mlInput.getAlgorithm());
+        assertEquals(MLInputDataType.SEARCH_QUERY, mlInput.getInputDataset().getInputDataType());
+        SearchQueryInputDataset inputDataset = (SearchQueryInputDataset) mlInput.getInputDataset();
+        assertEquals(1, inputDataset.getIndices().size());
+        assertEquals("iris_data", inputDataset.getIndices().get(0));
+        KMeansParams kMeansParams = (KMeansParams) mlInput.getParameters();
+        assertEquals(3, kMeansParams.getCentroids().intValue());
+    }
 }
