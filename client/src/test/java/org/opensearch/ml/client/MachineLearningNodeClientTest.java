@@ -273,7 +273,7 @@ public class MachineLearningNodeClientTest {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
             ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
-            DeleteResponse output = new DeleteResponse(shardId, "_doc", modelId, 1, 1, 1, true);
+            DeleteResponse output = new DeleteResponse(shardId, modelId, 1, 1, 1, true);
             actionListener.onResponse(output);
             return null;
         }).when(client).execute(eq(MLModelDeleteAction.INSTANCE), any(), any());
@@ -345,7 +345,7 @@ public class MachineLearningNodeClientTest {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
             ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
-            DeleteResponse output = new DeleteResponse(shardId, "_doc", taskId, 1, 1, 1, true);
+            DeleteResponse output = new DeleteResponse(shardId, taskId, 1, 1, 1, true);
             actionListener.onResponse(output);
             return null;
         }).when(client).execute(eq(MLTaskDeleteAction.INSTANCE), any(), any());

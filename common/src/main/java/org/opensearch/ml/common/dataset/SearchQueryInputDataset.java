@@ -42,7 +42,7 @@ public class SearchQueryInputDataset extends MLInputDataset {
     private static NamedXContentRegistry xContentRegistry;
 
     static {
-        SearchModule searchModule = new SearchModule(Settings.EMPTY, false, Collections.emptyList());
+        SearchModule searchModule = new SearchModule(Settings.EMPTY, Collections.emptyList());
         xContentRegistry = new NamedXContentRegistry(searchModule.getNamedXContents());
     }
 

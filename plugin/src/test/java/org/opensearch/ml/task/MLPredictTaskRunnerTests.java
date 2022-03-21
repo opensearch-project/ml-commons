@@ -180,7 +180,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
 
-        GetResult getResult = new GetResult(indexName, "type", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResult getResult = new GetResult(indexName, "111", 111l, 111l, 111l, true, bytesReference, null, null);
         getResponse = new GetResponse(getResult);
     }
 

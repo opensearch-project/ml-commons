@@ -22,7 +22,6 @@ import org.opensearch.ml.stats.StatNames;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-@OpenSearchIntegTestCase.ClusterScope(transportClientRatio = 0.9)
 public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
     @Before
     public void initTestingData() throws ExecutionException, InterruptedException {
@@ -34,7 +33,6 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
         return Collections.singletonList(MachineLearningPlugin.class);
     }
 
-    @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
         return Collections.singletonList(MachineLearningPlugin.class);
     }
