@@ -59,7 +59,6 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return Collections.singletonList(MachineLearningPlugin.class);
     }
 
-    @Override
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
         return Collections.singletonList(MachineLearningPlugin.class);
     }

@@ -40,7 +40,7 @@ public class AnomalyLocalizationInputTests {
         String json = Strings.toString(builder);
 
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                false, Collections.emptyList()).getNamedXContents()), null, json);
+                Collections.emptyList()).getNamedXContents()), null, json);
         parser.nextToken();
         AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
 
@@ -56,7 +56,7 @@ public class AnomalyLocalizationInputTests {
         String json = Strings.toString(builder);
 
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                false, Collections.emptyList()).getNamedXContents()), null, json);
+                Collections.emptyList()).getNamedXContents()), null, json);
         parser.nextToken();
         AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
 
@@ -72,7 +72,7 @@ public class AnomalyLocalizationInputTests {
         BytesStreamOutput out = new BytesStreamOutput();
         input.writeTo(out);
         StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(),
-                new NamedWriteableRegistry(new SearchModule(Settings.EMPTY, false, Collections.emptyList()).getNamedWriteables()));
+                new NamedWriteableRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedWriteables()));
         AnomalyLocalizationInput newInput = new AnomalyLocalizationInput(in);
 
         assertEquals(input, newInput);

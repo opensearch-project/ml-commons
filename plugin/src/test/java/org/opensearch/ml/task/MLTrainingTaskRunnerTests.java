@@ -295,7 +295,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
             doAnswer(invocation -> {
                 ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
                 ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
-                IndexResponse indexResponse = new IndexResponse(shardId, "_doc", "taskId", 1, 1, 1, true);
+                IndexResponse indexResponse = new IndexResponse(shardId, "taskId", 1, 1, 1, true);
                 if (failedToCreateTask) {
                     actionListener.onFailure(new RuntimeException(errorMessage));
                 } else {
@@ -314,7 +314,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
             ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
-            IndexResponse indexResponse = new IndexResponse(shardId, "_doc", "modelId", 1, 1, 1, true);
+            IndexResponse indexResponse = new IndexResponse(shardId, "modelId", 1, 1, 1, true);
             actionListener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());

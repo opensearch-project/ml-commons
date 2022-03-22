@@ -140,7 +140,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
             ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
-            UpdateResponse output = new UpdateResponse(shardId, "_doc", "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
+            UpdateResponse output = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
             actionListener.onResponse(output);
             return null;
         }).when(client).update(any(UpdateRequest.class), any());

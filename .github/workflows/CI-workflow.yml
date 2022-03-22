@@ -28,38 +28,39 @@ jobs:
 
       - name: Build and Run Tests
         run: |
-          ./gradlew build -Dopensearch.version=1.3.0-SNAPSHOT
+          ./gradlew build -Dopensearch.version=2.0.0-SNAPSHOT
       - name: Publish to Maven Local
         run: |
-          ./gradlew publishToMavenLocal -Dopensearch.version=1.3.0-SNAPSHOT
+          ./gradlew publishToMavenLocal -Dopensearch.version=2.0.0-SNAPSHOT
       - name: Multi Nodes Integration Testing
         run: |
           ./gradlew integTest -PnumNodes=3
-      - name: Pull and Run Docker
-        run: |
-          plugin=`ls plugin/build/distributions/*.zip`
-          echo MLCommons plugin $plugin
-          version=1.3.0
-          plugin_version=1.3.0.0-SNAPSHOT
-          echo Using OpenSearch $version with MLCommons $plugin_version
-          cd ..
-          if docker pull opensearchstaging/opensearch:$version
-          then
-            echo "FROM opensearchstaging/opensearch:$version" >> Dockerfile
-            echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
-            echo "ADD ml-commons/plugin/build/distributions/opensearch-ml-$plugin_version.zip /tmp/" >> Dockerfile
-            echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/opensearch-ml-$plugin_version.zip" >> Dockerfile
-            docker build -t opensearch-ml:test .
-            echo "imagePresent=true" >> $GITHUB_ENV
-          else
-            echo "imagePresent=false" >> $GITHUB_ENV
-          fi
-      - name: Run Docker Image
-        if: env.imagePresent == 'true'
-        run: |
-          cd ..
-          docker run -p 9200:9200 -d -p 9600:9600 -e "discovery.type=single-node" opensearch-ml:test
-          sleep 90
+#      ToDo: Check infra team for 2.0 docker availability and re-enable
+#      - name: Pull and Run Docker
+#        run: |
+#          plugin=`ls plugin/build/distributions/*.zip`
+#          echo MLCommons plugin $plugin
+#          version=2.0.0
+#          plugin_version=2.0.0-SNAPSHOT
+#          echo Using OpenSearch $version with MLCommons $plugin_version
+#          cd ..
+#          if docker pull opensearchstaging/opensearch:$version
+#          then
+#            echo "FROM opensearchstaging/opensearch:$version" >> Dockerfile
+#            echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
+#            echo "ADD ml-commons/plugin/build/distributions/opensearch-ml-$plugin_version.zip /tmp/" >> Dockerfile
+#            echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/opensearch-ml-$plugin_version.zip" >> Dockerfile
+#            docker build -t opensearch-ml:test .
+#            echo "imagePresent=true" >> $GITHUB_ENV
+#          else
+#            echo "imagePresent=false" >> $GITHUB_ENV
+#          fi
+#      - name: Run Docker Image
+#        if: env.imagePresent == 'true'
+#        run: |
+#          cd ..
+#          docker run -p 9200:9200 -d -p 9600:9600 -e "discovery.type=single-node" opensearch-ml:test
+#          sleep 90
       - name: Run MLCommons Test
         if: env.imagePresent == 'true'
         run: |
