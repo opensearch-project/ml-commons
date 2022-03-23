@@ -19,9 +19,9 @@ import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.KMeansParams;
-import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.base.Throwables;

@@ -7,7 +7,7 @@ package org.opensearch.ml.stats;
 
 import java.util.Locale;
 
-import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.FunctionName;
 
 /**
  * Enum containing names of all stats

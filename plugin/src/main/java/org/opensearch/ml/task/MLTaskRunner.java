@@ -11,10 +11,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
-import org.opensearch.ml.common.parameter.MLTask;
-import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.transport.TransportService;

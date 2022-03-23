@@ -8,7 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
-import org.opensearch.ml.common.parameter.MLTask;
+import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 
 import com.google.common.collect.ImmutableList;

@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.stats;
 
-import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class StatNamesTests extends OpenSearchTestCase {

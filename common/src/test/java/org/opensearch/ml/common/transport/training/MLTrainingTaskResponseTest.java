@@ -12,7 +12,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.parameter.MLTrainingOutput;
+import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 
 import static org.junit.Assert.assertEquals;

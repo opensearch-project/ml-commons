@@ -15,10 +15,10 @@ import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.Row;
-import org.opensearch.ml.common.parameter.BatchRCFParams;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.common.parameter.Model;
+import org.opensearch.ml.common.input.parameter.ad.BatchRCFParams;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.Model;
 
 import java.util.concurrent.ThreadLocalRandom;
 

@@ -13,11 +13,11 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.KMeansParams;
-import org.opensearch.ml.common.parameter.MLPredictionOutput;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)

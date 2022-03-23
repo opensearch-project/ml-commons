@@ -7,12 +7,12 @@ package org.opensearch.ml.engine.algorithms.ad;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.AnomalyDetectionParams;
-import org.opensearch.ml.common.parameter.MLAlgoParams;
-import org.opensearch.ml.common.parameter.MLOutput;
-import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.common.parameter.Model;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.Model;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
@@ -47,12 +47,12 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     private static double DEFAULT_NU = 0.1;
     private static KernelType DEFAULT_KERNEL_TYPE = KernelType.RBF;
 
-    private AnomalyDetectionParams parameters;
+    private AnomalyDetectionLibSVMParams parameters;
 
     public AnomalyDetectionLibSVM() {}
 
     public AnomalyDetectionLibSVM(MLAlgoParams parameters) {
-        this.parameters = parameters == null ? AnomalyDetectionParams.builder().build() : (AnomalyDetectionParams)parameters;
+        this.parameters = parameters == null ? AnomalyDetectionLibSVMParams.builder().build() : (AnomalyDetectionLibSVMParams)parameters;
         validateParameters();
     }
 

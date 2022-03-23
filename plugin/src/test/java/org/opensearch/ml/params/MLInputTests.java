@@ -12,12 +12,12 @@ import java.io.IOException;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.test.OpenSearchTestCase;
 

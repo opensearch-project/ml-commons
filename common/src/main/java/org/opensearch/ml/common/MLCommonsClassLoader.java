@@ -14,8 +14,7 @@ import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLOutputType;
+import org.opensearch.ml.common.output.MLOutputType;
 import org.reflections.Reflections;
 
 import java.lang.reflect.Constructor;
@@ -47,15 +46,17 @@ public class MLCommonsClassLoader {
 
     public static void loadClassMapping() {
         loadMLAlgoParameterClassMapping();
+        loadMLOutputClassMapping();
         loadMLInputDataSetClassMapping();
-        loadExecuteInputOutputClassMapping();
+        loadExecuteInputClassMapping();
+        loadExecuteOutputClassMapping();
     }
 
     /**
      * Load ML algorithm parameter and ML output class.
      */
     private static void loadMLAlgoParameterClassMapping() {
-        Reflections reflections = new Reflections("org.opensearch.ml.common.parameter");
+        Reflections reflections = new Reflections("org.opensearch.ml.common.input.parameter");
 
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLAlgoParameter.class);
         // Load ML algorithm parameter class
@@ -71,6 +72,22 @@ public class MLCommonsClassLoader {
 
         // Load ML output class
         classes = reflections.getTypesAnnotatedWith(MLAlgoOutput.class);
+        for (Class<?> clazz : classes) {
+            MLAlgoOutput mlAlgoOutput = clazz.getAnnotation(MLAlgoOutput.class);
+            MLOutputType mlOutputType = mlAlgoOutput.value();
+            if (mlOutputType != null) {
+                parameterClassMap.put(mlOutputType, clazz);
+            }
+        }
+    }
+
+    /**
+     * Load ML algorithm parameter and ML output class.
+     */
+    private static void loadMLOutputClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.common.output");
+
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLAlgoOutput.class);
         for (Class<?> clazz : classes) {
             MLAlgoOutput mlAlgoOutput = clazz.getAnnotation(MLAlgoOutput.class);
             MLOutputType mlOutputType = mlAlgoOutput.value();
@@ -98,11 +115,9 @@ public class MLCommonsClassLoader {
     /**
      * Load execute input output class.
      */
-    private static void loadExecuteInputOutputClassMapping() {
-        Reflections reflections = new Reflections("org.opensearch.ml.common.parameter");
-
+    private static void loadExecuteInputClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.common.input.execute");
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(ExecuteInput.class);
-        // Load execute input class
         for (Class<?> clazz : classes) {
             ExecuteInput executeInput = clazz.getAnnotation(ExecuteInput.class);
             FunctionName[] algorithms = executeInput.algorithms();
@@ -112,9 +127,14 @@ public class MLCommonsClassLoader {
                 }
             }
         }
+    }
 
-        // Load execute output class
-        classes = reflections.getTypesAnnotatedWith(ExecuteOutput.class);
+    /**
+     * Load execute input output class.
+     */
+    private static void loadExecuteOutputClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.common.output.execute");
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(ExecuteOutput.class);
         for (Class<?> clazz : classes) {
             ExecuteOutput executeOutput = clazz.getAnnotation(ExecuteOutput.class);
             FunctionName[] algorithms = executeOutput.algorithms();

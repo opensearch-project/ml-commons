@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.common.annotation;
 
-import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.FunctionName;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

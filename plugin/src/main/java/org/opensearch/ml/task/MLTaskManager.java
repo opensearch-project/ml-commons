@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.common.parameter.MLTask.LAST_UPDATE_TIME_FIELD;
+import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
 
 import java.time.Instant;
@@ -28,8 +28,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.ml.common.parameter.MLTask;
-import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.rest.RestStatus;
 

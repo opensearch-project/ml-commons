@@ -21,7 +21,7 @@ import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
-import org.opensearch.ml.common.parameter.MLTask;
+import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.test.OpenSearchTestCase;
 
