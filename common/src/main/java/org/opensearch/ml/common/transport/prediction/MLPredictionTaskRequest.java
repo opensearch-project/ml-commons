@@ -16,7 +16,7 @@ import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.input.MLInput;
 
 import lombok.AccessLevel;
 import lombok.Builder;

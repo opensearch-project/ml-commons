@@ -11,7 +11,7 @@ import java.util.Map;
 
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.parameter.Counter;
+import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
 
 /**
  * Hashmap-based exact counting.

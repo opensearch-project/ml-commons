@@ -41,16 +41,16 @@ import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
-import org.opensearch.ml.common.parameter.AnomalyDetectionParams;
-import org.opensearch.ml.common.parameter.AnomalyLocalizationInput;
-import org.opensearch.ml.common.parameter.BatchRCFParams;
-import org.opensearch.ml.common.parameter.FitRCFParams;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.KMeansParams;
-import org.opensearch.ml.common.parameter.LinearRegressionParams;
-import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
-import org.opensearch.ml.common.parameter.SampleAlgoParams;
+import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
+import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
+import org.opensearch.ml.common.input.parameter.ad.BatchRCFParams;
+import org.opensearch.ml.common.input.parameter.ad.FitRCFParams;
+import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
+import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -285,7 +285,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             .of(
                 KMeansParams.XCONTENT_REGISTRY,
                 LinearRegressionParams.XCONTENT_REGISTRY,
-                AnomalyDetectionParams.XCONTENT_REGISTRY,
+                AnomalyDetectionLibSVMParams.XCONTENT_REGISTRY,
                 SampleAlgoParams.XCONTENT_REGISTRY,
                 FitRCFParams.XCONTENT_REGISTRY,
                 BatchRCFParams.XCONTENT_REGISTRY,

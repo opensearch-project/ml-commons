@@ -9,11 +9,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
-import org.opensearch.ml.common.parameter.LocalSampleCalculatorOutput;
-import org.opensearch.ml.common.parameter.Output;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
 

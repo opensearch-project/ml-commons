@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.common.annotation;
 
-import org.opensearch.ml.common.parameter.MLOutputType;
+import org.opensearch.ml.common.output.MLOutputType;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

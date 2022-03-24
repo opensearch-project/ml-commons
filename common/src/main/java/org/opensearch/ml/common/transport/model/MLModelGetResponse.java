@@ -15,10 +15,7 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLModel;
-import org.opensearch.ml.common.parameter.MLOutput;
-import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.MLModel;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

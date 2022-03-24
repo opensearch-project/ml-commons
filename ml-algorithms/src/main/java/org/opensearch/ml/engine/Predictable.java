@@ -6,8 +6,8 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.parameter.MLOutput;
-import org.opensearch.ml.common.parameter.Model;
+import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.Model;
 
 /**
  * This is machine learning algorithms predict interface.

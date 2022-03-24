@@ -18,10 +18,10 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.DoubleValue;
 import org.opensearch.ml.common.dataframe.Row;
-import org.opensearch.ml.common.parameter.AnomalyDetectionParams;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLPredictionOutput;
-import org.opensearch.ml.common.parameter.Model;
+import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.Model;
 import org.tribuo.Dataset;
 import org.tribuo.Example;
 import org.tribuo.Feature;
@@ -34,7 +34,7 @@ import java.util.List;
 
 public class AnomalyDetectionLibSVMTest {
 
-    private AnomalyDetectionParams parameters;
+    private AnomalyDetectionLibSVMParams parameters;
     private AnomalyDetectionLibSVM anomalyDetection;
     private DataFrame trainDataFrame;
     private DataFrame predictionDataFrame;
@@ -47,7 +47,7 @@ public class AnomalyDetectionLibSVMTest {
 
     @Before
     public void setUp() {
-        parameters = AnomalyDetectionParams.builder().gamma(gamma).nu(nu).build();
+        parameters = AnomalyDetectionLibSVMParams.builder().gamma(gamma).nu(nu).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
 
         Pair<Dataset<Event>, Dataset<Event>> pair = AnomalyDataGenerator.gaussianAnomaly(1000, 0.3);
@@ -109,24 +109,24 @@ public class AnomalyDetectionLibSVMTest {
 
     @Test
     public void trainWithFullParams() {
-        AnomalyDetectionParams parameters = AnomalyDetectionParams.builder().gamma(gamma).nu(nu).cost(1.0).coeff(0.01).epsilon(0.001).degree(1).kernelType(AnomalyDetectionParams.ADKernelType.LINEAR).build();
+        AnomalyDetectionLibSVMParams parameters = AnomalyDetectionLibSVMParams.builder().gamma(gamma).nu(nu).cost(1.0).coeff(0.01).epsilon(0.001).degree(1).kernelType(AnomalyDetectionLibSVMParams.ADKernelType.LINEAR).build();
         AnomalyDetectionLibSVM anomalyDetection = new AnomalyDetectionLibSVM(parameters);
         Model model = anomalyDetection.train(trainDataFrame);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
         Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
 
-        parameters = parameters.toBuilder().kernelType(AnomalyDetectionParams.ADKernelType.POLY).build();
+        parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.POLY).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
         model = anomalyDetection.train(trainDataFrame);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
 
-        parameters = parameters.toBuilder().kernelType(AnomalyDetectionParams.ADKernelType.RBF).build();
+        parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.RBF).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
         model = anomalyDetection.train(trainDataFrame);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
 
-        parameters = parameters.toBuilder().kernelType(AnomalyDetectionParams.ADKernelType.SIGMOID).build();
+        parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.SIGMOID).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
         model = anomalyDetection.train(trainDataFrame);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
@@ -170,7 +170,7 @@ public class AnomalyDetectionLibSVMTest {
     public void constructor_NegativeGamma() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("gamma should be positive");
-        AnomalyDetectionParams parameters = AnomalyDetectionParams.builder().gamma(-1.0).build();
+        AnomalyDetectionLibSVMParams parameters = AnomalyDetectionLibSVMParams.builder().gamma(-1.0).build();
         new AnomalyDetectionLibSVM(parameters);
     }
 
@@ -178,7 +178,7 @@ public class AnomalyDetectionLibSVMTest {
     public void constructor_NegativeNu() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("nu should be positive");
-        AnomalyDetectionParams parameters = AnomalyDetectionParams.builder().nu(-1.0).build();
+        AnomalyDetectionLibSVMParams parameters = AnomalyDetectionLibSVMParams.builder().nu(-1.0).build();
         new AnomalyDetectionLibSVM(parameters);
     }
 }

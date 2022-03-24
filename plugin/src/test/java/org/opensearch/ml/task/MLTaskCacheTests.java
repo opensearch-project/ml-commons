@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.task;
 
-import org.opensearch.ml.common.parameter.MLTask;
+import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLTaskCacheTests extends OpenSearchTestCase {

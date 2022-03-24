@@ -9,8 +9,8 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLModel;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 
 import java.io.IOException;
 

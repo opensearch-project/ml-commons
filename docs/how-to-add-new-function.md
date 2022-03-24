@@ -6,7 +6,7 @@ This doc explains how to add new function to `ml-commons` with two examples.
 This sample algorithm will train a dummy model first. Then user can call predict API to calculate total sum of a data frame or selected data from indices.
 
 ### Step 1: name the function
-Add new function name in `common/src/main/java/org/opensearch/ml/common/parameter/FunctionName.java`
+Add new function name in `common/src/main/java/org/opensearch/ml/common/FunctionName.java`
 ```
 public enum FunctionName {
     ...
@@ -17,7 +17,7 @@ public enum FunctionName {
 ```
 
 ### Step 2: add input class 
-Create new class `common/src/main/java/org/opensearch/ml/common/parameter/SampleAlgoParams.java` by implementing `MLAlgoParams` interface. 
+Create new class `common/src/main/java/org/opensearch/ml/common/input/parameter/sample/SampleAlgoParams.java` by implementing `MLAlgoParams` interface. 
 
 Must define `NamedXContentRegistry.Entry` in `SampleAlgoParams`. 
 
@@ -49,7 +49,7 @@ Register `SampleAlgoParams.XCONTENT_REGISTRY` in `MachineLearningPlugin.getNamed
 ```
 
 ### Step 3: add output class
-Add new enum in `common/src/main/java/org/opensearch/ml/common/parameter/MLOutputType.java`:
+Add new enum in `common/src/main/java/org/opensearch/ml/common/output/MLOutputType.java`:
 ```    
     public enum MLOutputType {
         ...
@@ -57,7 +57,7 @@ Add new enum in `common/src/main/java/org/opensearch/ml/common/parameter/MLOutpu
         ...
     }
 ```
-Create new class `common/src/main/java/org/opensearch/ml/common/parameter/SampleAlgoOutput.java` by extending abstract class `MLOutput`.
+Create new class `common/src/main/java/org/opensearch/ml/common/output/sample/SampleAlgoOutput.java` by extending abstract class `MLOutput`.
 
 Must add `@MLAlgoOutput` annotation with new output type.
 
@@ -155,7 +155,7 @@ In this example, we will add a new sample calculator which runs on local node (d
 The sample calculator supports calculating `sum`/`max`/`min` value from a double list.
 
 ### Step 1: name the function
-Add new function name in  `common/src/main/java/org/opensearch/ml/common/parameter/FunctionName.java`
+Add new function name in  `common/src/main/java/org/opensearch/ml/common/FunctionName.java`
 ```
 public enum FunctionName {
     ...
@@ -165,7 +165,7 @@ public enum FunctionName {
 ```
 
 ### Step 2: add input class
-Add new class `common/src/main/java/org/opensearch/ml/common/parameter/LocalSampleCalculatorInput.java` by implementing `Input`.
+Add new class `common/src/main/java/org/opensearch/ml/common/input/execute/samplecalculator/LocalSampleCalculatorInput.java` by implementing `Input`.
 
 Must add `@ExecuteInput` annotation with new algorithm name.
 ```
@@ -184,7 +184,7 @@ public class LocalSampleCalculatorInput implements Input {
 ```
 
 ### Step 3: add output class
-Add output class `common/src/main/java/org/opensearch/ml/common/parameter/LocalSampleCalculatorOutput.java` by implementing `Output`.
+Add output class `common/src/main/java/org/opensearch/ml/common/output/execute/samplecalculator/LocalSampleCalculatorOutput.java` by implementing `Output`.
 
 Must add `@ExecuteOutput` annotation with new algorithm name.
 ```

@@ -10,8 +10,8 @@ import java.io.IOException;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.ResponseException;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLGetTaskActionIT extends MLCommonsRestTestCase {

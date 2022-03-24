@@ -14,10 +14,10 @@ import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.parameter.MLAlgoParams;
-import org.opensearch.ml.common.parameter.Model;
-import org.opensearch.ml.common.parameter.SampleAlgoOutput;
-import org.opensearch.ml.common.parameter.SampleAlgoParams;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.Model;
+import org.opensearch.ml.common.output.sample.SampleAlgoOutput;
+import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 
 public class SampleAlgoTest {
     @Rule

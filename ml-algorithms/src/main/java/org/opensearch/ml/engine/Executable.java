@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.engine;
 
-import org.opensearch.ml.common.parameter.Input;
-import org.opensearch.ml.common.parameter.Output;
+import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.output.Output;
 
 public interface Executable {
 

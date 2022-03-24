@@ -8,7 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
-import org.opensearch.ml.common.parameter.MLModel;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 
 import com.google.common.collect.ImmutableList;

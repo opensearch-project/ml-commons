@@ -9,7 +9,7 @@ import java.io.IOException;
 
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.MLTaskState;
 
 public class RestMLDeleteTaskActionIT extends MLCommonsRestTestCase {
 

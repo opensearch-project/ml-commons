@@ -11,8 +11,8 @@ import java.util.Map;
 
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
 
 public class RestMLSearchTaskActionIT extends MLCommonsRestTestCase {
     @Rule

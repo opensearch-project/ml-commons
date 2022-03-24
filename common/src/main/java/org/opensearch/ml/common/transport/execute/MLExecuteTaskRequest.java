@@ -18,8 +18,8 @@ import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.MLCommonsClassLoader;
-import org.opensearch.ml.common.parameter.FunctionName;
-import org.opensearch.ml.common.parameter.Input;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.input.Input;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

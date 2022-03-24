@@ -12,7 +12,10 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.ml.common.parameter.*;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.MLTask;
 
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.

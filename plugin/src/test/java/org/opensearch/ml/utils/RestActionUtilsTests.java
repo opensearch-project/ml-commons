@@ -19,7 +19,7 @@ import java.util.Map;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
