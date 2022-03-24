@@ -327,5 +327,3 @@ tasks.withType(licenseHeaders.class) {
 checkstyle {
     toolVersion = '8.29'
 }
-sourceCompatibility = JavaVersion.VERSION_1_9
-targetCompatibility = JavaVersion.VERSION_1_9

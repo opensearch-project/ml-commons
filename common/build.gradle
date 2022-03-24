@@ -16,7 +16,7 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.12'
     compileOnly "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.9.0'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
 }
 
 jacocoTestReport {
