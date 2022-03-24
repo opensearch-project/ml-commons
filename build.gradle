@@ -30,7 +30,7 @@ buildscript {
 plugins {
     id 'nebula.ospackage' version "8.3.0"
     id 'java'
-    id "io.freefair.lombok" version "5.1.0"
+    id "io.freefair.lombok" version "6.4.1"
     id 'jacoco'
 }
 
@@ -55,7 +55,7 @@ allprojects {
     apply from: "$rootDir/build-tools/repositories.gradle"
 
     plugins.withId('java') {
-        sourceCompatibility = targetCompatibility = "1.8"
+        sourceCompatibility = targetCompatibility = JavaVersion.VERSION_11
     }
 }
 
