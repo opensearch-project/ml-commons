@@ -30,9 +30,9 @@ import org.opensearch.ml.common.output.MLPredictionOutput;
 import java.io.IOException;
 import java.util.Arrays;
 
-import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
+import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
 
 public class MLEngineTest {
     @Rule
@@ -41,7 +41,7 @@ public class MLEngineTest {
     @Test
     public void predictKMeans() {
         Model model = trainKMeansModel();
-        DataFrame predictionDataFrame = constructKMeansDataFrame(10);
+        DataFrame predictionDataFrame = constructTestDataFrame(10);
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
         Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
         MLPredictionOutput output = (MLPredictionOutput)MLEngine.predict(mlInput, model);
@@ -106,7 +106,7 @@ public class MLEngineTest {
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
         try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
-            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructKMeansDataFrame(0)).build();
+            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructTestDataFrame(0)).build();
             MLEngine.train(MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build());
         }
     }
@@ -118,7 +118,7 @@ public class MLEngineTest {
         FunctionName algoName = FunctionName.LINEAR_REGRESSION;
         try (MockedStatic<MLEngineClassLoader> loader = Mockito.mockStatic(MLEngineClassLoader.class)) {
             loader.when(() -> MLEngineClassLoader.initInstance(algoName, null, MLAlgoParams.class)).thenReturn(null);
-            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructKMeansDataFrame(10)).build();
+            MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructTestDataFrame(10)).build();
             MLEngine.train(MLInput.builder().algorithm(algoName).inputDataset(inputDataset).build());
         }
     }
@@ -134,7 +134,7 @@ public class MLEngineTest {
     public void predictWithoutAlgoName() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("algorithm can't be null");
-        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructKMeansDataFrame(10)).build();
+        MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(constructTestDataFrame(10)).build();
         Input mlInput = MLInput.builder().inputDataset(inputDataset).build();
         MLEngine.predict(mlInput, null);
     }
@@ -165,7 +165,7 @@ public class MLEngineTest {
     public void trainAndPredictWithKmeans() {
         int dataSize = 100;
         MLAlgoParams parameters = KMeansParams.builder().build();
-        DataFrame dataFrame = constructKMeansDataFrame(dataSize);
+        DataFrame dataFrame = constructTestDataFrame(dataSize);
         MLInputDataset inputData = new DataFrameInputDataset(dataFrame);
         Input input = new MLInput(FunctionName.KMEANS, parameters, inputData);
         MLPredictionOutput output = (MLPredictionOutput) MLEngine.trainAndPredict(input);
@@ -216,7 +216,7 @@ public class MLEngineTest {
                 .iterations(10)
                 .distanceType(KMeansParams.DistanceType.EUCLIDEAN)
                 .build();
-        DataFrame trainDataFrame = constructKMeansDataFrame(100);
+        DataFrame trainDataFrame = constructTestDataFrame(100);
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(trainDataFrame).build();
         Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(parameters).inputDataset(inputDataset).build();
         return MLEngine.train(mlInput);

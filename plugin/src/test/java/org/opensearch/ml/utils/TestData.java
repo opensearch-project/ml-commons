@@ -5,23 +5,54 @@
 
 package org.opensearch.ml.utils;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 import org.apache.commons.math3.distribution.MultivariateNormalDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
+import org.opensearch.ml.common.dataframe.ColumnValue;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataframe.DefaultDataFrame;
+import org.opensearch.ml.common.dataframe.DoubleValue;
+import org.opensearch.ml.common.dataframe.Row;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 public class TestData {
 
+    public static final String TIME_FIELD = "timestamp";
+    public static final String TARGET_FIELD = "price";
+
     public static DataFrame constructTestDataFrame(int size) {
-        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE) };
+        return constructTestDataFrame(size, false);
+    }
+
+    public static DataFrame constructTestDataFrameForLinearRegression(int size) {
+        ColumnMeta[] columnMetas = new ColumnMeta[] {
+            new ColumnMeta("feet", ColumnType.DOUBLE),
+            new ColumnMeta(TARGET_FIELD, ColumnType.DOUBLE) };
+
+        List<Row> rows = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            rows.add(new Row(new ColumnValue[] { new DoubleValue(i), new DoubleValue(i) }));
+        }
+        return new DefaultDataFrame(columnMetas, rows);
+    }
+
+    public static DataFrame constructTestDataFrame(int size, boolean addTimeFiled) {
+        List<ColumnMeta> columnMetaList = new ArrayList<>();
+        columnMetaList.add(new ColumnMeta("f1", ColumnType.DOUBLE));
+        columnMetaList.add(new ColumnMeta("f2", ColumnType.DOUBLE));
+        if (addTimeFiled) {
+            columnMetaList.add(new ColumnMeta(TIME_FIELD, ColumnType.LONG));
+        }
+        ColumnMeta[] columnMetas = columnMetaList.toArray(new ColumnMeta[0]);
         DataFrame dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
 
         Random random = new Random(1);
@@ -36,13 +67,19 @@ public class TestData {
             new double[][] { { 2.0, 1.0 }, { 1.0, 2.0 } }
         );
         MultivariateNormalDistribution[] normalDistributions = new MultivariateNormalDistribution[] { g1, g2 };
+        long startTime = 1648154137000l;
         for (int i = 0; i < size; ++i) {
             int id = 0;
-            if (random.nextDouble() < 0.5) {
+            if (Math.random() < 0.5) {
                 id = 1;
             }
             double[] sample = normalDistributions[id].sample();
-            dataFrame.appendRow(Arrays.stream(sample).boxed().toArray(Double[]::new));
+            Object[] row = Arrays.stream(sample).boxed().toArray(Double[]::new);
+            if (addTimeFiled) {
+                long timestamp = startTime + 60_000 * i;
+                row = new Object[] { row[0], row[1], timestamp };
+            }
+            dataFrame.appendRow(row);
         }
 
         return dataFrame;

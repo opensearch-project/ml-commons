@@ -16,7 +16,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.Model;
 
-import static org.opensearch.ml.engine.helper.KMeansHelper.constructKMeansDataFrame;
+import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
 
 
 public class KMeansTest {
@@ -107,11 +107,11 @@ public class KMeansTest {
     }
 
     private void constructKMeansPredictionDataFrame() {
-        predictionDataFrame = constructKMeansDataFrame(predictionSize);
+        predictionDataFrame = constructTestDataFrame(predictionSize);
     }
 
     private void constructKMeansTrainDataFrame() {
-        trainDataFrame = constructKMeansDataFrame(trainSize);
+        trainDataFrame = constructTestDataFrame(trainSize);
     }
 
 }
