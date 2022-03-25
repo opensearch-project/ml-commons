@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.input.parameter.ad;
+package org.opensearch.ml.common.input.parameter.rcf;
 
 import org.junit.Before;
 import org.junit.Test;

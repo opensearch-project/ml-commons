@@ -24,7 +24,7 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.Model;
-import org.opensearch.ml.common.input.parameter.ad.FitRCFParams;
+import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
