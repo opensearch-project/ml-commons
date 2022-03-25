@@ -46,7 +46,7 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.input.parameter.ad.BatchRCFParams;
+import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
