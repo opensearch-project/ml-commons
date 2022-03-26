@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.action;
 
+import static org.opensearch.ml.utils.TestData.TARGET_FIELD;
+import static org.opensearch.ml.utils.TestData.TIME_FIELD;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -23,8 +26,10 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.BatchRCFParams;
+import org.opensearch.ml.common.parameter.FitRCFParams;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
+import org.opensearch.ml.common.parameter.LinearRegressionParams;
 import org.opensearch.ml.common.parameter.MLAlgoParams;
 import org.opensearch.ml.common.parameter.MLInput;
 import org.opensearch.ml.common.parameter.MLModel;
@@ -136,6 +141,30 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return trainModel(FunctionName.BATCH_RCF, BatchRCFParams.builder().build(), inputDataset, async);
     }
 
+    public String trainFitRCFWithDataFrame(int dataSize, boolean async) {
+        MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(dataSize, true));
+        return trainModel(FunctionName.FIT_RCF, FitRCFParams.builder().timeField(TIME_FIELD).build(), inputDataset, async);
+    }
+
+    public LinearRegressionParams getLinearRegressionParams() {
+        return LinearRegressionParams
+            .builder()
+            .objectiveType(LinearRegressionParams.ObjectiveType.SQUARED_LOSS)
+            .optimizerType(LinearRegressionParams.OptimizerType.LINEAR_DECAY_SGD)
+            .learningRate(0.01)
+            .epochs(10)
+            .epsilon(1e-5)
+            .beta1(0.9)
+            .beta2(0.99)
+            .target(TARGET_FIELD)
+            .build();
+    }
+
+    public String trainLinearRegressionWithDataFrame(int dataSize, boolean async) {
+        MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrameForLinearRegression(dataSize));
+        return trainModel(FunctionName.LINEAR_REGRESSION, getLinearRegressionParams(), inputDataset, async);
+    }
+
     public String trainModel(FunctionName functionName, MLAlgoParams params, MLInputDataset inputDataset, boolean async) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputDataset).build();
         MLTrainingTaskRequest trainingRequest = new MLTrainingTaskRequest(mlInput, async);
@@ -156,8 +185,14 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return id;
     }
 
-    public DataFrame predictAndVerify(String modelId, MLInputDataset inputDataset, FunctionName functionName, int size) {
-        MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).build();
+    public DataFrame predictAndVerify(
+        String modelId,
+        MLInputDataset inputDataset,
+        FunctionName functionName,
+        MLAlgoParams parameters,
+        int size
+    ) {
+        MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).parameters(parameters).build();
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();

@@ -22,7 +22,6 @@ import org.opensearch.ml.common.parameter.MLPredictionOutput;
 import org.opensearch.ml.common.parameter.Model;
 import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
-import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,7 +67,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
         if (model == null) {
             throw new IllegalArgumentException("No model found for batch RCF prediction.");
         }
-        RandomCutForestState state = (RandomCutForestState) ModelSerDeSer.deserialize(model.getContent());
+        RandomCutForestState state = RCFModelSerDeSer.deserializeRCF(model.getContent());
         RandomCutForest forest = rcfMapper.toModel(state);
         List<Map<String, Object>> predictResult = process(dataFrame, forest, 0);
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
@@ -83,7 +82,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
         model.setName(FunctionName.BATCH_RCF.name());
         model.setVersion(1);
         RandomCutForestState state = rcfMapper.toState(forest);
-        model.setContent(ModelSerDeSer.serialize(state));
+        model.setContent(RCFModelSerDeSer.serializeRCF(state));
         return model;
     }
 
