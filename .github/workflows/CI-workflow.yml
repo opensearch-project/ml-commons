@@ -28,10 +28,10 @@ jobs:
 
       - name: Build and Run Tests
         run: |
-          ./gradlew build -Dopensearch.version=2.0.0-SNAPSHOT
+          ./gradlew build
       - name: Publish to Maven Local
         run: |
-          ./gradlew publishToMavenLocal -Dopensearch.version=2.0.0-SNAPSHOT
+          ./gradlew publishToMavenLocal
       - name: Multi Nodes Integration Testing
         run: |
           ./gradlew integTest -PnumNodes=3

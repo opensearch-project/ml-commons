@@ -7,7 +7,7 @@ package org.opensearch.ml.action.trainpredict;
 
 import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 
-import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;

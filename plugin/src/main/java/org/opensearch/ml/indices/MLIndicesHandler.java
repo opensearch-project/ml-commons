@@ -16,7 +16,6 @@ import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentType;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor
@@ -72,7 +71,7 @@ public class MLIndicesHandler {
 
     private void initMLIndexIfAbsent(String indexName, String mapping) {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
-            client.admin().indices().prepareCreate(indexName).addMapping("_doc", mapping, XContentType.JSON).get();
+            client.admin().indices().prepareCreate(indexName).get();
             log.info("create index:{}", indexName);
         } else {
             log.info("index:{} is already created", indexName);
@@ -101,7 +100,7 @@ public class MLIndicesHandler {
                     log.error("Failed to create index " + indexName, e);
                     listener.onFailure(e);
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping("_doc", mapping, XContentType.JSON);
+                CreateIndexRequest request = new CreateIndexRequest(indexName);
                 client.admin().indices().create(request, ActionListener.runBefore(actionListener, () -> threadContext.restore()));
             } catch (Exception e) {
                 log.error("Failed to init index " + indexName, e);
