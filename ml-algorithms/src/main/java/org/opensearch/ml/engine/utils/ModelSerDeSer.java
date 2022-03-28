@@ -6,12 +6,12 @@
 package org.opensearch.ml.engine.utils;
 
 import lombok.experimental.UtilityClass;
+import org.apache.commons.io.serialization.ValidatingObjectInputStream;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
 @UtilityClass
@@ -41,8 +41,11 @@ public class ModelSerDeSer {
     }
 
     public static Object deserialize(byte[] modelBin) {
-        try (ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(modelBin))) {
-            return objectInputStream.readObject();
+        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
+             ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream)){
+            // Validate the model class type to avoid deserialization attack.
+            validatingObjectInputStream.accept(ACCEPT_CLASS_PATTERNS);
+            return validatingObjectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
         }
