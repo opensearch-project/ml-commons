@@ -49,14 +49,7 @@ ext {
 
 allprojects {
     group = 'org.opensearch'
-    version = opensearch_version - "-SNAPSHOT" + ".0"
-
-    if (buildVersionQualifier) {
-        version += "-${buildVersionQualifier}"
-    }
-    if (isSnapshot) {
-        version += "-SNAPSHOT"
-    }
+    version = opensearch_build
 
     apply from: "$rootDir/build-tools/repositories.gradle"
 
