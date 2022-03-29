@@ -11,7 +11,7 @@ import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -117,7 +117,6 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
             FitRCFParams.builder().timeField(TIME_FIELD).build(),
             batchRcfDataSize
         );
-        System.out.println(dataFrame);
     }
 
     public void testPredictionWithDataFrame_LinearRegression() {

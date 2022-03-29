@@ -8,9 +8,15 @@ buildscript {
 
     ext {
         opensearch_group = "org.opensearch"
-        opensearch_version = System.getProperty("opensearch.version", "2.0.0-SNAPSHOT")
-        // 2.0.0-SNAPSHOT -> 2.0.0.0-SNAPSHOT
-        opensearch_build = opensearch_version.replaceAll(/(\.\d)([^\d]*)$/, '$1.0$2')
+        opensearch_version = System.getProperty("opensearch.version", "2.0.0-alpha1-SNAPSHOT")
+
+        // 2.0.0-alpha1-SNAPSHOT -> 2.0.0.0-alpha1-SNAPSHOT
+        version_tokens = opensearch_version.tokenize('-')
+        opensearch_build = version_tokens[0] + '.0'
+        for (int j = 1; j < version_tokens.size(); j++) {
+            opensearch_build = opensearch_build + '-' + version_tokens[j]
+        }
+
         common_utils_version = System.getProperty("common_utils.version", opensearch_build)
     }
 
@@ -43,14 +49,7 @@ ext {
 
 allprojects {
     group = 'org.opensearch'
-    version = opensearch_version - "-SNAPSHOT" + ".0"
-
-    if (buildVersionQualifier) {
-        version += "-${buildVersionQualifier}"
-    }
-    if (isSnapshot) {
-        version += "-SNAPSHOT"
-    }
+    version = opensearch_build
 
     apply from: "$rootDir/build-tools/repositories.gradle"
 

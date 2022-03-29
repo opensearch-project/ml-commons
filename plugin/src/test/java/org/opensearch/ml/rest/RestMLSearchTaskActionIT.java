@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
@@ -18,6 +19,7 @@ public class RestMLSearchTaskActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    @Ignore
     public void testSearchTaskAPI_Success() throws IOException, InterruptedException {
         trainAsyncWithSample(trainResult -> {
             assertFalse(trainResult.containsKey("model_id"));
