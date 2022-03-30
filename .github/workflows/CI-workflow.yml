@@ -11,7 +11,7 @@ jobs:
   Build-ml:
     strategy:
       matrix:
-        java: [11, 14, 17]
+        java: [11, 17]
 
     name: Build and Test MLCommons Plugin
     runs-on: ubuntu-latest
