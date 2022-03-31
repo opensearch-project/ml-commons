@@ -35,6 +35,7 @@ jobs:
       - name: Multi Nodes Integration Testing
         run: |
           ./gradlew integTest -PnumNodes=3
+#      ToDo: Check infra team for 2.0 docker availability and re-enable
 #      - name: Pull and Run Docker
 #        run: |
 #          plugin=`basename $(ls plugin/build/distributions/*.zip)`
