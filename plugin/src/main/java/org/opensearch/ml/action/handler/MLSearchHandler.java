@@ -84,16 +84,10 @@ public class MLSearchHandler {
     }
 
     public static boolean isProperExceptionToReturn(Throwable e) {
-        if (e == null) {
-            return false;
-        }
         return e instanceof OpenSearchStatusException || e instanceof IndexNotFoundException || e instanceof InvalidIndexNameException;
     }
 
     public static boolean isBadRequest(Throwable e) {
-        if (e == null) {
-            return false;
-        }
         return e instanceof IllegalArgumentException || e instanceof MLResourceNotFoundException;
     }
 }
