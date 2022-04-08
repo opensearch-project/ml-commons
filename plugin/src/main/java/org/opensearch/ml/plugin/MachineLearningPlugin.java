@@ -162,6 +162,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         stats.put(StatNames.ML_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(StatNames.ML_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(StatNames.ML_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
