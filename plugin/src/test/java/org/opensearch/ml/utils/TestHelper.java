@@ -13,6 +13,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -163,6 +164,13 @@ public class TestHelper {
         return request;
     }
 
+    public static RestRequest getSearchAllRestRequest() {
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static void verifyParsedKMeansMLInput(MLInput mlInput) {
         assertEquals(FunctionName.KMEANS, mlInput.getAlgorithm());
         assertEquals(MLInputDataType.SEARCH_QUERY, mlInput.getInputDataset().getInputDataType());
@@ -174,6 +182,10 @@ public class TestHelper {
     }
 
     private static NamedXContentRegistry getXContentRegistry() {
-        return new NamedXContentRegistry(Collections.singletonList(KMeansParams.XCONTENT_REGISTRY));
+        SearchModule searchModule = new SearchModule(Settings.EMPTY, Collections.emptyList());
+        List<NamedXContentRegistry.Entry> entries = new ArrayList<>();
+        entries.addAll(searchModule.getNamedXContents());
+        entries.add(KMeansParams.XCONTENT_REGISTRY);
+        return new NamedXContentRegistry(entries);
     }
 }

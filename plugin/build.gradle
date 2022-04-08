@@ -208,7 +208,6 @@ List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
         'org.opensearch.ml.constant.CommonValue',
         'org.opensearch.ml.plugin.MachineLearningPlugin*',
-        'org.opensearch.ml.rest.AbstractMLSearchAction*',
         'org.opensearch.ml.rest.RestMLExecuteAction' //0.3
 ]
 
