@@ -45,6 +45,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
@@ -164,6 +165,17 @@ public class TestHelper {
         return request;
     }
 
+    public static RestRequest getLocalSampleCalculatorRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.LOCAL_SAMPLE_CALCULATOR.name());
+        final String requestContent = "{\"operation\": \"max\",\"input_data\":[1.0, 2.0, 3.0]}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static RestRequest getSearchAllRestRequest() {
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
             .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
@@ -186,6 +198,7 @@ public class TestHelper {
         List<NamedXContentRegistry.Entry> entries = new ArrayList<>();
         entries.addAll(searchModule.getNamedXContents());
         entries.add(KMeansParams.XCONTENT_REGISTRY);
+        entries.add(LocalSampleCalculatorInput.XCONTENT_REGISTRY);
         return new NamedXContentRegistry(entries);
     }
 }
