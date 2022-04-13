@@ -28,6 +28,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.RangeQueryBuilder;
@@ -126,6 +127,10 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
         List<Map.Entry<Long, Long>> intervals = timeBuckets.getAllIntervals();
         for (int i = 0; i < intervals.size(); i++) {
+            if (response.getResponses()[i].getFailure() instanceof IndexNotFoundException) {
+                listener.onFailure(new IndexNotFoundException("Fail to find index: " + input.getIndexName()));
+            }
+
             double value = getDoubleValue((SingleValue) response.getResponses()[i].getResponse().getAggregations().get(agg.getName()));
 
             AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();

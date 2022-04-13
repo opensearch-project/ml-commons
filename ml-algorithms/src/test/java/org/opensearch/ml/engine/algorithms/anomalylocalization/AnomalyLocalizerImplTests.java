@@ -21,6 +21,7 @@ import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
@@ -228,6 +229,15 @@ public class AnomalyLocalizerImplTests {
     @Test(expected = RuntimeException.class)
     public void testGetLocalizedResultsForInvalidTimeRange() {
         input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, startTime,
+                minTimeInterval, numOutput, Optional.empty(), Optional.empty());
+
+        anomalyLocalizer.getLocalizationResults(input, outputListener);
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testGetLocalizedResultsForInvalidIndexName() {
+        input = new AnomalyLocalizationInput("invalid", Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
                 startTime, startTime,
                 minTimeInterval, numOutput, Optional.empty(), Optional.empty());
 
