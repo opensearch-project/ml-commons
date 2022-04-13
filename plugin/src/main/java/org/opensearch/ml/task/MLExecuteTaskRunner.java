@@ -10,19 +10,21 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.TransportService;
+import org.opensearch.transport.TransportResponseHandler;
 
 /**
  * MLExecuteTaskRunner is responsible for running execute tasks.
@@ -44,26 +46,30 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService);
+        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
     }
 
+    @Override
+    protected String getTransportActionName() {
+        return MLExecuteTaskAction.NAME;
+    }
+
+    @Override
+    protected TransportResponseHandler<MLExecuteTaskResponse> getResponseHandler(ActionListener<MLExecuteTaskResponse> listener) {
+        return new ActionListenerResponseHandler<>(listener, MLExecuteTaskResponse::new);
+    }
+
     /**
      * Execute algorithm and return result.
-     * TODO: 1. support backend task run; 2. support dispatch task to remote node
      * @param request MLExecuteTaskRequest
-     * @param transportService transport service
      * @param listener Action listener
      */
     @Override
-    public void executeTask(
-        MLExecuteTaskRequest request,
-        TransportService transportService,
-        ActionListener<MLExecuteTaskResponse> listener
-    ) {
+    protected void executeTask(MLExecuteTaskRequest request, ActionListener<MLExecuteTaskResponse> listener) {
         threadPool.executor(TASK_THREAD_POOL).execute(() -> {
             try {
                 Input input = request.getInput();

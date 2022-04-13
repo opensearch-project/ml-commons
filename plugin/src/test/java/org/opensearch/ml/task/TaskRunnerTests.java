@@ -25,16 +25,19 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
 public class TaskRunnerTests extends OpenSearchTestCase {
@@ -46,6 +49,8 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     MLTaskDispatcher mlTaskDispatcher;
     @Mock
     MLCircuitBreakerService mlCircuitBreakerService;
+    @Mock
+    ClusterService clusterService;
 
     MLTaskRunner mlTaskRunner;
     MLTask mlTask;
@@ -64,9 +69,19 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         mlStats = new MLStats(stats);
 
         MockitoAnnotations.openMocks(this);
-        mlTaskRunner = new MLTaskRunner(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService) {
+        mlTaskRunner = new MLTaskRunner(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService) {
             @Override
-            public void executeTask(Object o, TransportService transportService, ActionListener listener) {}
+            public String getTransportActionName() {
+                return null;
+            }
+
+            @Override
+            public TransportResponseHandler getResponseHandler(ActionListener listener) {
+                return null;
+            }
+
+            @Override
+            public void executeTask(MLTaskRequest request, ActionListener listener) {}
         };
         mlTask = MLTask
             .builder()

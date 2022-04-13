@@ -40,7 +40,7 @@ import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.TransportService;
+import org.opensearch.transport.TransportResponseHandler;
 
 /**
  * MLPredictTaskRunner is responsible for running predict tasks.
@@ -62,7 +62,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService);
+        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
@@ -70,24 +70,13 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     }
 
     @Override
-    public void executeTask(MLTrainingTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
-        mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
-            if (clusterService.localNode().getId().equals(node.getId())) {
-                // Execute prediction task locally
-                log.info("execute ML train and prediction request {} locally on node {}", request.toString(), node.getId());
-                startTrainAndPredictionTask(request, listener);
-            } else {
-                // Execute batch task remotely
-                log.info("execute ML train and prediction request {} remotely on node {}", request.toString(), node.getId());
-                transportService
-                    .sendRequest(
-                        node,
-                        MLTrainAndPredictionTaskAction.NAME,
-                        request,
-                        new ActionListenerResponseHandler<>(listener, MLTaskResponse::new)
-                    );
-            }
-        }, e -> listener.onFailure(e)));
+    protected String getTransportActionName() {
+        return MLTrainAndPredictionTaskAction.NAME;
+    }
+
+    @Override
+    protected TransportResponseHandler<MLTaskResponse> getResponseHandler(ActionListener<MLTaskResponse> listener) {
+        return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
     }
 
     /**
@@ -95,7 +84,8 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
      * @param request MLPredictionTaskRequest
      * @param listener Action listener
      */
-    public void startTrainAndPredictionTask(MLTrainingTaskRequest request, ActionListener<MLTaskResponse> listener) {
+    @Override
+    protected void executeTask(MLTrainingTaskRequest request, ActionListener<MLTaskResponse> listener) {
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();
         MLTask mlTask = MLTask
