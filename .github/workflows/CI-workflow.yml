@@ -84,5 +84,5 @@ jobs:
       - name: Upload Coverage Report
         uses: codecov/codecov-action@v1
         with:
-          file: ./build/reports/jacoco/test/jacocoTestReport.xml
-          flags: plugin
+          flags: ml-commons
+          token: ${{ secrets.CODECOV_TOKEN }}
