@@ -61,6 +61,7 @@ import com.google.common.collect.ImmutableList;
 
 public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
+    public static final String USER_STRING = "myuser|role1,role2|myTenant";
     @Mock
     ThreadPool threadPool;
 
@@ -135,7 +136,8 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 mlStats,
                 mlInputDatasetHandler,
                 mlTaskDispatcher,
-                mlCircuitBreakerService
+                mlCircuitBreakerService,
+                xContentRegistry()
             )
         );
 
@@ -165,13 +167,13 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "myuser|role1,role2|myTenant");
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         MLModel mlModel = MLModel
             .builder()
-            .user(new User())
+            .user(User.parse(USER_STRING))
             .version(111)
             .name("test")
             .algorithm(FunctionName.BATCH_RCF)
@@ -187,7 +189,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode() {
         setupMocks(true, false, false, false);
 
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -198,7 +200,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_QueryInput() {
         setupMocks(true, false, false, false);
 
-        taskRunner.executeTask(requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -209,23 +211,36 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_QueryInput_Failure() {
         setupMocks(true, true, false, false);
 
-        taskRunner.executeTask(requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager, never()).add(any(MLTask.class));
         verify(client, never()).get(any(), any());
     }
 
+    public void testExecuteTask_NoPermission() {
+        setupMocks(true, true, false, false);
+        threadContext.stashContext();
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "test_user|test_role|test_tenant");
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        verify(mlTaskManager).add(any(MLTask.class));
+        verify(mlTaskManager).remove(anyString());
+        verify(client).get(any(), any());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertEquals("User: test_user does not have permissions to run predict by model: 111", argumentCaptor.getValue().getMessage());
+    }
+
     public void testExecuteTask_OnRemoteNode() {
         setupMocks(false, false, false, false);
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLPredictionTaskAction.NAME), eq(requestWithDataFrame), any());
     }
 
     public void testExecuteTask_OnLocalNode_GetModelFail() {
         setupMocks(true, false, true, false);
 
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -239,7 +254,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         setupMocks(true, false, false, false);
         requestWithDataFrame = MLPredictionTaskRequest.builder().mlInput(mlInputWithDataFrame).build();
 
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -253,7 +268,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_NullGetResponse() {
         setupMocks(true, false, false, true);
 
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
         verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
