@@ -106,6 +106,7 @@ public class AnomalyLocalizerImplTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
+        testState = setupTestClusterState();
         anomalyLocalizer = spy(
                 new AnomalyLocalizerImpl(client,
                         settings,
@@ -239,6 +240,7 @@ public class AnomalyLocalizerImplTests {
 
     @Test
     public void testGetLocalizedResultsGivenNoAnomaly() {
+        when(clusterService.state()).thenReturn(testState);
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
         ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
@@ -250,6 +252,7 @@ public class AnomalyLocalizerImplTests {
     @Test
     public void testGetLocalizedResultsGivenAnomaly() {
         when(valueThree.value()).thenReturn(Double.NaN);
+        when(clusterService.state()).thenReturn(testState);
         input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
                 startTime, endTime,
                 minTimeInterval, numOutput, Optional.of(1L), Optional.of(mock(QueryBuilder.class)));
@@ -306,6 +309,7 @@ public class AnomalyLocalizerImplTests {
         when(valueOne.value()).thenReturn(10.);
         when(valueTwo.value()).thenReturn(0.);
         when(valueThree.value()).thenReturn(11.);
+        when(clusterService.state()).thenReturn(testState);
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
@@ -324,6 +328,7 @@ public class AnomalyLocalizerImplTests {
     public void testGetLocalizedResultsOverallUnchange() {
         when(valueOne.value()).thenReturn(0.);
         when(valueTwo.value()).thenReturn(0.);
+        when(clusterService.state()).thenReturn(testState);
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
@@ -342,6 +347,7 @@ public class AnomalyLocalizerImplTests {
         input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
                 startTime, endTime,
                 minTimeInterval, 2, Optional.empty(), Optional.empty());
+        when(clusterService.state()).thenReturn(testState);
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
@@ -353,6 +359,7 @@ public class AnomalyLocalizerImplTests {
 
     @Test
     public void testExecuteSucceed() {
+        when(clusterService.state()).thenReturn(testState);
         AnomalyLocalizationOutput actualOutput = (AnomalyLocalizationOutput) anomalyLocalizer.execute(input);
 
         assertEquals(expectedOutput, actualOutput);
@@ -378,15 +385,16 @@ public class AnomalyLocalizerImplTests {
     }
 
     private ClusterState setupTestClusterState() {
-        TransportAddress transportAddress = new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet());
         Set<DiscoveryNodeRole> roleSet = new HashSet<>();
         roleSet.add(DiscoveryNodeRole.DATA_ROLE);
-        node = new DiscoveryNode("node1", transportAddress, new HashMap<>(), roleSet, Version.CURRENT);
-        DiscoveryNodes nodes = DiscoveryNodes.builder().add(node).build();
+        node = new DiscoveryNode("node",
+                new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
+                new HashMap<>(), roleSet,
+                Version.CURRENT);
         Metadata metadata = new Metadata.Builder()
                 .indices(ImmutableOpenMap
                         .<String, IndexMetadata>builder()
-                        .fPut("jobIndex", IndexMetadata.builder("test")
+                        .fPut(indexName, IndexMetadata.builder("test")
                                 .settings(Settings.builder()
                                         .put("index.number_of_shards", 1)
                                         .put("index.number_of_replicas", 1)
@@ -394,7 +402,8 @@ public class AnomalyLocalizerImplTests {
                                 .build())
                         .build()).build();
         return new ClusterState(new ClusterName(clusterName), 123l, "111111",
-                metadata, null, nodes, null, null, 0, false);
+                metadata, null, DiscoveryNodes.builder().add(node).build(),
+                null, null, 0, false);
     }
 }
 
