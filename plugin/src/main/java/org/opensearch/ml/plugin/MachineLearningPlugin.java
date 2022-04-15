@@ -216,7 +216,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
 
-        AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService);
+        AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
