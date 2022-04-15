@@ -136,7 +136,7 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
         List<Map.Entry<Long, Long>> intervals = timeBuckets.getAllIntervals();
 
-        if (isIndexExist(input.getIndexName(), listener)) {
+        if (isIndexExist(input.getIndexName())) {
             for (int i = 0; i < intervals.size(); i++) {
                 double value = getDoubleValue((SingleValue) response.getResponses()[i].getResponse().getAggregations().get(agg.getName()));
 
@@ -154,18 +154,13 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
         }
     }
     
-    protected boolean isIndexExist(String indexName, ActionListener<AnomalyLocalizationOutput> listener) {
+    private boolean isIndexExist(String indexName) {
         String[] concreteIndices = indexNameExpressionResolver.concreteIndexNames(clusterService.state(),
                 IndicesOptions.lenientExpandOpen(), indexName);
         if (concreteIndices == null || concreteIndices.length == 0) {
             return false;
         }
-        for(String index : concreteIndices) {
-            if (!clusterService.state().metadata().hasIndex(index)) {
-                return false;
-            }
-        }
-        return true;
+        return Arrays.stream(concreteIndices).anyMatch(index -> clusterService.state().metadata().hasIndex(index));
     }
 
     /**
