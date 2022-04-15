@@ -23,21 +23,27 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.ml.common.transport.MLTaskRequest;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLPredictionTaskRequest extends ActionRequest {
+public class MLPredictionTaskRequest extends MLTaskRequest {
 
     String modelId;
     MLInput mlInput;
 
     @Builder
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput) {
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask) {
+        super(dispatchTask);
         this.mlInput = mlInput;
         this.modelId = modelId;
+    }
+
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput) {
+        this(modelId, mlInput, true);
     }
 
     public MLPredictionTaskRequest(StreamInput in) throws IOException {

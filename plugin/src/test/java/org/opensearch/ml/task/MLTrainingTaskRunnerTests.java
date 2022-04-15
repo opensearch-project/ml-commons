@@ -56,6 +56,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.NodeNotConnectedException;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
@@ -166,7 +167,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnLocalNode_SyncRequest() {
         setupMocks(true, false, false, false);
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager, never()).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -177,7 +178,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnLocalNode_SyncRequest_QueryInput() {
         setupMocks(true, false, false, false);
-        taskRunner.executeTask(requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(requestWithQuery, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager, never()).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -188,7 +189,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnLocalNode_AsyncRequest_QueryInput_Failure() {
         setupMocks(true, false, false, true);
-        taskRunner.executeTask(asyncRequestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(asyncRequestWithQuery, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -200,7 +201,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnLocalNode_AsyncRequest() {
         setupMocks(true, false, false, false);
-        taskRunner.executeTask(asyncRequestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(asyncRequestWithDataFrame, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -211,7 +212,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnLocalNode_AsyncRequest_FailToCreateTask() {
         setupMocks(true, true, false, false);
-        taskRunner.executeTask(asyncRequestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(asyncRequestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -227,7 +228,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnLocalNode_AsyncRequest_FailToCreateTaskWithException() {
         setupMocks(true, true, true, false);
-        taskRunner.executeTask(asyncRequestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(asyncRequestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -243,8 +244,20 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_OnRemoteNode_SyncRequest() {
         setupMocks(false, false, false, false);
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), eq(requestWithDataFrame), any());
+    }
+
+    public void testExecuteTask_OnRemoteNode_SyncRequest_FailToSendRequest() {
+        setupMocks(false, false, false, false);
+        doThrow(new NodeNotConnectedException(remoteNode, errorMessage))
+            .when(transportService)
+            .sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), any(), any());
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), eq(requestWithDataFrame), any());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains(errorMessage));
     }
 
     public void testExecuteTask_FailedToDispatch() {
@@ -253,7 +266,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
             actionListener.onFailure(new RuntimeException(errorMessage));
             return null;
         }).when(mlTaskDispatcher).dispatchTask(any());
-        taskRunner.executeTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
