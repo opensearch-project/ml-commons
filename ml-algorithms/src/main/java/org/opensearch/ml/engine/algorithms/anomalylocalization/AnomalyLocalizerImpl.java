@@ -27,6 +27,9 @@ import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
@@ -74,6 +77,7 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
 
     private final Client client;
     private final Settings settings;
+    private final ClusterService clusterService;
 
     /**
      * Constructor.
@@ -83,9 +87,11 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
      */
     public AnomalyLocalizerImpl(
             Client client,
-            Settings settings) {
+            Settings settings,
+            ClusterService clusterService) {
         this.client = client;
         this.settings = settings;
+        this.clusterService = clusterService;
     }
 
     /**
@@ -126,22 +132,23 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
                                              LocalizationTimeBuckets timeBuckets, ActionListener<AnomalyLocalizationOutput> listener) {
         AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
         List<Map.Entry<Long, Long>> intervals = timeBuckets.getAllIntervals();
-        for (int i = 0; i < intervals.size(); i++) {
-            if (response.getResponses()[i].getFailure() instanceof IndexNotFoundException) {
-                listener.onFailure(new IndexNotFoundException("Fail to find index: " + input.getIndexName()));
+
+        if (clusterService.state().metadata().hasIndex(input.getIndexName())) {
+            for (int i = 0; i < intervals.size(); i++) {
+                double value = getDoubleValue((SingleValue) response.getResponses()[i].getResponse().getAggregations().get(agg.getName()));
+
+                AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();
+                bucket.setStartTime(intervals.get(i).getKey());
+                bucket.setEndTime(intervals.get(i).getValue());
+                bucket.setOverallAggValue(value);
+                result.getBuckets().add(bucket);
             }
-
-            double value = getDoubleValue((SingleValue) response.getResponses()[i].getResponse().getAggregations().get(agg.getName()));
-
-            AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();
-            bucket.setStartTime(intervals.get(i).getKey());
-            bucket.setEndTime(intervals.get(i).getValue());
-            bucket.setOverallAggValue(value);
-            result.getBuckets().add(bucket);
+            output.getResults().put(agg.getName(), result);
+            getLocalizedEntities(input, agg, result, output, listener);
+        } else {
+            log.info("index: {} does not exist", input.getIndexName());
+            listener.onFailure(new IndexNotFoundException("Failed to find index: " + input.getIndexName()));
         }
-
-        output.getResults().put(agg.getName(), result);
-        getLocalizedEntities(input, agg, result, output, listener);
     }
 
     /**
