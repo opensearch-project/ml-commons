@@ -26,8 +26,12 @@ import org.opensearch.action.search.MultiSearchRequest;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.RangeQueryBuilder;
@@ -73,6 +77,8 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
 
     private final Client client;
     private final Settings settings;
+    private final ClusterService clusterService;
+    private final IndexNameExpressionResolver indexNameExpressionResolver;
 
     /**
      * Constructor.
@@ -82,9 +88,13 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
      */
     public AnomalyLocalizerImpl(
             Client client,
-            Settings settings) {
+            Settings settings,
+            ClusterService clusterService,
+            IndexNameExpressionResolver indexNameExpressionResolver) {
         this.client = client;
         this.settings = settings;
+        this.clusterService = clusterService;
+        this.indexNameExpressionResolver = indexNameExpressionResolver;
     }
 
     /**
@@ -125,18 +135,32 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
                                              LocalizationTimeBuckets timeBuckets, ActionListener<AnomalyLocalizationOutput> listener) {
         AnomalyLocalizationOutput.Result result = new AnomalyLocalizationOutput.Result();
         List<Map.Entry<Long, Long>> intervals = timeBuckets.getAllIntervals();
-        for (int i = 0; i < intervals.size(); i++) {
-            double value = getDoubleValue((SingleValue) response.getResponses()[i].getResponse().getAggregations().get(agg.getName()));
 
-            AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();
-            bucket.setStartTime(intervals.get(i).getKey());
-            bucket.setEndTime(intervals.get(i).getValue());
-            bucket.setOverallAggValue(value);
-            result.getBuckets().add(bucket);
+        if (isIndexExist(input.getIndexName())) {
+            for (int i = 0; i < intervals.size(); i++) {
+                double value = getDoubleValue((SingleValue) response.getResponses()[i].getResponse().getAggregations().get(agg.getName()));
+
+                AnomalyLocalizationOutput.Bucket bucket = new AnomalyLocalizationOutput.Bucket();
+                bucket.setStartTime(intervals.get(i).getKey());
+                bucket.setEndTime(intervals.get(i).getValue());
+                bucket.setOverallAggValue(value);
+                result.getBuckets().add(bucket);
+            }
+            output.getResults().put(agg.getName(), result);
+            getLocalizedEntities(input, agg, result, output, listener);
+        } else {
+            log.info("index: {} does not exist", input.getIndexName());
+            listener.onFailure(new IndexNotFoundException("Failed to find index: " + input.getIndexName()));
         }
-
-        output.getResults().put(agg.getName(), result);
-        getLocalizedEntities(input, agg, result, output, listener);
+    }
+    
+    private boolean isIndexExist(String indexName) {
+        String[] concreteIndices = indexNameExpressionResolver.concreteIndexNames(clusterService.state(),
+                IndicesOptions.lenientExpandOpen(), indexName);
+        if (concreteIndices == null || concreteIndices.length == 0) {
+            return false;
+        }
+        return Arrays.stream(concreteIndices).anyMatch(index -> clusterService.state().metadata().hasIndex(index));
     }
 
     /**

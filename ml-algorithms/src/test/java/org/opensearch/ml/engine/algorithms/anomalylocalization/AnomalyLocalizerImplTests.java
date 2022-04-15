@@ -8,19 +8,39 @@ package org.opensearch.ml.engine.algorithms.anomalylocalization;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
+import org.opensearch.cluster.node.DiscoveryNodes;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
@@ -32,10 +52,13 @@ import org.opensearch.search.aggregations.bucket.filter.Filters;
 import org.opensearch.search.aggregations.metrics.NumericMetricsAggregation.SingleValue;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +69,15 @@ public class AnomalyLocalizerImplTests {
 
     @Mock
     private ActionListener<AnomalyLocalizationOutput> outputListener;
+
+    @Mock
+    private ClusterService clusterService;
+
+    @Mock
+    private IndexNameExpressionResolver indexNameExpressionResolver;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private Settings settings;
 
@@ -71,13 +103,26 @@ public class AnomalyLocalizerImplTests {
     private AnomalyLocalizationOutput.Bucket expectedBucketOne;
     private AnomalyLocalizationOutput.Bucket expectedBucketTwo;
     private AnomalyLocalizationOutput.Entity entity;
+    private static final AtomicInteger portGenerator = new AtomicInteger();
+    ClusterState testState;
+    String clusterName = "test cluster";
+    DiscoveryNode node;
+    String[] IndicesOptions;
+    String[] invalidIndicesOptions;
 
     @Before
     @SuppressWarnings("unchecked")
     public void setup() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
-        anomalyLocalizer = new AnomalyLocalizerImpl(client, settings);
+        testState = setupTestClusterState();
+        IndicesOptions = new String[]{"indexName"};
+        invalidIndicesOptions = new String[]{};
+        anomalyLocalizer = spy(
+                new AnomalyLocalizerImpl(client,
+                        settings,
+                        clusterService,
+                        indexNameExpressionResolver));
 
         input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
                 startTime, endTime,
@@ -200,8 +245,17 @@ public class AnomalyLocalizerImplTests {
         expectedOutput.getResults().put(agg.getName(), result);
     }
 
+    @AfterClass
+    public static void resetPortCounter() {
+        portGenerator.set(0);
+    }
+
     @Test
     public void testGetLocalizedResultsGivenNoAnomaly() {
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(IndicesOptions);
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
         ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
@@ -213,6 +267,10 @@ public class AnomalyLocalizerImplTests {
     @Test
     public void testGetLocalizedResultsGivenAnomaly() {
         when(valueThree.value()).thenReturn(Double.NaN);
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(IndicesOptions);
         input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
                 startTime, endTime,
                 minTimeInterval, numOutput, Optional.of(1L), Optional.of(mock(QueryBuilder.class)));
@@ -232,6 +290,39 @@ public class AnomalyLocalizerImplTests {
                 minTimeInterval, numOutput, Optional.empty(), Optional.empty());
 
         anomalyLocalizer.getLocalizationResults(input, outputListener);
+    }
+
+    @Test
+    public void testGetLocalizedResultsForInvalidIndexName() {
+        input = new AnomalyLocalizationInput("invalid", Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, endTime,
+                minTimeInterval, numOutput, Optional.of(1L), Optional.of(mock(QueryBuilder.class)));
+        testState = setupTestClusterState();
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(invalidIndicesOptions);
+        anomalyLocalizer.getLocalizationResults(input, outputListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(outputListener).onFailure(argumentCaptor.capture());
+        assertEquals(IndexNotFoundException.class, argumentCaptor.getValue().getClass());
+    }
+
+    @Test
+    public void testGetLocalizedResultsGivenIndexPattern() {
+        input = new AnomalyLocalizationInput("index*", Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
+                startTime, endTime,
+                minTimeInterval, numOutput, Optional.of(1L), Optional.of(mock(QueryBuilder.class)));
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), eq("index*")))
+                .thenReturn(IndicesOptions);
+        anomalyLocalizer.getLocalizationResults(input, outputListener);
+
+        ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
+        verify(outputListener).onResponse(outputCaptor.capture());
+        AnomalyLocalizationOutput actualOutput = outputCaptor.getValue();
+        assertEquals(expectedOutput, actualOutput);
     }
 
     @Test
@@ -256,7 +347,10 @@ public class AnomalyLocalizerImplTests {
         when(valueOne.value()).thenReturn(10.);
         when(valueTwo.value()).thenReturn(0.);
         when(valueThree.value()).thenReturn(11.);
-
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(IndicesOptions);
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
         ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
@@ -274,7 +368,10 @@ public class AnomalyLocalizerImplTests {
     public void testGetLocalizedResultsOverallUnchange() {
         when(valueOne.value()).thenReturn(0.);
         when(valueTwo.value()).thenReturn(0.);
-
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(IndicesOptions);
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
         ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
@@ -292,7 +389,10 @@ public class AnomalyLocalizerImplTests {
         input = new AnomalyLocalizationInput(indexName, Arrays.asList(attributeFieldNameOne), Arrays.asList(agg), timeFieldName,
                 startTime, endTime,
                 minTimeInterval, 2, Optional.empty(), Optional.empty());
-
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(IndicesOptions);
         anomalyLocalizer.getLocalizationResults(input, outputListener);
 
         ArgumentCaptor<AnomalyLocalizationOutput> outputCaptor = ArgumentCaptor.forClass(AnomalyLocalizationOutput.class);
@@ -303,6 +403,10 @@ public class AnomalyLocalizerImplTests {
 
     @Test
     public void testExecuteSucceed() {
+        when(clusterService.state()).thenReturn(testState);
+        when(indexNameExpressionResolver.concreteIndexNames(any(ClusterState.class),
+                any(IndicesOptions.class), anyString()))
+                .thenReturn(IndicesOptions);
         AnomalyLocalizationOutput actualOutput = (AnomalyLocalizationOutput) anomalyLocalizer.execute(input);
 
         assertEquals(expectedOutput, actualOutput);
@@ -325,6 +429,28 @@ public class AnomalyLocalizerImplTests {
     public void testExecuteInterrupted() {
         Thread.currentThread().interrupt();
         anomalyLocalizer.execute(input);
+    }
+
+    private ClusterState setupTestClusterState() {
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(DiscoveryNodeRole.DATA_ROLE);
+        node = new DiscoveryNode("node",
+                new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
+                new HashMap<>(), roleSet,
+                Version.CURRENT);
+        Metadata metadata = new Metadata.Builder()
+                .indices(ImmutableOpenMap
+                        .<String, IndexMetadata>builder()
+                        .fPut(indexName, IndexMetadata.builder("test")
+                                .settings(Settings.builder()
+                                        .put("index.number_of_shards", 1)
+                                        .put("index.number_of_replicas", 1)
+                                        .put("index.version.created", Version.CURRENT.id))
+                                .build())
+                        .build()).build();
+        return new ClusterState(new ClusterName(clusterName), 123l, "111111",
+                metadata, null, DiscoveryNodes.builder().add(node).build(),
+                null, null, 0, false);
     }
 }
 
