@@ -100,7 +100,7 @@ public class MLIndicesHandler {
                     log.error("Failed to create index " + indexName, e);
                     listener.onFailure(e);
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName);
+                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping);
                 client.admin().indices().create(request, ActionListener.runBefore(actionListener, () -> threadContext.restore()));
             } catch (Exception e) {
                 log.error("Failed to init index " + indexName, e);
