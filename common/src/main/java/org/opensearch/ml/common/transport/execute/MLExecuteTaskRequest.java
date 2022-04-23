@@ -35,6 +35,11 @@ public class MLExecuteTaskRequest extends MLTaskRequest {
     Input input;
 
     @Builder
+    public MLExecuteTaskRequest(Input input) {
+        this(input, true);
+    }
+
+    @Builder
     public MLExecuteTaskRequest(Input input,  boolean dispatchTask) {
         super(dispatchTask);
         this.input = input;

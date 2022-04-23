@@ -36,6 +36,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.index.get.GetResult;
+import org.opensearch.index.mapper.MapperService;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -186,7 +187,18 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
 
-        GetResult getResult = new GetResult(indexName, "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResult getResult = new GetResult(
+            indexName,
+            MapperService.SINGLE_MAPPING_NAME,
+            "111",
+            111l,
+            111l,
+            111l,
+            true,
+            bytesReference,
+            null,
+            null
+        );
         getResponse = new GetResponse(getResult);
     }
 

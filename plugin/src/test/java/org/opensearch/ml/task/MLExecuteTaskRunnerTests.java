@@ -27,7 +27,6 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
-import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -109,9 +108,7 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
             )
         );
 
-        mlExecuteTaskRequest = new MLExecuteTaskRequest(
-            new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0)), false
-        );
+        mlExecuteTaskRequest = new MLExecuteTaskRequest(new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0)), false);
     }
 
     public void testExecuteTask_Success() {
