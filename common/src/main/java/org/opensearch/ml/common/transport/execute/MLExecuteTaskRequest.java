@@ -20,6 +20,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.transport.MLTaskRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,15 +32,20 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLExecuteTaskRequest extends ActionRequest {
+public class MLExecuteTaskRequest extends MLTaskRequest {
 
     FunctionName functionName;
     Input input;
 
     @Builder
-    public MLExecuteTaskRequest(@NonNull FunctionName functionName, Input input) {
+    public MLExecuteTaskRequest(@NonNull FunctionName functionName, Input input, boolean dispatchTask) {
+        super(dispatchTask);
         this.functionName = functionName;
         this.input = input;
+    }
+
+    public MLExecuteTaskRequest(@NonNull FunctionName functionName, Input input) {
+        this(functionName, input, true);
     }
 
     public MLExecuteTaskRequest(StreamInput in) throws IOException {
