@@ -10,13 +10,19 @@ import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
 import java.util.HashMap;
 import java.util.Map;
 
+import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.parameter.MLTaskState;
+import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.transport.TransportResponse;
+import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableMap;
@@ -26,12 +32,14 @@ import com.google.common.collect.ImmutableMap;
  * @param <Request> ML task request
  * @param <Response> ML task request
  */
-public abstract class MLTaskRunner<Request, Response> {
+@Log4j2
+public abstract class MLTaskRunner<Request extends MLTaskRequest, Response extends TransportResponse> {
     public static final int TIMEOUT_IN_MILLIS = 2000;
     protected final MLTaskManager mlTaskManager;
     protected final MLStats mlStats;
     protected final MLTaskDispatcher mlTaskDispatcher;
     protected final MLCircuitBreakerService mlCircuitBreakerService;
+    private final ClusterService clusterService;
 
     protected static final String TASK_ID = "task_id";
     protected static final String ALGORITHM = "algorithm";
@@ -44,12 +52,14 @@ public abstract class MLTaskRunner<Request, Response> {
         MLTaskManager mlTaskManager,
         MLStats mlStats,
         MLTaskDispatcher mlTaskDispatcher,
-        MLCircuitBreakerService mlCircuitBreakerService
+        MLCircuitBreakerService mlCircuitBreakerService,
+        ClusterService clusterService
     ) {
         this.mlTaskManager = mlTaskManager;
         this.mlStats = mlStats;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlCircuitBreakerService = mlCircuitBreakerService;
+        this.clusterService = clusterService;
     }
 
     protected void handleAsyncMLTaskFailure(MLTask mlTask, Exception e) {
@@ -80,7 +90,12 @@ public abstract class MLTaskRunner<Request, Response> {
         if (mlCircuitBreakerService.isOpen()) {
             throw new MLLimitExceededException("Circuit breaker is open");
         }
-        executeTask(request, transportService, listener);
+        if (!request.isDispatchTask()) {
+            log.info("Run ML request {} locally", request.getRequestID());
+            executeTask(request, listener);
+            return;
+        }
+        dispatchTask(request, transportService, listener);
     }
 
     protected ActionListener<MLTaskResponse> wrappedCleanupListener(ActionListener<MLTaskResponse> listener, String taskId) {
@@ -91,5 +106,24 @@ public abstract class MLTaskRunner<Request, Response> {
         return internalListener;
     }
 
-    public abstract void executeTask(Request request, TransportService transportService, ActionListener<Response> listener);
+    protected void dispatchTask(Request request, TransportService transportService, ActionListener<Response> listener) {
+        mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
+            if (clusterService.localNode().getId().equals(node.getId())) {
+                // Execute ML task locally
+                log.info("Execute ML request {} locally on node {}", request.getRequestID(), node.getId());
+                executeTask(request, listener);
+            } else {
+                // Execute ML task remotely
+                log.info("Execute ML request {} remotely on node {}", request.getRequestID(), node.getId());
+                request.setDispatchTask(false);
+                transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+            }
+        }, e -> listener.onFailure(e)));
+    }
+
+    protected abstract String getTransportActionName();
+
+    protected abstract TransportResponseHandler<Response> getResponseHandler(ActionListener<Response> listener);
+
+    protected abstract void executeTask(Request request, ActionListener<Response> listener);
 }
