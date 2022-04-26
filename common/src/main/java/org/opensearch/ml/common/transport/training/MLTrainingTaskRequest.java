@@ -17,6 +17,7 @@ import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.common.transport.MLTaskRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -29,7 +30,7 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLTrainingTaskRequest extends ActionRequest {
+public class MLTrainingTaskRequest extends MLTaskRequest {
 
     /**
      * the name of algorithm
@@ -38,9 +39,14 @@ public class MLTrainingTaskRequest extends ActionRequest {
     boolean async;
 
     @Builder
-    public MLTrainingTaskRequest(MLInput mlInput, boolean async) {
+    public MLTrainingTaskRequest(MLInput mlInput, boolean async, boolean dispatchTask) {
+        super(dispatchTask);
         this.mlInput = mlInput;
         this.async = async;
+    }
+
+    public MLTrainingTaskRequest(MLInput mlInput, boolean async) {
+        this(mlInput, async, true);
     }
 
     public MLTrainingTaskRequest(StreamInput in) throws IOException {
