@@ -17,9 +17,9 @@ dependencies {
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     compile project(':opensearch-ml-common')
     compile group: 'org.reflections', name: 'reflections', version: '0.9.12'
-    compile group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.0'
-    compile group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.0'
-    compile group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.0'
+    compile group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
+    compile group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'
+    compile group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.1'
     compile group: 'commons-io', name: 'commons-io', version: '2.11.0'
     compile files('lib/randomcutforest-parkservices-2.0.1.jar')
     compile files('lib/randomcutforest-core-2.0.1.jar')
