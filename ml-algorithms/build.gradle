@@ -21,8 +21,8 @@ dependencies {
     compile group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'
     compile group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.1'
     compile group: 'commons-io', name: 'commons-io', version: '2.11.0'
-    compile files('lib/randomcutforest-parkservices-2.0.1.jar')
-    compile files('lib/randomcutforest-core-2.0.1.jar')
+    compile group: 'software.amazon.randomcutforest', name: 'randomcutforest-parkservices', version: '3.0-rc2.1'
+    compile group: 'software.amazon.randomcutforest', name: 'randomcutforest-core', version: '3.0-rc2.1'
     compile group: 'io.protostuff', name: 'protostuff-core', version: '1.8.0'
     compile group: 'io.protostuff', name: 'protostuff-runtime', version: '1.8.0'
     compile group: 'io.protostuff', name: 'protostuff-api', version: '1.8.0'
