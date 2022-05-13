@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -31,7 +32,10 @@ import org.opensearch.ml.common.parameter.MLTask;
 import org.opensearch.ml.common.parameter.MLTaskState;
 import org.opensearch.ml.common.parameter.MLTaskType;
 import org.opensearch.ml.common.transport.MLTaskRequest;
+import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.StatNames;
+import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
@@ -40,7 +44,6 @@ public class TaskRunnerTests extends OpenSearchTestCase {
 
     @Mock
     MLTaskManager mlTaskManager;
-    @Mock
     MLStats mlStats;
     @Mock
     MLTaskDispatcher mlTaskDispatcher;
@@ -57,6 +60,14 @@ public class TaskRunnerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
+        Map<String, MLStat<?>> stats = new ConcurrentHashMap<>();
+        stats.put(StatNames.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
+        mlStats = new MLStats(stats);
+
         MockitoAnnotations.openMocks(this);
         mlTaskRunner = new MLTaskRunner(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService) {
             @Override
@@ -113,11 +124,11 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     }
 
     public void testRun_CircuitBreakerOpen() {
-        exceptionRule.expect(MLLimitExceededException.class);
-        exceptionRule.expectMessage("Circuit breaker is open");
         when(mlCircuitBreakerService.isOpen()).thenReturn(true);
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
-        mlTaskRunner.run(null, transportService, listener);
+        expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(null, transportService, listener));
+        Long value = (Long) mlStats.getStat(StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
+        assertEquals(1L, value.longValue());
     }
 }
