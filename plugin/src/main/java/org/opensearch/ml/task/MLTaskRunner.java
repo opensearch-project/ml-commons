@@ -6,6 +6,7 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
+import static org.opensearch.ml.stats.StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -88,6 +89,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
 
     public void run(Request request, TransportService transportService, ActionListener<Response> listener) {
         if (mlCircuitBreakerService.isOpen()) {
+            mlStats.getStat(ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
             throw new MLLimitExceededException("Circuit breaker is open");
         }
         if (!request.isDispatchTask()) {

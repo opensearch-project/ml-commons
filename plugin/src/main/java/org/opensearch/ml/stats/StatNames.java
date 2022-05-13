@@ -17,6 +17,7 @@ public class StatNames {
     public static String ML_TOTAL_REQUEST_COUNT = "ml_total_request_count";
     public static String ML_TOTAL_FAILURE_COUNT = "ml_total_failure_count";
     public static String ML_TOTAL_MODEL_COUNT = "ml_total_model_count";
+    public static String ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT = "ml_total_circuit_breaker_trigger_count";
 
     public static String requestCountStat(FunctionName functionName, ActionName actionName) {
         return String.format(Locale.ROOT, "ml_%s_%s_request_count", functionName, actionName).toLowerCase(Locale.ROOT);
