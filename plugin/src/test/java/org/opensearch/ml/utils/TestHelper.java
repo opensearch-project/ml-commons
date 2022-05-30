@@ -47,10 +47,13 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
+
+import com.google.common.collect.ImmutableMap;
 
 public class TestHelper {
     public static XContentParser parser(String xc) throws IOException {
@@ -161,6 +164,29 @@ public class TestHelper {
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getStatsRestRequest(MLStatsInput input) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String requestContent = TestHelper.xContentBuilderToString(builder);
+
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getStatsRestRequest() {
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry()).build();
+        return request;
+    }
+
+    public static RestRequest getStatsRestRequest(String nodeId, String stat) {
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(ImmutableMap.of("nodeId", nodeId, "stat", stat))
             .build();
         return request;
     }

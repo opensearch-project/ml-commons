@@ -32,9 +32,9 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.transport.MLTaskRequest;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
-import org.opensearch.ml.stats.StatNames;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportResponseHandler;
@@ -60,12 +60,12 @@ public class TaskRunnerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        Map<String, MLStat<?>> stats = new ConcurrentHashMap<>();
-        stats.put(StatNames.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(StatNames.ML_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(StatNames.ML_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(StatNames.ML_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
+        Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
+        stats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         mlStats = new MLStats(stats);
 
         MockitoAnnotations.openMocks(this);
@@ -128,7 +128,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
         expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(null, transportService, listener));
-        Long value = (Long) mlStats.getStat(StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
+        Long value = (Long) mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
         assertEquals(1L, value.longValue());
     }
 }

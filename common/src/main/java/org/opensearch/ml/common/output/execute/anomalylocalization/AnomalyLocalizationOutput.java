@@ -124,7 +124,9 @@ public class AnomalyLocalizationOutput implements Output {
             this.startTime = in.readLong();
             this.endTime = in.readLong();
             this.overallAggValue = in.readDouble();
-            this.entities = in.readList(Entity::new);
+            if (in.readBoolean()) {
+                this.entities = in.readList(Entity::new);
+            }
         }
 
         @Override
@@ -132,7 +134,12 @@ public class AnomalyLocalizationOutput implements Output {
             out.writeLong(startTime);
             out.writeLong(endTime);
             out.writeDouble(overallAggValue);
-            out.writeList(entities);
+            if (entities ==  null) {
+                out.writeBoolean(false);
+            } else {
+                out.writeBoolean(true);
+                out.writeList(entities);
+            }
         }
 
         @SneakyThrows
