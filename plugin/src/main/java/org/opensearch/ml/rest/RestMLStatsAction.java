@@ -49,7 +49,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 @Log4j2
-public class RestStatsMLAction extends BaseRestHandler {
+public class RestMLStatsAction extends BaseRestHandler {
     private static final String STATS_ML_ACTION = "stats_ml";
     private MLStats mlStats;
     private ClusterService clusterService;
@@ -61,7 +61,7 @@ public class RestStatsMLAction extends BaseRestHandler {
      * @param clusterService cluster service
      * @param indexUtils index util
      */
-    public RestStatsMLAction(MLStats mlStats, ClusterService clusterService, IndexUtils indexUtils) {
+    public RestMLStatsAction(MLStats mlStats, ClusterService clusterService, IndexUtils indexUtils) {
         this.mlStats = mlStats;
         this.clusterService = clusterService;
         this.indexUtils = indexUtils;

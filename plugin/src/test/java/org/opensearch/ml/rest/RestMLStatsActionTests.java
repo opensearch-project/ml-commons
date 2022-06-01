@@ -81,11 +81,11 @@ import org.opensearch.threadpool.ThreadPool;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-public class RestStatsMLActionTests extends OpenSearchTestCase {
+public class RestMLStatsActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
-    RestStatsMLAction restAction;
+    RestMLStatsAction restAction;
     MLStats mlStats;
     @Mock
     ClusterService clusterService;
@@ -117,7 +117,7 @@ public class RestStatsMLActionTests extends OpenSearchTestCase {
         mlStats = new MLStats(statMap);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restAction = new RestStatsMLAction(mlStats, clusterService, indexUtils);
+        restAction = new RestMLStatsAction(mlStats, clusterService, indexUtils);
 
         testState = setupTestClusterState();
         when(clusterService.state()).thenReturn(testState);

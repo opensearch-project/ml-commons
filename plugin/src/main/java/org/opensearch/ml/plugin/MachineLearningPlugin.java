@@ -259,7 +259,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         IndexNameExpressionResolver indexNameExpressionResolver,
         Supplier<DiscoveryNodes> nodesInCluster
     ) {
-        RestStatsMLAction restStatsMLAction = new RestStatsMLAction(mlStats, clusterService, indexUtils);
+        RestMLStatsAction restMLStatsAction = new RestMLStatsAction(mlStats, clusterService, indexUtils);
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
@@ -273,7 +273,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         return ImmutableList
             .of(
-                restStatsMLAction,
+                restMLStatsAction,
                 restMLTrainingAction,
                 restMLPredictionAction,
                 restMLExecuteAction,
