@@ -17,13 +17,6 @@ public class MLStatsNodeRequest extends BaseNodeRequest {
     @Getter
     private MLStatsNodesRequest mlStatsNodesRequest;
 
-    /**
-     * Constructor
-     */
-    public MLStatsNodeRequest() {
-        super();
-    }
-
     public MLStatsNodeRequest(StreamInput in) throws IOException {
         super(in);
         this.mlStatsNodesRequest = new MLStatsNodesRequest(in);
