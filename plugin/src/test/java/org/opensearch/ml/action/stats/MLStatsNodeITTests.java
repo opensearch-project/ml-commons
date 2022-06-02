@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.stats;
 
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_DATA;
 import static org.opensearch.ml.utils.IntegTestUtils.generateMLTestingData;
 import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
@@ -12,17 +13,17 @@ import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
-import org.opensearch.ml.stats.StatNames;
+import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-@OpenSearchIntegTestCase.ClusterScope(transportClientRatio = 0.9)
+import com.google.common.collect.ImmutableSet;
+
 public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
     @Before
     public void initTestingData() throws ExecutionException, InterruptedException {
@@ -44,8 +45,8 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
     }
 
     public void testNormalCase() throws ExecutionException, InterruptedException {
-        MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0]);
-        request.addStat(StatNames.ML_EXECUTING_TASK_COUNT);
+        MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0], new MLStatsInput());
+        request.addNodeLevelStats(ImmutableSet.of(ML_NODE_EXECUTING_TASK_COUNT));
 
         ActionFuture<MLStatsNodesResponse> future = client().execute(MLStatsNodesAction.INSTANCE, request);
         MLStatsNodesResponse response = future.get();
@@ -57,9 +58,7 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
         assertNotNull(responseList);
 
         MLStatsNodeResponse nodeResponse = responseList.get(0);
-        Map<String, Object> statsMap = nodeResponse.getStatsMap();
-
-        assertEquals(1, statsMap.size());
-        assertEquals(0l, statsMap.get("ml_executing_task_count"));
+        assertEquals(1, nodeResponse.getNodeLevelStatSize());
+        assertEquals(0l, nodeResponse.getNodeLevelStat(ML_NODE_EXECUTING_TASK_COUNT));
     }
 }
