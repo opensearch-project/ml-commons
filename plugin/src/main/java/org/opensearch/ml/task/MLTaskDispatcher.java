@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.stats.InternalStatNames.JVM_HEAP_USAGE;
-import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +22,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.utils.MLNodeUtils;
 
 import com.google.common.collect.ImmutableSet;
@@ -56,14 +54,15 @@ public class MLTaskDispatcher {
         // DiscoveryNode[] mlNodes = getEligibleMLNodes();
         DiscoveryNode[] mlNodes = getEligibleDataNodes();
         MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(mlNodes);
-        MLStatsNodesRequest.addAll(ImmutableSet.of(ML_EXECUTING_TASK_COUNT, JVM_HEAP_USAGE.getName()));
+        MLStatsNodesRequest
+            .addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE));
 
         client.execute(MLStatsNodesAction.INSTANCE, MLStatsNodesRequest, ActionListener.wrap(mlStatsResponse -> {
             // Check JVM pressure
             List<MLStatsNodeResponse> candidateNodeResponse = mlStatsResponse
                 .getNodes()
                 .stream()
-                .filter(stat -> (long) stat.getStatsMap().get(JVM_HEAP_USAGE.getName()) < DEFAULT_JVM_HEAP_USAGE_THRESHOLD)
+                .filter(stat -> (long) stat.getNodeLevelStat(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE) < DEFAULT_JVM_HEAP_USAGE_THRESHOLD)
                 .collect(Collectors.toList());
 
             if (candidateNodeResponse.size() == 0) {
@@ -78,7 +77,7 @@ public class MLTaskDispatcher {
             // Check # of executing ML task
             candidateNodeResponse = candidateNodeResponse
                 .stream()
-                .filter(stat -> (Long) stat.getStatsMap().get(ML_EXECUTING_TASK_COUNT) < maxMLBatchTaskPerNode)
+                .filter(stat -> (Long) stat.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT) < maxMLBatchTaskPerNode)
                 .collect(Collectors.toList());
             if (candidateNodeResponse.size() == 0) {
                 String errorMessage = "All nodes' executing ML task count reach limitation.";
@@ -91,13 +90,13 @@ public class MLTaskDispatcher {
             Optional<MLStatsNodeResponse> targetNode = candidateNodeResponse
                 .stream()
                 .sorted((MLStatsNodeResponse r1, MLStatsNodeResponse r2) -> {
-                    int result = ((Long) r1.getStatsMap().get(ML_EXECUTING_TASK_COUNT))
-                        .compareTo((Long) r2.getStatsMap().get(ML_EXECUTING_TASK_COUNT));
+                    int result = ((Long) r1.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT))
+                        .compareTo((Long) r2.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
                     if (result == 0) {
                         // if multiple nodes have same running task count, choose the one with least
                         // JVM heap usage.
-                        return ((Long) r1.getStatsMap().get(JVM_HEAP_USAGE.getName()))
-                            .compareTo((Long) r2.getStatsMap().get(JVM_HEAP_USAGE.getName()));
+                        return ((Long) r1.getNodeLevelStat(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE))
+                            .compareTo((Long) r2.getNodeLevelStat(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE));
                     }
                     return result;
                 })

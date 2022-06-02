@@ -8,5 +8,14 @@ package org.opensearch.ml.stats;
 public enum ActionName {
     TRAIN,
     PREDICT,
-    TRAIN_PREDICT;
+    TRAIN_PREDICT,
+    EXECUTE;
+
+    public static ActionName from(String value) {
+        try {
+            return ActionName.valueOf(value);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Wrong action name");
+        }
+    }
 }
