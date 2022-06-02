@@ -45,10 +45,13 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.common.parameter.KMeansParams;
 import org.opensearch.ml.common.parameter.MLInput;
+import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
+
+import com.google.common.collect.ImmutableMap;
 
 public class TestHelper {
     public static XContentParser parser(String xc) throws IOException {
@@ -159,6 +162,47 @@ public class TestHelper {
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getStatsRestRequest(MLStatsInput input) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String requestContent = TestHelper.xContentBuilderToString(builder);
+
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getStatsRestRequest() {
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry()).build();
+        return request;
+    }
+
+    public static RestRequest getStatsRestRequest(String nodeId, String stat) {
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(ImmutableMap.of("nodeId", nodeId, "stat", stat))
+            .build();
+        return request;
+    }
+
+    public static RestRequest getLocalSampleCalculatorRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.LOCAL_SAMPLE_CALCULATOR.name());
+        final String requestContent = "{\"operation\": \"max\",\"input_data\":[1.0, 2.0, 3.0]}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getSearchAllRestRequest() {
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
             .build();
         return request;
     }
