@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.stats;
 
+import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -14,25 +16,26 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.parameter.FunctionName;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLStatsTests extends OpenSearchTestCase {
-    private Map<String, MLStat<?>> statsMap;
+    private Map<Enum, MLStat<?>> statsMap;
     private MLStats mlStats;
-    private String clusterStatName1;
-    private String nodeStatName1;
+    private MLClusterLevelStat clusterStatName1;
+    private MLNodeLevelStat nodeStatName1;
 
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
     @Before
     public void setup() {
-        clusterStatName1 = "clusterStat1";
+        clusterStatName1 = MLClusterLevelStat.ML_MODEL_COUNT;
 
-        nodeStatName1 = "nodeStat1";
+        nodeStatName1 = MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT;
 
-        statsMap = new HashMap<String, MLStat<?>>() {
+        statsMap = new HashMap<Enum, MLStat<?>>() {
             {
                 put(nodeStatName1, new MLStat<>(false, new CounterSupplier()));
                 put(clusterStatName1, new MLStat<>(true, new CounterSupplier()));
@@ -43,11 +46,11 @@ public class MLStatsTests extends OpenSearchTestCase {
     }
 
     public void testGetStats() {
-        Map<String, MLStat<?>> stats = mlStats.getStats();
+        Map<Enum, MLStat<?>> stats = mlStats.getStats();
 
         Assert.assertEquals("getStats returns the incorrect number of stats", stats.size(), statsMap.size());
 
-        for (Map.Entry<String, MLStat<?>> stat : stats.entrySet()) {
+        for (Map.Entry<Enum, MLStat<?>> stat : stats.entrySet()) {
             Assert
                 .assertTrue(
                     "getStats returns incorrect stats",
@@ -67,20 +70,20 @@ public class MLStatsTests extends OpenSearchTestCase {
     }
 
     public void testGetStatNoExisting() {
-        String wrongStat = randomAlphaOfLength(10);
+        MLNodeLevelStat wrongStat = MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE;
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Stat \"" + wrongStat + "\" does not exist");
         mlStats.getStat(wrongStat);
     }
 
     public void testCreateCounterStatIfAbsent() {
-        MLStat<?> stat = mlStats.createCounterStatIfAbsent("dummy stat name");
+        MLStat<?> stat = mlStats.createCounterStatIfAbsent(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT);
         stat.increment();
         assertEquals(1L, stat.getValue());
     }
 
     public void testGetNodeStats() {
-        Map<String, MLStat<?>> stats = mlStats.getStats();
+        Map<Enum, MLStat<?>> stats = mlStats.getStats();
         Set<MLStat<?>> nodeStats = new HashSet<>(mlStats.getNodeStats().values());
 
         for (MLStat<?> stat : stats.values()) {
@@ -93,7 +96,7 @@ public class MLStatsTests extends OpenSearchTestCase {
     }
 
     public void testGetClusterStats() {
-        Map<String, MLStat<?>> stats = mlStats.getStats();
+        Map<Enum, MLStat<?>> stats = mlStats.getStats();
         Set<MLStat<?>> clusterStats = new HashSet<>(mlStats.getClusterStats().values());
 
         for (MLStat<?> stat : stats.values()) {
@@ -103,5 +106,32 @@ public class MLStatsTests extends OpenSearchTestCase {
                     (stat.isClusterLevel() && clusterStats.contains(stat)) || (!stat.isClusterLevel() && !clusterStats.contains(stat))
                 );
         }
+    }
+
+    public void testGetAlgorithmStats_Empty() {
+        Map<ActionName, MLActionStats> algorithmStats = mlStats.getAlgorithmStats(FunctionName.KMEANS);
+        assertNull(algorithmStats);
+    }
+
+    public void testGetAlgorithmStats() {
+        MLStats stats = new MLStats(statsMap);
+        MLStat<?> statCounter = stats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, ML_ACTION_REQUEST_COUNT);
+        statCounter.increment();
+        Map<ActionName, MLActionStats> algorithmStats = stats.getAlgorithmStats(FunctionName.KMEANS);
+        assertNotNull(algorithmStats);
+        assertEquals(1l, algorithmStats.get(ActionName.TRAIN).getActionStat(ML_ACTION_REQUEST_COUNT));
+    }
+
+    public void testGetAllAlgorithms_Empty() {
+        FunctionName[] allAlgorithms = mlStats.getAllAlgorithms();
+        assertEquals(0, allAlgorithms.length);
+    }
+
+    public void testGetAllAlgorithms() {
+        MLStats stats = new MLStats(statsMap);
+        MLStat<?> statCounter = stats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, ML_ACTION_REQUEST_COUNT);
+        statCounter.increment();
+        FunctionName[] allAlgorithms = stats.getAllAlgorithms();
+        assertArrayEquals(new FunctionName[] { FunctionName.KMEANS }, allAlgorithms);
     }
 }

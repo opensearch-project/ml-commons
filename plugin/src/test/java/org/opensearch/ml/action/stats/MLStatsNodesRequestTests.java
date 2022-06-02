@@ -6,31 +6,32 @@
 package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 import org.junit.Assert;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.test.OpenSearchTestCase;
+
+import com.google.common.collect.ImmutableSet;
 
 public class MLStatsNodesRequestTests extends OpenSearchTestCase {
 
     public void testSerializationDeserialization() throws IOException {
-        MLStatsNodesRequest request = new MLStatsNodesRequest(("nodeId"));
-        request.clear();
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { "testNodeId" }, new MLStatsInput());
 
-        Set<String> statsToBeRetrieved = new HashSet<>(Arrays.asList("stat1"));
-
-        for (String stat : statsToBeRetrieved) {
-            request.addStat(stat);
-        }
+        mlStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
         BytesStreamOutput output = new BytesStreamOutput();
+        MLStatsNodeRequest request = new MLStatsNodeRequest(mlStatsNodesRequest);
         request.writeTo(output);
-        MLStatsNodesRequest newRequest = new MLStatsNodesRequest(output.bytes().streamInput());
-        Assert.assertEquals(newRequest.getStatsToBeRetrieved().size(), request.getStatsToBeRetrieved().size());
-        for (String stat : newRequest.getStatsToBeRetrieved()) {
-            Assert.assertTrue(request.getStatsToBeRetrieved().contains(stat));
+        MLStatsNodeRequest newRequest = new MLStatsNodeRequest(output.bytes().streamInput());
+        Assert
+            .assertEquals(
+                newRequest.getMlStatsNodesRequest().getMlStatsInput().getNodeLevelStats().size(),
+                request.getMlStatsNodesRequest().getMlStatsInput().getNodeLevelStats().size()
+            );
+        for (Enum stat : newRequest.getMlStatsNodesRequest().getMlStatsInput().getNodeLevelStats()) {
+            Assert.assertTrue(request.getMlStatsNodesRequest().getMlStatsInput().getNodeLevelStats().contains(stat));
         }
     }
 }

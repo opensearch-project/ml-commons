@@ -7,11 +7,11 @@ package org.opensearch.ml.action.stats;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -24,39 +24,50 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.env.Environment;
-import org.opensearch.ml.stats.InternalStatNames;
+import org.opensearch.ml.common.parameter.FunctionName;
+import org.opensearch.ml.stats.ActionName;
+import org.opensearch.ml.stats.MLActionLevelStat;
+import org.opensearch.ml.stats.MLActionStats;
+import org.opensearch.ml.stats.MLAlgoStats;
+import org.opensearch.ml.stats.MLClusterLevelStat;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
+import org.opensearch.ml.stats.MLStatLevel;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.SettableSupplier;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.collect.ImmutableSet;
+
 public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     private MLStatsNodesTransportAction action;
     private MLStats mlStats;
-    private Map<String, MLStat<?>> statsMap;
-    private String clusterStatName1;
-    private String nodeStatName1;
+    private Map<Enum, MLStat<?>> statsMap;
+    private MLClusterLevelStat clusterStatName1;
+    private MLNodeLevelStat nodeStatName1;
+    private Environment environment;
 
     @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
 
-        clusterStatName1 = "clusterStat1";
-        nodeStatName1 = "nodeStat1";
+        clusterStatName1 = MLClusterLevelStat.ML_MODEL_COUNT;
+        nodeStatName1 = MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT;
 
-        statsMap = new HashMap<String, MLStat<?>>() {
+        statsMap = new HashMap<Enum, MLStat<?>>() {
             {
                 put(nodeStatName1, new MLStat<>(false, new CounterSupplier()));
                 put(clusterStatName1, new MLStat<>(true, new CounterSupplier()));
-                put(InternalStatNames.JVM_HEAP_USAGE.getName(), new MLStat<>(true, new SettableSupplier()));
+                put(ML_NODE_JVM_HEAP_USAGE, new MLStat<>(true, new SettableSupplier()));
             }
         };
 
         mlStats = new MLStats(statsMap);
-        Environment environment = mock(Environment.class);
+        environment = mock(Environment.class);
         Settings settings = Settings.builder().build();
         when(environment.settings()).thenReturn(settings);
 
@@ -72,7 +83,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
 
     public void testNewNodeRequest() {
         String nodeId = "nodeId1";
-        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(nodeId);
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
 
         MLStatsNodeRequest mlStatsNodeRequest1 = new MLStatsNodeRequest(mlStatsNodesRequest);
         MLStatsNodeRequest mlStatsNodeRequest2 = action.newNodeRequest(mlStatsNodesRequest);
@@ -81,77 +92,79 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     }
 
     public void testNewNodeResponse() throws IOException {
-        Map<String, Object> statValues = new HashMap<>();
+        Map<MLNodeLevelStat, Object> statValues = new HashMap<>();
         DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
         MLStatsNodeResponse statsNodeResponse = new MLStatsNodeResponse(localNode, statValues);
         BytesStreamOutput out = new BytesStreamOutput();
         statsNodeResponse.writeTo(out);
         StreamInput in = out.bytes().streamInput();
         MLStatsNodeResponse newStatsNodeResponse = action.newNodeResponse(in);
-        Assert.assertEquals(statsNodeResponse.getStatsMap().size(), newStatsNodeResponse.getStatsMap().size());
-        for (String statName : newStatsNodeResponse.getStatsMap().keySet()) {
-            Assert.assertTrue(statsNodeResponse.getStatsMap().containsKey(statName));
-        }
+        Assert.assertEquals(statsNodeResponse.getNodeLevelStatSize(), newStatsNodeResponse.getAlgorithmStatSize());
     }
 
     public void testNodeOperation() {
         String nodeId = clusterService().localNode().getId();
-        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));
-        mlStatsNodesRequest.clear();
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
 
-        Set<String> statsToBeRetrieved = new HashSet<>(Arrays.asList(nodeStatName1));
-
-        for (String stat : statsToBeRetrieved) {
-            mlStatsNodesRequest.addStat(stat);
-        }
+        ImmutableSet<MLNodeLevelStat> statsToBeRetrieved = ImmutableSet.of(nodeStatName1);
+        mlStatsNodesRequest.addNodeLevelStats(statsToBeRetrieved);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
-        Map<String, Object> stats = response.getStatsMap();
-
-        Assert.assertEquals(statsToBeRetrieved.size(), stats.size());
-        for (String statName : stats.keySet()) {
-            Assert.assertTrue(statsToBeRetrieved.contains(statName));
-        }
+        Assert.assertEquals(1, response.getNodeLevelStatSize());
+        assertNotNull(response.getNodeLevelStat(nodeStatName1));
     }
 
     public void testNodeOperationWithJvmHeapUsage() {
         String nodeId = clusterService().localNode().getId();
-        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));
-        mlStatsNodesRequest.clear();
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
 
-        Set<String> statsToBeRetrieved = new HashSet<>(Arrays.asList(nodeStatName1, InternalStatNames.JVM_HEAP_USAGE.getName()));
+        Set<MLNodeLevelStat> statsToBeRetrieved = ImmutableSet.of(ML_NODE_JVM_HEAP_USAGE);
 
-        for (String stat : statsToBeRetrieved) {
-            mlStatsNodesRequest.addStat(stat);
-        }
+        mlStatsNodesRequest.addNodeLevelStats(statsToBeRetrieved);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
-        Map<String, Object> stats = response.getStatsMap();
-
-        Assert.assertEquals(statsToBeRetrieved.size(), stats.size());
-        for (String statName : stats.keySet()) {
-            Assert.assertTrue(statsToBeRetrieved.contains(statName));
-        }
+        Assert.assertEquals(statsToBeRetrieved.size(), response.getNodeLevelStatSize());
+        assertNotNull(response.getNodeLevelStat(ML_NODE_JVM_HEAP_USAGE));
     }
 
-    public void testNodeOperationNotSupportedStat() {
+    public void testNodeOperation_NoNodeLevelStat() {
         String nodeId = clusterService().localNode().getId();
-        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest((nodeId));
-        mlStatsNodesRequest.clear();
-
-        Set<String> statsToBeRetrieved = new HashSet<>(Arrays.asList("notSupportedStat"));
-
-        for (String stat : statsToBeRetrieved) {
-            mlStatsNodesRequest.addStat(stat);
-        }
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM)).build();
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, mlStatsInput);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
-        Map<String, Object> stats = response.getStatsMap();
+        assertEquals(0, response.getNodeLevelStatSize());
+    }
 
-        Assert.assertEquals(0, stats.size());
+    public void testNodeOperation_NoNodeLevelStat_AlgoStat() {
+        MLStats mlStats = new MLStats(statsMap);
+        mlStats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+
+        MLStatsNodesTransportAction action = new MLStatsNodesTransportAction(
+            client().threadPool(),
+            clusterService(),
+            mock(TransportService.class),
+            mock(ActionFilters.class),
+            mlStats,
+            environment
+        );
+
+        String nodeId = clusterService().localNode().getId();
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM)).build();
+        MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, mlStatsInput);
+
+        MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
+
+        assertEquals(0, response.getNodeLevelStatSize());
+        assertEquals(1, response.getAlgorithmStatSize());
+        MLAlgoStats algorithmStats = response.getAlgorithmStats(FunctionName.KMEANS);
+        assertNotNull(algorithmStats);
+        MLActionStats actionStats = algorithmStats.getActionStats(ActionName.TRAIN);
+        assertNotNull(actionStats);
+        assertEquals(1l, actionStats.getActionStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
     }
 
 }
