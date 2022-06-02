@@ -10,8 +10,8 @@ import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTT
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_PASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_PEMCERT_FILEPATH;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT;
 import static org.opensearch.ml.utils.TestData.trainModelDataJson;
 
 import java.io.IOException;
@@ -61,7 +61,7 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.stats.ActionName;
-import org.opensearch.ml.stats.StatNames;
+import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestStatus;
@@ -275,21 +275,32 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         int totalAlgoFailureCount = 0;
         int totalRequestCount = 0;
         int totalAlgoRequestCount = 0;
-        for (String key : map.keySet()) {
-            Map<String, Object> nodeStatsMap = (Map<String, Object>) map.get(key);
-            if (nodeStatsMap.containsKey(ML_TOTAL_FAILURE_COUNT)) {
-                totalFailureCount += (Double) nodeStatsMap.get(ML_TOTAL_FAILURE_COUNT);
+        Map<String, Object> allNodeStats = (Map<String, Object>) map.get("nodes");
+        for (String key : allNodeStats.keySet()) {
+            Map<String, Object> nodeStatsMap = (Map<String, Object>) allNodeStats.get(key);
+            String statKey = ML_NODE_TOTAL_FAILURE_COUNT.name().toLowerCase(Locale.ROOT);
+            if (nodeStatsMap.containsKey(statKey)) {
+                totalFailureCount += (Double) nodeStatsMap.get(statKey);
             }
-            String failureCountStat = StatNames.failureCountStat(functionName, actionName);
-            if (nodeStatsMap.containsKey(failureCountStat)) {
-                totalAlgoFailureCount += (Double) nodeStatsMap.get(failureCountStat);
+            statKey = ML_NODE_TOTAL_REQUEST_COUNT.name().toLowerCase(Locale.ROOT);
+            if (nodeStatsMap.containsKey(statKey)) {
+                totalRequestCount += (Double) nodeStatsMap.get(statKey);
             }
-            if (nodeStatsMap.containsKey(ML_TOTAL_REQUEST_COUNT)) {
-                totalRequestCount += (Double) nodeStatsMap.get(ML_TOTAL_REQUEST_COUNT);
-            }
-            String requestCountStat = StatNames.requestCountStat(functionName, actionName);
-            if (nodeStatsMap.containsKey(requestCountStat)) {
-                totalAlgoRequestCount += (Double) nodeStatsMap.get(requestCountStat);
+            Map<String, Object> allAlgoStats = (Map<String, Object>) nodeStatsMap.get("algorithms");
+            statKey = functionName.name().toLowerCase(Locale.ROOT);
+            if (allAlgoStats.containsKey(statKey)) {
+                Map<String, Object> allActionStats = (Map<String, Object>) allAlgoStats.get(statKey);
+                String actionKey = actionName.name().toLowerCase(Locale.ROOT);
+                Map<String, Object> actionStats = (Map<String, Object>) allActionStats.get(actionKey);
+
+                String actionStatKey = MLActionLevelStat.ML_ACTION_FAILURE_COUNT.name().toLowerCase(Locale.ROOT);
+                if (actionStats.containsKey(actionStatKey)) {
+                    totalAlgoFailureCount += (Double) actionStats.get(actionStatKey);
+                }
+                actionStatKey = MLActionLevelStat.ML_ACTION_REQUEST_COUNT.name().toLowerCase(Locale.ROOT);
+                if (actionStats.containsKey(actionStatKey)) {
+                    totalAlgoRequestCount += (Double) actionStats.get(actionStatKey);
+                }
             }
         }
         assertTrue(totalFailureCount >= expectedMinimumTotalFailureCount);
