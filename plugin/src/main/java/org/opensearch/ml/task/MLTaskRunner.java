@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,6 +18,7 @@ import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.transport.TransportResponse;
 import org.opensearch.transport.TransportResponseHandler;
@@ -89,7 +87,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
 
     public void run(Request request, TransportService transportService, ActionListener<Response> listener) {
         if (mlCircuitBreakerService.isOpen()) {
-            mlStats.getStat(ML_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
             throw new MLLimitExceededException("Circuit breaker is open");
         }
         if (!request.isDispatchTask()) {
@@ -102,7 +100,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
 
     protected ActionListener<MLTaskResponse> wrappedCleanupListener(ActionListener<MLTaskResponse> listener, String taskId) {
         ActionListener<MLTaskResponse> internalListener = ActionListener.runAfter(listener, () -> {
-            mlStats.getStat(ML_EXECUTING_TASK_COUNT).decrement();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).decrement();
             mlTaskManager.remove(taskId);
         });
         return internalListener;

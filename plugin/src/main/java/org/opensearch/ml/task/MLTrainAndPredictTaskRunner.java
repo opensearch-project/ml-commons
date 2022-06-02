@@ -6,11 +6,6 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
-import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
-import static org.opensearch.ml.stats.StatNames.failureCountStat;
-import static org.opensearch.ml.stats.StatNames.requestCountStat;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -38,6 +33,8 @@ import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskA
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.ActionName;
+import org.opensearch.ml.stats.MLActionLevelStat;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
@@ -127,9 +124,11 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     ) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
-        mlStats.getStat(ML_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(ML_TOTAL_REQUEST_COUNT).increment();
-        mlStats.createCounterStatIfAbsent(requestCountStat(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT)).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        mlStats
+            .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
+            .increment();
         mlTaskManager.add(mlTask);
         MLInput mlInput = request.getMlInput();
 
@@ -155,8 +154,10 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
 
     private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure) {
         if (trackFailure) {
-            mlStats.createCounterStatIfAbsent(failureCountStat(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT)).increment();
-            mlStats.getStat(ML_TOTAL_FAILURE_COUNT).increment();
+            mlStats
+                .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+                .increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
         }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);

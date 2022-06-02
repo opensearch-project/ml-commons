@@ -10,11 +10,6 @@ import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
-import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
-import static org.opensearch.ml.stats.StatNames.failureCountStat;
-import static org.opensearch.ml.stats.StatNames.requestCountStat;
 
 import java.time.Instant;
 import java.util.Base64;
@@ -55,6 +50,8 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.ActionName;
+import org.opensearch.ml.stats.MLActionLevelStat;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
@@ -148,9 +145,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     ) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
-        mlStats.getStat(ML_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(ML_TOTAL_REQUEST_COUNT).increment();
-        mlStats.createCounterStatIfAbsent(requestCountStat(mlTask.getFunctionName(), ActionName.PREDICT)).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        mlStats
+            .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
+            .increment();
         mlTaskManager.add(mlTask);
 
         // run predict
@@ -225,8 +224,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
     private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure) {
         if (trackFailure) {
-            mlStats.createCounterStatIfAbsent(failureCountStat(mlTask.getFunctionName(), ActionName.PREDICT)).increment();
-            mlStats.getStat(ML_TOTAL_FAILURE_COUNT).increment();
+            mlStats
+                .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+                .increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
         }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);

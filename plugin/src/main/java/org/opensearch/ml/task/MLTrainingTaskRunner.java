@@ -7,13 +7,6 @@ package org.opensearch.ml.task;
 
 import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
-import static org.opensearch.ml.stats.StatNames.ML_EXECUTING_TASK_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_FAILURE_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_MODEL_COUNT;
-import static org.opensearch.ml.stats.StatNames.ML_TOTAL_REQUEST_COUNT;
-import static org.opensearch.ml.stats.StatNames.failureCountStat;
-import static org.opensearch.ml.stats.StatNames.modelCountStat;
-import static org.opensearch.ml.stats.StatNames.requestCountStat;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -50,6 +43,8 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.ActionName;
+import org.opensearch.ml.stats.MLActionLevelStat;
+import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
@@ -144,9 +139,11 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     private void startTrainingTask(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
-        mlStats.getStat(ML_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(ML_TOTAL_REQUEST_COUNT).increment();
-        mlStats.createCounterStatIfAbsent(requestCountStat(mlTask.getFunctionName(), ActionName.TRAIN)).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        mlStats
+            .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
+            .increment();
         mlTaskManager.add(mlTask);
         try {
             if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
@@ -176,8 +173,10 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
 
     private void train(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
         ActionListener<MLTaskResponse> listener = ActionListener.wrap(r -> actionListener.onResponse(r), e -> {
-            mlStats.createCounterStatIfAbsent(failureCountStat(mlTask.getFunctionName(), ActionName.TRAIN)).increment();
-            mlStats.getStat(ML_TOTAL_FAILURE_COUNT).increment();
+            mlStats
+                .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+                .increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
             actionListener.onFailure(e);
         });
         try {
@@ -194,8 +193,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
                         log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
-                        mlStats.getStat(ML_TOTAL_MODEL_COUNT).increment();
-                        mlStats.createCounterStatIfAbsent(modelCountStat(mlTask.getFunctionName())).increment();
+                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                         String returnedTaskId = mlTask.isAsync() ? mlTask.getTaskId() : null;
                         MLTrainingOutput output = new MLTrainingOutput(r.getId(), returnedTaskId, MLTaskState.COMPLETED.name());
                         listener.onResponse(MLTaskResponse.builder().output(output).build());
