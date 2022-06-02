@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
@@ -18,8 +17,14 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.env.Environment;
-import org.opensearch.ml.stats.InternalStatNames;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.stats.ActionName;
+import org.opensearch.ml.stats.MLActionStats;
+import org.opensearch.ml.stats.MLAlgoStats;
+import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.ml.stats.MLStatLevel;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -87,22 +92,39 @@ public class MLStatsNodesTransportAction extends
         return createMLStatsNodeResponse(request.getMlStatsNodesRequest());
     }
 
-    private MLStatsNodeResponse createMLStatsNodeResponse(MLStatsNodesRequest mlStatsNodesRequest) {
-        Map<String, Object> statValues = new HashMap<>();
-        Set<String> statsToBeRetrieved = mlStatsNodesRequest.getStatsToBeRetrieved();
-        boolean retrieveAllStats = mlStatsNodesRequest.isRetrieveAllStats();
+    MLStatsNodeResponse createMLStatsNodeResponse(MLStatsNodesRequest mlStatsNodesRequest) {
+        Map<MLNodeLevelStat, Object> statValues = new HashMap<>();
+        MLStatsInput mlStatsInput = mlStatsNodesRequest.getMlStatsInput();
+        // return node level stats
+        if (mlStatsInput.getTargetStatLevels().contains(MLStatLevel.NODE)) {
+            if (mlStatsInput.retrieveStat(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE)) {
+                long heapUsedPercent = jvmService.stats().getMem().getHeapUsedPercent();
+                statValues.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, heapUsedPercent);
+            }
 
-        if (retrieveAllStats || statsToBeRetrieved.contains(InternalStatNames.JVM_HEAP_USAGE.getName())) {
-            long heapUsedPercent = jvmService.stats().getMem().getHeapUsedPercent();
-            statValues.put(InternalStatNames.JVM_HEAP_USAGE.getName(), heapUsedPercent);
-        }
-
-        for (String statName : mlStats.getNodeStats().keySet()) {
-            if (retrieveAllStats || statsToBeRetrieved.contains(statName)) {
-                statValues.put(statName, mlStats.getStats().get(statName).getValue());
+            for (Enum statName : mlStats.getNodeStats().keySet()) {
+                if (mlStatsInput.retrieveStat(statName)) {
+                    statValues.put((MLNodeLevelStat) statName, mlStats.getStats().get(statName).getValue());
+                }
             }
         }
 
-        return new MLStatsNodeResponse(clusterService.localNode(), statValues);
+        Map<FunctionName, MLAlgoStats> algorithmStats = new HashMap<>();
+        // return algorithm level stats
+        if (mlStatsInput.includeAlgoStats()) {
+            for (FunctionName algoName : mlStats.getAllAlgorithms()) {
+                if (mlStatsInput.retrieveStatsForAlgo(algoName)) {
+                    Map<ActionName, MLActionStats> actionStatsMap = new HashMap<>();
+                    for (Map.Entry<ActionName, MLActionStats> entry : mlStats.getAlgorithmStats(algoName).entrySet()) {
+                        if (mlStatsInput.retrieveStatsForAction(entry.getKey())) {
+                            actionStatsMap.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    algorithmStats.put(algoName, new MLAlgoStats(actionStatsMap));
+                }
+            }
+        }
+
+        return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats);
     }
 }
