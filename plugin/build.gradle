@@ -24,6 +24,7 @@ ext {
 
 apply plugin: 'opensearch.opensearchplugin'
 apply plugin: 'opensearch.testclusters'
+apply plugin: 'opensearch.pluginzip'
 ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
@@ -53,6 +54,28 @@ dependencies {
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 
+publishing {
+    publications {
+        pluginZip(MavenPublication) { publication ->
+            pom {
+                name = opensearchplugin.name
+                description = opensearchplugin.description
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        name = "OpenSearch"
+                        url = "https://github.com/opensearch-project/ml-commons"
+                    }
+                }
+            }
+        }
+    }
+}
 
 compileJava {
     options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
@@ -238,6 +261,7 @@ configurations.all {
     resolutionStrategy.force 'junit:junit:4.12'
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
+    resolutionStrategy.force 'org.objenesis:objenesis:3.2'
 }
 
 apply plugin: 'nebula.ospackage'
