@@ -7,11 +7,12 @@ package org.opensearch.ml.task;
 
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.breaker.MemoryCircuitBreaker.DEFAULT_JVM_HEAP_USAGE_THRESHOLD;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_ROLE_NAME;
+import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -35,6 +36,8 @@ import org.opensearch.ml.action.stats.MLStatsNodesResponse;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.test.OpenSearchTestCase;
 
+import com.google.common.collect.ImmutableSet;
+
 public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     @Mock
@@ -48,8 +51,9 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     MLTaskDispatcher taskDispatcher;
     ClusterState testState;
-    DiscoveryNode node1;
-    DiscoveryNode node2;
+    DiscoveryNode dataNode1;
+    DiscoveryNode dataNode2;
+    DiscoveryNode mlNode;
     MLStatsNodesResponse mlStatsNodesResponse;
     String clusterName = "test cluster";
 
@@ -59,11 +63,12 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
         taskDispatcher = spy(new MLTaskDispatcher(clusterService, client));
 
-        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
-        roleSet.add(DiscoveryNodeRole.DATA_ROLE);
-        node1 = new DiscoveryNode("node1", buildNewFakeTransportAddress(), new HashMap<>(), roleSet, Version.CURRENT);
-        node2 = new DiscoveryNode("node2", buildNewFakeTransportAddress(), new HashMap<>(), roleSet, Version.CURRENT);
-        DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
+        Set<DiscoveryNodeRole> dataRoleSet = ImmutableSet.of(DiscoveryNodeRole.DATA_ROLE);
+        dataNode1 = new DiscoveryNode("node1", buildNewFakeTransportAddress(), new HashMap<>(), dataRoleSet, Version.CURRENT);
+        dataNode2 = new DiscoveryNode("node2", buildNewFakeTransportAddress(), new HashMap<>(), dataRoleSet, Version.CURRENT);
+        Set<DiscoveryNodeRole> mlRoleSet = ImmutableSet.of(ML_ROLE);
+        mlNode = new DiscoveryNode("mlNode", buildNewFakeTransportAddress(), new HashMap<>(), mlRoleSet, Version.CURRENT);
+        DiscoveryNodes nodes = DiscoveryNodes.builder().add(dataNode1).add(dataNode2).build();
         testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, null, 0, false);
         when(clusterService.state()).thenReturn(testState);
 
@@ -111,12 +116,34 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
     }
 
+    public void testGetEligibleNodes_DataNodeOnly() {
+        DiscoveryNode[] eligibleNodes = taskDispatcher.getEligibleNodes();
+        assertEquals(2, eligibleNodes.length);
+        for (DiscoveryNode node : eligibleNodes) {
+            assertTrue(node.isDataNode());
+        }
+    }
+
+    public void testGetEligibleNodes_MlAndDataNodes() {
+        DiscoveryNodes nodes = DiscoveryNodes.builder().add(dataNode1).add(dataNode2).add(mlNode).build();
+        testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, null, 0, false);
+        when(clusterService.state()).thenReturn(testState);
+
+        DiscoveryNode[] eligibleNodes = taskDispatcher.getEligibleNodes();
+        assertEquals(1, eligibleNodes.length);
+        for (DiscoveryNode node : eligibleNodes) {
+            assertFalse(node.isDataNode());
+            DiscoveryNodeRole[] discoveryNodeRoles = node.getRoles().toArray(new DiscoveryNodeRole[0]);
+            assertEquals(ML_ROLE_NAME, discoveryNodeRoles[0].roleName());
+        }
+    }
+
     private MLStatsNodesResponse getMlStatsNodesResponse() {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
         nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 50l);
         nodeStats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, 5l);
-        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(node1, nodeStats);
-        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(node1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
             new ClusterName(clusterName),
             Arrays.asList(mlStatsNodeResponse1, mlStatsNodeResponse2),
@@ -127,8 +154,8 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
     private MLStatsNodesResponse getNodesResponse_NoTaskCounts() {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
         nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 50l);
-        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(node1, nodeStats);
-        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(node1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
             new ClusterName(clusterName),
             Arrays.asList(mlStatsNodeResponse1, mlStatsNodeResponse2),
@@ -140,8 +167,8 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
         nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 90l);
         nodeStats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, 5l);
-        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(node1, nodeStats);
-        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(node1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
             new ClusterName(clusterName),
             Arrays.asList(mlStatsNodeResponse1, mlStatsNodeResponse2),
@@ -153,8 +180,8 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
         nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 50l);
         nodeStats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, 15l);
-        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(node1, nodeStats);
-        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(node1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
+        MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
             new ClusterName(clusterName),
             Arrays.asList(mlStatsNodeResponse1, mlStatsNodeResponse2),
