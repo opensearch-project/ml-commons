@@ -6,6 +6,7 @@
 package org.opensearch.ml.utils;
 
 import static java.util.Collections.emptyMap;
+import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -22,7 +23,6 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLNodeUtilsTests extends OpenSearchTestCase {
@@ -34,7 +34,7 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
         DiscoveryNode normalNode = new DiscoveryNode("Normal node", buildNewFakeTransportAddress(), emptyMap(), roleSet, Version.CURRENT);
         Assert.assertFalse(MLNodeUtils.isMLNode(normalNode));
 
-        roleSet.add(MachineLearningPlugin.ML_ROLE);
+        roleSet.add(ML_ROLE);
         DiscoveryNode mlNode = new DiscoveryNode("ML node", buildNewFakeTransportAddress(), emptyMap(), roleSet, Version.CURRENT);
         Assert.assertTrue(MLNodeUtils.isMLNode(mlNode));
     }

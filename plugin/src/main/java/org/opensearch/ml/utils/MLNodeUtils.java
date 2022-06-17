@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_ROLE_NAME;
+
 import java.io.IOException;
 
 import lombok.experimental.UtilityClass;
@@ -12,12 +14,11 @@ import lombok.experimental.UtilityClass;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.*;
-import org.opensearch.ml.plugin.MachineLearningPlugin;
 
 @UtilityClass
 public class MLNodeUtils {
     public boolean isMLNode(DiscoveryNode node) {
-        return node.getRoles().stream().anyMatch(role -> role.roleName().equalsIgnoreCase(MachineLearningPlugin.ML_ROLE.roleName()));
+        return node.getRoles().stream().anyMatch(role -> role.roleName().equalsIgnoreCase(ML_ROLE_NAME));
     }
 
     public static XContentParser createXContentParserFromRegistry(NamedXContentRegistry xContentRegistry, BytesReference bytesReference)
