@@ -30,8 +30,10 @@ import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.WarningsHandler;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
@@ -56,6 +58,16 @@ import org.opensearch.test.rest.FakeRestRequest;
 import com.google.common.collect.ImmutableMap;
 
 public class TestHelper {
+
+    public static final Setting<Boolean> IS_ML_NODE_SETTING = Setting.boolSetting("node.ml", false, Setting.Property.NodeScope);
+
+    public static final DiscoveryNodeRole ML_ROLE = new DiscoveryNodeRole("ml", "ml") {
+        @Override
+        public Setting<Boolean> legacySetting() {
+            return IS_ML_NODE_SETTING;
+        }
+    };
+
     public static XContentParser parser(String xc) throws IOException {
         return parser(xc, true);
     }
