@@ -45,6 +45,9 @@ import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskActi
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
+import org.opensearch.ml.common.input.execute.bertqa.BertQAInput;
+import org.opensearch.ml.common.input.execute.od.ObjectDetectionInput;
+import org.opensearch.ml.common.input.execute.resnet18.Resnet18Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -64,6 +67,9 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
+import org.opensearch.ml.engine.algorithms.bertqa.BertQA;
+import org.opensearch.ml.engine.algorithms.od.ObjectDetection;
+import org.opensearch.ml.engine.algorithms.resnet18.Resnet18;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -218,8 +224,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         );
 
         // Register thread-safe ML objects here.
-        LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
-        MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
+        MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, new LocalSampleCalculator(client, settings));
+        MLEngineClassLoader.register(FunctionName.OBJECT_DETECTION, new ObjectDetection());
+        MLEngineClassLoader.register(FunctionName.RESNET18, new Resnet18());
+        MLEngineClassLoader.register(FunctionName.BERT_QA, new BertQA());
 
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
@@ -296,7 +304,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 FitRCFParams.XCONTENT_REGISTRY,
                 BatchRCFParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
-                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY
+                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
+                ObjectDetectionInput.XCONTENT_REGISTRY_ENTRY,
+                Resnet18Input.XCONTENT_REGISTRY_ENTRY,
+                BertQAInput.XCONTENT_REGISTRY_ENTRY
             );
     }
 }
