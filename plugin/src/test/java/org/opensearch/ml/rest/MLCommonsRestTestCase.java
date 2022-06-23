@@ -156,7 +156,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     @After
     protected void wipeAllODFEIndices() throws IOException {
         Response response = adminClient().performRequest(new Request("GET", "/_cat/indices?format=json&expand_wildcards=all"));
-        XContentType xContentType = XContentType.fromMediaTypeOrFormat(response.getEntity().getContentType().getValue());
+        XContentType xContentType = XContentType.fromMediaType(response.getEntity().getContentType().getValue());
         try (
             XContentParser parser = xContentType
                 .xContent()
