@@ -9,7 +9,7 @@ buildscript {
     ext {
         opensearch_group = "org.opensearch"
         isSnapshot = "true" == System.getProperty("build.snapshot", "true")
-        opensearch_version = System.getProperty("opensearch.version", "2.0.0-SNAPSHOT")
+        opensearch_version = System.getProperty("opensearch.version", "2.1.0-SNAPSHOT")
         buildVersionQualifier = System.getProperty("build.version_qualifier", "")
 
         // 2.0.0-rc1-SNAPSHOT -> 2.0.0.0-rc1-SNAPSHOT
@@ -30,6 +30,7 @@ buildscript {
         maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
         mavenCentral()
         maven { url "https://plugins.gradle.org/m2/" }
+        maven { url "https://d1nvenhzbhpy0q.cloudfront.net/snapshots/lucene/" }
     }
 
     dependencies {
