@@ -47,6 +47,25 @@ public class TribuoUtil {
         return new Tuple<>(featureNames, featureValues);
     }
 
+    public static Tuple<String[], float[][]> transformDataFrameFloat(DataFrame dataFrame) {
+        String[] featureNames = Arrays.stream(dataFrame.columnMetas()).map(ColumnMeta::getName).toArray(String[]::new);
+        float[][] featureValues = new float[dataFrame.size()][];
+        Iterator<Row> itr = dataFrame.iterator();
+        int i = 0;
+        while (itr.hasNext()) {
+            Row row = itr.next();
+            float[] v = new float[row.size()];
+            for (int ii = 0; ii < row.size(); ii++) {
+                v[ii] = (float)row.getValue(ii).doubleValue();
+            }
+
+            featureValues[i] = v;
+            ++i;
+        }
+
+        return new Tuple<>(featureNames, featureValues);
+    }
+
     /**
      * Generate tribuo dataset from data frame.
      * @param dataFrame features data
