@@ -2,6 +2,11 @@ package org.opensearch.ml.engine.utils;
 
 import java.util.function.BiFunction;
 public class MathUtil {
+<<<<<<< HEAD
+=======
+    public static Integer iamconst = 1;
+
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
     public static <T, C extends Number> int findNearest(T query, Iterable<T> base, BiFunction<T,T,C> dist) {
         int index = -1;
         double minValue = Double.MAX_VALUE;

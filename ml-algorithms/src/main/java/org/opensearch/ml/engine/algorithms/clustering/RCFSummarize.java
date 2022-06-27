@@ -18,10 +18,17 @@ import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.MathUtil;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
+<<<<<<< HEAD
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import com.amazon.randomcutforest.returntypes.SampleSummary;
 import com.amazon.randomcutforest.summarization.Summarizer;
 import org.opensearch.ml.engine.algorithms.clustering.SerializableSummary;
+=======
+import org.opensearch.ml.engine.utils.SerializableSummary;
+import org.opensearch.ml.engine.utils.TribuoUtil;
+import com.amazon.randomcutforest.returntypes.SampleSummary;
+import com.amazon.randomcutforest.summarization.Summarizer;
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,9 +43,15 @@ import java.util.function.BiFunction;
 public class RCFSummarize implements TrainAndPredictable {
     private static final RCFSummarizeParams.DistanceType DEFAULT_DISTANCE_TYPE = RCFSummarizeParams.DistanceType.L2;
     private static int DEFAULT_MAX_K = 10;
+<<<<<<< HEAD
     private static boolean DEFAULT_PHASE1_REASSIGN = true;
     private static boolean DEFAULT_PARALLEL = false;
     private final Random rnd = new Random();
+=======
+    private static int DEFAULT_INITIAL_K = 20;
+    private static boolean DEFAULT_PHASE1_REASSIGN = true;
+    private static boolean DEFAULT_PARALLEL = false;
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
 
     // Parameters
     private RCFSummarizeParams parameters;
@@ -47,14 +60,23 @@ public class RCFSummarize implements TrainAndPredictable {
     public RCFSummarize() {}
 
     public RCFSummarize(MLAlgoParams parameters) {
+<<<<<<< HEAD
         this.parameters = parameters == null ? RCFSummarizeParams.builder().maxK(DEFAULT_MAX_K).initialK(DEFAULT_MAX_K).phase1Reassign(DEFAULT_PHASE1_REASSIGN).parallel(DEFAULT_PARALLEL).build() : (RCFSummarizeParams) parameters;
+=======
+        this.parameters = parameters == null ? RCFSummarizeParams.builder().maxK(DEFAULT_MAX_K).initialK(DEFAULT_INITIAL_K).phase1Reassign(DEFAULT_PHASE1_REASSIGN).parallel(DEFAULT_PARALLEL).build() : (RCFSummarizeParams) parameters;
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
         validateParametersAndRefine();
         createDistance();
     }
 
     private void validateParametersAndRefine() {
+<<<<<<< HEAD
         Boolean phase1Reassign = parameters.getPhase1Reassign();
         Boolean parallel = parameters.getParallel();
+=======
+        boolean phase1Reassign = parameters.getPhase1Reassign();
+        boolean parallel = parameters.getParallel();
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
         Integer maxK = parameters.getMaxK();
         Integer initialK = parameters.getInitialK();
         RCFSummarizeParams.DistanceType distType = parameters.getDistanceType();
@@ -72,13 +94,18 @@ public class RCFSummarize implements TrainAndPredictable {
         }
 
         if (initialK == null) {
+<<<<<<< HEAD
             initialK = maxK;
+=======
+            initialK = DEFAULT_INITIAL_K;
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
         }
 
         if (distType == null) {
             distType = DEFAULT_DISTANCE_TYPE;
         }
 
+<<<<<<< HEAD
         if (phase1Reassign == null) {
             phase1Reassign = false;
         }
@@ -87,6 +114,8 @@ public class RCFSummarize implements TrainAndPredictable {
             parallel = false;
         }
 
+=======
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
         parameters = RCFSummarizeParams.builder().maxK(maxK).initialK(initialK).phase1Reassign(phase1Reassign).parallel(parallel).distanceType(distType).build();
     }
 
@@ -116,7 +145,11 @@ public class RCFSummarize implements TrainAndPredictable {
             parameters.getInitialK(), 
             parameters.getPhase1Reassign(), 
             distance, 
+<<<<<<< HEAD
             rnd.nextLong(), 
+=======
+            new Random().nextLong(), 
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
             parameters.getParallel());
 
         Model model = new Model();
@@ -153,7 +186,11 @@ public class RCFSummarize implements TrainAndPredictable {
             parameters.getInitialK(), 
             parameters.getPhase1Reassign(), 
             distance, 
+<<<<<<< HEAD
             rnd.nextLong(), 
+=======
+            new Random().nextLong(), 
+>>>>>>> a50a14c (add clustering function - RCFSummarize)
             parameters.getParallel());
         
         Iterable<float[]> centroidsLst = Arrays.asList(summary.summaryPoints);
