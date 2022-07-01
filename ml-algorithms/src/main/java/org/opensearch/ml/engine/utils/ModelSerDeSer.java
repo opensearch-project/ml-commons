@@ -36,7 +36,7 @@ public class ModelSerDeSer {
             objectOutputStream.flush();
             return byteArrayOutputStream.toByteArray();
         } catch (IOException e) {
-            throw new ModelSerDeSerException("Failed to serialize model." + e.getMessage(), e.getCause());
+            throw new ModelSerDeSerException("Failed to serialize model.", e.getCause());
         }
     }
 

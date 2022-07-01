@@ -19,6 +19,7 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.MathUtil;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 <<<<<<< HEAD
+<<<<<<< HEAD
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import com.amazon.randomcutforest.returntypes.SampleSummary;
 import com.amazon.randomcutforest.summarization.Summarizer;
@@ -29,6 +30,12 @@ import org.opensearch.ml.engine.utils.TribuoUtil;
 import com.amazon.randomcutforest.returntypes.SampleSummary;
 import com.amazon.randomcutforest.summarization.Summarizer;
 >>>>>>> a50a14c (add clustering function - RCFSummarize)
+=======
+import org.opensearch.ml.engine.utils.TribuoUtil;
+import com.amazon.randomcutforest.returntypes.SampleSummary;
+import com.amazon.randomcutforest.summarization.Summarizer;
+import org.opensearch.ml.engine.algorithms.clustering.SerializableSummary;
+>>>>>>> 9805027 (applying cr chages)
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,7 +58,11 @@ public class RCFSummarize implements TrainAndPredictable {
     private static int DEFAULT_INITIAL_K = 20;
     private static boolean DEFAULT_PHASE1_REASSIGN = true;
     private static boolean DEFAULT_PARALLEL = false;
+<<<<<<< HEAD
 >>>>>>> a50a14c (add clustering function - RCFSummarize)
+=======
+    private final Random rnd = new Random();
+>>>>>>> 9805027 (applying cr chages)
 
     // Parameters
     private RCFSummarizeParams parameters;
@@ -146,10 +157,14 @@ public class RCFSummarize implements TrainAndPredictable {
             parameters.getPhase1Reassign(), 
             distance, 
 <<<<<<< HEAD
+<<<<<<< HEAD
             rnd.nextLong(), 
 =======
             new Random().nextLong(), 
 >>>>>>> a50a14c (add clustering function - RCFSummarize)
+=======
+            rnd.nextLong(), 
+>>>>>>> 9805027 (applying cr chages)
             parameters.getParallel());
 
         Model model = new Model();
@@ -187,10 +202,14 @@ public class RCFSummarize implements TrainAndPredictable {
             parameters.getPhase1Reassign(), 
             distance, 
 <<<<<<< HEAD
+<<<<<<< HEAD
             rnd.nextLong(), 
 =======
             new Random().nextLong(), 
 >>>>>>> a50a14c (add clustering function - RCFSummarize)
+=======
+            rnd.nextLong(), 
+>>>>>>> 9805027 (applying cr chages)
             parameters.getParallel());
         
         Iterable<float[]> centroidsLst = Arrays.asList(summary.summaryPoints);
