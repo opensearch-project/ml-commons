@@ -8,7 +8,6 @@ package org.opensearch.ml.action.training;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -34,7 +33,6 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         loadIrisData(irisIndexName);
     }
 
-    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testTrainingWithSearchInput_Async_KMenas() throws InterruptedException {
         String taskId = trainKmeansWithIrisData(irisIndexName, true);
         assertNotNull(taskId);
@@ -49,11 +47,31 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
-    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testTrainingWithSearchInput_Sync_KMenas() {
         String modelId = trainKmeansWithIrisData(irisIndexName, false);
         assertNotNull(modelId);
         MLModel model = getModel(modelId);
+        assertNotNull(model);
+    }
+
+    public void testTrainingWithSearchInput_Sync_LogisticRegression() {
+        String modelId = trainLogisticRegressionWithIrisData(irisIndexName, false);
+        assertNotNull(modelId);
+        MLModel model = getModel(modelId);
+        assertNotNull(model);
+    }
+
+    public void testTrainingWithSearchInput_Async_LogisticRegression() throws InterruptedException {
+        String taskId = trainLogisticRegressionWithIrisData(irisIndexName, true);
+        assertNotNull(taskId);
+
+        AtomicReference<String> modelId = new AtomicReference<>();
+        waitUntil(() -> {
+            String id = getTask(taskId).getModelId();
+            modelId.set(id);
+            return id != null;
+        }, 10, TimeUnit.SECONDS);
+        MLModel model = getModel(modelId.get());
         assertNotNull(model);
     }
 
