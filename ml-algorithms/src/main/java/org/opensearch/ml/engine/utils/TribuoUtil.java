@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.utils;
 
 import lombok.experimental.UtilityClass;
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
@@ -56,7 +55,7 @@ public class TribuoUtil {
 
         int i = 0;
         Iterator<Row> itr = dataFrame.iterator();
-        double[][] featureValues = new double[dataFrame.size()][];
+        double[][] featureValues = new double[dataFrame.size()][featureNames.size() - 1];
         while (itr.hasNext()) {
             Row row = itr.next();
             int col = 0;
@@ -116,6 +115,9 @@ public class TribuoUtil {
                     Event.EventType defaultEventType = Event.EventType.EXPECTED;
                     // TODO: support anomaly labels to evaluate prediction result
                     example = new ArrayExample<>((T) new Event(defaultEventType), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    break;
+                case LABEL:
+                    example = new ArrayExample<>((T) new Label(""), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);
