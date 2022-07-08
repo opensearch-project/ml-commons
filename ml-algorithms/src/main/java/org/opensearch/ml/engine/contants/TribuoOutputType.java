@@ -11,5 +11,7 @@ public enum TribuoOutputType {
     //for tribuo regression
     REGRESSOR,
     //for anomaly detection based on libSVM
-    ANOMALY_DETECTION_LIBSVM;
+    ANOMALY_DETECTION_LIBSVM,
+    //for tribuo classification
+    LABEL;
 }
