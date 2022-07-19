@@ -51,6 +51,9 @@ public class RCFSummarize implements TrainAndPredictable {
     private static final RCFSummarizeParams.DistanceType DEFAULT_DISTANCE_TYPE = RCFSummarizeParams.DistanceType.L2;
     private static int DEFAULT_MAX_K = 10;
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 2ff916a (default parameters)
     private static boolean DEFAULT_PHASE1_REASSIGN = true;
     private static boolean DEFAULT_PARALLEL = false;
     private final Random rnd = new Random();
@@ -72,10 +75,14 @@ public class RCFSummarize implements TrainAndPredictable {
 
     public RCFSummarize(MLAlgoParams parameters) {
 <<<<<<< HEAD
+<<<<<<< HEAD
         this.parameters = parameters == null ? RCFSummarizeParams.builder().maxK(DEFAULT_MAX_K).initialK(DEFAULT_MAX_K).phase1Reassign(DEFAULT_PHASE1_REASSIGN).parallel(DEFAULT_PARALLEL).build() : (RCFSummarizeParams) parameters;
 =======
         this.parameters = parameters == null ? RCFSummarizeParams.builder().maxK(DEFAULT_MAX_K).initialK(DEFAULT_INITIAL_K).phase1Reassign(DEFAULT_PHASE1_REASSIGN).parallel(DEFAULT_PARALLEL).build() : (RCFSummarizeParams) parameters;
 >>>>>>> a50a14c (add clustering function - RCFSummarize)
+=======
+        this.parameters = parameters == null ? RCFSummarizeParams.builder().maxK(DEFAULT_MAX_K).initialK(DEFAULT_MAX_K).phase1Reassign(DEFAULT_PHASE1_REASSIGN).parallel(DEFAULT_PARALLEL).build() : (RCFSummarizeParams) parameters;
+>>>>>>> 2ff916a (default parameters)
         validateParametersAndRefine();
         createDistance();
     }
@@ -106,10 +113,14 @@ public class RCFSummarize implements TrainAndPredictable {
 
         if (initialK == null) {
 <<<<<<< HEAD
+<<<<<<< HEAD
             initialK = maxK;
 =======
             initialK = DEFAULT_INITIAL_K;
 >>>>>>> a50a14c (add clustering function - RCFSummarize)
+=======
+            initialK = maxK;
+>>>>>>> 2ff916a (default parameters)
         }
 
         if (distType == null) {
