@@ -7,6 +7,7 @@ package org.opensearch.ml.common;
 
 public enum FunctionName {
     LINEAR_REGRESSION,
+    LOGISTIC_REGRESSION,
     KMEANS,
     AD_LIBSVM,
     SAMPLE_ALGO,
