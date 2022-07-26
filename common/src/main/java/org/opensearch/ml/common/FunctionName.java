@@ -13,7 +13,8 @@ public enum FunctionName {
     LOCAL_SAMPLE_CALCULATOR,
     FIT_RCF,
     BATCH_RCF,
-    ANOMALY_LOCALIZATION;
+    ANOMALY_LOCALIZATION,
+    RCF_SUMMARIZE;
 
     public static FunctionName from(String value) {
         try {

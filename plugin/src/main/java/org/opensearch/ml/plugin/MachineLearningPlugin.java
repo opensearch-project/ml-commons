@@ -48,6 +48,7 @@ import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocaliz
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.input.parameter.clustering.RCFSummarizeParams;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
@@ -296,7 +297,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 FitRCFParams.XCONTENT_REGISTRY,
                 BatchRCFParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
-                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY
+                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
+                RCFSummarizeParams.XCONTENT_REGISTRY
             );
     }
 }
