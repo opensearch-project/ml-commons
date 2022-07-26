@@ -50,11 +50,8 @@ public class RCFSummarizeParams implements MLAlgoParams {
     // TODO: expose seed?
 
     @Builder(toBuilder = true)
-<<<<<<< HEAD
     public RCFSummarizeParams(Integer maxK, Integer initialK, DistanceType distanceType, Boolean phase1Reassign, Boolean parallel) {
-=======
-    public RCFSummarizeParams(Integer maxK, Integer initialK, DistanceType distanceType, boolean phase1Reassign, boolean parallel) {
->>>>>>> a50a14c (add clustering function - RCFSummarize)
+
         this.maxK = maxK;
         this.initialK = initialK;
         this.distanceType = distanceType;
@@ -64,7 +61,7 @@ public class RCFSummarizeParams implements MLAlgoParams {
 
     public RCFSummarizeParams(StreamInput in) throws IOException {
         this.maxK = in.readOptionalInt();
-<<<<<<< HEAD
+
         if (in.readBoolean()) {
             this.initialK = in.readOptionalInt();
         }
@@ -77,11 +74,6 @@ public class RCFSummarizeParams implements MLAlgoParams {
             this.parallel = in.readBoolean();
         }
 
-=======
-        this.initialK = in.readOptionalInt();
-        this.phase1Reassign = in.readBoolean();
-        this.parallel = in.readBoolean();
->>>>>>> a50a14c (add clustering function - RCFSummarize)
         if (in.readBoolean()) {
             this.distanceType = in.readEnum(DistanceType.class);
         }
@@ -132,7 +124,6 @@ public class RCFSummarizeParams implements MLAlgoParams {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalInt(maxK);
-<<<<<<< HEAD
         
         if (initialK != null) {
             out.writeBoolean(true);
@@ -154,11 +145,6 @@ public class RCFSummarizeParams implements MLAlgoParams {
         } else {
             out.writeBoolean(false);
         }
-=======
-        out.writeOptionalInt(initialK);
-        out.writeBoolean(phase1Reassign);
-        out.writeBoolean(parallel);
->>>>>>> a50a14c (add clustering function - RCFSummarize)
         if (distanceType != null) {
             out.writeBoolean(true);
             out.writeEnum(distanceType);

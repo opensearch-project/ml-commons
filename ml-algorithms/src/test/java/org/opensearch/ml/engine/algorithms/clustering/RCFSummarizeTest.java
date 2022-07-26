@@ -88,11 +88,7 @@ public class RCFSummarizeTest {
     }
 
     @Test
-<<<<<<< HEAD
     public void constructorWithNegtiveInitialK() {
-=======
-    public void constructorWithNegtiveIterations() {
->>>>>>> a50a14c (add clustering function - RCFSummarize)
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("initial K should be positive");
         new RCFSummarize(RCFSummarizeParams.builder().initialK(-1).build());
