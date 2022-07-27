@@ -31,16 +31,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Tribuo Kmean can only run with Java8. We see such error when run with Java11
+ * access denied ("java.lang.RuntimePermission" "modifyThreadGroup")
+ * Check more details in these Github issues
+ * https://github.com/opensearch-project/ml-commons/issues/67
+ * https://github.com/oracle/tribuo/issues/158
+ */
 @Function(FunctionName.KMEANS)
 public class KMeans implements TrainAndPredictable {
     private static final KMeansParams.DistanceType DEFAULT_DISTANCE_TYPE = KMeansParams.DistanceType.EUCLIDEAN;
     private static int DEFAULT_CENTROIDS = 2;
     private static int DEFAULT_ITERATIONS = 10;
 
-    //The number of threads.
+    // Parameters
     private KMeansParams parameters;
 
+    //The number of threads.
     private int numThreads = Math.max(Runtime.getRuntime().availableProcessors() / 2, 1); //Assume cpu-bound.
+    
     //The random seed.
     private long seed = System.currentTimeMillis();
     private KMeansTrainer.Distance distance;
