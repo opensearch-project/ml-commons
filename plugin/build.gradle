@@ -44,7 +44,7 @@ dependencies {
     compile "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     compile "org.opensearch:common-utils:${common_utils_version}"
     compile("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
-    compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
+    compile("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     implementation group: 'com.google.guava', name: 'guava', version: '31.0.1-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.0'
 
