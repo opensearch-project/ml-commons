@@ -308,7 +308,7 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLModelSearchAction.INSTANCE), isA(SearchRequest.class), any());
         verify(searchModelActionListener).onResponse(argumentCaptor.capture());
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();
-        assertEquals(modelContent, source.get(MLModel.MODEL_CONTENT));
+        assertEquals(modelContent, source.get(MLModel.MODEL_CONTENT_FIELD));
     }
 
     @Test
