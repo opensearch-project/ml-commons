@@ -25,7 +25,7 @@ import org.tribuo.Trainer;
 import org.tribuo.classification.Label;
 import org.tribuo.classification.LabelFactory;
 import org.tribuo.classification.sgd.LabelObjective;
-import org.tribuo.classification.sgd.linear.LogisticRegressionTrainer;
+import org.tribuo.classification.sgd.linear.LinearSGDTrainer;
 import org.tribuo.classification.sgd.objectives.Hinge;
 import org.tribuo.classification.sgd.objectives.LogMulticlass;
 import org.tribuo.math.StochasticGradientOptimiser;
@@ -114,9 +114,8 @@ public class LogisticRegression implements Trainable, Predictable {
     public Model train(DataFrame dataFrame) {
         MutableDataset<Label> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new LabelFactory(),
                 "Logistic regression training data from OpenSearch", TribuoOutputType.LABEL, parameters.getTarget());
-        // Integer epochs = Optional.ofNullable(parameters.getEpochs()).orElse(DEFAULT_EPOCHS);
         // LinearSGDTrainer(objective=LogMulticlass,optimiser=AdaGrad(initialLearningRate=1.0,epsilon=0.1,initialValue=0.0),epochs=5,minibatchSize=1,seed=12345)
-        Trainer<Label> logisticRegressionTrainer = new LogisticRegressionTrainer();
+        Trainer<Label> logisticRegressionTrainer = new LinearSGDTrainer(new LogMulticlass(), new AdaGrad(1.0, 0.1), 5, Trainer.DEFAULT_SEED);
         org.tribuo.Model<Label> classificationModel = logisticRegressionTrainer.train(trainDataset);
         Model model = new Model();
         model.setName(FunctionName.LOGISTIC_REGRESSION.name());

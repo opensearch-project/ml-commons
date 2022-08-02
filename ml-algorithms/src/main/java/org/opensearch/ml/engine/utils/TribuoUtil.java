@@ -135,7 +135,7 @@ public class TribuoUtil {
                     example = new ArrayExample<>((T) new Event(defaultEventType), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 case LABEL:
-                    example = new ArrayExample<>((T) new Label(""), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    example = new ArrayExample<>((T) outputFactory.getUnknownOutput(), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);
