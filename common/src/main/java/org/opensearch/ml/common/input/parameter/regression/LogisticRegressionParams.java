@@ -39,6 +39,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
     public static final String EPSILON_FIELD = "epsilon";
     public static final String EPOCHS_FIELD = "epochs";
     public static final String BATCH_SIZE_FIELD = "batch_size";
+    public static final String LOGGING_INTERVAL_FIELD = "logging_interval";
     public static final String SEED_FIELD = "seed";
     public static final String TARGET_FIELD = "target";
 
@@ -48,6 +49,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
     private Double epsilon;
     private Integer epochs;
     private Integer batchSize;
+    private Integer loggingInterval;
     private Long seed;
     private String target;
 
@@ -59,6 +61,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         Double epsilon,
         Integer epochs,
         Integer batchSize,
+        Integer loggingInterval,
         Long seed,
         String target
     ) {
@@ -68,6 +71,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         this.epsilon = epsilon;
         this.epochs = epochs;
         this.batchSize = batchSize;
+        this.loggingInterval = loggingInterval;
         this.seed = seed;
         this.target = target;
     }
@@ -84,6 +88,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         this.epsilon = in.readOptionalDouble();
         this.epochs = in.readOptionalInt();
         this.batchSize = in.readOptionalInt();
+        this.loggingInterval = in.readOptionalInt();
         this.seed = in.readOptionalLong();
         this.target = in.readOptionalString();
     }
@@ -95,6 +100,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         Double epsilon = null;
         Integer epochs = null;
         Integer batchSize = null;
+        Integer loggingInterval = null;
         Long seed = null;
         String target = null;
 
@@ -122,6 +128,9 @@ public class LogisticRegressionParams implements MLAlgoParams {
                 case BATCH_SIZE_FIELD:
                     batchSize = parser.intValue(false);
                     break;
+                case LOGGING_INTERVAL_FIELD:
+                    loggingInterval = parser.intValue(false);
+                    break;
                 case SEED_FIELD:
                     seed = parser.longValue(false);
                     break;
@@ -133,7 +142,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
                     break;
             }
         }
-        return new LogisticRegressionParams(objective,  optimizerType,  learningRate, epsilon, epochs, batchSize, seed, target);
+        return new LogisticRegressionParams(objective,  optimizerType,  learningRate, epsilon, epochs, batchSize, loggingInterval, seed, target);
     }
 
     @Override
@@ -154,6 +163,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
         out.writeOptionalDouble(epsilon);
         out.writeOptionalInt(epochs);
         out.writeOptionalInt(batchSize);
+        out.writeOptionalInt(loggingInterval);
         out.writeOptionalLong(seed);
         out.writeOptionalString(target);
     }
@@ -178,6 +188,9 @@ public class LogisticRegressionParams implements MLAlgoParams {
         }
         if (batchSize != null) {
             builder.field(BATCH_SIZE_FIELD, batchSize);
+        }
+        if (loggingInterval != null) {
+            builder.field(LOGGING_INTERVAL_FIELD, loggingInterval);
         }
         if (seed != null) {
             builder.field(SEED_FIELD, seed);

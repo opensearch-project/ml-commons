@@ -42,12 +42,19 @@ public class LogisticRegression implements Trainable, Predictable {
 
     private static final LogisticRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
     private static final LogisticRegressionParams.OptimizerType DEFAULT_OPTIMIZER_TYPE = LogisticRegressionParams.OptimizerType.ADA_GRAD;
-    private static final double DEFAULT_LEARNING_RATE = 0.01;
+    private static final double DEFAULT_LEARNING_RATE = 1.0;
 
     //AdaGrad, AdaDelta, AdaGradRDA, Adam, RMSProp
-    private static final double DEFAULT_EPSILON = 1e-6;
+    private static final double DEFAULT_EPSILON = 0.1;
+    private static final int DEFAULT_EPOCHS = 5;
+    private static final int DEFAULT_LOGGING_INTERVAL = 1000;
+    private static final int DEFAULT_BATCH_SIZE = 1;
+    private static final Long DEFAULT_SEED = Trainer.DEFAULT_SEED;
 
-    private static final int DEFAULT_EPOCHS = 10;
+    private int epochs;
+    private int loggingInterval;
+    private int minibatchSize;
+    private long seed;
 
     private LogisticRegressionParams parameters;
     private StochasticGradientOptimiser optimiser;
@@ -79,6 +86,15 @@ public class LogisticRegression implements Trainable, Predictable {
         if (parameters.getBatchSize() != null && parameters.getBatchSize() < 0) {
             throw new IllegalArgumentException("MiniBatchSize should not be negative.");
         }
+
+        if (parameters.getLoggingInterval() != null && parameters.getLoggingInterval() < 0) {
+            throw new IllegalArgumentException("Logging intervals should not be negative.");
+        }
+
+        epochs = Optional.ofNullable(parameters.getEpochs()).orElse(DEFAULT_EPOCHS);
+        loggingInterval = Optional.ofNullable(parameters.getLoggingInterval()).orElse(DEFAULT_LOGGING_INTERVAL);
+        minibatchSize = Optional.ofNullable(parameters.getBatchSize()).orElse(DEFAULT_BATCH_SIZE);
+        seed = Optional.ofNullable(parameters.getSeed()).orElse(DEFAULT_SEED);
     }
 
     private void createObjective() {
@@ -115,7 +131,7 @@ public class LogisticRegression implements Trainable, Predictable {
         MutableDataset<Label> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new LabelFactory(),
                 "Logistic regression training data from OpenSearch", TribuoOutputType.LABEL, parameters.getTarget());
         // LinearSGDTrainer(objective=LogMulticlass,optimiser=AdaGrad(initialLearningRate=1.0,epsilon=0.1,initialValue=0.0),epochs=5,minibatchSize=1,seed=12345)
-        Trainer<Label> logisticRegressionTrainer = new LinearSGDTrainer(new LogMulticlass(), new AdaGrad(1.0, 0.1), 5, Trainer.DEFAULT_SEED);
+        Trainer<Label> logisticRegressionTrainer = new LinearSGDTrainer(objective, optimiser, epochs, loggingInterval, minibatchSize, seed);
         org.tribuo.Model<Label> classificationModel = logisticRegressionTrainer.train(trainDataset);
         Model model = new Model();
         model.setName(FunctionName.LOGISTIC_REGRESSION.name());
