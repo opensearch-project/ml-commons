@@ -47,6 +47,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     private String batchRcfModelId;
     private String fitRcfModelId;
     private String linearRegressionModelId;
+    private String logisticRegressionModelId;
     private int batchRcfDataSize = 100;
 
     @Rule
@@ -66,6 +67,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         batchRcfModelId = trainBatchRCFWithDataFrame(500, false);
         fitRcfModelId = trainFitRCFWithDataFrame(500, false);
         linearRegressionModelId = trainLinearRegressionWithDataFrame(100, false);
+        logisticRegressionModelId = trainLogisticRegressionWithIrisData(irisIndexName, false);
         MLModel batchRcfModel = getModel(batchRcfModelId);
         assertNotNull(batchRcfModel);
     }
@@ -101,6 +103,14 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         predictionFuture.actionGet();
+    }
+
+    public void testPredictionWithSearchInput_LogisticRegression() {
+        MLInputDataset inputDataset = new SearchQueryInputDataset(
+            ImmutableList.of(irisIndexName),
+            irisDataQueryPredictLogisticRegression()
+        );
+        predictAndVerify(logisticRegressionModelId, inputDataset, FunctionName.LOGISTIC_REGRESSION, null, IRIS_DATA_SIZE);
     }
 
     public void testPredictionWithDataFrame_BatchRCF() {
