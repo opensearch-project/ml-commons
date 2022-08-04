@@ -40,13 +40,6 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     protected final MLCircuitBreakerService mlCircuitBreakerService;
     private final ClusterService clusterService;
 
-    protected static final String TASK_ID = "task_id";
-    protected static final String ALGORITHM = "algorithm";
-    protected static final String MODEL_NAME = "model_name";
-    protected static final String MODEL_VERSION = "model_version";
-    protected static final String MODEL_CONTENT = "model_content";
-    protected static final String USER = "user";
-
     public MLTaskRunner(
         MLTaskManager mlTaskManager,
         MLStats mlStats,

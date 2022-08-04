@@ -7,12 +7,15 @@ package org.opensearch.ml.utils;
 
 import static org.apache.http.entity.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,16 +28,25 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.nio.entity.NStringEntity;
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.Version;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.WarningsHandler;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.ToXContent;
@@ -238,5 +250,67 @@ public class TestHelper {
         entries.add(KMeansParams.XCONTENT_REGISTRY);
         entries.add(LocalSampleCalculatorInput.XCONTENT_REGISTRY);
         return new NamedXContentRegistry(entries);
+    }
+
+    public static ClusterState state(
+        ClusterName name,
+        String indexName,
+        String mapping,
+        DiscoveryNode localNode,
+        DiscoveryNode clusterManagerNode,
+        List<DiscoveryNode> allNodes
+    ) throws IOException {
+        DiscoveryNodes.Builder discoBuilder = DiscoveryNodes.builder();
+        for (DiscoveryNode node : allNodes) {
+            discoBuilder.add(node);
+        }
+        if (clusterManagerNode != null) {
+            discoBuilder.masterNodeId(clusterManagerNode.getId());
+        }
+        discoBuilder.localNodeId(localNode.getId());
+
+        Settings indexSettings = Settings
+            .builder()
+            .put(IndexMetadata.SETTING_NUMBER_OF_SHARDS, 1)
+            .put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, 1)
+            .put(IndexMetadata.SETTING_VERSION_CREATED, Version.CURRENT)
+            .build();
+        final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
+        IndexMetadata indexMetaData = IndexMetadata.builder(indexName).settings(existingSettings).putMapping(mapping).build();
+
+        final ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap
+            .<String, IndexMetadata>builder()
+            .fPut(indexName, indexMetaData)
+            .build();
+        ClusterState clusterState = ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
+
+        return clusterState;
+    }
+
+    public static ClusterState state(int numDataNodes, String indexName, String mapping) throws IOException {
+        DiscoveryNode clusterManagerNode = new DiscoveryNode(
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+        List<DiscoveryNode> allNodes = new ArrayList<>();
+        allNodes.add(clusterManagerNode);
+        for (int i = 1; i <= numDataNodes - 1; i++) {
+            allNodes
+                .add(
+                    new DiscoveryNode(
+                        "foo" + i,
+                        "foo" + i,
+                        new TransportAddress(InetAddress.getLoopbackAddress(), 9300 + i),
+                        Collections.emptyMap(),
+                        Collections.singleton(DATA_ROLE),
+                        Version.CURRENT
+                    )
+                );
+        }
+        return state(new ClusterName("test"), indexName, mapping, clusterManagerNode, clusterManagerNode, allNodes);
     }
 }

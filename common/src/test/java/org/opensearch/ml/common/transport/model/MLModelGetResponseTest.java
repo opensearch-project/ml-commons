@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common.transport.model;
 
 import org.junit.Before;
@@ -56,7 +61,7 @@ public class MLModelGetResponseTest {
         assertEquals("{\"name\":\"model\"," +
                 "\"algorithm\":\"KMEANS\"," +
                 "\"version\":1," +
-                "\"content\":\"content\"," +
+                "\"model_content\":\"content\"," +
                 "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}}", jsonStr);
     }
 }
