@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.plugin;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.util.Collection;
 import java.util.Collections;

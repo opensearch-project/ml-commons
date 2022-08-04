@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.indices;
 
+import static org.opensearch.ml.common.CommonValue.META;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -13,80 +22,41 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
+import org.opensearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.exception.MLException;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor
 @Log4j2
 public class MLIndicesHandler {
-    public static final String ML_MODEL_INDEX = ".plugins-ml-model";
-    public static final String ML_TASK_INDEX = ".plugins-ml-task";
-    private static final String ML_MODEL_INDEX_MAPPING = "{\n"
-        + "    \"properties\": {\n"
-        + "      \"task_id\": { \"type\": \"keyword\" },\n"
-        + "      \"algorithm\": {\"type\": \"keyword\"},\n"
-        + "      \"model_name\" : { \"type\": \"keyword\"},\n"
-        + "      \"model_version\" : { \"type\": \"keyword\"},\n"
-        + "      \"model_content\" : { \"type\": \"binary\"}\n"
-        + "    }\n"
-        + "}";
-
-    private static final String ML_TASK_INDEX_MAPPING = "{\n"
-        + "    \"properties\": {\n"
-        + "      \"model_id\": {\"type\": \"keyword\"},\n"
-        + "      \"task_type\": {\"type\": \"keyword\"},\n"
-        + "      \"function_name\": {\"type\": \"keyword\"},\n"
-        + "      \"state\": {\"type\": \"keyword\"},\n"
-        + "      \"input_type\": {\"type\": \"keyword\"},\n"
-        + "      \"progress\": {\"type\": \"float\"},\n"
-        + "      \"output_index\": {\"type\": \"keyword\"},\n"
-        + "      \"worker_node\": {\"type\": \"keyword\"},\n"
-        + "      \"create_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-        + "      \"last_update_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-        + "      \"error\": {\"type\": \"text\"},\n"
-        + "      \"user\": {\n"
-        + "        \"type\": \"nested\",\n"
-        + "        \"properties\": {\n"
-        + "          \"name\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\", \"ignore_above\":256}}},\n"
-        + "          \"backend_roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
-        + "          \"roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
-        + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
-        + "        }\n"
-        + "      }\n"
-        + "    }\n"
-        + "}";
 
     ClusterService clusterService;
     Client client;
 
-    public void initModelIndexIfAbsent() {
-        initMLIndexIfAbsent(ML_MODEL_INDEX, ML_MODEL_INDEX_MAPPING);
-    }
-
-    public boolean doesModelIndexExist() {
-        return clusterService.state().metadata().hasIndex(ML_MODEL_INDEX);
-    }
-
-    private void initMLIndexIfAbsent(String indexName, String mapping) {
-        if (!clusterService.state().metadata().hasIndex(indexName)) {
-            client.admin().indices().prepareCreate(indexName).get();
-            log.info("create index:{}", indexName);
-        } else {
-            log.info("index:{} is already created", indexName);
-        }
+    private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
+    static {
+        indexMappingUpdated.put(ML_MODEL_INDEX, new AtomicBoolean(false));
+        indexMappingUpdated.put(ML_TASK_INDEX, new AtomicBoolean(false));
     }
 
     public void initModelIndexIfAbsent(ActionListener<Boolean> listener) {
-        initMLIndexIfAbsent(ML_MODEL_INDEX, ML_MODEL_INDEX_MAPPING, listener);
+        initMLIndexIfAbsent(MLIndex.MODEL, listener);
     }
 
     public void initMLTaskIndex(ActionListener<Boolean> listener) {
-        initMLIndexIfAbsent(ML_TASK_INDEX, ML_TASK_INDEX_MAPPING, listener);
+        initMLIndexIfAbsent(MLIndex.TASK, listener);
     }
 
-    public void initMLIndexIfAbsent(String indexName, String mapping, ActionListener<Boolean> listener) {
+    public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
+        String indexName = index.getIndexName();
+        String mapping = index.getMapping();
+
         if (!clusterService.state().metadata().hasIndex(indexName)) {
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<CreateIndexResponse> actionListener = ActionListener.wrap(r -> {
@@ -108,8 +78,67 @@ public class MLIndicesHandler {
             }
         } else {
             log.info("index:{} is already created", indexName);
-            listener.onResponse(true);
+            if (indexMappingUpdated.containsKey(indexName) && !indexMappingUpdated.get(indexName).get()) {
+                shouldUpdateIndex(indexName, index.getVersion(), ActionListener.wrap(r -> {
+                    if (r) {
+                        // return true if should update index
+                        client
+                            .admin()
+                            .indices()
+                            .putMapping(
+                                new PutMappingRequest().indices(indexName).source(mapping, XContentType.JSON),
+                                ActionListener.wrap(response -> {
+                                    if (response.isAcknowledged()) {
+                                        indexMappingUpdated.get(indexName).set(true);
+                                        listener.onResponse(true);
+                                    } else {
+                                        listener.onFailure(new MLException("Failed to update index: " + indexName));
+                                    }
+                                }, exception -> {
+                                    log.error("Failed to update index " + indexName, exception);
+                                    listener.onFailure(exception);
+                                })
+                            );
+                    } else {
+                        // no need to update index if it does not exist or the version is already up-to-date.
+                        indexMappingUpdated.get(indexName).set(true);
+                        listener.onResponse(true);
+                    }
+                }, e -> {
+                    log.error("Failed to update index mapping", e);
+                    listener.onFailure(e);
+                }));
+            } else {
+                // No need to update index if it's not ML system index or it's already updated.
+                listener.onResponse(true);
+            }
         }
+    }
+
+    /**
+     * Check if we should update index based on schema version.
+     * @param indexName index name
+     * @param newVersion new index mapping version
+     * @param listener action listener, if should update index, will pass true to its onResponse method
+     */
+    public void shouldUpdateIndex(String indexName, Integer newVersion, ActionListener<Boolean> listener) {
+        IndexMetadata indexMetaData = clusterService.state().getMetadata().indices().get(indexName);
+        if (indexMetaData == null) {
+            listener.onResponse(Boolean.FALSE);
+            return;
+        }
+        Integer oldVersion = CommonValue.NO_SCHEMA_VERSION;
+        Map<String, Object> indexMapping = indexMetaData.mapping().getSourceAsMap();
+        Object meta = indexMapping.get(META);
+        if (meta != null && meta instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metaMapping = (Map<String, Object>) meta;
+            Object schemaVersion = metaMapping.get(SCHEMA_VERSION_FIELD);
+            if (schemaVersion instanceof Integer) {
+                oldVersion = (Integer) schemaVersion;
+            }
+        }
+        listener.onResponse(newVersion > oldVersion);
     }
 
 }

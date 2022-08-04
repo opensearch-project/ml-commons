@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.time.Instant;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
 
 @Getter
 @EqualsAndHashCode
@@ -39,7 +40,6 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
     public static final String ERROR_FIELD = "error";
-    public static final String USER_FIELD = "user";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
 
     @Setter
@@ -177,7 +177,7 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(ERROR_FIELD, error);
         }
         if (user != null) {
-            builder.field(USER_FIELD, user);
+            builder.field(USER, user);
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
         return builder.endObject();
@@ -246,7 +246,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 case ERROR_FIELD:
                     error = parser.text();
                     break;
-                case USER_FIELD:
+                case USER:
                     user = User.parse(parser);
                     break;
                 case IS_ASYNC_TASK_FIELD:
