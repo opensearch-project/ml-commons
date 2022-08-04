@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.task;
 
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
 
 import java.time.Instant;
 import java.util.HashMap;

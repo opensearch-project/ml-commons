@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;

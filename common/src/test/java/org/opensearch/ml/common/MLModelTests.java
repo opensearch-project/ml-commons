@@ -40,7 +40,7 @@ public class MLModelTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"version\":1,\"content\":\"test_content\"}", mlModelContent);
+        assertEquals("{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"version\":1,\"model_content\":\"test_content\"}", mlModelContent);
     }
 
     @Test

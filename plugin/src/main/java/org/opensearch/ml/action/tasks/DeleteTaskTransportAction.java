@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.tasks;
 
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import lombok.extern.log4j.Log4j2;
 
