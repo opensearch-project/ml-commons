@@ -52,6 +52,7 @@ import org.opensearch.ml.common.input.parameter.clustering.RCFSummarizeParams;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
+import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -298,7 +299,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 BatchRCFParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
                 AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
-                RCFSummarizeParams.XCONTENT_REGISTRY
+                RCFSummarizeParams.XCONTENT_REGISTRY,
+                LogisticRegressionParams.XCONTENT_REGISTRY
             );
     }
 }
