@@ -18,6 +18,7 @@ import org.tribuo.MutableDataset;
 import org.tribuo.Output;
 import org.tribuo.OutputFactory;
 import org.tribuo.anomaly.Event;
+import org.tribuo.classification.Label;
 import org.tribuo.clustering.ClusterID;
 import org.tribuo.datasource.ListDataSource;
 import org.tribuo.impl.ArrayExample;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
@@ -56,7 +58,7 @@ public class TribuoUtil {
             Row row = itr.next();
             float[] v = new float[row.size()];
             for (int ii = 0; ii < row.size(); ii++) {
-                v[ii] = (float)row.getValue(ii).doubleValue();
+                v[ii] = (float) row.getValue(ii).doubleValue();
             }
 
             featureValues[i] = v;
@@ -64,6 +66,43 @@ public class TribuoUtil {
         }
 
         return new Tuple<>(featureNames, featureValues);
+    }
+
+    public static Tuple<String[], double[][]> transformClassificationDataFrame(DataFrame dataFrame, String target) {
+        List<String> featureNames = Arrays.stream(dataFrame.columnMetas()).map(ColumnMeta::getName).collect(Collectors.toList());
+        int targetIndex = dataFrame.getColumnIndex(target);
+
+        int i = 0;
+        Iterator<Row> itr = dataFrame.iterator();
+        double[][] featureValues = new double[dataFrame.size()][featureNames.size() - 1];
+        while (itr.hasNext()) {
+            Row row = itr.next();
+            int col = 0;
+            for (int j = 0; j < featureNames.size(); j++) {
+                if (j == targetIndex) {
+                    continue;
+                }
+                featureValues[i][col++] = row.getValue(j).doubleValue();
+            }
+            ++i;
+        }
+        featureNames.remove(target);
+        return new Tuple<>(featureNames.toArray(new String[featureNames.size()]), featureValues);
+    }
+
+    public static String[] transformTargetValuesDataFrames(DataFrame dataFrame, String target) {
+        int targetIndex = dataFrame.getColumnIndex(target);
+
+        int i = 0;
+        Iterator<Row> itr = dataFrame.iterator();
+        String[] targetValues = new String[dataFrame.size()];
+        while (itr.hasNext()) {
+            Row row = itr.next();
+            targetValues[i] = row.getValue(targetIndex).stringValue();
+            ++i;
+        }
+
+        return targetValues;
     }
 
     /**
@@ -95,6 +134,9 @@ public class TribuoUtil {
                     // TODO: support anomaly labels to evaluate prediction result
                     example = new ArrayExample<>((T) new Event(defaultEventType), featureNamesValues.v1(), featureNamesValues.v2()[i]);
                     break;
+                case LABEL:
+                    example = new ArrayExample<>((T) outputFactory.getUnknownOutput(), featureNamesValues.v1(), featureNamesValues.v2()[i]);
+                    break;
                 default:
                     throw new IllegalArgumentException("unknown type:" + outputType);
             }
@@ -119,8 +161,45 @@ public class TribuoUtil {
         }
 
         List<Example<T>> dataset = new ArrayList<>();
-        Tuple<String[], double[][]> featureNamesValues = transformDataFrame(dataFrame);
+        ArrayExample<T> example;
 
+        for (int i=0; i<dataFrame.size(); ++i) {
+            final int finalI = i;
+            double[] featureValues;
+            Tuple<String[], double[][]> featureNamesValues;
+            String[] featureNames;
+            int finalTargetIndex;
+            switch (outputType) {
+                case REGRESSOR:
+                    featureNamesValues = transformDataFrame(dataFrame);
+                    finalTargetIndex = findFinalTargetIndex(featureNamesValues, target);
+                    featureNames = createFeatureNames(featureNamesValues, finalTargetIndex);
+                    double targetValue = featureNamesValues.v2()[finalI][finalTargetIndex];
+                    featureValues = IntStream.range(0, featureNamesValues.v2()[i].length).
+                            filter(e -> e != finalTargetIndex).
+                            mapToDouble(e -> featureNamesValues.v2()[finalI][e]).
+                            toArray();
+                    example = new ArrayExample<>((T) new Regressor(target, targetValue), featureNames, featureValues);
+                    break;
+                case LABEL:
+                    featureNamesValues = transformClassificationDataFrame(dataFrame, target);
+                    featureNames = createFeatureNames(featureNamesValues);
+                    String[] targetValues = transformTargetValuesDataFrames(dataFrame, target);
+                    featureValues = IntStream.range(0, featureNamesValues.v2()[i].length).
+                            mapToDouble(e -> featureNamesValues.v2()[finalI][e]).
+                            toArray();
+                    example = new ArrayExample<>((T) new Label(targetValues[i]), featureNames, featureValues);
+                    break;
+                default:
+                    throw new IllegalArgumentException("unknown type:" + outputType);
+            }
+            dataset.add(example);
+        }
+        SimpleDataSourceProvenance provenance = new SimpleDataSourceProvenance(desc, outputFactory);
+        return new MutableDataset<>(new ListDataSource<>(dataset, outputFactory, provenance));
+    }
+
+    private int findFinalTargetIndex(Tuple<String[], double[][]> featureNamesValues, String target) {
         int targetIndex = -1;
         for (int i = 0; i < featureNamesValues.v1().length; ++i) {
             if (featureNamesValues.v1()[i].equals(target)) {
@@ -132,31 +211,23 @@ public class TribuoUtil {
             throw new IllegalArgumentException("No matched target when generating dataset from data frame.");
         }
 
-        ArrayExample<T> example;
-        final int finalTargetIndex = targetIndex;
+        return targetIndex;
+    }
+
+    private String[] createFeatureNames(Tuple<String[], double[][]> featureNamesValues, int finalTargetIndex) {
         String[] featureNames = IntStream.range(0, featureNamesValues.v1().length).
                 filter(e -> e != finalTargetIndex).
                 mapToObj(e -> featureNamesValues.v1()[e]).
                 toArray(String[]::new);
 
-        for (int i=0; i<dataFrame.size(); ++i) {
-            switch (outputType) {
-                case REGRESSOR:
-                    final int finalI = i;
-                    double targetValue = featureNamesValues.v2()[finalI][finalTargetIndex];
-                    double[] featureValues = IntStream.range(0, featureNamesValues.v2()[i].length).
-                            filter(e -> e != finalTargetIndex).
-                            mapToDouble(e -> featureNamesValues.v2()[finalI][e]).
-                            toArray();
-                    example = new ArrayExample<>((T) new Regressor(target, targetValue), featureNames, featureValues);
-                    break;
-                default:
-                    throw new IllegalArgumentException("unknown type:" + outputType);
-            }
-            dataset.add(example);
-        }
-        SimpleDataSourceProvenance provenance = new SimpleDataSourceProvenance(desc, outputFactory);
-        return new MutableDataset<>(new ListDataSource<>(dataset, outputFactory, provenance));
+        return featureNames;
     }
 
+    private String[] createFeatureNames(Tuple<String[], double[][]> featureNamesValues) {
+        String[] featureNames = IntStream.range(0, featureNamesValues.v1().length).
+                mapToObj(e -> featureNamesValues.v1()[e]).
+                toArray(String[]::new);
+
+        return featureNames;
+    }
 }
