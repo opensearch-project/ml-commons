@@ -133,11 +133,11 @@ public class DefaultDataFrame extends AbstractDataFrame{
 
     @Override
     public int getColumnIndex(String target) {
-        List<String> featureNames = Arrays.stream(this.columnMetas()).map(ColumnMeta::getName).collect(Collectors.toList());
+        List<String> columnNames = Arrays.stream(this.columnMetas()).map(ColumnMeta::getName).collect(Collectors.toList());
 
         int targetIndex = -1;
-        for (int i = 0; i < featureNames.size(); ++i) {
-            if (featureNames.get(i).equals(target)) {
+        for (int i = 0; i < columnNames.size(); ++i) {
+            if (columnNames.get(i).equals(target)) {
                 targetIndex = i;
                 break;
             }

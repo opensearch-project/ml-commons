@@ -46,6 +46,42 @@ public class LogisticRegressionTest {
     }
 
     @Test
+    public void train_linear_decay_sgd() {
+        parameters.setOptimizerType(LogisticRegressionParams.OptimizerType.LINEAR_DECAY_SGD);
+        trainAndVerify(parameters);
+    }
+
+    @Test
+    public void train_sqrt_decay_sgd() {
+        parameters.setOptimizerType(LogisticRegressionParams.OptimizerType.SQRT_DECAY_SGD);
+        trainAndVerify(parameters);
+    }
+
+    @Test
+    public void train_sqrt_ada_delta() {
+        parameters.setOptimizerType(LogisticRegressionParams.OptimizerType.ADA_DELTA);
+        trainAndVerify(parameters);
+    }
+
+    @Test
+    public void train_adam() {
+        parameters.setOptimizerType(LogisticRegressionParams.OptimizerType.ADAM);
+        trainAndVerify(parameters);
+    }
+
+    @Test
+    public void train_rms_prop() {
+        parameters.setOptimizerType(LogisticRegressionParams.OptimizerType.SIMPLE_SGD);
+        trainAndVerify(parameters);
+    }
+
+    @Test
+    public void train_simple_sgd() {
+        parameters.setOptimizerType(LogisticRegressionParams.OptimizerType.RMS_PROP);
+        trainAndVerify(parameters);
+    }
+
+    @Test
     public void trainExceptionWithoutTarget() {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("Empty target when generating dataset from data frame.");

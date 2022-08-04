@@ -35,18 +35,28 @@ public class LogisticRegressionParams implements MLAlgoParams {
 
     public static final String OBJECTIVE_FIELD = "objective";
     public static final String OPTIMISER_FIELD = "optimiser";
+    public static final String MOMENTUM_TYPE_FIELD = "momentum_type";
     public static final String LEARNING_RATE_FIELD = "learning_rate";
     public static final String EPSILON_FIELD = "epsilon";
+    public static final String MOMENTUM_FACTOR_FIELD = "momentum_factor";
+    public static final String BETA1_FIELD = "beta1";
+    public static final String BETA2_FIELD = "beta2";
+    public static final String DECAY_RATE_FIELD = "decay_rate";
     public static final String EPOCHS_FIELD = "epochs";
     public static final String BATCH_SIZE_FIELD = "batch_size";
     public static final String LOGGING_INTERVAL_FIELD = "logging_interval";
     public static final String SEED_FIELD = "seed";
     public static final String TARGET_FIELD = "target";
 
-    private LogisticRegressionParams.ObjectiveType objectiveType;
-    private LogisticRegressionParams.OptimizerType optimizerType;
+    private ObjectiveType objectiveType;
+    private OptimizerType optimizerType;
+    private MomentumType momentumType;
     private Double learningRate;
     private Double epsilon;
+    private Double momentumFactor;
+    private Double beta1;
+    private Double beta2;
+    private Double decayRate;
     private Integer epochs;
     private Integer batchSize;
     private Integer loggingInterval;
@@ -57,8 +67,13 @@ public class LogisticRegressionParams implements MLAlgoParams {
     public LogisticRegressionParams(
         ObjectiveType objectiveType,
         OptimizerType optimizerType,
+        MomentumType momentumType,
         Double learningRate,
         Double epsilon,
+        Double momentumFactor,
+        Double beta1,
+        Double beta2,
+        Double decayRate,
         Integer epochs,
         Integer batchSize,
         Integer loggingInterval,
@@ -67,8 +82,13 @@ public class LogisticRegressionParams implements MLAlgoParams {
     ) {
         this.objectiveType = objectiveType;
         this.optimizerType = optimizerType;
+        this.momentumType = momentumType;
         this.learningRate = learningRate;
         this.epsilon = epsilon;
+        this.momentumFactor = momentumFactor;
+        this.beta1 = beta1;
+        this.beta2 = beta2;
+        this.decayRate = decayRate;
         this.epochs = epochs;
         this.batchSize = batchSize;
         this.loggingInterval = loggingInterval;
@@ -83,9 +103,15 @@ public class LogisticRegressionParams implements MLAlgoParams {
         if (in.readBoolean()) {
             this.optimizerType = in.readEnum(OptimizerType.class);
         }
+        if (in.readBoolean()) {
+            this.momentumType = in.readEnum(MomentumType.class);
+        }
         this.learningRate = in.readOptionalDouble();
-
         this.epsilon = in.readOptionalDouble();
+        this.momentumFactor = in.readOptionalDouble();
+        this.beta1 = in.readOptionalDouble();
+        this.beta2 = in.readOptionalDouble();
+        this.decayRate = in.readOptionalDouble();
         this.epochs = in.readOptionalInt();
         this.batchSize = in.readOptionalInt();
         this.loggingInterval = in.readOptionalInt();
@@ -96,8 +122,13 @@ public class LogisticRegressionParams implements MLAlgoParams {
     public static MLAlgoParams parse(XContentParser parser) throws IOException {
         ObjectiveType objective = null;
         OptimizerType optimizerType = null;
+        MomentumType momentumType = null;
         Double learningRate = null;
         Double epsilon = null;
+        Double momentumFactor = null;
+        Double beta1 = null;
+        Double beta2 = null;
+        Double decayRate = null;
         Integer epochs = null;
         Integer batchSize = null;
         Integer loggingInterval = null;
@@ -116,11 +147,26 @@ public class LogisticRegressionParams implements MLAlgoParams {
                 case OPTIMISER_FIELD:
                     optimizerType = OptimizerType.valueOf(parser.text().toUpperCase(Locale.ROOT));
                     break;
+                case MOMENTUM_TYPE_FIELD:
+                    momentumType = MomentumType.valueOf(parser.text().toUpperCase(Locale.ROOT));
+                    break;
                 case LEARNING_RATE_FIELD:
                     learningRate = parser.doubleValue(false);
                     break;
                 case EPSILON_FIELD:
                     epsilon = parser.doubleValue(false);
+                    break;
+                case MOMENTUM_FACTOR_FIELD:
+                    momentumFactor = parser.doubleValue(false);
+                    break;
+                case BETA1_FIELD:
+                    beta1 = parser.doubleValue(false);
+                    break;
+                case BETA2_FIELD:
+                    beta2 = parser.doubleValue(false);
+                    break;
+                case DECAY_RATE_FIELD:
+                    decayRate = parser.doubleValue(false);
                     break;
                 case EPOCHS_FIELD:
                     epochs = parser.intValue(false);
@@ -142,7 +188,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
                     break;
             }
         }
-        return new LogisticRegressionParams(objective,  optimizerType,  learningRate, epsilon, epochs, batchSize, loggingInterval, seed, target);
+        return new LogisticRegressionParams(objective, optimizerType, momentumType, learningRate, epsilon, momentumFactor, beta1, beta2, decayRate, epochs, batchSize, loggingInterval, seed, target);
     }
 
     @Override
@@ -159,8 +205,18 @@ public class LogisticRegressionParams implements MLAlgoParams {
         } else {
             out.writeBoolean(false);
         }
+        if (momentumType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(momentumType);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalDouble(learningRate);
         out.writeOptionalDouble(epsilon);
+        out.writeOptionalDouble(momentumFactor);
+        out.writeOptionalDouble(beta1);
+        out.writeOptionalDouble(beta2);
+        out.writeOptionalDouble(decayRate);
         out.writeOptionalInt(epochs);
         out.writeOptionalInt(batchSize);
         out.writeOptionalInt(loggingInterval);
@@ -177,11 +233,26 @@ public class LogisticRegressionParams implements MLAlgoParams {
         if (optimizerType != null) {
             builder.field(OPTIMISER_FIELD, optimizerType);
         }
+        if (momentumType != null) {
+            builder.field(MOMENTUM_TYPE_FIELD, momentumType);
+        }
         if (learningRate != null) {
             builder.field(LEARNING_RATE_FIELD, learningRate);
         }
         if (epsilon != null) {
             builder.field(EPSILON_FIELD, epsilon);
+        }
+        if (momentumFactor != null) {
+            builder.field(MOMENTUM_FACTOR_FIELD, momentumFactor);
+        }
+        if (beta1 != null) {
+            builder.field(BETA1_FIELD, beta1);
+        }
+        if (beta2 != null) {
+            builder.field(BETA1_FIELD, beta2);
+        }
+        if (decayRate != null) {
+            builder.field(DECAY_RATE_FIELD, decayRate);
         }
         if (epochs != null) {
             builder.field(EPOCHS_FIELD, epochs);
@@ -220,6 +291,19 @@ public class LogisticRegressionParams implements MLAlgoParams {
                 return ObjectiveType.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong objective type");
+            }
+        }
+    }
+
+    public enum MomentumType {
+        STANDARD,
+        NESTEROV;
+
+        public static MomentumType from(String value) {
+            try{
+                return MomentumType.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong momentum type");
             }
         }
     }
