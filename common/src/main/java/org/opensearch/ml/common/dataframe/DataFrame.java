@@ -58,4 +58,10 @@ public interface DataFrame extends Iterable<Row>, Writeable, ToXContentObject {
      */
     DataFrame select(int[] columns);
 
+    /**
+     * Find the index of the target in columnMetas
+     * @param target the string value of the target
+     * @return column index of the target in the list of columnMetas
+     */
+    int getColumnIndex(String target);
 }
