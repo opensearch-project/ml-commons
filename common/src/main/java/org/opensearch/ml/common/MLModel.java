@@ -18,14 +18,15 @@ import java.io.IOException;
 import java.util.Base64;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
 
 @Getter
 public class MLModel implements ToXContentObject {
-    public static final String ALGORITHM = "algorithm";
-    public static final String MODEL_NAME = "name";
-    public static final String MODEL_VERSION = "version";
-    public static final String MODEL_CONTENT = "content";
-    public static final String USER = "user";
+    public static final String ALGORITHM_FIELD = "algorithm";
+    public static final String MODEL_NAME_FIELD = "name";
+    public static final String MODEL_VERSION_FIELD = "version";
+    public static final String OLD_MODEL_CONTENT_FIELD = "content";
+    public static final String MODEL_CONTENT_FIELD = "model_content";
 
     private String name;
     private FunctionName algorithm;
@@ -75,16 +76,16 @@ public class MLModel implements ToXContentObject {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         if (name != null) {
-            builder.field(MODEL_NAME, name);
+            builder.field(MODEL_NAME_FIELD, name);
         }
         if (algorithm != null) {
-            builder.field(ALGORITHM, algorithm);
+            builder.field(ALGORITHM_FIELD, algorithm);
         }
         if (version != null) {
-            builder.field(MODEL_VERSION, version);
+            builder.field(MODEL_VERSION_FIELD, version);
         }
         if (content != null) {
-            builder.field(MODEL_CONTENT, content);
+            builder.field(MODEL_CONTENT_FIELD, content);
         }
         if (user != null) {
             builder.field(USER, user);
@@ -98,6 +99,7 @@ public class MLModel implements ToXContentObject {
         FunctionName algorithm = null;
         Integer version = null;
         String content = null;
+        String oldContent = null;
         User user = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -106,19 +108,22 @@ public class MLModel implements ToXContentObject {
             parser.nextToken();
 
             switch (fieldName) {
-                case MODEL_NAME:
+                case MODEL_NAME_FIELD:
                     name = parser.text();
                     break;
-                case MODEL_CONTENT:
+                case MODEL_CONTENT_FIELD:
                     content = parser.text();
                     break;
-                case MODEL_VERSION:
+                case OLD_MODEL_CONTENT_FIELD:
+                    oldContent = parser.text();
+                    break;
+                case MODEL_VERSION_FIELD:
                     version = parser.intValue(false);
                     break;
                 case USER:
                     user = User.parse(parser);
                     break;
-                case ALGORITHM:
+                case ALGORITHM_FIELD:
                     algorithm = FunctionName.from(parser.text());
                     break;
                 default:
@@ -130,7 +135,7 @@ public class MLModel implements ToXContentObject {
                 .name(name)
                 .algorithm(algorithm)
                 .version(version)
-                .content(content)
+                .content(content == null ? oldContent : content)
                 .user(user)
                 .build();
         }

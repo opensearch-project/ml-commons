@@ -6,7 +6,7 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.indices.MLIndicesHandler.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
