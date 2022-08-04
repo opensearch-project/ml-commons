@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
@@ -52,7 +54,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 public class IntegTestUtils extends OpenSearchIntegTestCase {
-    public static final String ML_MODEL = ".plugins-ml-model";
     public static final String TESTING_DATA = "{\n"
         + "\"k1\":1.1,\n"
         + "\"k2\":1.2,\n"
@@ -145,7 +146,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
         modelSearchSourceBuilder.query(queryBuilder);
-        SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL }, modelSearchSourceBuilder);
+        SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL_INDEX }, modelSearchSourceBuilder);
         SearchResponse modelSearchResponse = null;
         int i = 0;
         while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 500) {
