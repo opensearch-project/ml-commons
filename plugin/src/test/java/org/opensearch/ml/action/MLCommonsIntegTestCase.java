@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action;
 
+import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
 import static org.opensearch.ml.utils.TestData.TARGET_FIELD;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 
@@ -34,6 +35,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
+import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -103,6 +105,27 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return searchSourceBuilder;
     }
 
+    public SearchSourceBuilder irisDataQueryTrainLogisticRegression() {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.size(1000);
+        searchSourceBuilder
+            .fetchSource(
+                new String[] { "sepal_length_in_cm", "sepal_width_in_cm", "petal_length_in_cm", "petal_width_in_cm", "class" },
+                null
+            );
+        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
+        return searchSourceBuilder;
+    }
+
+    public SearchSourceBuilder irisDataQueryPredictLogisticRegression() {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.size(1000);
+        searchSourceBuilder
+            .fetchSource(new String[] { "sepal_length_in_cm", "sepal_width_in_cm", "petal_length_in_cm", "petal_width_in_cm" }, null);
+        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
+        return searchSourceBuilder;
+    }
+
     public MLInputDataset emptyQueryInputDataSet(String indexName) {
         SearchSourceBuilder searchSourceBuilder = irisDataQuery();
         searchSourceBuilder.query(QueryBuilders.matchQuery("class", "wrong_value"));
@@ -133,6 +156,16 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     public String trainKmeansWithIrisData(String irisIndexName, boolean async) {
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
         return trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), inputDataset, async);
+    }
+
+    public String trainLogisticRegressionWithIrisData(String irisIndexName, boolean async) {
+        MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQueryTrainLogisticRegression());
+        return trainModel(
+            FunctionName.LOGISTIC_REGRESSION,
+            LogisticRegressionParams.builder().objectiveType(LOGMULTICLASS).target("class").build(),
+            inputDataset,
+            async
+        );
     }
 
     public String trainBatchRCFWithDataFrame(int dataSize, boolean async) {
