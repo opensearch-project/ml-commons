@@ -58,7 +58,7 @@ public class LinearRegression implements Trainable, Predictable {
     //RMSProp
     private static final double DEFAULT_DECAY_RATE = 0.9;
 
-    private static final int DEFAULT_EPOCHS = 10;
+    private static final int DEFAULT_EPOCHS = 1000;
     private static final int DEFAULT_INTERVAL = -1;
     private static final int DEFAULT_BATCH_SIZE = 1;
 
