@@ -44,6 +44,7 @@ public class LinearRegressionParams implements MLAlgoParams {
     public static final String DECAY_RATE_FIELD = "decay_rate";
     public static final String EPOCHS_FIELD = "epochs";
     public static final String BATCH_SIZE_FIELD = "batch_size";
+    public static final String LOGGING_INTERVAL_FIELD = "logging_interval";
     public static final String SEED_FIELD = "seed";
     public static final String TARGET_FIELD = "target";
 
@@ -58,11 +59,12 @@ public class LinearRegressionParams implements MLAlgoParams {
     private Double decayRate;
     private Integer epochs;
     private Integer batchSize;
+    private Integer loggingInterval;
     private Long seed;
     private String target;
 
     @Builder(toBuilder = true)
-    public LinearRegressionParams(ObjectiveType objectiveType, OptimizerType optimizerType, Double learningRate, MomentumType momentumType, Double momentumFactor, Double epsilon, Double beta1, Double beta2, Double decayRate, Integer epochs, Integer batchSize, Long seed, String target) {
+    public LinearRegressionParams(ObjectiveType objectiveType, OptimizerType optimizerType, Double learningRate, MomentumType momentumType, Double momentumFactor, Double epsilon, Double beta1, Double beta2, Double decayRate, Integer epochs, Integer batchSize, Integer loggingInterval, Long seed, String target) {
         this.objectiveType = objectiveType;
         this.optimizerType = optimizerType;
         this.learningRate = learningRate;
@@ -74,6 +76,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         this.decayRate = decayRate;
         this.epochs = epochs;
         this.batchSize = batchSize;
+        this.loggingInterval = loggingInterval;
         this.seed = seed;
         this.target = target;
     }
@@ -96,6 +99,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         this.decayRate = in.readOptionalDouble();
         this.epochs = in.readOptionalInt();
         this.batchSize = in.readOptionalInt();
+        this.loggingInterval = in.readOptionalInt();
         this.seed = in.readOptionalLong();
         this.target = in.readOptionalString();
     }
@@ -112,6 +116,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         Double decayRate = null;
         Integer epochs = null;
         Integer batchSize = null;
+        Integer loggingInterval = null;
         Long seed = null;
         String target = null;
 
@@ -154,6 +159,9 @@ public class LinearRegressionParams implements MLAlgoParams {
                 case BATCH_SIZE_FIELD:
                     batchSize = parser.intValue(false);
                     break;
+                case LOGGING_INTERVAL_FIELD:
+                    loggingInterval = parser.intValue(false);
+                    break;
                 case SEED_FIELD:
                     seed = parser.longValue(false);
                     break;
@@ -165,7 +173,7 @@ public class LinearRegressionParams implements MLAlgoParams {
                     break;
             }
         }
-        return new LinearRegressionParams(objective,  optimizerType,  learningRate,  momentumType,  momentumFactor, epsilon, beta1, beta2,decayRate, epochs, batchSize, seed, target);
+        return new LinearRegressionParams(objective,  optimizerType,  learningRate,  momentumType,  momentumFactor, epsilon, beta1, beta2,decayRate, epochs, batchSize, loggingInterval, seed, target);
     }
 
     @Override
@@ -201,6 +209,7 @@ public class LinearRegressionParams implements MLAlgoParams {
         out.writeOptionalDouble(decayRate);
         out.writeOptionalInt(epochs);
         out.writeOptionalInt(batchSize);
+        out.writeOptionalInt(loggingInterval);
         out.writeOptionalLong(seed);
         out.writeOptionalString(target);
     }
@@ -240,6 +249,9 @@ public class LinearRegressionParams implements MLAlgoParams {
         }
         if (batchSize != null) {
             builder.field(BATCH_SIZE_FIELD, batchSize);
+        }
+        if (loggingInterval != null) {
+            builder.field(LOGGING_INTERVAL_FIELD, loggingInterval);
         }
         if (seed != null) {
             builder.field(SEED_FIELD, seed);
