@@ -21,6 +21,7 @@ import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
 import org.tribuo.Prediction;
+import org.tribuo.Trainer;
 import org.tribuo.math.StochasticGradientOptimiser;
 import org.tribuo.math.optimisers.AdaDelta;
 import org.tribuo.math.optimisers.AdaGrad;
@@ -58,15 +59,18 @@ public class LinearRegression implements Trainable, Predictable {
     //RMSProp
     private static final double DEFAULT_DECAY_RATE = 0.9;
 
-    private static final int DEFAULT_EPOCHS = 10;
+    private static final int DEFAULT_EPOCHS = 1000;
     private static final int DEFAULT_INTERVAL = -1;
     private static final int DEFAULT_BATCH_SIZE = 1;
+    private static final Long DEFAULT_SEED = Trainer.DEFAULT_SEED;
 
     private LinearRegressionParams parameters;
     private StochasticGradientOptimiser optimiser;
     private RegressionObjective objective;
 
-    private long seed = System.currentTimeMillis();
+    private int loggingInterval;
+    private int minibatchSize;
+    private long seed;
 
     public LinearRegression() {}
 
@@ -177,6 +181,14 @@ public class LinearRegression implements Trainable, Predictable {
         if (parameters.getBatchSize() != null && parameters.getBatchSize() < 0) {
             throw new IllegalArgumentException("MiniBatchSize should not be negative.");
         }
+
+        if (parameters.getLoggingInterval() != null && parameters.getLoggingInterval() < -1) {
+            throw new IllegalArgumentException("Invalid Logging intervals");
+        }
+
+        loggingInterval = Optional.ofNullable(parameters.getLoggingInterval()).orElse(DEFAULT_INTERVAL);
+        minibatchSize = Optional.ofNullable(parameters.getBatchSize()).orElse(DEFAULT_BATCH_SIZE);
+        seed = Optional.ofNullable(parameters.getSeed()).orElse(DEFAULT_SEED);
     }
 
     @Override
@@ -200,7 +212,7 @@ public class LinearRegression implements Trainable, Predictable {
         MutableDataset<Regressor> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(),
                 "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, parameters.getTarget());
         Integer epochs = Optional.ofNullable(parameters.getEpochs()).orElse(DEFAULT_EPOCHS);
-        LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, DEFAULT_INTERVAL, DEFAULT_BATCH_SIZE, seed);
+        LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, loggingInterval, minibatchSize, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
         Model model = new Model();
         model.setName(FunctionName.LINEAR_REGRESSION.name());
