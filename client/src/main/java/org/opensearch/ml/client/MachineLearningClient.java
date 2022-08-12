@@ -24,6 +24,7 @@ public interface MachineLearningClient {
 
     /**
      * Do prediction machine learning job
+     * For additional info on Predict, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#predict
      * @param modelId the trained model id
      * @param mlInput ML input
      * @return ActionFuture of MLOutput
@@ -36,6 +37,7 @@ public interface MachineLearningClient {
 
     /**
      * Do prediction machine learning job
+     * For additional info on Predict, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#predict
      * @param modelId the trained model id
      * @param mlInput ML input
      * @param listener a listener to be notified of the result
@@ -44,6 +46,7 @@ public interface MachineLearningClient {
 
     /**
      * Train model then predict with the same data set.
+     * For additional info on train and predict, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#train-and-predict
      * @param mlInput ML input
      * @return ActionFuture of MLOutput
      */
@@ -55,6 +58,7 @@ public interface MachineLearningClient {
 
     /**
      * Train model then predict with the same data set.
+     * For additional info on train and predict, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#train-and-predict
      * @param mlInput ML input
      * @param listener a listener to be notified of the result
      */
@@ -62,6 +66,7 @@ public interface MachineLearningClient {
 
     /**
      *  Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
+     * For more info on train model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#train-model
      * @param mlInput ML input
      * @param asyncTask is async task or not
      * @return ActionFuture of MLOutput
@@ -75,6 +80,7 @@ public interface MachineLearningClient {
 
     /**
      * Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
+     * For more info on train model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#train-model
      * @param mlInput ML input
      * @param asyncTask is async task or not
      * @param listener a listener to be notified of the result
@@ -83,6 +89,7 @@ public interface MachineLearningClient {
 
     /**
      * Get MLModel and return ActionFuture.
+     * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
      * @param modelId id of the model
      * @return ActionFuture of ml model
      */
@@ -94,6 +101,7 @@ public interface MachineLearningClient {
 
     /**
      * Get MLModel and return model in listener
+     * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
      * @param modelId id of the model
      * @param listener action listener
      */
@@ -101,6 +109,7 @@ public interface MachineLearningClient {
 
     /**
      * Get MLTask and return ActionFuture.
+     * For more info on get task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-task-information
      * @param taskId id of the task
      * @return ActionFuture of ml task
      */
@@ -112,6 +121,7 @@ public interface MachineLearningClient {
 
     /**
      * Get MLTask and return task in listener
+     * For more info on get task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-task-information
      * @param taskId id of the model
      * @param listener action listener
      */
@@ -119,6 +129,7 @@ public interface MachineLearningClient {
 
     /**
      *  Delete the model with modelId.
+     *  For more info on delete model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-model
      * @param modelId ML model id
      * @return the result future
      */
@@ -130,6 +141,7 @@ public interface MachineLearningClient {
 
     /**
      * Delete MLModel
+     * For more info on delete model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-model
      * @param modelId id of the model
      * @param listener action listener
      */
@@ -137,6 +149,7 @@ public interface MachineLearningClient {
 
     /**
      *  Delete the task with taskId.
+     *  For more info on delete task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-task
      * @param taskId ML task id
      * @return the result future
      */
@@ -148,13 +161,14 @@ public interface MachineLearningClient {
 
     /**
      * Delete MLTask
+     * For more info on delete task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-task
      * @param taskId id of the task
      * @param listener action listener
      */
     void deleteTask(String taskId, ActionListener<DeleteResponse> listener);
 
     /**
-     *
+     * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
      * @param searchRequest searchRequest to search the ML Model
      * @return Action future of search response
      */
@@ -165,14 +179,14 @@ public interface MachineLearningClient {
     }
 
     /**
-     *
+     * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
      * @param searchRequest searchRequest to search the ML Model
      * @param listener action listener
      */
     void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
 
     /**
-     *
+     * For more info on search task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-task
      * @param searchRequest searchRequest to search the ML Task
      * @return Action future of search response
      */
@@ -183,7 +197,7 @@ public interface MachineLearningClient {
     }
 
     /**
-     *
+     * For more info on search task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-task
      * @param searchRequest searchRequest to search the ML Task
      * @param listener action listener
      */
