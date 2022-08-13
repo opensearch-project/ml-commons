@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -39,6 +40,7 @@ import org.opensearch.rest.RestStatus;
 @Log4j2
 public class MLTaskManager {
     private final Map<String, MLTaskCache> taskCaches;
+    private final Map<String, List<String>> taskWorkNodesCaches;
     // TODO: make this value configurable as cluster setting
     public final static int MAX_ML_TASK_PER_NODE = 10;
     private final Client client;
@@ -54,6 +56,7 @@ public class MLTaskManager {
         this.client = client;
         this.mlIndicesHandler = mlIndicesHandler;
         taskCaches = new ConcurrentHashMap<>();
+        taskWorkNodesCaches = new ConcurrentHashMap<>();
     }
 
     /**
@@ -71,6 +74,14 @@ public class MLTaskManager {
         }
         taskCaches.put(taskId, new MLTaskCache(mlTask));
         log.info("add ML task to cache " + taskId);
+    }
+
+    public synchronized void addTaskWorkerNodes(String taskId, List<String> nodes) {
+        if (taskWorkNodesCaches.containsKey(taskId)) {
+            throw new IllegalArgumentException("Duplicate taskId");
+        }
+        taskWorkNodesCaches.put(taskId, nodes);
+        log.info("add ML task to worker node cache " + taskId);
     }
 
     /**
@@ -132,6 +143,10 @@ public class MLTaskManager {
             taskCaches.remove(taskId);
             log.info("remove ML task from cache " + taskId);
         }
+        if (taskWorkNodesCaches.containsKey(taskId)) {
+            taskWorkNodesCaches.remove(taskId);
+            log.info("remove ML task worker nodes cache from cache " + taskId);
+        }
     }
 
     /**
@@ -143,6 +158,13 @@ public class MLTaskManager {
     public MLTask get(String taskId) {
         if (contains(taskId)) {
             return taskCaches.get(taskId).getMlTask();
+        }
+        return null;
+    }
+
+    public List<String> getWorkNodes(String taskId) {
+        if (taskWorkNodesCaches.containsKey(taskId)) {
+            return taskWorkNodesCaches.get(taskId);
         }
         return null;
     }

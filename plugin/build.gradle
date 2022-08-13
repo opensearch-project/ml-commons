@@ -51,6 +51,8 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
 
+    implementation 'org.opensearch.client:opensearch-rest-high-level-client:2.2.0-SNAPSHOT'
+
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 
@@ -231,7 +233,13 @@ List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
         'org.opensearch.ml.constant.CommonValue',
         'org.opensearch.ml.plugin.MachineLearningPlugin*',
-        'org.opensearch.ml.indices.MLIndicesHandler'
+        'org.opensearch.ml.indices.MLIndicesHandler',
+        'org.opensearch.ml.action.custom.*',
+        'org.opensearch.ml.rest.RestMLCustomModelUploadAction',
+        'org.opensearch.ml.rest.RestMLCustomModelLoadAction',
+        'org.opensearch.ml.rest.RestMLCustomModelUnloadAction',
+        'org.opensearch.ml.rest.RestMLCustomModelPredictAction',
+        'org.opensearch.ml.rest.RestMLKNNSearchAction*',
 ]
 
 jacocoTestCoverageVerification {
@@ -263,6 +271,10 @@ configurations.all {
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
+    resolutionStrategy.force 'net.java.dev.jna:jna:5.10.0'
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.19.4'
+    resolutionStrategy.force 'com.google.guava:guava:31.0.1-jre'
+    resolutionStrategy.force 'com.google.errorprone:error_prone_annotations:2.10.0'
 }
 
 apply plugin: 'nebula.ospackage'

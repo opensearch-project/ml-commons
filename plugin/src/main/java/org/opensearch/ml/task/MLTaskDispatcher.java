@@ -113,7 +113,7 @@ public class MLTaskDispatcher {
      *
      * @return array of discovery node
      */
-    protected DiscoveryNode[] getEligibleNodes() {
+    public DiscoveryNode[] getEligibleNodes() {
         ClusterState state = this.clusterService.state();
         final List<DiscoveryNode> eligibleMLNodes = new ArrayList<>();
         final List<DiscoveryNode> eligibleDataNodes = new ArrayList<>();

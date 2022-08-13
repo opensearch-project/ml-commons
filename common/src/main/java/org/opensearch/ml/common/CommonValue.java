@@ -44,6 +44,12 @@ public class CommonValue {
             + "      \""
             + MLModel.MODEL_CONTENT_FIELD
             + "\" : {\"type\": \"binary\"},\n"
+            + "      \""
+            + MLModel.CHUNK_NUMBER_FIELD
+            + "\" : {\"type\": \"long\"},\n"
+            + "      \""
+            + MLModel.TOTAL_CHUNKS_FIELD
+            + "\" : {\"type\": \"long\"},\n"
             + USER_FIELD_MAPPING
             + "    }\n"
             + "}";

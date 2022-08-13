@@ -1,0 +1,28 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.opensearch.ml.serving.bertqa";
+option java_outer_classname = "BertQaProto";
+option objc_class_prefix = "BertQa";
+
+package bertqa;
+
+// The bert QA service definition.
+service BertQa {
+  rpc FindAnswer (BertQaRequest) returns (BertQaResponse) {}
+}
+
+// The request message containing question and document
+message BertQaRequest {
+  string question = 1;
+  string doc = 2;
+}
+
+// The response message containing the answer
+message BertQaResponse {
+  string answer = 1;
+}

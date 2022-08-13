@@ -1,0 +1,32 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.opensearch.ml.serving.st";
+option java_outer_classname = "SentenceTransformerProto";
+option objc_class_prefix = "ST";
+
+package sentencetransformer;
+
+// The sentence transformer service definition.
+service SentenceTransformer {
+  // define a remote procedure of transforming sentence
+  rpc TransformSentence (TransformSentenceRequest) returns (TransformSentenceResponse) {}
+}
+
+// The request message containing a list of sentences
+message TransformSentenceRequest {
+  repeated string sentence = 1;
+}
+
+// The response message containing the dense vectors
+message TransformSentenceResponse {
+  repeated Vector vectors = 1;
+}
+
+message Vector {
+  repeated float vector = 1;
+}

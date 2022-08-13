@@ -26,6 +26,8 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_NAME_FIELD = "name";
     public static final String MODEL_VERSION_FIELD = "version";
     public static final String OLD_MODEL_CONTENT_FIELD = "content";
+    public static final String CHUNK_NUMBER_FIELD = "chunk_number";
+    public static final String TOTAL_CHUNKS_FIELD = "total_chunks";
     public static final String MODEL_CONTENT_FIELD = "model_content";
 
     private String name;
@@ -33,18 +35,22 @@ public class MLModel implements ToXContentObject {
     private Integer version;
     private String content;
     private User user;
+    private Integer chunkNumber;
+    private Integer totalChunks;
 
     @Builder
-    public MLModel(String name, FunctionName algorithm, Integer version, String content, User user) {
+    public MLModel(String name, FunctionName algorithm, Integer version, String content, User user, Integer chunkNumber, Integer totalChunks) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
         this.content = content;
+        this.chunkNumber = chunkNumber;
+        this.totalChunks = totalChunks;
         this.user = user;
     }
 
     public MLModel(FunctionName algorithm, Model model) {
-        this(model.getName(), algorithm, model.getVersion(), Base64.getEncoder().encodeToString(model.getContent()), null);
+        this(model.getName(), algorithm, model.getVersion(), Base64.getEncoder().encodeToString(model.getContent()), null, null, null);
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -52,6 +58,8 @@ public class MLModel implements ToXContentObject {
         algorithm = input.readEnum(FunctionName.class);
         version = input.readInt();
         content = input.readOptionalString();
+        chunkNumber = input.readOptionalInt();
+        totalChunks = input.readOptionalInt();
         if (input.readBoolean()) {
             this.user = new User(input);
         } else {
@@ -64,6 +72,8 @@ public class MLModel implements ToXContentObject {
         out.writeEnum(algorithm);
         out.writeInt(version);
         out.writeOptionalString(content);
+        out.writeOptionalInt(chunkNumber);
+        out.writeOptionalInt(totalChunks);
         if (user != null) {
             out.writeBoolean(true); // user exists
             user.writeTo(out);
@@ -87,6 +97,12 @@ public class MLModel implements ToXContentObject {
         if (content != null) {
             builder.field(MODEL_CONTENT_FIELD, content);
         }
+        if (chunkNumber != null) {
+            builder.field(CHUNK_NUMBER_FIELD, chunkNumber);
+        }
+        if (totalChunks != null) {
+            builder.field(TOTAL_CHUNKS_FIELD, totalChunks);
+        }
         if (user != null) {
             builder.field(USER, user);
         }
@@ -99,6 +115,8 @@ public class MLModel implements ToXContentObject {
         FunctionName algorithm = null;
         Integer version = null;
         String content = null;
+        Integer chunkNumber = null;
+        Integer totalChunks = null;
         String oldContent = null;
         User user = null;
 
@@ -120,6 +138,12 @@ public class MLModel implements ToXContentObject {
                 case MODEL_VERSION_FIELD:
                     version = parser.intValue(false);
                     break;
+                case CHUNK_NUMBER_FIELD:
+                    chunkNumber = parser.intValue(false);
+                    break;
+                case TOTAL_CHUNKS_FIELD:
+                    totalChunks = parser.intValue(false);
+                    break;
                 case USER:
                     user = User.parse(parser);
                     break;
@@ -136,6 +160,8 @@ public class MLModel implements ToXContentObject {
                 .algorithm(algorithm)
                 .version(version)
                 .content(content == null ? oldContent : content)
+                .chunkNumber(chunkNumber)
+                .totalChunks(totalChunks)
                 .user(user)
                 .build();
         }
@@ -143,5 +169,9 @@ public class MLModel implements ToXContentObject {
     public static MLModel fromStream(StreamInput in) throws IOException {
         MLModel mlModel = new MLModel(in);
         return mlModel;
+    }
+
+    public static String customModelId(String modelName, Integer version, Integer chunkNumber) {
+        return modelName + "_" + version + "_" + chunkNumber;
     }
 }

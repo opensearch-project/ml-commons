@@ -25,6 +25,8 @@ import org.tribuo.impl.ArrayExample;
 import org.tribuo.regression.RegressionFactory;
 import org.tribuo.regression.Regressor;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -111,5 +113,12 @@ public class TribuoUtilTest {
         ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("f1", ColumnType.DOUBLE), new ColumnMeta("f2", ColumnType.DOUBLE)};
         dataFrame = DataFrameBuilder.emptyDataFrame(columnMetas);
         Arrays.stream(rawData).forEach(e -> dataFrame.appendRow(e));
+    }
+
+    @Test
+    public void testA() {
+        Path path = Paths.get("/home/ylwu/test");
+        Path a = path.resolve("a").resolve("b");
+        System.out.println(a);
     }
 }
