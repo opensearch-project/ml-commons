@@ -1,0 +1,7 @@
+{
+  "prefix": "mlCommonsPlugin",
+  "paths": {
+    "mlCommonsPlugin": "."
+  },
+  "translations": ["translations/ja-JP.json"]
+}
