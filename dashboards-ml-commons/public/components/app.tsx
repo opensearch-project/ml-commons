@@ -7,12 +7,9 @@ import React from 'react';
 import { I18nProvider } from '@osd/i18n/react';
 import { Provider } from 'react-redux';
 import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
-import { ROUTES } from '../../common/router'
+import { ROUTES } from '../../common/router';
 
-import {
-  EuiPage,
-  EuiPageBody,
-} from '@elastic/eui';
+import { EuiPage, EuiPageBody } from '@elastic/eui';
 import store from '../../redux/store';
 
 import { CoreStart } from '../../../../src/core/public';
@@ -49,7 +46,7 @@ export const MlCommonsPluginApp = ({
               <EuiPage restrictWidth="1000px">
                 <EuiPageBody component="main">
                   {ROUTES.map(({ path, Component, exact }) => (
-                    <Route path={path} render={Component} exact={exact ?? false} />
+                    <Route path={path} component={Component} exact={exact ?? false} />
                   ))}
                 </EuiPageBody>
               </EuiPage>
