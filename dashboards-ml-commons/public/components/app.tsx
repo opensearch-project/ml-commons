@@ -9,13 +9,14 @@ import { Provider } from 'react-redux';
 import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
 import { ROUTES } from '../../common/router';
 
-import { EuiPage, EuiPageBody } from '@elastic/eui';
+import { EuiPage, EuiPageBody, EuiPageSideBar } from '@elastic/eui';
 import store from '../../redux/store';
 
 import { CoreStart } from '../../../../src/core/public';
 import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/public';
 
 import { PLUGIN_ID } from '../../common';
+import { NavPanel } from '../components/nav_panel';
 
 interface MlCommonsPluginAppDeps {
   basename: string;
@@ -44,6 +45,9 @@ export const MlCommonsPluginApp = ({
                 useDefaultBehaviors={true}
               />
               <EuiPage restrictWidth="1000px">
+                <EuiPageSideBar>
+                  <NavPanel />
+                </EuiPageSideBar>
                 <EuiPageBody component="main">
                   {ROUTES.map(({ path, Component, exact }) => (
                     <Route path={path} component={Component} exact={exact ?? false} />
