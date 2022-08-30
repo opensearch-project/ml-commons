@@ -38,23 +38,16 @@ export const MlCommonsPluginApp = ({
       <Router basename={basename}>
         <I18nProvider>
           <Switch>
-            <>
-              <navigation.ui.TopNavMenu
-                appName={PLUGIN_ID}
-                showSearchBar={true}
-                useDefaultBehaviors={true}
-              />
-              <EuiPage restrictWidth="1000px">
-                <EuiPageSideBar>
-                  <NavPanel />
-                </EuiPageSideBar>
-                <EuiPageBody component="main">
-                  {ROUTES.map(({ path, Component, exact }) => (
-                    <Route path={path} component={Component} exact={exact ?? false} />
-                  ))}
-                </EuiPageBody>
-              </EuiPage>
-            </>
+            <EuiPage restrictWidth="1000px">
+              <EuiPageSideBar>
+                <NavPanel />
+              </EuiPageSideBar>
+              <EuiPageBody component="main">
+                {ROUTES.map(({ path, Component, exact }) => (
+                  <Route path={path} component={Component} exact={exact ?? false} />
+                ))}
+              </EuiPageBody>
+            </EuiPage>
           </Switch>
         </I18nProvider>
       </Router>
