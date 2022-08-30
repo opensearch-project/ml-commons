@@ -1,16 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { EuiPageHeader, EuiButton, EuiSpacer } from '@elastic/eui';
+import { EuiPageHeader, EuiButton, EuiSpacer, EuiPanel } from '@elastic/eui';
 
 import { ModelSearchItem } from '../../apis/model';
 import { APIProvider } from '../../apis/api_provider';
 
 import { ModelTable } from './model_table';
 
-import { ComponentsCommonProps } from '../app'
-interface Props extends ComponentsCommonProps {
-
-}
-export function ModelList({ }: Props) {
+export const ModelList = () => {
   const [models, setModels] = useState<ModelSearchItem[]>([]);
   const [pagination, setCurrentPageAndPageSize] = useState({
     currentPage: 1,
@@ -59,7 +55,7 @@ export function ModelList({ }: Props) {
   }, [pagination.currentPage, pagination.pageSize]);
 
   return (
-    <>
+    <EuiPanel>
       <EuiPageHeader
         pageTitle="Models"
         rightSideItems={[<EuiButton fill>Train new model</EuiButton>]}
@@ -72,6 +68,6 @@ export function ModelList({ }: Props) {
         onPaginationChange={handlePaginationChange}
         onModelDeleted={reloadModels}
       />
-    </>
+    </EuiPanel>
   );
-}
+};
