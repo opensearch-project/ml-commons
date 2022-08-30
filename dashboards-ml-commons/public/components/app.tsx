@@ -12,10 +12,9 @@ import { ROUTES } from '../../common/router';
 import { EuiPage, EuiPageBody, EuiPageSideBar } from '@elastic/eui';
 import store from '../../redux/store';
 
-import { CoreStart } from '../../../../src/core/public';
-import { NavigationPublicPluginStart } from '../../../../src/plugins/navigation/public';
+import { CoreStart } from '../../../../../src/core/public';
+import { NavigationPublicPluginStart } from '../../../../../src/plugins/navigation/public';
 
-import { PLUGIN_ID } from '../../common';
 import { NavPanel } from '../components/nav_panel';
 
 interface MlCommonsPluginAppDeps {
@@ -23,6 +22,11 @@ interface MlCommonsPluginAppDeps {
   notifications: CoreStart['notifications'];
   http: CoreStart['http'];
   navigation: NavigationPublicPluginStart;
+}
+
+export interface ComponentsCommonProps {
+  notifications: CoreStart['notifications'];
+  http: CoreStart['http'];
 }
 
 export const MlCommonsPluginApp = ({
@@ -44,8 +48,7 @@ export const MlCommonsPluginApp = ({
               </EuiPageSideBar>
               <EuiPageBody component="main">
                 {ROUTES.map(({ path, Component, exact }) => (
-                  <Route path={path} component={Component} exact={exact ?? false} />
-                ))}
+                  <Route path={path} render={() => <Component http={http} notifications={notifications} />} exact={exact ?? false} />))}
               </EuiPageBody>
             </EuiPage>
           </Switch>

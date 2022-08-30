@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Model } from '../public/components/model';
+import { Train } from '../public/components/train';
 import { Predict } from '../public/components/predict';
 import { Home } from '../public/components/home';
 import { ModelList } from '../public/components/model_list';
@@ -12,9 +12,9 @@ import { routerPaths } from './router_paths';
 
 export const ROUTES = [
   {
-    path: routerPaths.model,
-    component: Model,
-    label: 'Model',
+    path: routerPaths.train,
+    Component: Train,
+    label: 'Train Model',
     icon: 'createSingleMetricJob',
   },
   {
