@@ -20,9 +20,12 @@ import { FormattedMessage } from '@osd/i18n/react';
 import { PLUGIN_NAME, PLUGIN_DESC } from '../../../common';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../../../common/router'
+import { ComponentsCommonProps } from '../app'
+interface Props extends ComponentsCommonProps {
 
+}
 
-export const Home = () => {
+export const Home = ({ }: Props) => {
     return (
         <>
             <EuiPageHeader>

@@ -30,19 +30,20 @@ export default function (Client: any, config: any, components: any) {
    */
   mlCommonsTrain.trainModel = ca({
     method: 'POST',
-    url: {
-      fmt: `${TRAIN_BASE_API}/<%=methodName%>?async=<%=async%>`,
-      req: {
-        methodName: {
-          type: 'string',
-          required: true,
-        },
-        async: {
-          type: 'boolean',
-          required: true,
-        },
-      },
-    },
     needBody: true,
+    url: {
+      fmt: '/_plugins/_ml/_train/kmeans'
+      // fmt: `${TRAIN_BASE_API}/<%=methodName%>?async=<%=async%>`,
+      // req: {
+      //   methodName: {
+      //     type: 'string',
+      //     required: true,
+      //   },
+      //   async: {
+      //     type: 'boolean',
+      //     required: true,
+      //   },
+      // },
+    },
   });
 }

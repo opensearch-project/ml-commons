@@ -13,7 +13,7 @@
  *   permissions and limitations under the License.
  */
 
-import { ILegacyClusterClient, ScopeableRequest } from '../../../../../src/core/server';
+import { ILegacyClusterClient } from '../../../../../src/core/server';
 
 export class TrainService {
   private osClient: ILegacyClusterClient;
@@ -22,33 +22,15 @@ export class TrainService {
     this.osClient = osClient;
   }
 
-  public async trainModel({
-    methodName,
-    async,
-    body,
-    request,
-  }: {
-    methodName: string;
-    async: boolean;
-    body: any;
-    request: ScopeableRequest;
-  }) {
+  public async trainModel(request) {
+    const params = {
+      body: {
+        ...request.body
+      }
+    }
     const response = await this.osClient
       .asScoped(request)
-      .callAsCurrentUser('mlCommonsTrain.trainModel', {
-        body,
-        methodName,
-        async,
-      });
-    if (async) {
-      return {
-        taskId: response['task_id'],
-        status: response['status'],
-      };
-    }
-    return {
-      modelId: response['model_id'],
-      status: response['status'],
-    };
+      .callAsCurrentUser('mlCommonsTrain.trainModel', params);
+    return response
   }
 }

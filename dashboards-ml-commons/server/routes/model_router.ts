@@ -15,41 +15,15 @@
 
 import { schema } from '@osd/config-schema';
 import { IRouter, opensearchDashboardsResponseFactory } from '../../../../../src/core/server';
-import { ModelService, TrainService } from '../services';
+import { ModelService } from '../services';
 import { ModelNotFound } from '../services/model_service';
 import { MODEL_API_ENDPOINT } from './constants';
 
 export default function (
-  services: { modelService: ModelService; trainService: TrainService },
+  services: { modelService: ModelService },
   router: IRouter
 ) {
-  const { modelService, trainService } = services;
-
-  router.post(
-    {
-      path: MODEL_API_ENDPOINT,
-      validate: {
-        body: schema.object({
-          methodName: schema.string(),
-          body: schema.any(),
-        }),
-      },
-    },
-    async (_context, request) => {
-      const { methodName, body } = request.body;
-      try {
-        const payload = await trainService.trainModel({
-          methodName,
-          async: true,
-          request,
-          body,
-        });
-        return opensearchDashboardsResponseFactory.ok({ body: payload });
-      } catch (err) {
-        return opensearchDashboardsResponseFactory.badRequest({ body: err.message });
-      }
-    }
-  );
+  const { modelService } = services;
 
   router.get(
     {

@@ -10,7 +10,7 @@ import createTrainCluster from './clusters/create_train_cluster';
 import createModelCluster from './clusters/create_model_cluster';
 import createTaskCluster from './clusters/create_task_cluster';
 import { MlCommonsPluginSetup, MlCommonsPluginStart } from './types';
-import { modelRouter, taskRouter } from './routes';
+import { modelRouter, taskRouter, trainRouter } from './routes';
 import { ModelService, TrainService } from './services';
 import { TaskService } from './services/task_service';
 
@@ -41,6 +41,7 @@ export class MlCommonsPlugin implements Plugin<MlCommonsPluginSetup, MlCommonsPl
 
     modelRouter(services, router);
     taskRouter(services, router);
+    trainRouter(services, router);
 
     return {};
   }
@@ -50,5 +51,5 @@ export class MlCommonsPlugin implements Plugin<MlCommonsPluginSetup, MlCommonsPl
     return {};
   }
 
-  public stop() {}
+  public stop() { }
 }

@@ -4,8 +4,12 @@
  */
 
 import React from 'react';
+import { ComponentsCommonProps } from '../app'
+interface Props extends ComponentsCommonProps {
 
-export const Predict = () => {
+}
+
+export const Predict = ({ }: Props) => {
     return (
         <div>predict</div>
     );

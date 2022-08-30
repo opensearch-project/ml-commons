@@ -6,7 +6,11 @@ import { APIProvider } from '../../apis/api_provider';
 
 import { ModelTable } from './model_table';
 
-export function ModelList() {
+import { ComponentsCommonProps } from '../app'
+interface Props extends ComponentsCommonProps {
+
+}
+export function ModelList({ }: Props) {
   const [models, setModels] = useState<ModelSearchItem[]>([]);
   const [pagination, setCurrentPageAndPageSize] = useState({
     currentPage: 1,
