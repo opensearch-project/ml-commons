@@ -32,12 +32,13 @@ export const ROUTES = [
   {
     path: '/',
     Component: Home,
+    label: 'Home',
     exact: true,
   },
   {
     path: routerPaths.taskList,
     Component: TaskList,
-    label: 'Model List',
+    label: 'Task List',
     icon: 'createSingleMetricJob',
   },
 ];

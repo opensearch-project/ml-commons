@@ -16,12 +16,14 @@ import { CoreStart } from '../../../../../src/core/public';
 import { NavigationPublicPluginStart } from '../../../../../src/plugins/navigation/public';
 
 import { NavPanel } from '../components/nav_panel';
+import { GlobalBreadcrumbs } from './global_breadcrumbs';
 
 interface MlCommonsPluginAppDeps {
   basename: string;
   notifications: CoreStart['notifications'];
   http: CoreStart['http'];
   navigation: NavigationPublicPluginStart;
+  chrome: CoreStart['chrome'];
 }
 
 export interface ComponentsCommonProps {
@@ -34,6 +36,7 @@ export const MlCommonsPluginApp = ({
   notifications,
   http,
   navigation,
+  chrome,
 }: MlCommonsPluginAppDeps) => {
   // Render the application DOM.
   // Note that `navigation.ui.TopNavMenu` is a stateful component exported on the `navigation` plugin's start contract.
@@ -48,10 +51,16 @@ export const MlCommonsPluginApp = ({
               </EuiPageSideBar>
               <EuiPageBody component="main">
                 {ROUTES.map(({ path, Component, exact }) => (
-                  <Route path={path} render={() => <Component http={http} notifications={notifications} />} exact={exact ?? false} />))}
+                  <Route
+                    path={path}
+                    render={() => <Component http={http} notifications={notifications} />}
+                    exact={exact ?? false}
+                  />
+                ))}
               </EuiPageBody>
             </EuiPage>
           </Switch>
+          <GlobalBreadcrumbs chrome={chrome} basename={basename} />
         </I18nProvider>
       </Router>
     </Provider>

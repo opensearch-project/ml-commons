@@ -5,14 +5,14 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { AppMountParameters, CoreStart } from '../../../src/core/public';
+import { AppMountParameters, CoreStart } from '../../../../src/core/public';
 import { AppPluginStartDependencies } from './types';
 import { MlCommonsPluginApp } from './components/app';
 import { InnerHttpProvider } from './apis/inner_http_provider';
 import { APIProvider } from './apis/api_provider';
 
 export const renderApp = (
-  { notifications, http }: CoreStart,
+  { notifications, http, chrome }: CoreStart,
   { navigation }: AppPluginStartDependencies,
   { appBasePath, element }: AppMountParameters
 ) => {
@@ -24,6 +24,7 @@ export const renderApp = (
       notifications={notifications}
       http={http}
       navigation={navigation}
+      chrome={chrome}
     />,
     element
   );
