@@ -19,6 +19,10 @@ export class MlCommonsPluginPlugin
     core.application.register({
       id: 'mlCommonsPlugin',
       title: PLUGIN_NAME,
+      category: {
+        id: 'opensearch',
+        label: 'OpenSearch Plugins',
+      },
       async mount(params: AppMountParameters) {
         // Load application bundle
         const { renderApp } = await import('./application');
@@ -46,5 +50,5 @@ export class MlCommonsPluginPlugin
     return {};
   }
 
-  public stop() { }
+  public stop() {}
 }
