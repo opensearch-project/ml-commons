@@ -14,6 +14,7 @@ import store from '../../redux/store';
 
 import { CoreStart } from '../../../../../src/core/public';
 import { NavigationPublicPluginStart } from '../../../../../src/plugins/navigation/public';
+import { DataPublicPluginStart } from '../../../../../src/plugins/data/public';
 
 import { NavPanel } from '../components/nav_panel';
 import { GlobalBreadcrumbs } from './global_breadcrumbs';
@@ -24,11 +25,13 @@ interface MlCommonsPluginAppDeps {
   http: CoreStart['http'];
   navigation: NavigationPublicPluginStart;
   chrome: CoreStart['chrome'];
+  data: DataPublicPluginStart;
 }
 
 export interface ComponentsCommonProps {
   notifications: CoreStart['notifications'];
   http: CoreStart['http'];
+  data: DataPublicPluginStart;
 }
 
 export const MlCommonsPluginApp = ({
@@ -37,6 +40,7 @@ export const MlCommonsPluginApp = ({
   http,
   navigation,
   chrome,
+  data,
 }: MlCommonsPluginAppDeps) => {
   // Render the application DOM.
   // Note that `navigation.ui.TopNavMenu` is a stateful component exported on the `navigation` plugin's start contract.
@@ -53,7 +57,9 @@ export const MlCommonsPluginApp = ({
                 {ROUTES.map(({ path, Component, exact }) => (
                   <Route
                     path={path}
-                    render={() => <Component http={http} notifications={notifications} />}
+                    render={() => (
+                      <Component http={http} notifications={notifications} data={data} />
+                    )}
                     exact={exact ?? false}
                   />
                 ))}

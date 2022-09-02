@@ -13,7 +13,7 @@ import { APIProvider } from './apis/api_provider';
 
 export const renderApp = (
   { notifications, http, chrome }: CoreStart,
-  { navigation }: AppPluginStartDependencies,
+  { navigation, data }: AppPluginStartDependencies,
   { appBasePath, element }: AppMountParameters
 ) => {
   InnerHttpProvider.setHttp(http);
@@ -25,6 +25,7 @@ export const renderApp = (
       http={http}
       navigation={navigation}
       chrome={chrome}
+      data={data}
     />,
     element
   );
