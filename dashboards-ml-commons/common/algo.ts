@@ -1,3 +1,4 @@
+
 // https://opensearch.org/docs/latest/ml-commons-plugin/algorithms/
 export const SUPPORTED_ALGOS = [
     {
@@ -28,4 +29,5 @@ export const SUPPORTED_ALGOS = [
         value: 'LINEAR_REGRESSION',
         text: 'LINEAR_REGRESSION'
     }
-]
+] as const
+export type ALGOS = typeof SUPPORTED_ALGOS[number]['value']

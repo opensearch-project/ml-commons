@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { I18nProvider } from '@osd/i18n/react';
-import { Provider } from 'react-redux';
+import { Provider as ReduxProvider } from 'react-redux';
 import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
 import { ROUTES } from '../../common/router';
 
@@ -18,6 +18,7 @@ import { DataPublicPluginStart } from '../../../../../src/plugins/data/public';
 
 import { NavPanel } from '../components/nav_panel';
 import { GlobalBreadcrumbs } from './global_breadcrumbs';
+import { useIndexPatterns } from '../hooks'
 
 interface MlCommonsPluginAppDeps {
   basename: string;
@@ -42,10 +43,11 @@ export const MlCommonsPluginApp = ({
   chrome,
   data,
 }: MlCommonsPluginAppDeps) => {
+  useIndexPatterns(data);
   // Render the application DOM.
   // Note that `navigation.ui.TopNavMenu` is a stateful component exported on the `navigation` plugin's start contract.
   return (
-    <Provider store={store}>
+    <ReduxProvider store={store}>
       <Router basename={basename}>
         <I18nProvider>
           <Switch>
@@ -69,6 +71,6 @@ export const MlCommonsPluginApp = ({
           <GlobalBreadcrumbs chrome={chrome} basename={basename} />
         </I18nProvider>
       </Router>
-    </Provider>
+    </ReduxProvider>
   );
 };

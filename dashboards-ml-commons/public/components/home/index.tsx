@@ -21,18 +21,10 @@ import { PLUGIN_NAME, PLUGIN_DESC } from '../../../common';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../../../common/router';
 import { ComponentsCommonProps } from '../app';
-interface Props extends ComponentsCommonProps {}
+interface Props extends ComponentsCommonProps { }
 
 export const Home = ({ data }: Props) => {
-  useEffect(() => {
-    const handleUpdate = async () => {
-      const ids = await data.indexPatterns.getIds(true);
-      const patterns = await Promise.all(ids.map((id) => data.indexPatterns.get(id)));
-      console.log(patterns);
-    };
 
-    handleUpdate();
-  }, []);
   return (
     <>
       <EuiPageHeader>
