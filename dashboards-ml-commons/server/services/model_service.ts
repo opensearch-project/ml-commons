@@ -15,6 +15,7 @@
 
 import { ILegacyClusterClient, ScopeableRequest } from '../../../../../src/core/server';
 import { getQueryFromSize, RequestPagination, getPagination } from './utils/pagination';
+import { convertModelSource, generateModelSearchQuery } from './utils/model';
 
 export class ModelNotFound {}
 
@@ -27,41 +28,47 @@ export class ModelService {
 
   public async search({
     request,
+    ids,
     pagination,
-    algorithm,
+    algorithms,
+    context,
   }: {
     request: ScopeableRequest;
-    algorithm?: string;
+    algorithms?: string[];
+    ids?: string[];
     pagination: RequestPagination;
+    context?: Record<string, Array<string | number>>;
   }) {
     const { hits } = await this.osClient
       .asScoped(request)
       .callAsCurrentUser('mlCommonsModel.search', {
         body: {
-          query:
-            algorithm === undefined
-              ? {
-                  match_all: {},
-                }
-              : {
-                  term: {
-                    algorithm: {
-                      value: algorithm,
-                    },
-                  },
-                },
+          query: generateModelSearchQuery({
+            ids,
+            algorithms,
+            context,
+          }),
           ...getQueryFromSize(pagination),
         },
       });
     return {
-      data: hits.hits.map(({ _id, _source: { model_content, name, algorithm, version } }) => ({
+      data: hits.hits.map(({ _id, _source }) => ({
         id: _id,
-        content: model_content,
-        name,
-        algorithm,
-        version,
+        ...convertModelSource(_source),
       })),
       pagination: getPagination(pagination.currentPage, pagination.pageSize, hits.total.value),
+    };
+  }
+
+  public async getOne({ request, modelId }: { request: ScopeableRequest; modelId: string }) {
+    const modelSource = await this.osClient
+      .asScoped(request)
+      .callAsCurrentUser('mlCommonsModel.getOne', {
+        modelId,
+      });
+    return {
+      id: modelId,
+      ...convertModelSource(modelSource),
     };
   }
 

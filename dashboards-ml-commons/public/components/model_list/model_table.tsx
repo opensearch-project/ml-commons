@@ -1,9 +1,8 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { EuiBasicTable } from '@elastic/eui';
-import { DefaultItemIconButtonAction } from '@elastic/eui/src/components/basic_table/action_types';
 
 import { ModelSearchItem } from '../../apis/model';
-import { APIProvider } from '../../apis/api_provider';
+import { ModelDeleteButton } from './model_delete_button';
 
 export function ModelTable(props: {
   models: ModelSearchItem[];
@@ -18,16 +17,6 @@ export function ModelTable(props: {
   const { models, onPaginationChange, onModelDeleted } = props;
   const onPaginationChangeRef = useRef(onPaginationChange);
   onPaginationChangeRef.current = onPaginationChange;
-  const onModelDeletedRef = useRef(onModelDeleted);
-  onModelDeletedRef.current = onModelDeleted;
-
-  const handleModelDelete = useCallback((item: ModelSearchItem) => {
-    APIProvider.getAPI('model')
-      .delete(item.id)
-      .then(() => {
-        onModelDeletedRef.current();
-      });
-  }, []);
 
   const columns = useMemo(
     () => [
@@ -44,20 +33,16 @@ export function ModelTable(props: {
         name: 'Algorithm',
       },
       {
+        field: 'context',
+        name: 'Context',
+      },
+      {
+        field: 'id',
         name: 'Actions',
-        actions: [
-          {
-            name: 'Delete',
-            description: 'Delete this model',
-            icon: 'trash',
-            type: 'icon',
-            color: 'danger',
-            onClick: handleModelDelete,
-          } as DefaultItemIconButtonAction<ModelSearchItem>,
-        ],
+        render: (id: string) => <ModelDeleteButton key={id} id={id} onDeleted={onModelDeleted} />,
       },
     ],
-    [handleModelDelete]
+    [onModelDeleted]
   );
 
   const pagination = useMemo(
@@ -81,7 +66,7 @@ export function ModelTable(props: {
   );
 
   return (
-    <EuiBasicTable
+    <EuiBasicTable<ModelSearchItem>
       columns={columns}
       items={models}
       pagination={pagination}

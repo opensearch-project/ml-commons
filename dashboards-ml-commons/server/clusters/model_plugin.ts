@@ -33,6 +33,19 @@ export default function (Client: any, config: any, components: any) {
     needBody: true,
   });
 
+  mlCommonsModel.getOne = ca({
+    method: 'GET',
+    url: {
+      fmt: `${MODEL_BASE_API}/<%=modelId%>`,
+      req: {
+        modelId: {
+          type: 'string',
+          required: true,
+        },
+      },
+    },
+  });
+
   mlCommonsModel.delete = ca({
     method: 'DELETE',
     url: {
