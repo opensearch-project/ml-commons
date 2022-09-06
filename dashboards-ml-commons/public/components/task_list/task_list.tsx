@@ -78,7 +78,19 @@ export function TaskList() {
 
   return (
     <EuiPanel>
-      <EuiPageHeader pageTitle="Tasks" bottomBorder />
+      <EuiPageHeader
+        pageTitle={
+          <>
+            Tasks
+            {totalTaskCounts !== undefined && (
+              <span style={{ fontSize: '0.6em', verticalAlign: 'middle', paddingLeft: 4 }}>
+                ({totalTaskCounts})
+              </span>
+            )}
+          </>
+        }
+        bottomBorder
+      />
       <EuiSpacer />
       <TaskListFilter value={params} onChange={handleFilterChange} />
       <EuiSpacer />

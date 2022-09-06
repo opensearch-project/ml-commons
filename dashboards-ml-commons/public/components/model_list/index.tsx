@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { EuiPageHeader, EuiButton, EuiSpacer, EuiPanel } from '@elastic/eui';
+import { Link } from 'react-router-dom';
 
 import { CoreStart } from '../../../../../../src/core/public';
 import { ModelSearchItem } from '../../apis/model';
 import { APIProvider } from '../../apis/api_provider';
+import { routerPaths } from '../../../common/router_paths';
 
 import { ModelTable } from './model_table';
 import { ModelListFilter } from './model_list_filter';
@@ -82,8 +84,21 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
   return (
     <EuiPanel>
       <EuiPageHeader
-        pageTitle="Models"
-        rightSideItems={[<EuiButton fill>Train new model</EuiButton>]}
+        pageTitle={
+          <>
+            Models
+            {totalModelCounts !== undefined && (
+              <span style={{ fontSize: '0.6em', verticalAlign: 'middle', paddingLeft: 4 }}>
+                ({totalModelCounts})
+              </span>
+            )}
+          </>
+        }
+        rightSideItems={[
+          <Link to={routerPaths.train}>
+            <EuiButton fill>Train new model</EuiButton>
+          </Link>,
+        ]}
         bottomBorder
       />
       <EuiSpacer />
