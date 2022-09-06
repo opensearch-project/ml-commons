@@ -48,7 +48,7 @@ export const generateModelSearchQuery = ({
   context?: Record<string, Array<string | number>>;
 }) =>
   generateMustQueries([
-    ...(ids ? [{ ids: { value: ids } }] : []),
+    ...(ids ? [{ ids: { values: ids } }] : []),
     ...(algorithms ? [generateTermQuery('algorithm', algorithms)] : []),
     ...(context ? genereateContextQuery(context) : []),
   ]);
