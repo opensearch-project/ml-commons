@@ -1,13 +1,14 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { EuiComboBox, EuiComboBoxProps, EuiFlexItem } from '@elastic/eui';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { EuiFlexItem } from '@elastic/eui';
 import { APIProvider } from '../../apis/api_provider';
+import { PrimitiveComboBox } from '../primitive_combo_box';
 
 type FilterOptionValue = string | number;
 
 const ContextSelectorInnter = ({
   identity,
   value,
-  options: optionsInProps,
+  options,
   onChange,
 }: {
   identity: string;
@@ -15,31 +16,17 @@ const ContextSelectorInnter = ({
   options: Array<FilterOptionValue>;
   onChange: (identity: string, value: Array<FilterOptionValue> | undefined) => void;
 }) => {
-  const options = useMemo(
-    () => optionsInProps.map((option) => ({ label: option.toString(), value: option })),
-    [optionsInProps]
-  );
-  const selectedOptions = useMemo(() => options.filter((option) => value?.includes(option.value)), [
-    value,
-    options,
-  ]);
-
-  const handleChange = useCallback<Required<EuiComboBoxProps<FilterOptionValue>>['onChange']>(
+  const handleChange = useCallback(
     (options) => {
-      const result: FilterOptionValue[] = [];
-      options.forEach((item) => {
-        if (item.value !== undefined) {
-          result.push(item.value);
-        }
-      });
-      onChange(identity, result.length === 0 ? undefined : result);
+      onChange(identity, options);
     },
     [identity, onChange]
   );
   return (
-    <EuiComboBox
+    <PrimitiveComboBox
       options={options}
-      selectedOptions={selectedOptions}
+      value={value}
+      multi
       placeholder={`All ${identity}`}
       onChange={handleChange}
     />

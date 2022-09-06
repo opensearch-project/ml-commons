@@ -7,20 +7,20 @@ import { ContextSelector } from './context_selector';
 export const ModelListFilter = ({
   context,
   onContextChange,
-  algorithms,
+  algorithm,
   onAlgorithmsChange,
 }: {
-  algorithms: string[] | undefined;
+  algorithm: string | undefined;
   context: { [key: string]: Array<string | number> } | undefined;
-  onAlgorithmsChange: (algorithms: string[] | undefined) => void;
+  onAlgorithmsChange: (algorithms: string | undefined) => void;
   onContextChange: (context: { [key: string]: Array<string | number> } | undefined) => void;
 }) => {
   return (
     <EuiFlexGrid columns={3}>
       <EuiFlexItem>
-        <AlgorithmSelector value={algorithms} onChange={onAlgorithmsChange} />
+        <AlgorithmSelector value={algorithm} onChange={onAlgorithmsChange} />
       </EuiFlexItem>
-      <ContextSelector algorithm={algorithms?.[0]} value={context} onChange={onContextChange} />
+      <ContextSelector algorithm={algorithm} value={context} onChange={onContextChange} />
     </EuiFlexGrid>
   );
 };

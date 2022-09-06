@@ -56,8 +56,12 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
   }, [pagination.currentPage, pagination.pageSize]);
 
   const handleAlgorithmsChange = useCallback(
-    (algorithms: string[] | undefined) => {
-      setParams((previousValue) => ({ ...previousValue, algorithms, context: undefined }));
+    (algorithms: string | undefined) => {
+      setParams((previousValue) => ({
+        ...previousValue,
+        algorithms: algorithms ? [algorithms] : undefined,
+        context: undefined,
+      }));
     },
     [setParams]
   );
@@ -85,7 +89,7 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
       <EuiSpacer />
       <ModelListFilter
         context={params.context}
-        algorithms={params.algorithms}
+        algorithm={params.algorithms?.[0]}
         onContextChange={handleContextChange}
         onAlgorithmsChange={handleAlgorithmsChange}
       />
