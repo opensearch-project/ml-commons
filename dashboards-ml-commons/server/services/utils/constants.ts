@@ -16,8 +16,9 @@
 export const API_ROUTE_PREFIX = '/_plugins/_ml';
 export const TRAIN_BASE_API = `${API_ROUTE_PREFIX}/_train`;
 export const TASK_BASE_API = `${API_ROUTE_PREFIX}/tasks`;
+export const TASK_SEARCH_API = `${TASK_BASE_API}/_search`;
 export const MODEL_BASE_API = `${API_ROUTE_PREFIX}/models`;
-export const MODEL_SEARCH_API = `${API_ROUTE_PREFIX}/models/_search`;
+export const MODEL_SEARCH_API = `${MODEL_BASE_API}/_search`;
 
 export const CLUSTER = {
   TRAIN: 'opensearch_mlCommonsTrain',

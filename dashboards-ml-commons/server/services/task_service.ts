@@ -13,40 +13,14 @@
  *   permissions and limitations under the License.
  */
 
-import { ILegacyClusterClient, ScopeableRequest } from '../../../../../src/core/server';
+import {
+  ILegacyClusterClient,
+  IScopedClusterClient,
+  ScopeableRequest,
+} from '../../../../../src/core/server';
 import { getQueryFromSize, RequestPagination, getPagination } from './utils/pagination';
-
-const convertTaskSource = ({
-  last_update_time,
-  create_time,
-  is_async,
-  function_name,
-  input_type,
-  worker_node,
-  state,
-  model_id,
-  task_type,
-}: {
-  last_update_time: number;
-  create_time: number;
-  is_async: boolean;
-  function_name: string;
-  input_type: string;
-  worker_node: string;
-  state: string;
-  model_id: string;
-  task_type: string;
-}) => ({
-  lastUpdateTime: last_update_time,
-  createTime: create_time,
-  isAsync: is_async,
-  functionName: function_name,
-  inputType: input_type,
-  workerNode: worker_node,
-  state,
-  modelId: model_id,
-  taskType: task_type,
-});
+import { generateTaskSearchQuery, convertTaskSource } from './utils/task';
+import { TASK_SEARCH_API } from './utils/constants';
 
 export class TaskNotFound {}
 
@@ -60,28 +34,23 @@ export class TaskService {
   public async search({
     request,
     pagination,
+    modelId,
     functionName,
+    createdStart,
+    createdEnd,
   }: {
     request: ScopeableRequest;
+    modelId?: string;
     functionName?: string;
+    createdStart?: number;
+    createdEnd?: number;
     pagination: RequestPagination;
   }) {
     const { hits } = await this.osClient
       .asScoped(request)
       .callAsCurrentUser('mlCommonsTask.search', {
         body: {
-          query:
-            functionName === undefined
-              ? {
-                  match_all: {},
-                }
-              : {
-                  term: {
-                    function_name: {
-                      value: functionName,
-                    },
-                  },
-                },
+          query: generateTaskSearchQuery({ modelId, functionName, createdStart, createdEnd }),
           ...getQueryFromSize(pagination),
         },
       });
@@ -104,5 +73,55 @@ export class TaskService {
       throw new TaskNotFound();
     }
     return true;
+  }
+
+  public static async getAllFunctions({ client }: { client: IScopedClusterClient }) {
+    const {
+      body: {
+        aggregations: {
+          functions: { buckets },
+        },
+      },
+    } = await client.asCurrentUser.transport.request({
+      method: 'POST',
+      path: TASK_SEARCH_API,
+      body: {
+        size: 0,
+        aggs: {
+          functions: {
+            terms: {
+              field: 'function_name',
+            },
+          },
+        },
+      },
+    });
+
+    return buckets.map(({ key }: { key: string }) => key);
+  }
+
+  public static async getAllStates({ client }: { client: IScopedClusterClient }) {
+    const {
+      body: {
+        aggregations: {
+          states: { buckets },
+        },
+      },
+    } = await client.asCurrentUser.transport.request({
+      method: 'POST',
+      path: TASK_SEARCH_API,
+      body: {
+        size: 0,
+        aggs: {
+          states: {
+            terms: {
+              field: 'state',
+            },
+          },
+        },
+      },
+    });
+
+    return buckets.map(({ key }: { key: string }) => key);
   }
 }

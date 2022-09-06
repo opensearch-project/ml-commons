@@ -1,3 +1,5 @@
+import { generateTermQuery, generateMustQueries } from './query';
+
 export const convertModelSource = ({
   model_content,
   name,
@@ -14,21 +16,6 @@ export const convertModelSource = ({
   algorithm,
   context: model_context,
 });
-
-const generateTermQuery = (key: string, value: string | number | Array<string | number>) => {
-  if (typeof value === 'string' || typeof value === 'number') {
-    return {
-      term: {
-        [key]: { value: value },
-      },
-    };
-  }
-  return {
-    terms: {
-      [key]: value,
-    },
-  };
-};
 
 const genereateContextQuery = (context: Record<string, Array<string | number>>) => {
   const keys = Object.keys(context);
@@ -59,25 +46,9 @@ export const generateModelSearchQuery = ({
   ids?: string[];
   algorithms?: string[];
   context?: Record<string, Array<string | number>>;
-}) => {
-  const queries = [
+}) =>
+  generateMustQueries([
     ...(ids ? [{ ids: { value: ids } }] : []),
     ...(algorithms ? [generateTermQuery('algorithm', algorithms)] : []),
     ...(context ? genereateContextQuery(context) : []),
-  ];
-
-  switch (queries.length) {
-    case 0:
-      return {
-        match_all: {},
-      };
-    case 1:
-      return queries[0];
-    default:
-      return {
-        bool: {
-          must: queries,
-        },
-      };
-  }
-};
+  ]);

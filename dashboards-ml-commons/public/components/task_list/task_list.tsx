@@ -1,22 +1,46 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { EuiPageHeader, EuiSpacer, EuiPanel } from '@elastic/eui';
 
 import { TaskSearchItem } from '../../apis/task';
 import { APIProvider } from '../../apis/api_provider';
 import { TaskTable } from './task_table';
+import { TaskListFilter, TaskListFilterValue } from './task_list_filter';
 
 export function TaskList() {
   const [tasks, setTasks] = useState<TaskSearchItem[]>([]);
-  const [pagination, setCurrentPageAndPageSize] = useState({
+  const [totalTaskCounts, setTotalTaskCounts] = useState<number>();
+  const [params, setParams] = useState<
+    TaskListFilterValue & {
+      currentPage: number;
+      pageSize: number;
+    }
+  >({
     currentPage: 1,
     pageSize: 15,
-    totalRecords: undefined as number | undefined,
-    totalPages: undefined as number | undefined,
   });
+
+  const pagination = useMemo(
+    () => ({
+      currentPage: params.currentPage,
+      pageSize: params.pageSize,
+      totalRecords: totalTaskCounts,
+    }),
+    [totalTaskCounts, params.currentPage, params.pageSize]
+  );
+
+  const loadByParams = useCallback(
+    () =>
+      APIProvider.getAPI('task').search({
+        ...params,
+        createdStart: params.createdStart?.valueOf(),
+        createdEnd: params.createdEnd?.valueOf(),
+      }),
+    [params]
+  );
 
   const handlePaginationChange = useCallback(
     (pagination: { currentPage: number; pageSize: number }) => {
-      setCurrentPageAndPageSize((previousValue) => {
+      setParams((previousValue) => {
         if (
           previousValue.currentPage === pagination.currentPage &&
           previousValue.pageSize === pagination.pageSize
@@ -36,26 +60,27 @@ export function TaskList() {
     await new Promise((resolve) => {
       setTimeout(resolve, 1000);
     });
-    const payload = await APIProvider.getAPI('task').search({
-      currentPage: pagination.currentPage,
-      pageSize: pagination.pageSize,
-    });
+    const payload = await loadByParams();
     setTasks(payload.data);
-    setCurrentPageAndPageSize(payload.pagination);
-  }, [pagination.currentPage, pagination.pageSize]);
+    setTotalTaskCounts(payload.pagination.totalRecords);
+  }, [loadByParams]);
+
+  const handleFilterChange = useCallback((filter) => {
+    setParams((prevParams) => ({ ...prevParams, ...filter }));
+  }, []);
 
   useEffect(() => {
-    APIProvider.getAPI('task')
-      .search({ currentPage: pagination.currentPage, pageSize: pagination.pageSize })
-      .then((payload) => {
-        setTasks(payload.data);
-        setCurrentPageAndPageSize(payload.pagination);
-      });
-  }, [pagination.currentPage, pagination.pageSize]);
+    loadByParams().then((payload) => {
+      setTasks(payload.data);
+      setTotalTaskCounts(payload.pagination.totalRecords);
+    });
+  }, [loadByParams]);
 
   return (
     <EuiPanel>
       <EuiPageHeader pageTitle="Tasks" bottomBorder />
+      <EuiSpacer />
+      <TaskListFilter value={params} onChange={handleFilterChange} />
       <EuiSpacer />
       <TaskTable
         tasks={tasks}

@@ -1,4 +1,8 @@
-import { TASK_API_ENDPOINT } from '../../server/routes/constants';
+import {
+  TASK_API_ENDPOINT,
+  TASK_FUNCTION_API_ENDPOINT,
+  TASK_STATE_API_ENDPOINT,
+} from '../../server/routes/constants';
 import { Pagination } from '../../server/services/utils/pagination';
 import { InnerHttpProvider } from './inner_http_provider';
 
@@ -21,7 +25,14 @@ export interface TaskSarchResponse {
 }
 
 export class Task {
-  public search(query: { functionName?: string; currentPage: number; pageSize: number }) {
+  public search(query: {
+    functionName?: string;
+    modelId?: string;
+    createdStart?: number;
+    createdEnd?: number;
+    currentPage: number;
+    pageSize: number;
+  }) {
     return InnerHttpProvider.getHttp().get<TaskSarchResponse>(TASK_API_ENDPOINT, {
       query,
     });
@@ -29,5 +40,13 @@ export class Task {
 
   public delete(taskId: string) {
     return InnerHttpProvider.getHttp().delete(`${TASK_API_ENDPOINT}/${taskId}`);
+  }
+
+  public getAllFunctions() {
+    return InnerHttpProvider.getHttp().get<string[]>(TASK_FUNCTION_API_ENDPOINT);
+  }
+
+  public getAllStates() {
+    return InnerHttpProvider.getHttp().get<string[]>(TASK_STATE_API_ENDPOINT);
   }
 }

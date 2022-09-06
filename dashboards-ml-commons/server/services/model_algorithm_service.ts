@@ -19,7 +19,7 @@ import {
   IScopedClusterClient,
   ScopeableRequest,
 } from '../../../../../src/core/server';
-import { MODEL_BASE_API, MODEL_INDEX, MODEL_SEARCH_API } from './utils/constants';
+import { MODEL_INDEX, MODEL_SEARCH_API } from './utils/constants';
 
 const getAlgorithmAggsQuery = (properties: Record<PropertyName, MappingProperty>) => {
   const keys = Object.keys(properties);

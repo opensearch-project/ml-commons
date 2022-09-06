@@ -17,7 +17,11 @@ import { schema } from '@osd/config-schema';
 import { IRouter, opensearchDashboardsResponseFactory } from '../../../../../src/core/server';
 import { ModelNotFound } from '../services/model_service';
 import { TaskService } from '../services/task_service';
-import { TASK_API_ENDPOINT } from './constants';
+import {
+  TASK_API_ENDPOINT,
+  TASK_FUNCTION_API_ENDPOINT,
+  TASK_STATE_API_ENDPOINT,
+} from './constants';
 
 export default function (services: { taskService: TaskService }, router: IRouter) {
   const { taskService } = services;
@@ -28,17 +32,30 @@ export default function (services: { taskService: TaskService }, router: IRouter
       validate: {
         query: schema.object({
           functionName: schema.maybe(schema.string()),
+          modelId: schema.maybe(schema.string()),
+          createdStart: schema.maybe(schema.number()),
+          createdEnd: schema.maybe(schema.number()),
           currentPage: schema.number(),
           pageSize: schema.number(),
         }),
       },
     },
     async (_context, request) => {
-      const { functionName, currentPage, pageSize } = request.query;
+      const {
+        modelId,
+        functionName,
+        currentPage,
+        pageSize,
+        createdStart,
+        createdEnd,
+      } = request.query;
       try {
         const payload = await taskService.search({
           request,
+          modelId,
           functionName,
+          createdStart,
+          createdEnd,
           pagination: { currentPage, pageSize },
         });
         return opensearchDashboardsResponseFactory.ok({ body: payload });
@@ -68,6 +85,36 @@ export default function (services: { taskService: TaskService }, router: IRouter
         if (err instanceof ModelNotFound) {
           return opensearchDashboardsResponseFactory.notFound();
         }
+        return opensearchDashboardsResponseFactory.badRequest({ body: err.message });
+      }
+    }
+  );
+
+  router.get(
+    {
+      path: TASK_FUNCTION_API_ENDPOINT,
+      validate: false,
+    },
+    async (context) => {
+      try {
+        const body = await TaskService.getAllFunctions({ client: context.core.opensearch.client });
+        return opensearchDashboardsResponseFactory.ok({ body });
+      } catch (err) {
+        return opensearchDashboardsResponseFactory.badRequest({ body: err.message });
+      }
+    }
+  );
+
+  router.get(
+    {
+      path: TASK_STATE_API_ENDPOINT,
+      validate: false,
+    },
+    async (context) => {
+      try {
+        const body = await TaskService.getAllStates({ client: context.core.opensearch.client });
+        return opensearchDashboardsResponseFactory.ok({ body });
+      } catch (err) {
         return opensearchDashboardsResponseFactory.badRequest({ body: err.message });
       }
     }
