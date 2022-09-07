@@ -7,4 +7,5 @@ repositories {
     mavenLocal()
     maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
     mavenCentral()
+    maven { url "https://d1nvenhzbhpy0q.cloudfront.net/snapshots/lucene/" }
 }
