@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { EuiFlexItem } from '@elastic/eui';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { EuiFlexItem, EuiFlexGroup, EuiFlexGrid } from '@elastic/eui';
 import { APIProvider } from '../../apis/api_provider';
 import { PrimitiveComboBox } from '../primitive_combo_box';
 
@@ -45,7 +45,18 @@ export const ContextSelector = ({
   const valueRef = useRef(value);
   valueRef.current = value;
   const [filter, setFilter] = useState<{ [key: string]: Array<FilterOptionValue> }>({});
-  const keys = Object.keys(filter);
+  const groupedKeys = useMemo(
+    () =>
+      Object.keys(filter).reduce<string[][]>((pValue, cValue) => {
+        const last = pValue[pValue.length - 1];
+        if (!last || last.length === 3) {
+          return [...pValue, [cValue]];
+        }
+        last.push(cValue);
+        return pValue;
+      }, []),
+    [filter]
+  );
 
   const handleChange = useCallback(
     (identity: string, value: Array<FilterOptionValue> | undefined) => {
@@ -78,15 +89,41 @@ export const ContextSelector = ({
 
   return (
     <>
-      {keys.map((key) => (
-        <EuiFlexItem key={key}>
-          <ContextSelectorInnter
-            identity={key}
-            value={value?.[key]}
-            options={filter?.[key]}
-            onChange={handleChange}
-          />
-        </EuiFlexItem>
+      {groupedKeys.map(([key1, key2, key3]) => (
+        <EuiFlexGroup>
+          <EuiFlexItem grow={1}>
+            <ContextSelectorInnter
+              identity={key1}
+              value={value?.[key1]}
+              options={filter?.[key1]}
+              onChange={handleChange}
+            />
+          </EuiFlexItem>
+          <EuiFlexItem grow={2}>
+            <EuiFlexGrid columns={2}>
+              {key2 && (
+                <EuiFlexItem>
+                  <ContextSelectorInnter
+                    identity={key2}
+                    value={value?.[key2]}
+                    options={filter?.[key2]}
+                    onChange={handleChange}
+                  />
+                </EuiFlexItem>
+              )}
+              {key3 && (
+                <EuiFlexItem>
+                  <ContextSelectorInnter
+                    identity={key3}
+                    value={value?.[key3]}
+                    options={filter?.[key3]}
+                    onChange={handleChange}
+                  />
+                </EuiFlexItem>
+              )}
+            </EuiFlexGrid>
+          </EuiFlexItem>
+        </EuiFlexGroup>
       ))}
     </>
   );

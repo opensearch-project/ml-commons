@@ -48,11 +48,21 @@ export default function (services: { modelService: ModelService }, router: IRout
           ),
           currentPage: schema.number(),
           pageSize: schema.number(),
+          trainedStart: schema.maybe(schema.number()),
+          trainedEnd: schema.maybe(schema.number()),
         }),
       },
     },
     async (_context, request) => {
-      const { algorithms, ids, currentPage, pageSize, context: contextInQuery } = request.query;
+      const {
+        algorithms,
+        ids,
+        currentPage,
+        pageSize,
+        context: contextInQuery,
+        trainedStart,
+        trainedEnd,
+      } = request.query;
       try {
         const payload = await modelService.search({
           request,
@@ -62,6 +72,8 @@ export default function (services: { modelService: ModelService }, router: IRout
           context: contextInQuery
             ? ((JSON.parse(contextInQuery) as unknown) as Record<string, Array<string | number>>)
             : undefined,
+          trainedStart,
+          trainedEnd,
         });
         return opensearchDashboardsResponseFactory.ok({ body: payload });
       } catch (err) {

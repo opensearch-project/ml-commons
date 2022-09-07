@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { EuiPageHeader, EuiButton, EuiSpacer, EuiPanel } from '@elastic/eui';
 import { Link } from 'react-router-dom';
+import moment from 'moment';
 
 import { CoreStart } from '../../../../../../src/core/public';
 import { ModelSearchItem } from '../../apis/model';
@@ -16,6 +17,8 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
   const [params, setParams] = useState<{
     algorithms?: string[];
     context?: { [key: string]: Array<string | number> };
+    trainedStart?: moment.Moment | null;
+    trainedEnd?: moment.Moment | null;
     currentPage: number;
     pageSize: number;
   }>({
@@ -51,7 +54,11 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
   );
 
   const handleModelDeleted = useCallback(async () => {
-    const payload = await APIProvider.getAPI('model').search(params);
+    const payload = await APIProvider.getAPI('model').search({
+      ...params,
+      trainedStart: params.trainedStart?.valueOf(),
+      trainedEnd: params.trainedEnd?.valueOf(),
+    });
     setModels(payload.data);
     setTotalModelCount(payload.pagination.totalRecords);
     notifications.toasts.addSuccess('Model has been deleted.');
@@ -72,9 +79,21 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
     setParams((previousValue) => ({ ...previousValue, context }));
   }, []);
 
+  const handleTrainedStartChange = useCallback((date: moment.Moment | null) => {
+    setParams((previousValue) => ({ ...previousValue, trainedStart: date }));
+  }, []);
+
+  const handleTrainedEndChange = useCallback((date: moment.Moment | null) => {
+    setParams((previousValue) => ({ ...previousValue, trainedEnd: date }));
+  }, []);
+
   useEffect(() => {
     APIProvider.getAPI('model')
-      .search(params)
+      .search({
+        ...params,
+        trainedStart: params.trainedStart?.valueOf(),
+        trainedEnd: params.trainedEnd?.valueOf(),
+      })
       .then((payload) => {
         setModels(payload.data);
         setTotalModelCount(payload.pagination.totalRecords);
@@ -107,6 +126,10 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
         algorithm={params.algorithms?.[0]}
         onContextChange={handleContextChange}
         onAlgorithmsChange={handleAlgorithmsChange}
+        trainedStart={params.trainedStart}
+        trainedEnd={params.trainedEnd}
+        onTrainedStartChange={handleTrainedStartChange}
+        onTrainedEndChange={handleTrainedEndChange}
       />
       <EuiSpacer />
       <ModelTable

@@ -28,26 +28,22 @@ export class ModelService {
 
   public async search({
     request,
-    ids,
     pagination,
-    algorithms,
-    context,
+    ...restParams
   }: {
     request: ScopeableRequest;
     algorithms?: string[];
     ids?: string[];
     pagination: RequestPagination;
     context?: Record<string, Array<string | number>>;
+    trainedStart?: number;
+    trainedEnd?: number;
   }) {
     const { hits } = await this.osClient
       .asScoped(request)
       .callAsCurrentUser('mlCommonsModel.search', {
         body: {
-          query: generateModelSearchQuery({
-            ids,
-            algorithms,
-            context,
-          }),
+          query: generateModelSearchQuery(restParams),
           ...getQueryFromSize(pagination),
         },
       });

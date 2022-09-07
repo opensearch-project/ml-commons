@@ -1,8 +1,11 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { EuiBasicTable } from '@elastic/eui';
+import moment from 'moment';
 
 import { ModelSearchItem } from '../../apis/model';
 import { ModelDeleteButton } from './model_delete_button';
+
+const renderDateTime = (value: number) => (value ? moment(value).format() : '-');
 
 export function ModelTable(props: {
   models: ModelSearchItem[];
@@ -35,6 +38,11 @@ export function ModelTable(props: {
       {
         field: 'context',
         name: 'Context',
+      },
+      {
+        field: 'trainTime',
+        name: 'Train Time',
+        render: renderDateTime,
       },
       {
         field: 'id',

@@ -7,6 +7,7 @@ export interface ModelSearchItem {
   name: string;
   algorithm: string;
   context: string;
+  trainTime: number;
 }
 
 export interface ModelDetail extends ModelSearchItem {
@@ -23,6 +24,8 @@ export class Model {
     algorithms?: string[];
     ids?: string[];
     context?: { [key: string]: Array<string | number> };
+    trainedStart?: number;
+    trainedEnd?: number;
     currentPage: number;
     pageSize: number;
   }) {

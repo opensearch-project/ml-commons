@@ -5,16 +5,19 @@ export const convertModelSource = ({
   name,
   algorithm,
   model_context,
+  model_train_time,
 }: {
   model_content: string;
   name: string;
   algorithm: string;
   model_context: string;
+  model_train_time: number;
 }) => ({
   content: model_content,
   name,
   algorithm,
   context: model_context,
+  trainTime: model_train_time,
 });
 
 const genereateContextQuery = (context: Record<string, Array<string | number>>) => {
@@ -42,13 +45,29 @@ export const generateModelSearchQuery = ({
   ids,
   algorithms,
   context,
+  trainedStart,
+  trainedEnd,
 }: {
   ids?: string[];
   algorithms?: string[];
   context?: Record<string, Array<string | number>>;
+  trainedStart?: number;
+  trainedEnd?: number;
 }) =>
   generateMustQueries([
     ...(ids ? [{ ids: { values: ids } }] : []),
     ...(algorithms ? [generateTermQuery('algorithm', algorithms)] : []),
     ...(context ? genereateContextQuery(context) : []),
+    ...(trainedStart || trainedEnd
+      ? [
+          {
+            range: {
+              model_train_time: {
+                ...(trainedStart ? { gte: trainedStart } : {}),
+                ...(trainedEnd ? { lte: trainedEnd } : {}),
+              },
+            },
+          },
+        ]
+      : []),
   ]);
