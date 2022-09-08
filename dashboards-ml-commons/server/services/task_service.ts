@@ -34,12 +34,10 @@ export class TaskService {
   public async search({
     request,
     pagination,
-    modelId,
-    functionName,
-    createdStart,
-    createdEnd,
+    ...restParams
   }: {
     request: ScopeableRequest;
+    ids?: string[];
     modelId?: string;
     functionName?: string;
     createdStart?: number;
@@ -50,7 +48,7 @@ export class TaskService {
       .asScoped(request)
       .callAsCurrentUser('mlCommonsTask.search', {
         body: {
-          query: generateTaskSearchQuery({ modelId, functionName, createdStart, createdEnd }),
+          query: generateTaskSearchQuery(restParams),
           ...getQueryFromSize(pagination),
         },
       });

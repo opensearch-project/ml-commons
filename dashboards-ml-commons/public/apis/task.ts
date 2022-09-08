@@ -27,6 +27,7 @@ export interface TaskSarchResponse {
 export class Task {
   public search(query: {
     functionName?: string;
+    ids?: string[];
     modelId?: string;
     createdStart?: number;
     createdEnd?: number;

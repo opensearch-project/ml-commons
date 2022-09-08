@@ -31,6 +31,7 @@ export default function (services: { taskService: TaskService }, router: IRouter
       path: TASK_API_ENDPOINT,
       validate: {
         query: schema.object({
+          ids: schema.maybe(schema.oneOf([schema.string(), schema.arrayOf(schema.string())])),
           functionName: schema.maybe(schema.string()),
           modelId: schema.maybe(schema.string()),
           createdStart: schema.maybe(schema.number()),
@@ -41,21 +42,12 @@ export default function (services: { taskService: TaskService }, router: IRouter
       },
     },
     async (_context, request) => {
-      const {
-        modelId,
-        functionName,
-        currentPage,
-        pageSize,
-        createdStart,
-        createdEnd,
-      } = request.query;
+      const { currentPage, pageSize, ids, ...restQueries } = request.query;
       try {
         const payload = await taskService.search({
           request,
-          modelId,
-          functionName,
-          createdStart,
-          createdEnd,
+          ids: typeof ids === 'string' ? [ids] : ids,
+          ...restQueries,
           pagination: { currentPage, pageSize },
         });
         return opensearchDashboardsResponseFactory.ok({ body: payload });

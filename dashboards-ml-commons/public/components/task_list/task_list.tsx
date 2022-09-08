@@ -2,11 +2,12 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { EuiPageHeader, EuiSpacer, EuiPanel } from '@elastic/eui';
 
 import { TaskSearchItem } from '../../apis/task';
+import { CoreStart } from '../../../../../../src/core/public';
 import { APIProvider } from '../../apis/api_provider';
 import { TaskTable } from './task_table';
 import { TaskListFilter, TaskListFilterValue } from './task_list_filter';
 
-export function TaskList() {
+export function TaskList({ notifications }: { notifications: CoreStart['notifications'] }) {
   const [tasks, setTasks] = useState<TaskSearchItem[]>([]);
   const [totalTaskCounts, setTotalTaskCounts] = useState<number>();
   const [params, setParams] = useState<
@@ -57,12 +58,10 @@ export function TaskList() {
   );
 
   const handleTaskDeleted = useCallback(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1000);
-    });
     const payload = await loadByParams();
     setTasks(payload.data);
     setTotalTaskCounts(payload.pagination.totalRecords);
+    notifications.toasts.addSuccess('Task has been deleted.');
   }, [loadByParams]);
 
   const handleFilterChange = useCallback((filter) => {

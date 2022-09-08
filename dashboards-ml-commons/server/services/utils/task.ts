@@ -33,17 +33,20 @@ export const convertTaskSource = ({
 });
 
 export const generateTaskSearchQuery = ({
+  ids,
   modelId,
   functionName,
   createdStart,
   createdEnd,
 }: {
+  ids?: string[];
   modelId?: string;
   functionName?: string;
   createdStart?: number;
   createdEnd?: number;
 }) =>
   generateMustQueries([
+    ...(ids ? [{ ids: { values: ids } }] : []),
     ...(functionName ? [generateTermQuery('function_name', functionName)] : []),
     ...(modelId
       ? [

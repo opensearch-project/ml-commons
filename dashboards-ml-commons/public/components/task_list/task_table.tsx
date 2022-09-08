@@ -1,10 +1,9 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { EuiBasicTable } from '@elastic/eui';
 import moment from 'moment';
-import { DefaultItemIconButtonAction } from '@elastic/eui/src/components/basic_table/action_types';
 
-import { APIProvider } from '../../apis/api_provider';
 import { TaskSearchItem } from '../../apis/task';
+import { TaskDeleteButton } from './task_delete_button';
 
 const renderDateTime = (value: number) => moment(value).format();
 
@@ -23,14 +22,6 @@ export function TaskTable(props: {
   onPaginationChangeRef.current = onPaginationChange;
   const onTaskDeletedRef = useRef(onTaskDeleted);
   onTaskDeletedRef.current = onTaskDeleted;
-
-  const handleTaskDelete = useCallback((item: TaskSearchItem) => {
-    APIProvider.getAPI('task')
-      .delete(item.id)
-      .then(() => {
-        onTaskDeletedRef.current();
-      });
-  }, []);
 
   const columns = useMemo(
     () => [
@@ -66,19 +57,12 @@ export function TaskTable(props: {
       },
       {
         name: 'Actions',
-        actions: [
-          {
-            name: 'Delete',
-            description: 'Delete this task',
-            icon: 'trash',
-            type: 'icon',
-            color: 'danger',
-            onClick: handleTaskDelete,
-          } as DefaultItemIconButtonAction<TaskSearchItem>,
-        ],
+        field: 'id',
+        width: 130,
+        render: (id: string) => <TaskDeleteButton id={id} onDeleted={onTaskDeleted} />,
       },
     ],
-    [handleTaskDelete]
+    [onTaskDeleted]
   );
 
   const pagination = useMemo(
@@ -102,7 +86,7 @@ export function TaskTable(props: {
   );
 
   return (
-    <EuiBasicTable
+    <EuiBasicTable<TaskSearchItem>
       columns={columns}
       items={tasks}
       pagination={pagination}
