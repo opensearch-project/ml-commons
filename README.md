@@ -1,7 +1,7 @@
 [![Test Workflow](https://github.com/opensearch-project/ml-commons/workflows/Build%20and%20Test%20ml-commons/badge.svg)](https://github.com/opensearch-project/ml-commons/actions)
 [![codecov](https://codecov.io/gh/opensearch-project/ml-commons/branch/main/graph/badge.svg)](https://codecov.io/gh/opensearch-project/ml-commons)
 [![Documentation](https://img.shields.io/badge/api-reference-blue.svg)](https://opensearch.org/docs/latest/ml-commons-plugin/api/)
-[![Chat](https://img.shields.io/badge/chat-on%20forums-blue)](https://discuss.opendistrocommunity.dev/c/alerting/)
+[![Chat](https://img.shields.io/badge/chat-on%20forums-blue)](https://forum.opensearch.org/c/plugins/ml/46)
 ![PRs welcome!](https://img.shields.io/badge/PRs-welcome!-success)
 
 <img src="https://opensearch.org/assets/brand/SVG/Logo/opensearch_logo_default.svg" height="64px"/>
