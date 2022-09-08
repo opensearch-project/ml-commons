@@ -6,6 +6,8 @@ export interface TrainResponse {
     status: string,
     model_id: string
 }
+export type DataSource = 'upload' | 'query'
+
 
 // {
 //     "parameters": {
@@ -23,13 +25,34 @@ export interface TrainResponse {
 // }
 
 export class Train {
-    public train(algo: ALGOS, params: any, input_data: any) {
-        const body = JSON.stringify({
-            "parameters": params,
-            input_data
-        })
+    public train(body: Record<string, string[]>) {
         return InnerHttpProvider.getHttp().post<TrainResponse>(TRAIN_API_ENDPOINT, {
-            body
+            body: JSON.stringify(body)
         });
+    }
+
+    public convertParams(algo: ALGOS, dataSource: DataSource, params: any, input_data: any, selectedFields: Record<string, string[]>): Record<string, any> {
+
+        if (dataSource === 'query') {
+            const index = Object.keys(selectedFields)[0];
+            if (!index) return {}
+            return {
+                "parameters": params,
+                "input_query": {
+                    "_source": selectedFields[index],
+                    "size": 10000
+                },
+                "input_index": [
+                    index
+                ]
+            }
+
+        } else {
+            return {
+                "parameters": params,
+                input_data
+
+            }
+        }
     }
 }

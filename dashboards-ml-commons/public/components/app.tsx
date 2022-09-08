@@ -6,13 +6,13 @@
 import React from 'react';
 import { I18nProvider } from '@osd/i18n/react';
 import { Provider as ReduxProvider } from 'react-redux';
-import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
+import { Route, Switch } from 'react-router-dom';
 import { ROUTES } from '../../common/router';
 
 import { EuiPage, EuiPageBody, EuiPageSideBar } from '@elastic/eui';
 import store from '../../redux/store';
 
-import { CoreStart } from '../../../../../src/core/public';
+import { CoreStart, IUiSettingsClient } from '../../../../../src/core/public';
 import { NavigationPublicPluginStart } from '../../../../../src/plugins/navigation/public';
 import { DataPublicPluginStart } from '../../../../../src/plugins/data/public';
 
@@ -27,6 +27,7 @@ interface MlCommonsPluginAppDeps {
   navigation: NavigationPublicPluginStart;
   chrome: CoreStart['chrome'];
   data: DataPublicPluginStart;
+  uiSettingsClient: IUiSettingsClient
 }
 
 export interface ComponentsCommonProps {
@@ -39,7 +40,6 @@ export const MlCommonsPluginApp = ({
   basename,
   notifications,
   http,
-  navigation,
   chrome,
   data,
 }: MlCommonsPluginAppDeps) => {
@@ -48,29 +48,27 @@ export const MlCommonsPluginApp = ({
   // Note that `navigation.ui.TopNavMenu` is a stateful component exported on the `navigation` plugin's start contract.
   return (
     <ReduxProvider store={store}>
-      <Router basename={basename}>
-        <I18nProvider>
-          <Switch>
-            <EuiPage restrictWidth="1000px">
-              <EuiPageSideBar>
-                <NavPanel />
-              </EuiPageSideBar>
-              <EuiPageBody component="main">
-                {ROUTES.map(({ path, Component, exact }) => (
-                  <Route
-                    path={path}
-                    render={() => (
-                      <Component http={http} notifications={notifications} data={data} />
-                    )}
-                    exact={exact ?? false}
-                  />
-                ))}
-              </EuiPageBody>
-            </EuiPage>
-          </Switch>
-          <GlobalBreadcrumbs chrome={chrome} basename={basename} />
-        </I18nProvider>
-      </Router>
+      <I18nProvider>
+        <Switch>
+          <EuiPage restrictWidth="1000px">
+            <EuiPageSideBar>
+              <NavPanel />
+            </EuiPageSideBar>
+            <EuiPageBody component="main">
+              {ROUTES.map(({ path, Component, exact }) => (
+                <Route
+                  path={path}
+                  render={() => (
+                    <Component http={http} notifications={notifications} data={data} />
+                  )}
+                  exact={exact ?? false}
+                />
+              ))}
+            </EuiPageBody>
+          </EuiPage>
+        </Switch>
+        <GlobalBreadcrumbs chrome={chrome} basename={basename} />
+      </I18nProvider>
     </ReduxProvider>
   );
 };

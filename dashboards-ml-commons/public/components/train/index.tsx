@@ -23,24 +23,25 @@ import { APIProvider } from '../../apis/api_provider';
 import { ComponentsCommonProps } from '../app'
 import { trainSuccessNotification } from '../../utils/notification'
 import { parseFile, transToInputData } from '../../../public/utils'
-import './index.scss'
-import { ParsedResult } from './parse_result';
-import { QueryField } from './query_field';
+import { ParsedResult } from '../data/parse_result';
+import { QueryField } from '../data/query_field';
 import { useIndexPatterns } from '../../hooks'
-
+import { type DataSource } from '../../apis/train'
 
 import { type ALGOS } from '../../../common/'
 
 interface Props extends ComponentsCommonProps {
 
 }
+
+
 export const Train = ({ notifications, data }: Props) => {
     const [selectedAlgo, setSelectedAlgo] = useState<ALGOS>('kmeans')
     const [params, setParams] = useState({ centroids: 2, iterations: 10, distance_type: 'EUCLIDEAN' });
     const [isLoading, setIsLoading] = useState(false);
     const [selectedCols, setSelectedCols] = useState<number[]>([])
     const [files, setFiles] = useState([{}])
-    const [dataSource, setDataSource] = useState<'upload' | 'query'>('upload')
+    const [dataSource, setDataSource] = useState<DataSource>('upload')
     const { indexPatterns } = useIndexPatterns(data);
     const [selectedFields, setSelectedFields] = useState<Record<string, string[]>>({})
 
@@ -86,7 +87,8 @@ export const Train = ({ notifications, data }: Props) => {
         const input_data = transToInputData(parsedData.data, selectedCols);
         let result
         try {
-            result = await APIProvider.getAPI('train').train(selectedAlgo, params, input_data)
+            const body = await APIProvider.getAPI('train').convertParams(selectedAlgo, dataSource, params, input_data, selectedFields);
+            result = await APIProvider.getAPI('train').train(body)
             const { status, model_id } = result;
             if (status === "COMPLETED") {
                 trainSuccessNotification(notifications, model_id);
@@ -95,7 +97,7 @@ export const Train = ({ notifications, data }: Props) => {
             console.log('err', e)
         }
         setIsLoading(false)
-    }, [params, selectedAlgo, selectedCols])
+    }, [params, selectedAlgo, selectedFields, parsedData, selectedCols, dataSource])
     return (
         <>
             <EuiPageHeader pageTitle="Train model" bottomBorder />

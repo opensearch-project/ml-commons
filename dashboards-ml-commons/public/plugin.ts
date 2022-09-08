@@ -4,17 +4,18 @@
  */
 
 import { i18n } from '@osd/i18n';
-import { AppMountParameters, CoreSetup, CoreStart, Plugin } from '../../../src/core/public';
+import { AppMountParameters, CoreSetup, CoreStart, Plugin } from '../../../../src/core/public';
 import {
   MlCommonsPluginPluginSetup,
   MlCommonsPluginPluginStart,
   AppPluginStartDependencies,
+  MLServices,
 } from './types';
 import { PLUGIN_NAME } from '../common';
 
 export class MlCommonsPluginPlugin
   implements Plugin<MlCommonsPluginPluginSetup, MlCommonsPluginPluginStart> {
-  public setup(core: CoreSetup): MlCommonsPluginPluginSetup {
+  public setup(core: CoreSetup<AppPluginStartDependencies, AppPluginStartDependencies>): MlCommonsPluginPluginSetup {
     // Register an application into the side navigation menu
     core.application.register({
       id: 'mlCommonsPlugin',
@@ -27,9 +28,23 @@ export class MlCommonsPluginPlugin
         // Load application bundle
         const { renderApp } = await import('./application');
         // Get start services as specified in opensearch_dashboards.json
-        const [coreStart, depsStart] = await core.getStartServices();
+        const [coreStart, pluginsStart] = await core.getStartServices();
+        const { data, navigation } = pluginsStart;
+
+        data.indexPatterns.clearCache();
+
+        await pluginsStart.data.indexPatterns.ensureDefaultIndexPattern();
+
+
+        const services: MLServices = {
+          ...coreStart,
+          data,
+          navigation,
+          history: params.history,
+          setHeaderActionMenu: params.setHeaderActionMenu,
+        };
         // Render the application
-        return renderApp(coreStart, depsStart as AppPluginStartDependencies, params);
+        return renderApp(params, services);
       },
     });
 
@@ -47,8 +62,10 @@ export class MlCommonsPluginPlugin
   }
 
   public start(core: CoreStart): MlCommonsPluginPluginStart {
-    return {};
+    return {
+
+    };
   }
 
-  public stop() {}
+  public stop() { }
 }
