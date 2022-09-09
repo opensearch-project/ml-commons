@@ -8,7 +8,7 @@ export function NavPanel() {
   const location = useLocation();
   const items = useMemo(
     () =>
-      ROUTES.map((item) => ({
+      ROUTES.filter((item) => !!item.label).map((item) => ({
         id: item.path,
         name: item.label,
         href: item.path,
