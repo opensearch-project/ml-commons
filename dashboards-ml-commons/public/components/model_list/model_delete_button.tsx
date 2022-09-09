@@ -23,11 +23,15 @@ export const ModelDeleteButton = ({ id, onDeleted }: { id: string; onDeleted: ()
     },
   });
 
-  const handleClick = useCallback(async () => {
-    setIsDeleting(true);
-    await APIProvider.getAPI('model').delete(id);
-    startPolling();
-  }, [id, onDeleted, startPolling]);
+  const handleClick = useCallback(
+    async (e) => {
+      e.stopPropagation();
+      setIsDeleting(true);
+      await APIProvider.getAPI('model').delete(id);
+      startPolling();
+    },
+    [id, onDeleted, startPolling]
+  );
 
   return (
     <EuiButton isLoading={isDeleting} isDisabled={isDeleting} onClick={handleClick}>

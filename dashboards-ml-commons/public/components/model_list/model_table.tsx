@@ -1,9 +1,11 @@
 import React, { useMemo, useCallback, useRef } from 'react';
+import { generatePath, useHistory } from 'react-router-dom';
 import { EuiBasicTable } from '@elastic/eui';
 import moment from 'moment';
 
 import { ModelSearchItem } from '../../apis/model';
 import { ModelDeleteButton } from './model_delete_button';
+import { routerPaths } from '../../../common/router_paths';
 
 const renderDateTime = (value: number) => (value ? moment(value).format() : '-');
 
@@ -18,6 +20,7 @@ export function ModelTable(props: {
   onModelDeleted: () => void;
 }) {
   const { models, onPaginationChange, onModelDeleted } = props;
+  const history = useHistory();
   const onPaginationChangeRef = useRef(onPaginationChange);
   onPaginationChangeRef.current = onPaginationChange;
 
@@ -73,12 +76,22 @@ export function ModelTable(props: {
     [onPaginationChangeRef.current]
   );
 
+  const rowProps = useCallback(
+    ({ id }) => ({
+      onClick: () => {
+        history.push(generatePath(routerPaths.modelDetail, { id }));
+      },
+    }),
+    [history]
+  );
+
   return (
     <EuiBasicTable<ModelSearchItem>
       columns={columns}
       items={models}
       pagination={pagination}
       onChange={handleChange}
+      rowProps={rowProps}
     />
   );
 }
