@@ -21,7 +21,7 @@ import {
 import { SUPPORTED_ALGOS } from '../../../common/algo'
 import { APIProvider } from '../../apis/api_provider';
 import { ComponentsCommonProps } from '../app'
-import { trainSuccessNotification } from '../../utils/notification'
+import { trainSuccessNotification, trainFailNotification } from '../../utils/notification'
 import { parseFile, transToInputData } from '../../../public/utils'
 import { ParsedResult } from '../data/parse_result';
 import { QueryField, type Query } from '../data/query_field';
@@ -92,12 +92,14 @@ export const Train = ({ notifications, data }: Props) => {
         try {
             const body = APIProvider.getAPI('train').convertParams(selectedAlgo, dataSource, params, input_data, { fields: selectedFields, query });
             result = await APIProvider.getAPI('train').train(body)
-            const { status, model_id } = result;
+            const { status, model_id, message } = result;
             if (status === "COMPLETED") {
                 trainSuccessNotification(notifications, model_id);
+            } else if (message) {
+                trainFailNotification(notifications, message)
             }
         } catch (e) {
-            console.log('err', e)
+            console.log('error', e)
         }
         setIsLoading(false)
     }, [params, selectedAlgo, selectedFields, parsedData, selectedCols, dataSource, query])
@@ -201,7 +203,7 @@ export const Train = ({ notifications, data }: Props) => {
                 }
 
                 <EuiSpacer />
-                <EuiButton type="submit" onClick={handleBuild} isLoading={isLoading}>
+                <EuiButton color="primary" fill onClick={handleBuild} isLoading={isLoading}>
                     Build Model
                 </EuiButton>
             </div>

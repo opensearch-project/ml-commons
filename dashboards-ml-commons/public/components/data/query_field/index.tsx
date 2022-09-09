@@ -10,7 +10,7 @@ import { IndexPattern } from '../../../../../../../src/plugins/data/public/index
 import { useOpenSearchDashboards } from '../../../../../../../src/plugins/opensearch_dashboards_react/public/index';
 import { MLServices } from '../../../types'
 import { PLUGIN_ID } from '../../../../common'
-import { type Filter, buildOpenSearchQuery } from '../../../../../../../src/plugins/data/common'
+import { buildOpenSearchQuery } from '../../../../../../../src/plugins/data/common'
 
 export type Query = {
     bool?: {

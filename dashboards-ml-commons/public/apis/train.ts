@@ -5,9 +5,17 @@ import { type Query } from '../../public/components/data/query_field';
 
 export interface TrainResponse {
     status: string,
-    model_id: string
+    model_id: string,
+    message?: string
 }
 export type DataSource = 'upload' | 'query'
+
+type Body = {
+    parameters: Record<string, string>,
+    input_query?: Record<string, string | number | Array<string> | Query>,
+    input_index?: Array<string>,
+    input_data?: Record<string, string>
+}
 
 export class Train {
     public train(body: Record<string, string[]>) {
@@ -21,7 +29,7 @@ export class Train {
         if (dataSource === 'query') {
             const index = Object.keys(fields)[0];
             if (!index) return {}
-            let body = {
+            let body: Body = {
                 "parameters": params,
                 "input_query": {
                     "_source": fields[index],
@@ -32,9 +40,8 @@ export class Train {
                 ]
             }
             if (query) {
-                body.input_query.query = query
+                body.input_query!.query = query
             }
-            console.log('body', body)
             return body
         } else {
             return {

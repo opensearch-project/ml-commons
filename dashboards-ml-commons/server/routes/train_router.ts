@@ -33,7 +33,12 @@ export default function (services: { trainService: TrainService }, router: IRout
                 const payload = await trainService.trainModel(req);
                 return opensearchDashboardsResponseFactory.ok({ body: payload });
             } catch (err) {
-                return opensearchDashboardsResponseFactory.badRequest({ body: err.message });
+                //Temporarily set error response ok to pass err detail to web
+                return opensearchDashboardsResponseFactory.ok({
+                    body: {
+                        message: err.message
+                    }
+                });
             }
         }
     );
