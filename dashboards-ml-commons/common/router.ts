@@ -9,6 +9,7 @@ import { Home } from '../public/components/home';
 import { ModelList } from '../public/components/model_list';
 import { TaskList } from '../public/components/task_list';
 import { routerPaths } from './router_paths';
+import { ModelDetail } from '../public/components/model_detail';
 
 export const ROUTES = [
   {
@@ -40,5 +41,9 @@ export const ROUTES = [
     Component: TaskList,
     label: 'Task List',
     icon: 'createSingleMetricJob',
+  },
+  {
+    path: routerPaths.modelDetail,
+    Component: ModelDetail,
   },
 ];
