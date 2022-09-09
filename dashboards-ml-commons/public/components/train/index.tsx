@@ -24,9 +24,10 @@ import { ComponentsCommonProps } from '../app'
 import { trainSuccessNotification } from '../../utils/notification'
 import { parseFile, transToInputData } from '../../../public/utils'
 import { ParsedResult } from '../data/parse_result';
-import { QueryField } from '../data/query_field';
+import { QueryField, type Query } from '../data/query_field';
 import { useIndexPatterns } from '../../hooks'
 import { type DataSource } from '../../apis/train'
+import './index.scss'
 
 import { type ALGOS } from '../../../common/'
 
@@ -44,6 +45,8 @@ export const Train = ({ notifications, data }: Props) => {
     const [dataSource, setDataSource] = useState<DataSource>('upload')
     const { indexPatterns } = useIndexPatterns(data);
     const [selectedFields, setSelectedFields] = useState<Record<string, string[]>>({})
+    const [query, setQuery] = useState<Query>()
+
 
     const [parsedData, setParsedData] = useState({
         data: []
@@ -87,7 +90,7 @@ export const Train = ({ notifications, data }: Props) => {
         const input_data = transToInputData(parsedData.data, selectedCols);
         let result
         try {
-            const body = await APIProvider.getAPI('train').convertParams(selectedAlgo, dataSource, params, input_data, selectedFields);
+            const body = APIProvider.getAPI('train').convertParams(selectedAlgo, dataSource, params, input_data, { fields: selectedFields, query });
             result = await APIProvider.getAPI('train').train(body)
             const { status, model_id } = result;
             if (status === "COMPLETED") {
@@ -97,7 +100,7 @@ export const Train = ({ notifications, data }: Props) => {
             console.log('err', e)
         }
         setIsLoading(false)
-    }, [params, selectedAlgo, selectedFields, parsedData, selectedCols, dataSource])
+    }, [params, selectedAlgo, selectedFields, parsedData, selectedCols, dataSource, query])
     return (
         <>
             <EuiPageHeader pageTitle="Train model" bottomBorder />
@@ -173,6 +176,9 @@ export const Train = ({ notifications, data }: Props) => {
                     onChange={(id) => setDataSource(id)}
                 />
                 <EuiSpacer />
+                {/* The closing tag is placed here because the EuiBadge embedded in the TopNavMenu component causes an automatic refresh */}
+            </EuiForm>
+            <div className='ml-train-form-below'>
                 {
                     dataSource === 'upload' ? (
                         <>
@@ -191,14 +197,14 @@ export const Train = ({ notifications, data }: Props) => {
                                 parsedData?.data?.length > 0 ? <ParsedResult data={parsedData.data} selectedCols={selectedCols} onChangeSelectedCols={setSelectedCols} /> : null
                             }
                         </>
-                    ) : <QueryField indexPatterns={indexPatterns} selectedFields={selectedFields} onSelectedFields={setSelectedFields} />
+                    ) : <QueryField indexPatterns={indexPatterns} selectedFields={selectedFields} onSelectedFields={setSelectedFields} onUpdateQuerys={setQuery} />
                 }
 
                 <EuiSpacer />
-                <EuiButton type="submit" fill onClick={handleBuild} isLoading={isLoading}>
+                <EuiButton type="submit" onClick={handleBuild} isLoading={isLoading}>
                     Build Model
                 </EuiButton>
-            </EuiForm>
+            </div>
         </>
     );
 };

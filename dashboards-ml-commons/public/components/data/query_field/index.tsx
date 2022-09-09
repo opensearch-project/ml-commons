@@ -4,20 +4,29 @@
  */
 
 
-import React, { useEffect, useCallback, useState } from 'react'
+import React, { useEffect, useCallback, useState, useLayoutEffect } from 'react'
 import { EuiSelect, EuiTitle, EuiSelectable, EuiSelectableOption, EuiBadge, EuiSpacer } from '@elastic/eui';
 import { IndexPattern } from '../../../../../../../src/plugins/data/public/index';
 import { useOpenSearchDashboards } from '../../../../../../../src/plugins/opensearch_dashboards_react/public/index';
 import { MLServices } from '../../../types'
 import { PLUGIN_ID } from '../../../../common'
+import { type Filter, buildOpenSearchQuery } from '../../../../../../../src/plugins/data/common'
+
+export type Query = {
+    bool?: {
+        [key: string]: Array<any>
+    }
+}
 
 interface Props {
     indexPatterns: IndexPattern[],
     selectedFields: Record<string, string[]>
-    onSelectedFields: (val: Record<string, string[]>) => void
+    onSelectedFields: React.Dispatch<React.SetStateAction<Record<string, string[]>>>
+    onUpdateQuerys: React.Dispatch<React.SetStateAction<Query | undefined>>
 }
+
 type fieldsOption = Partial<IndexPattern & EuiSelectableOption>
-export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields }: Props) => {
+export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields, onUpdateQuerys }: Props) => {
     const [selectedIndex, setSelectedIndex] = useState(0)
     const [fieldsOptions, setFieldsOptions] = useState<Array<fieldsOption>>([]);
     const { services } = useOpenSearchDashboards<MLServices>();
@@ -26,6 +35,7 @@ export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields }: 
         navigation: {
             ui: { TopNavMenu },
         },
+        data
     } = services;
 
     const handleSelectField = useCallback((newOptions: Array<fieldsOption>) => {
@@ -45,6 +55,19 @@ export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields }: 
         const indexTitle = indexPatterns[selectedIndex].title;
         onSelectedFields({ [indexTitle]: [] });
     }, [selectedIndex, indexPatterns])
+
+    useLayoutEffect(() => {
+        const subscription = data.query.state$.subscribe(({ state }) => {
+            if (state.filters && state.query) {
+                const query = buildOpenSearchQuery(indexPatterns[selectedIndex], state.query, state.filters);
+                onUpdateQuerys(query)
+            }
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, [data.query.state$]);
 
     return (
         <>
@@ -84,20 +107,14 @@ export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields }: 
             <EuiSpacer />
 
             <EuiTitle size="xs">
-                <h5>Add filter</h5>
+                <h5>Filter</h5>
             </EuiTitle>
             <TopNavMenu
                 appName={PLUGIN_ID}
-                // config={[{
-                //     run: (a) => {
-                //         console.log('run', a)
-                //     },
-                //     label: '123'
-                // }]}
                 setMenuMountPoint={setHeaderActionMenu}
                 indexPatterns={[indexPatterns[selectedIndex]]}
                 useDefaultBehaviors={true}
-                showSaveQuery={true}
+                showQueryBar={false}
                 showSearchBar={true}
             />
         </>
