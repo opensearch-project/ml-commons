@@ -6,13 +6,13 @@
 package org.opensearch.ml.stats;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.utils.MLNodeUtils.parseField;
 
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
-import java.util.function.Function;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -260,24 +260,6 @@ public class MLStatsInput implements ToXContentObject, Writeable {
 
     public boolean retrieveStatsForAllActions() {
         return actions == null || actions.size() == 0;
-    }
-
-    private static void parseField(XContentParser parser, Set<String> set) throws IOException {
-        parseField(parser, set, null, String.class);
-    }
-
-    private static <T> void parseField(XContentParser parser, Set<T> set, Function<String, T> function, Class<T> clazz) throws IOException {
-        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-            String value = parser.text();
-            if (function != null) {
-                set.add(function.apply(value));
-            } else {
-                if (clazz.isInstance(value)) {
-                    set.add(clazz.cast(value));
-                }
-            }
-        }
     }
 
     public boolean retrieveStat(Enum<?> key) {
