@@ -47,12 +47,13 @@ export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields, on
     }, [selectedFields, onSelectedFields])
 
     useEffect(() => {
-        setFieldsOptions(indexPatterns[selectedIndex].fields.map(item => ({
+        if (!indexPatterns || !indexPatterns[selectedIndex]) return
+        setFieldsOptions(indexPatterns[selectedIndex]?.fields.map(item => ({
             ...item,
             label: item.name,
             prepend: <EuiBadge color="hollow">{item?.type}</EuiBadge>
         })));
-        const indexTitle = indexPatterns[selectedIndex].title;
+        const indexTitle = indexPatterns[selectedIndex]?.title;
         onSelectedFields({ [indexTitle]: [] });
     }, [selectedIndex, indexPatterns])
 

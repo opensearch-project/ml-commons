@@ -178,7 +178,7 @@ export const Train = ({ notifications, data }: Props) => {
                     onChange={(id) => setDataSource(id)}
                 />
                 <EuiSpacer />
-                {/* The closing tag is placed here because the EuiBadge embedded in the TopNavMenu component causes an automatic refresh */}
+                {/* The closing tag is placed here because the EuiBadge embedded in the TopNavMenu component of QueryField causes an automatic refresh issue */}
             </EuiForm>
             <div className='ml-train-form-below'>
                 {

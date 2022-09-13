@@ -19,11 +19,13 @@ export const TASK_BASE_API = `${API_ROUTE_PREFIX}/tasks`;
 export const TASK_SEARCH_API = `${TASK_BASE_API}/_search`;
 export const MODEL_BASE_API = `${API_ROUTE_PREFIX}/models`;
 export const MODEL_SEARCH_API = `${MODEL_BASE_API}/_search`;
+export const PREDICT_BASE_API = `${API_ROUTE_PREFIX}/_predict`;
 
 export const CLUSTER = {
   TRAIN: 'opensearch_mlCommonsTrain',
   MODEL: 'opensearch_mlCommonsModel',
   TASK: 'opensearch_mlCommonsTask',
+  PREDICT: 'opensearch_mlCommonsPredict'
 };
 
 export const MODEL_INDEX = '.plugins-ml-model';
