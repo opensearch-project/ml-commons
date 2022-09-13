@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { EuiPageHeader, EuiButton, EuiSpacer, EuiPanel } from '@elastic/eui';
 import { Link } from 'react-router-dom';
 import moment from 'moment';
@@ -10,8 +10,13 @@ import { routerPaths } from '../../../common/router_paths';
 
 import { ModelTable } from './model_table';
 import { ModelListFilter } from './model_list_filter';
+import {
+  ModelConfirmDeleteModal,
+  ModelConfirmDeleteModalInstance,
+} from './model_confirm_delete_modal';
 
 export const ModelList = ({ notifications }: { notifications: CoreStart['notifications'] }) => {
+  const confirmModelDeleteRef = useRef<ModelConfirmDeleteModalInstance>(null);
   const [models, setModels] = useState<ModelSearchItem[]>([]);
   const [totalModelCounts, setTotalModelCount] = useState(0);
   const [params, setParams] = useState<{
@@ -87,6 +92,10 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
     setParams((previousValue) => ({ ...previousValue, trainedEnd: date }));
   }, []);
 
+  const handleModelDelete = useCallback((modelId: string) => {
+    confirmModelDeleteRef.current?.show(modelId);
+  }, []);
+
   useEffect(() => {
     APIProvider.getAPI('model')
       .search({
@@ -136,8 +145,9 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
         models={models}
         pagination={pagination}
         onPaginationChange={handlePaginationChange}
-        onModelDeleted={handleModelDeleted}
+        onModelDelete={handleModelDelete}
       />
+      <ModelConfirmDeleteModal ref={confirmModelDeleteRef} onDeleted={handleModelDeleted} />
     </EuiPanel>
   );
 };

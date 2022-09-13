@@ -1,10 +1,9 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { generatePath, useHistory } from 'react-router-dom';
-import { EuiBasicTable } from '@elastic/eui';
+import { CustomItemAction, EuiBasicTable, EuiButtonIcon } from '@elastic/eui';
 import moment from 'moment';
 
 import { ModelSearchItem } from '../../apis/model';
-import { ModelDeleteButton } from './model_delete_button';
 import { routerPaths } from '../../../common/router_paths';
 
 const renderDateTime = (value: number) => (value ? moment(value).format() : '-');
@@ -17,9 +16,9 @@ export function ModelTable(props: {
     totalRecords: number | undefined;
   };
   onPaginationChange: (pagination: { currentPage: number; pageSize: number }) => void;
-  onModelDeleted: () => void;
+  onModelDelete: (id: string) => void;
 }) {
-  const { models, onPaginationChange, onModelDeleted } = props;
+  const { models, onPaginationChange, onModelDelete } = props;
   const history = useHistory();
   const onPaginationChangeRef = useRef(onPaginationChange);
   onPaginationChangeRef.current = onPaginationChange;
@@ -48,12 +47,24 @@ export function ModelTable(props: {
         render: renderDateTime,
       },
       {
-        field: 'id',
         name: 'Actions',
-        render: (id: string) => <ModelDeleteButton key={id} id={id} onDeleted={onModelDeleted} />,
+        actions: [
+          {
+            render: ({ id }) => (
+              <EuiButtonIcon
+                iconType="trash"
+                color="danger"
+                onClick={(e: { stopPropagation: () => void }) => {
+                  e.stopPropagation();
+                  onModelDelete(id);
+                }}
+              />
+            ),
+          } as CustomItemAction<ModelSearchItem>,
+        ],
       },
     ],
-    [onModelDeleted]
+    [onModelDelete]
   );
 
   const pagination = useMemo(
