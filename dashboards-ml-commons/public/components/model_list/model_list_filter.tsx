@@ -1,6 +1,6 @@
 import { EuiFlexItem, EuiDatePickerRange, EuiDatePicker, EuiFlexGroup } from '@elastic/eui';
 import moment from 'moment';
-import React from 'react';
+import React, { useCallback } from 'react';
 
 import { AlgorithmSelector } from './algorithm_selector';
 import { ContextSelector } from './context_selector';
@@ -24,6 +24,14 @@ export const ModelListFilter = ({
   onTrainedStartChange?: (time: moment.Moment | null) => void;
   onTrainedEndChange?: (time: moment.Moment | null) => void;
 }) => {
+  const handleTrainedStartClear = useCallback(() => {
+    onTrainedStartChange?.(null);
+  }, [onTrainedStartChange]);
+
+  const handleTrainedEndClear = useCallback(() => {
+    onTrainedEndChange?.(null);
+  }, [onTrainedEndChange]);
+
   return (
     <>
       <EuiFlexGroup>
@@ -39,6 +47,7 @@ export const ModelListFilter = ({
                 showTimeSelect
                 selected={trainedStart}
                 onChange={onTrainedStartChange}
+                onClear={handleTrainedStartClear}
               />
             }
             endDateControl={
@@ -48,6 +57,7 @@ export const ModelListFilter = ({
                 showTimeSelect
                 selected={trainedEnd}
                 onChange={onTrainedEndChange}
+                onClear={handleTrainedEndClear}
               />
             }
             fullWidth

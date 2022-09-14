@@ -15,8 +15,8 @@ export interface TaskListFilterValue {
   modelId?: string;
   functionName?: string;
   state?: string;
-  createdStart?: moment.Moment;
-  createdEnd?: moment.Moment;
+  createdStart?: moment.Moment | null;
+  createdEnd?: moment.Moment | null;
 }
 
 export const TaskListFilter = ({
@@ -65,6 +65,14 @@ export const TaskListFilter = ({
     },
     [fireChange]
   );
+
+  const handleCreatedStartClear = useCallback(() => {
+    fireChange({ createdStart: null });
+  }, [fireChange]);
+
+  const handleCreatedEndClear = useCallback(() => {
+    fireChange({ createdEnd: null });
+  }, [fireChange]);
 
   useEffect(() => {
     APIProvider.getAPI('task')
@@ -119,6 +127,7 @@ export const TaskListFilter = ({
                 placeholder="Create Start Time"
                 selected={value.createdStart}
                 onChange={handleCreatedStartChange}
+                onClear={handleCreatedStartClear}
                 showTimeSelect
               />
             }
@@ -128,6 +137,7 @@ export const TaskListFilter = ({
                 placeholder="Create End Time"
                 selected={value.createdEnd}
                 onChange={handleCreatedEndChange}
+                onClear={handleCreatedEndClear}
                 showTimeSelect
               />
             }
