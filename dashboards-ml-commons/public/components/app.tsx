@@ -18,7 +18,7 @@ import { DataPublicPluginStart } from '../../../../../src/plugins/data/public';
 
 import { NavPanel } from '../components/nav_panel';
 import { GlobalBreadcrumbs } from './global_breadcrumbs';
-import { useIndexPatterns } from '../hooks'
+import { useIndexPatterns } from '../hooks';
 
 interface MlCommonsPluginAppDeps {
   basename: string;
@@ -27,7 +27,7 @@ interface MlCommonsPluginAppDeps {
   navigation: NavigationPublicPluginStart;
   chrome: CoreStart['chrome'];
   data: DataPublicPluginStart;
-  uiSettingsClient: IUiSettingsClient
+  uiSettingsClient: IUiSettingsClient;
 }
 
 export interface ComponentsCommonProps {
@@ -50,7 +50,7 @@ export const MlCommonsPluginApp = ({
     <ReduxProvider store={store}>
       <I18nProvider>
         <Switch>
-          <EuiPage restrictWidth="1000px">
+          <EuiPage>
             <EuiPageSideBar>
               <NavPanel />
             </EuiPageSideBar>
@@ -58,9 +58,7 @@ export const MlCommonsPluginApp = ({
               {ROUTES.map(({ path, Component, exact }) => (
                 <Route
                   path={path}
-                  render={() => (
-                    <Component http={http} notifications={notifications} data={data} />
-                  )}
+                  render={() => <Component http={http} notifications={notifications} data={data} />}
                   exact={exact ?? false}
                 />
               ))}
