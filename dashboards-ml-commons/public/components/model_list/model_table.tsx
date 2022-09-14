@@ -1,12 +1,10 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { generatePath, useHistory } from 'react-router-dom';
 import { CustomItemAction, EuiBasicTable, EuiButtonIcon } from '@elastic/eui';
-import moment from 'moment';
 
 import { ModelSearchItem } from '../../apis/model';
 import { routerPaths } from '../../../common/router_paths';
-
-const renderDateTime = (value: number) => (value ? moment(value).format() : '-');
+import { renderTime } from '../../utils';
 
 export function ModelTable(props: {
   models: ModelSearchItem[];
@@ -40,11 +38,12 @@ export function ModelTable(props: {
       {
         field: 'context',
         name: 'Context',
+        width: '500px',
       },
       {
         field: 'trainTime',
         name: 'Train Time',
-        render: renderDateTime,
+        render: renderTime,
       },
       {
         name: 'Actions',

@@ -1,11 +1,9 @@
 import React, { useMemo, useCallback, useRef } from 'react';
 import { EuiBasicTable } from '@elastic/eui';
-import moment from 'moment';
 
 import { TaskSearchItem } from '../../apis/task';
 import { TaskDeleteButton } from './task_delete_button';
-
-const renderDateTime = (value: number) => moment(value).format();
+import { renderTime } from '../../utils';
 
 export function TaskTable(props: {
   tasks: TaskSearchItem[];
@@ -40,12 +38,12 @@ export function TaskTable(props: {
       {
         field: 'createTime',
         name: 'Create Time',
-        render: renderDateTime,
+        render: renderTime,
       },
       {
         field: 'lastUpdateTime',
         name: 'Last Update Time',
-        render: renderDateTime,
+        render: renderTime,
       },
       {
         field: 'isAsync',
@@ -58,7 +56,7 @@ export function TaskTable(props: {
       {
         name: 'Actions',
         field: 'id',
-        width: 130,
+        width: '130px',
         render: (id: string) => <TaskDeleteButton id={id} onDeleted={onTaskDeleted} />,
       },
     ],
