@@ -18,13 +18,12 @@ import {
 } from '@elastic/eui';
 import { FormattedMessage } from '@osd/i18n/react';
 import { PLUGIN_NAME, PLUGIN_DESC } from '../../../common';
-import { Link } from 'react-router-dom';
+import { generatePath, Link } from 'react-router-dom';
 import { ROUTES } from '../../../common/router';
 import { ComponentsCommonProps } from '../app';
-interface Props extends ComponentsCommonProps { }
+interface Props extends ComponentsCommonProps {}
 
 export const Home = ({ data }: Props) => {
-
   return (
     <>
       <EuiPageHeader>
@@ -61,7 +60,7 @@ export const Home = ({ data }: Props) => {
             <EuiKeyPadMenu>
               {ROUTES.map(({ path, icon, label }) => {
                 return icon ? (
-                  <Link to={Array.isArray(path) ? path[0] : path}>
+                  <Link to={generatePath(path)}>
                     <EuiKeyPadMenuItem label={label}>
                       <EuiIcon type={icon} size="xxl" />
                     </EuiKeyPadMenuItem>

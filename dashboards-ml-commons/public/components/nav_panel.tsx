@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { EuiSideNav } from '@elastic/eui';
-import { Link, matchPath, useLocation } from 'react-router-dom';
+import { generatePath, Link, matchPath, useLocation } from 'react-router-dom';
 
 import { ROUTES } from '../../common/router';
 
@@ -8,12 +8,15 @@ export function NavPanel() {
   const location = useLocation();
   const items = useMemo(
     () =>
-      ROUTES.filter((item) => !!item.label).map((item) => ({
-        id: Array.isArray(item.path) ? item.path[0] : item.path,
-        name: item.label,
-        href: Array.isArray(item.path) ? item.path[0] : item.path,
-        isSelected: matchPath(location.pathname, { path: item.path, exact: item.exact }) !== null,
-      })),
+      ROUTES.filter((item) => !!item.label).map((item) => {
+        const href = generatePath(item.path);
+        return {
+          id: href,
+          name: item.label,
+          href,
+          isSelected: matchPath(location.pathname, { path: item.path, exact: item.exact }) !== null,
+        };
+      }),
     [location.pathname]
   );
   const renderItem = useCallback(

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useRouteMatch, Link } from 'react-router-dom';
+import { useRouteMatch, Link, generatePath } from 'react-router-dom';
 import {
   EuiPanel,
   EuiPageHeader,
@@ -72,6 +72,9 @@ export const ModelDetail = (props: any) => {
       <EuiPageHeader
         pageTitle="Model Detail"
         rightSideItems={[
+          <Link to={generatePath(routerPaths.predict, { id: params.id })}>
+            <EuiButton fill>Predict</EuiButton>
+          </Link>,
           <Link to={routerPaths.modelList}>
             <EuiButton>Back to list</EuiButton>
           </Link>,
