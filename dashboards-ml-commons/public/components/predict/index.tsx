@@ -48,7 +48,7 @@ export const Predict = ({ data }: Props) => {
                 }, selectModel.algo, selectModel.id) as PredictResponse;
             const { prediction_result, status } = result;
             if (status === 'COMPLETED' && prediction_result) {
-
+                console.log('prediction_result', prediction_result)
             }
         } catch (err) {
             console.error('err', err)
