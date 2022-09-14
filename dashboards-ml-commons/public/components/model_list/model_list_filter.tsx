@@ -28,7 +28,7 @@ export const ModelListFilter = ({
     <>
       <EuiFlexGroup>
         <EuiFlexItem grow={1}>
-          <AlgorithmSelector value={algorithm} onChange={onAlgorithmsChange} />
+          <AlgorithmSelector value={algorithm} onChange={onAlgorithmsChange} fullWidth />
         </EuiFlexItem>
         <EuiFlexItem grow={2}>
           <EuiDatePickerRange

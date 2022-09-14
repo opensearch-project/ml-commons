@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { APIProvider } from '../../apis/api_provider';
-import { PrimitiveComboBox } from '../primitive_combo_box';
+import { PrimitiveComboBox, PrimitiveComboBoxProps } from '../primitive_combo_box';
 
-export const AlgorithmSelector = ({
-  value,
-  onChange,
-}: {
-  value: string | undefined;
-  onChange: (value: string | undefined) => void;
-}) => {
+export const AlgorithmSelector = (props: Omit<PrimitiveComboBoxProps<string>, 'options'>) => {
   const [algorithms, setAlgorithms] = useState<string[]>([]);
 
   useEffect(() => {
@@ -19,12 +13,5 @@ export const AlgorithmSelector = ({
       });
   }, []);
 
-  return (
-    <PrimitiveComboBox
-      options={algorithms}
-      value={value}
-      onChange={onChange}
-      placeholder="All algorithm"
-    />
-  );
+  return <PrimitiveComboBox<string> {...props} options={algorithms} placeholder="All algorithm" />;
 };

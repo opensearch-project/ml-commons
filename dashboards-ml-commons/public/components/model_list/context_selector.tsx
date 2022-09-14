@@ -29,6 +29,7 @@ const ContextSelectorInnter = ({
       multi
       placeholder={`All ${identity}`}
       onChange={handleChange}
+      fullWidth
     />
   );
 };

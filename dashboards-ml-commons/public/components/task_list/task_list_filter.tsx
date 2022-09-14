@@ -88,6 +88,7 @@ export const TaskListFilter = ({
             placeholder="Search by model id"
             value={value.modelId ?? ''}
             onChange={handleModelIdChange}
+            fullWidth
           />
         </EuiFlexItem>
         <EuiFlexItem>
@@ -96,6 +97,7 @@ export const TaskListFilter = ({
             value={value.functionName}
             onChange={handleFunctionChange}
             placeholder="All functions"
+            fullWidth
           />
         </EuiFlexItem>
         <EuiFlexItem>
@@ -104,6 +106,7 @@ export const TaskListFilter = ({
             value={value.state}
             onChange={handleStateChange}
             placeholder="All states"
+            fullWidth
           />
         </EuiFlexItem>
       </EuiFlexGrid>
