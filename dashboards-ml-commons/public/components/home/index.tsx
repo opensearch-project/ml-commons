@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   EuiHorizontalRule,
   EuiPageContent,
@@ -61,7 +61,7 @@ export const Home = ({ data }: Props) => {
             <EuiKeyPadMenu>
               {ROUTES.map(({ path, icon, label }) => {
                 return icon ? (
-                  <Link to={path}>
+                  <Link to={Array.isArray(path) ? path[0] : path}>
                     <EuiKeyPadMenuItem label={label}>
                       <EuiIcon type={icon} size="xxl" />
                     </EuiKeyPadMenuItem>

@@ -5,7 +5,7 @@
 
 
 import React, { useEffect, useCallback, useState, useLayoutEffect } from 'react'
-import { EuiSelect, EuiTitle, EuiSelectable, EuiSelectableOption, EuiBadge, EuiSpacer } from '@elastic/eui';
+import { EuiSelect, EuiSelectable, EuiSelectableOption, EuiBadge, EuiSpacer, EuiFormRow } from '@elastic/eui';
 import { IndexPattern } from '../../../../../../../src/plugins/data/public/index';
 import { useOpenSearchDashboards } from '../../../../../../../src/plugins/opensearch_dashboards_react/public/index';
 import { MLServices } from '../../../types'
@@ -72,52 +72,44 @@ export const QueryField = ({ indexPatterns, selectedFields, onSelectedFields, on
 
     return (
         <>
-
-            <EuiTitle size="xs">
-                <h5>Select index</h5>
-            </EuiTitle>
-            <EuiSelect
-                options={indexPatterns?.map((i, index) => { return { value: index, text: i.title } })}
-                value={selectedIndex}
-                onChange={(e) => {
-                    setSelectedIndex(Number(e.target.value))
-                }}
-            />
-            <EuiSpacer />
-
-            <EuiTitle size="xs">
-                <h5>Select source fileds</h5>
-            </EuiTitle>
-            <EuiSelectable
-                aria-label="Searchable example"
-                searchable
-                searchProps={{
-                    'data-test-subj': 'selectableSearchHere',
-                }}
-                options={fieldsOptions as unknown as EuiSelectableOption[]}
-                onChange={handleSelectField}
-            >
-                {(list, search) => (
-                    <>
-                        {search}
-                        {list}
-                    </>
-                )}
-            </EuiSelectable>
-
-            <EuiSpacer />
-
-            <EuiTitle size="xs">
-                <h5>Filter</h5>
-            </EuiTitle>
-            <TopNavMenu
-                appName={PLUGIN_ID}
-                setMenuMountPoint={setHeaderActionMenu}
-                indexPatterns={[indexPatterns[selectedIndex]]}
-                useDefaultBehaviors={true}
-                showQueryBar={false}
-                showSearchBar={true}
-            />
+            <EuiFormRow label="Select index" fullWidth helpText="select a index which used to query">
+                <EuiSelect
+                    options={indexPatterns?.map((i, index) => { return { value: index, text: i.title } })}
+                    value={selectedIndex}
+                    fullWidth
+                    onChange={(e) => {
+                        setSelectedIndex(Number(e.target.value))
+                    }}
+                />
+            </EuiFormRow>
+            <EuiFormRow label="Select source fileds" fullWidth helpText="select fields which used to query">
+                <EuiSelectable
+                    aria-label="Searchable example"
+                    searchable
+                    searchProps={{
+                        'data-test-subj': 'selectableSearchHere',
+                    }}
+                    options={fieldsOptions as unknown as EuiSelectableOption[]}
+                    onChange={handleSelectField}
+                >
+                    {(list, search) => (
+                        <>
+                            {search}
+                            {list}
+                        </>
+                    )}
+                </EuiSelectable>
+            </EuiFormRow>
+            <EuiFormRow label="Filter" fullWidth helpText="add filter which used to query">
+                <TopNavMenu
+                    appName={PLUGIN_ID}
+                    setMenuMountPoint={setHeaderActionMenu}
+                    indexPatterns={[indexPatterns[selectedIndex]]}
+                    useDefaultBehaviors={true}
+                    showQueryBar={false}
+                    showSearchBar={true}
+                />
+            </EuiFormRow>
         </>
     )
 }

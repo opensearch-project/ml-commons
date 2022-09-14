@@ -9,9 +9,9 @@ export function NavPanel() {
   const items = useMemo(
     () =>
       ROUTES.filter((item) => !!item.label).map((item) => ({
-        id: item.path,
+        id: Array.isArray(item.path) ? item.path[0] : item.path,
         name: item.label,
-        href: item.path,
+        href: Array.isArray(item.path) ? item.path[0] : item.path,
         isSelected: matchPath(location.pathname, { path: item.path, exact: item.exact }) !== null,
       })),
     [location.pathname]

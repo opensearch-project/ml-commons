@@ -7,6 +7,22 @@ type Body = {
     input_index?: Array<string>,
 }
 
+export type PredictResponse = {
+    status: string
+    prediction_result: {
+        column_metas: Array<{
+            name: string,
+            column: string
+        }>,
+        rows: Array<{
+            values: Array<{
+                column_type: string,
+                value: number | string | boolean
+            }>
+        }>
+    }
+}
+
 export class Predict {
     public predict(payload: any, algo: string, modelId: string) {
         const { fields, query } = payload;
@@ -24,7 +40,7 @@ export class Predict {
         if (query) {
             body.input_query!.query = query
         }
-        return InnerHttpProvider.getHttp().post<any>(`${PREDICT_API_ENDPOINT}/${algo}/${modelId}`, {
+        return InnerHttpProvider.getHttp().post<PredictResponse>(`${PREDICT_API_ENDPOINT}/${algo}/${modelId}`, {
             body: JSON.stringify(body)
         });
     }

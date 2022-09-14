@@ -1,5 +1,5 @@
 export const routerPaths = {
-  predict: '/predict',
+  predict: ['/predict', '/predict/:id'],
   modelList: '/model-list',
   taskList: '/task-list',
   train: '/train',

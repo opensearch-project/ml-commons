@@ -7,7 +7,6 @@
 import React, { useCallback, useState } from 'react';
 import {
     EuiButton,
-    EuiForm,
     EuiFormRow,
     EuiTitle,
     EuiSelect,
@@ -106,43 +105,47 @@ export const Train = ({ notifications, data }: Props) => {
     return (
         <>
             <EuiPageHeader pageTitle="Train model" bottomBorder />
-            <EuiTitle size="xs">
-                <h4>Select a algorithm</h4>
-            </EuiTitle>
-            <EuiSelect
-                onChange={(e) => setSelectedAlgo(e.target.value)}
-                value={selectedAlgo}
-                options={[
-                    {
-                        value: 'kmeans',
-                        text: 'K-means'
-                    }, {
-                        value: 'LINEAR_REGRESSION',
-                        text: 'LINEAR_REGRESSION'
-                    }
-                ]}
-            />
-            <EuiSpacer />
-            <EuiTitle size="xs">
-                <h4>Parameters</h4>
-            </EuiTitle>
-            <EuiForm component="form">
-                <EuiFormRow label="centroids" helpText="The number of clusters in which to group the generated data">
+            <div className='ml-train-form'>
+                <EuiTitle size="xs">
+                    <h4>Select a algorithm</h4>
+                </EuiTitle>
+                <EuiSelect
+                    onChange={(e) => setSelectedAlgo(e.target.value)}
+                    value={selectedAlgo}
+                    fullWidth
+                    options={[
+                        {
+                            value: 'kmeans',
+                            text: 'K-means'
+                        }, {
+                            value: 'LINEAR_REGRESSION',
+                            text: 'LINEAR_REGRESSION'
+                        }
+                    ]}
+                />
+                <EuiSpacer />
+                <EuiTitle size="xs">
+                    <h4>Parameters</h4>
+                </EuiTitle>
+                <EuiFormRow label="centroids" fullWidth helpText="The number of clusters in which to group the generated data">
                     <EuiFieldNumber
+                        fullWidth
                         value={params?.centroids ?? 2}
                         onChange={(e) => setParams({ ...params, centroids: Number(e.target.value) })}
                         aria-label="Use aria labels when no actual label is in use"
                     />
                 </EuiFormRow>
-                <EuiFormRow label="iterations" helpText="The number of iterations to perform against the data until a mean generates">
+                <EuiFormRow label="iterations" fullWidth helpText="The number of iterations to perform against the data until a mean generates">
                     <EuiFieldNumber
+                        fullWidth
                         value={params?.iterations ?? 10}
                         onChange={(e) => setParams({ ...params, iterations: Number(e.target.value) })}
                         aria-label="Use aria labels when no actual label is in use"
                     />
                 </EuiFormRow>
-                <EuiFormRow label="distance_type" helpText="The type of measurement from which to measure the distance between centroids">
+                <EuiFormRow label="distance_type" fullWidth helpText="The type of measurement from which to measure the distance between centroids">
                     <EuiSelect
+                        fullWidth
                         onChange={(e) => setParams({ ...params, distance_type: e.target.value })}
                         value={params?.distance_type}
                         options={[
@@ -178,17 +181,15 @@ export const Train = ({ notifications, data }: Props) => {
                     onChange={(id) => setDataSource(id)}
                 />
                 <EuiSpacer />
-                {/* The closing tag is placed here because the EuiBadge embedded in the TopNavMenu component of QueryField causes an automatic refresh issue */}
-            </EuiForm>
-            <div className='ml-train-form-below'>
                 {
                     dataSource === 'upload' ? (
                         <>
-                            <EuiFormRow label="File picker">
+                            <EuiFormRow label="File picker" fullWidth>
                                 <EuiFilePicker
                                     initialPromptText="upload CSV or JSON data"
                                     display='large'
                                     onChange={onChange}
+                                    fullWidth
                                 />
                             </EuiFormRow>
                             <EuiText>
@@ -201,7 +202,6 @@ export const Train = ({ notifications, data }: Props) => {
                         </>
                     ) : <QueryField indexPatterns={indexPatterns} selectedFields={selectedFields} onSelectedFields={setSelectedFields} onUpdateQuerys={setQuery} />
                 }
-
                 <EuiSpacer />
                 <EuiButton color="primary" fill onClick={handleBuild} isLoading={isLoading}>
                     Build Model
