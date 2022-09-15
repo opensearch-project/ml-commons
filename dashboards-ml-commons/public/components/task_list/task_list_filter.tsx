@@ -10,6 +10,7 @@ import {
 } from '@elastic/eui';
 import { APIProvider } from '../../apis/api_provider';
 import { PrimitiveComboBox } from '../primitive_combo_box';
+import { RangePicker } from '../range_picker';
 
 export interface TaskListFilterValue {
   modelId?: string;
@@ -66,14 +67,6 @@ export const TaskListFilter = ({
     [fireChange]
   );
 
-  const handleCreatedStartClear = useCallback(() => {
-    fireChange({ createdStart: null });
-  }, [fireChange]);
-
-  const handleCreatedEndClear = useCallback(() => {
-    fireChange({ createdEnd: null });
-  }, [fireChange]);
-
   useEffect(() => {
     APIProvider.getAPI('task')
       .getAllFunctions()
@@ -120,28 +113,12 @@ export const TaskListFilter = ({
       </EuiFlexGrid>
       <EuiFlexGroup>
         <EuiFlexItem>
-          <EuiDatePickerRange
-            startDateControl={
-              <EuiDatePicker
-                aria-label="Start time"
-                placeholder="Create Start Time"
-                selected={value.createdStart}
-                onChange={handleCreatedStartChange}
-                onClear={handleCreatedStartClear}
-                showTimeSelect
-              />
-            }
-            endDateControl={
-              <EuiDatePicker
-                aria-label="End time"
-                placeholder="Create End Time"
-                selected={value.createdEnd}
-                onChange={handleCreatedEndChange}
-                onClear={handleCreatedEndClear}
-                showTimeSelect
-              />
-            }
-            fullWidth
+          <RangePicker
+            start={value.createdStart}
+            end={value.createdEnd}
+            onStartChange={handleCreatedStartChange}
+            onEndChange={handleCreatedEndChange}
+            placeholders={['Create Start Time', 'Create End Time']}
           />
         </EuiFlexItem>
       </EuiFlexGroup>
