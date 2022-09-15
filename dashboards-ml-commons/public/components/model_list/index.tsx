@@ -67,7 +67,7 @@ export const ModelList = ({ notifications }: { notifications: CoreStart['notific
     setModels(payload.data);
     setTotalModelCount(payload.pagination.totalRecords);
     notifications.toasts.addSuccess('Model has been deleted.');
-  }, [pagination.currentPage, pagination.pageSize]);
+  }, [params]);
 
   const handleAlgorithmsChange = useCallback(
     (algorithms: string | undefined) => {
