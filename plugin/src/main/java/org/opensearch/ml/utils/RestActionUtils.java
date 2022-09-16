@@ -37,7 +37,7 @@ public class RestActionUtils {
      * Get the Model or Task id from a RestRequest
      *
      * @param request RestRequest
-     * @param idName ID name for example "model_id"
+     * @param idName  ID name for example "model_id"
      * @return id for model or task
      */
     public static String getParameterId(RestRequest request, String idName) {
@@ -72,7 +72,12 @@ public class RestActionUtils {
             } else {
                 return new FetchSourceContext(true, includes, excludes);
             }
+        } else {
+            if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
+            } else {
+                return null;
+            }
         }
-        return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
     }
 }
