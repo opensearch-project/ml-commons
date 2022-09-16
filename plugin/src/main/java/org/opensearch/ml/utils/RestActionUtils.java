@@ -9,6 +9,7 @@ import java.util.Locale;
 
 import org.opensearch.common.Strings;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 public class RestActionUtils {
@@ -54,12 +55,24 @@ public class RestActionUtils {
      * @param request rest request
      * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
      */
-    public static FetchSourceContext getSourceContext(RestRequest request) {
+    public static FetchSourceContext getSourceContext(RestRequest request, SearchSourceBuilder searchSourceBuilder) {
         String userAgent = Strings.coalesceToEmpty(request.header("User-Agent"));
-        if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
-            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
-        } else {
-            return null;
+        if (searchSourceBuilder.fetchSource() != null) {
+            String[] includes = searchSourceBuilder.fetchSource().includes();
+            String[] excludes = searchSourceBuilder.fetchSource().excludes();
+            String[] metadataExcludes = new String[excludes.length + 1];
+            if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
+                if (excludes.length == 0) {
+                    return new FetchSourceContext(true, includes, UI_METADATA_EXCLUDE);
+                } else {
+                    System.arraycopy(excludes, 0, metadataExcludes, 0, excludes.length);
+                    metadataExcludes[metadataExcludes.length - 1] = "ui_metadata";
+                    return new FetchSourceContext(true, includes, metadataExcludes);
+                }
+            } else {
+                return new FetchSourceContext(true, includes, excludes);
+            }
         }
+        return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
     }
 }
