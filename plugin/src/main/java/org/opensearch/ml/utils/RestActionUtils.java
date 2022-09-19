@@ -53,13 +53,14 @@ public class RestActionUtils {
      * If the request came from the client then we exclude the UI Metadata from the search result.
      *
      * @param request rest request
+     * @param searchSourceBuilder instance of searchSourceBuilder to fetch includes and excludes
      * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
      */
     public static FetchSourceContext getSourceContext(RestRequest request, SearchSourceBuilder searchSourceBuilder) {
         String userAgent = Strings.coalesceToEmpty(request.header("User-Agent"));
         if (searchSourceBuilder.fetchSource() != null) {
-            String[] includes = searchSourceBuilder.fetchSource().includes();
-            String[] excludes = searchSourceBuilder.fetchSource().excludes();
+            final String[] includes = searchSourceBuilder.fetchSource().includes();
+            final String[] excludes = searchSourceBuilder.fetchSource().excludes();
             String[] metadataExcludes = new String[excludes.length + 1];
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
                 if (excludes.length == 0) {
