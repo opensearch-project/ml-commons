@@ -74,6 +74,7 @@ public class RestActionUtils {
                 return new FetchSourceContext(true, includes, excludes);
             }
         } else {
+            // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
                 return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
             } else {
