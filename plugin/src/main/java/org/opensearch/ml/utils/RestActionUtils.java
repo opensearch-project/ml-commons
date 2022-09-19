@@ -9,6 +9,7 @@ import java.util.Locale;
 
 import org.opensearch.common.Strings;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 public class RestActionUtils {
@@ -36,7 +37,7 @@ public class RestActionUtils {
      * Get the Model or Task id from a RestRequest
      *
      * @param request RestRequest
-     * @param idName ID name for example "model_id"
+     * @param idName  ID name for example "model_id"
      * @return id for model or task
      */
     public static String getParameterId(RestRequest request, String idName) {
@@ -52,14 +53,33 @@ public class RestActionUtils {
      * If the request came from the client then we exclude the UI Metadata from the search result.
      *
      * @param request rest request
+     * @param searchSourceBuilder instance of searchSourceBuilder to fetch includes and excludes
      * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
      */
-    public static FetchSourceContext getSourceContext(RestRequest request) {
+    public static FetchSourceContext getSourceContext(RestRequest request, SearchSourceBuilder searchSourceBuilder) {
         String userAgent = Strings.coalesceToEmpty(request.header("User-Agent"));
-        if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
-            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
+        if (searchSourceBuilder.fetchSource() != null) {
+            final String[] includes = searchSourceBuilder.fetchSource().includes();
+            final String[] excludes = searchSourceBuilder.fetchSource().excludes();
+            String[] metadataExcludes = new String[excludes.length + 1];
+            if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
+                if (excludes.length == 0) {
+                    return new FetchSourceContext(true, includes, UI_METADATA_EXCLUDE);
+                } else {
+                    System.arraycopy(excludes, 0, metadataExcludes, 0, excludes.length);
+                    metadataExcludes[metadataExcludes.length - 1] = "ui_metadata";
+                    return new FetchSourceContext(true, includes, metadataExcludes);
+                }
+            } else {
+                return new FetchSourceContext(true, includes, excludes);
+            }
         } else {
-            return null;
+            // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
+            if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
+            } else {
+                return null;
+            }
         }
     }
 }
