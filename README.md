@@ -11,7 +11,7 @@
 
 <!-- /TOC -->
 
-## OpenSearch Machine Learning Commons (Experimental, not released yet)
+## OpenSearch Machine Learning Commons
 
 Machine Learning Commons for OpenSearch is a new solution that make it easy to develop new machine learning feature. It allows engineers to leverage existing opensource machine learning algorithms and reduce the efforts to build any new machine learning feature. It also removes the necessity from engineers to manage the machine learning tasks which will help to speed the feature developing process.
 
