@@ -22,6 +22,7 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
@@ -95,17 +96,33 @@ public class RestActionUtilsTests extends OpenSearchTestCase {
             .withParams(param)
             .withHeaders(headers)
             .build();
-        FetchSourceContext sourceContext = RestActionUtils.getSourceContext(request);
-        assertNull(sourceContext);
+        SearchSourceBuilder testSearchSourceBuilder = new SearchSourceBuilder();
+        testSearchSourceBuilder.fetchSource(new String[] { "a" }, new String[] { "b" });
+        FetchSourceContext sourceContext = RestActionUtils.getSourceContext(request, testSearchSourceBuilder);
+        assertNotNull(sourceContext);
     }
 
-    public void testGetSourceContext_FromClient() {
+    public void testGetSourceContext_FromClient_EmptyExcludes() {
         FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
             .withMethod(RestRequest.Method.POST)
             .withPath(urlPath)
             .withParams(param)
             .build();
-        FetchSourceContext sourceContext = RestActionUtils.getSourceContext(request);
+        SearchSourceBuilder testSearchSourceBuilder = new SearchSourceBuilder();
+        testSearchSourceBuilder.fetchSource(new String[] { "a" }, new String[0]);
+        FetchSourceContext sourceContext = RestActionUtils.getSourceContext(request, testSearchSourceBuilder);
         assertArrayEquals(UI_METADATA_EXCLUDE, sourceContext.excludes());
+    }
+
+    public void testGetSourceContext_FromClient_WithExcludes() {
+        FakeRestRequest request = new FakeRestRequest.Builder(xContentRegistry())
+            .withMethod(RestRequest.Method.POST)
+            .withPath(urlPath)
+            .withParams(param)
+            .build();
+        SearchSourceBuilder testSearchSourceBuilder = new SearchSourceBuilder();
+        testSearchSourceBuilder.fetchSource(new String[] { "a" }, new String[] { "b" });
+        FetchSourceContext sourceContext = RestActionUtils.getSourceContext(request, testSearchSourceBuilder);
+        assertEquals(sourceContext.excludes().length, 2);
     }
 }
