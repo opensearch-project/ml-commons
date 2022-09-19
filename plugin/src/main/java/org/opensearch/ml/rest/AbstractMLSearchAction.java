@@ -44,7 +44,7 @@ public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.parseXContent(request.contentOrSourceParamParser());
-        searchSourceBuilder.fetchSource(getSourceContext(request));
+        searchSourceBuilder.fetchSource(getSourceContext(request, searchSourceBuilder));
         searchSourceBuilder.seqNoAndPrimaryTerm(true).version(true);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(index);
         return channel -> client.execute(actionType, searchRequest, search(channel));
