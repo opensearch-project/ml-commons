@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
@@ -24,6 +26,7 @@ import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+@Log4j2
 public class MLProfileTransportAction extends
     TransportNodesAction<MLProfileRequest, MLProfileResponse, MLProfileNodeRequest, MLProfileNodeResponse> {
     private MLTaskManager mlTaskManager;
@@ -84,18 +87,21 @@ public class MLProfileTransportAction extends
 
     @Override
     protected MLProfileNodeResponse nodeOperation(MLProfileNodeRequest request) {
-        return createTaskProfileNodeResponse(request.getMlProfileRequest());
+        return createMLProfileNodeResponse(request.getMlProfileRequest());
     }
 
-    private MLProfileNodeResponse createTaskProfileNodeResponse(MLProfileRequest mlProfileRequest) {
+    private MLProfileNodeResponse createMLProfileNodeResponse(MLProfileRequest mlProfileRequest) {
+        log.info("Calculating ml profile response on node id:{}", clusterService.localNode().getId());
         Map<String, MLTask> mlLocalTasks = new HashMap<>();
         MLProfileInput mlProfileInput = mlProfileRequest.getMlProfileInput();
         mlTaskManager.getTaskCaches().forEach((key, value) -> {
             if (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(key)) {
+                log.info("Runtime task profile is found for model {}", value.getMlTask().getModelId());
                 mlLocalTasks.put(key, value.getMlTask());
                 return;
             }
             if (!mlProfileInput.emptyModels() && mlProfileInput.getModelIds().contains(value.getMlTask().getModelId())) {
+                log.info("Runtime task profile is found for model {}", value.getMlTask().getModelId());
                 mlLocalTasks.put(key, value.getMlTask());
             }
         });

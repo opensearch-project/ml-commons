@@ -60,11 +60,11 @@ public class MLProfileResponse extends BaseNodesResponse<MLProfileNodeResponse> 
         String nodeId;
         DiscoveryNode node;
         builder.startObject("nodes");
-        for (MLProfileNodeResponse mlTaskNodeProfile : getNodes()) {
-            node = mlTaskNodeProfile.getNode();
+        for (MLProfileNodeResponse nodeResponse : getNodes()) {
+            node = nodeResponse.getNode();
             nodeId = node.getId();
             builder.startObject(nodeId);
-            mlTaskNodeProfile.toXContent(builder, params);
+            nodeResponse.toXContent(builder, params);
             builder.endObject();
         }
         builder.endObject();

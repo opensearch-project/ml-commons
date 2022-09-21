@@ -24,8 +24,8 @@ import org.opensearch.common.xcontent.XContentParser;
 
 @Getter
 public class MLProfileInput implements ToXContentObject, Writeable {
-    public static final String MODELS = "models";
-    public static final String TASKS = "tasks";
+    public static final String MODELS = "model_ids";
+    public static final String TASKS = "task_ids";
     public static final String NODE_IDS = "node_ids";
 
     /**

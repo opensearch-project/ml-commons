@@ -69,6 +69,7 @@ public class RestMLProfileAction extends BaseRestHandler {
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
+        log.info("Prepare request for {}", request.getHttpRequest());
         boolean hasContent = request.hasContent();
         MLProfileInput mlProfileInput;
         if (hasContent) {
@@ -89,6 +90,7 @@ public class RestMLProfileAction extends BaseRestHandler {
                 builder.startObject();
                 // node level profile
                 List<MLProfileNodeResponse> nodeProfiles = r.getNodes().stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
+                log.info("Build MLProfileNodeResponse for size of {}", nodeProfiles.size());
                 if (nodeProfiles.size() > 0) {
                     r.toXContent(builder, ToXContent.EMPTY_PARAMS);
                 }
