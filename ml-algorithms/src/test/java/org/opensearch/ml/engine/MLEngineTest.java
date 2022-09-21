@@ -21,6 +21,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.model.MLModelTaskType;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
@@ -167,7 +168,7 @@ public class MLEngineTest {
         MLAlgoParams parameters = KMeansParams.builder().build();
         DataFrame dataFrame = constructTestDataFrame(dataSize);
         MLInputDataset inputData = new DataFrameInputDataset(dataFrame);
-        Input input = new MLInput(FunctionName.KMEANS, parameters, inputData);
+        Input input = new MLInput(FunctionName.KMEANS, parameters, inputData, MLModelTaskType.TEXT_EMBEDDING);
         MLPredictionOutput output = (MLPredictionOutput) MLEngine.trainAndPredict(input);
         Assert.assertEquals(dataSize, output.getPredictionResult().size());
     }

@@ -18,7 +18,9 @@ import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.transport.model.predict.MLPredictModelAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -54,8 +56,14 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(request);
-        return channel -> client.execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
+        String algorithm = getAlgorithm(request);
+        if (FunctionName.valueOf(algorithm.toUpperCase(Locale.ROOT)) == FunctionName.CUSTOM) {
+            MLPredictionTaskRequest mlPredictionTaskRequest = getCustomModelRequest(algorithm, request);
+            return channel -> client.execute(MLPredictModelAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
+        } else {
+            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(algorithm, request);
+            return channel -> client.execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
+        }
     }
 
     /**
@@ -65,10 +73,18 @@ public class RestMLPredictionAction extends BaseRestHandler {
      * @return MLPredictionTaskRequest
      */
     @VisibleForTesting
-    MLPredictionTaskRequest getRequest(RestRequest request) throws IOException {
-        String algorithm = getAlgorithm(request);
+    MLPredictionTaskRequest getRequest(String algorithm, RestRequest request) throws IOException {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
 
+        XContentParser parser = request.contentParser();
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+        MLInput mlInput = MLInput.parse(parser, algorithm);
+
+        return new MLPredictionTaskRequest(modelId, mlInput);
+    }
+
+    MLPredictionTaskRequest getCustomModelRequest(String algorithm, RestRequest request) throws IOException {
+        String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm);

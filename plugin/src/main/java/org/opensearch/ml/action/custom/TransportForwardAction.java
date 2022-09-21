@@ -20,12 +20,13 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.action.custom.upload.MLModelUploader;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.transport.custom.MLForwardAction;
-import org.opensearch.ml.common.transport.custom.MLForwardInput;
-import org.opensearch.ml.common.transport.custom.MLForwardRequest;
-import org.opensearch.ml.common.transport.custom.MLForwardRequestType;
-import org.opensearch.ml.common.transport.custom.MLForwardResponse;
-import org.opensearch.ml.common.transport.custom.upload.MLUploadInput;
+import org.opensearch.ml.common.output.custom_model.MLBatchModelTensorOutput;
+import org.opensearch.ml.common.transport.model.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.model.forward.MLForwardInput;
+import org.opensearch.ml.common.transport.model.forward.MLForwardRequest;
+import org.opensearch.ml.common.transport.model.forward.MLForwardRequestType;
+import org.opensearch.ml.common.transport.model.forward.MLForwardResponse;
+import org.opensearch.ml.common.transport.model.upload.MLUploadInput;
 import org.opensearch.ml.engine.algorithms.custom.CustomModelManager;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.task.MLTaskDispatcher;
@@ -87,6 +88,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLTask mlTask = forwardInput.getMlTask();
         MLForwardRequestType requestType = forwardInput.getRequestType();
         String url = forwardInput.getUrl();
+        log.info("Received ML request with type: {}", requestType);
         try {
             switch (requestType) {
                 case LOAD_MODEL_DONE:
@@ -101,14 +103,15 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MLTask.STATE_FIELD, MLTaskState.COMPLETED), 5000);
                         mlTaskManager.remove(taskId);
                     }
-                    listener.onResponse(new MLForwardResponse("ok"));
+                    listener.onResponse(new MLForwardResponse("ok", null));
                     break;
                 case UPLOAD_MODEL:
                     mlModelUploader.uploadModel(MLUploadInput.builder().name(modelName).version(version).url(url).build(), mlTask);
+                    listener.onResponse(new MLForwardResponse("ok", null));
                     break;
                 case PREDICT_MODEL:
-                    String result = customModelManager.predict(forwardInput.getPredictModelInput());
-                    listener.onResponse(new MLForwardResponse(result));
+                    MLBatchModelTensorOutput output = customModelManager.predict(forwardInput.getModelId(), forwardInput.getModelInput());
+                    listener.onResponse(new MLForwardResponse("ok", output));
                     break;
                 default:
                     break;

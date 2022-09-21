@@ -107,6 +107,12 @@ public class MLTaskDispatcher {
         }));
     }
 
+    public void dispatchTaskWithRoundRobin(ActionListener<DiscoveryNode> listener) {
+        DiscoveryNode[] mlNodes = getEligibleNodes();
+        //TODO
+        listener.onResponse(mlNodes[0]);
+    }
+
     /**
      * Get eligible node to run ML task. If there are nodes with ml role, will return all these
      * ml nodes; otherwise return all data nodes.

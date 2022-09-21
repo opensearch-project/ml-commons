@@ -13,7 +13,7 @@ import org.opensearch.action.ActionResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.node.NodeClient;
+import org.opensearch.client.Client;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.output.MLOutput;
@@ -38,7 +38,7 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 public class MachineLearningNodeClient implements MachineLearningClient {
 
-    NodeClient client;
+    Client client;
 
     @Override
     public void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
@@ -80,9 +80,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
                 .modelId(modelId)
                 .build();
 
-        client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, ActionListener.wrap(response -> {
-            listener.onResponse(MLModelGetResponse.fromActionResponse(response).getMlModel());
-        }, listener::onFailure));
+        client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, getMlGetModelResponseActionListener(listener));
     }
 
     @Override
@@ -130,6 +128,17 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLTaskSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
             listener.onResponse(searchResponse);
         }, listener::onFailure));
+    }
+
+    private ActionListener<MLModelGetResponse> getMlGetModelResponseActionListener(ActionListener<MLModel> listener) {
+        ActionListener<MLModelGetResponse> internalListener = ActionListener.wrap(predictionResponse -> {
+            listener.onResponse(predictionResponse.getMlModel());
+        }, listener::onFailure);
+        ActionListener<MLModelGetResponse> actionListener = wrapActionListener(internalListener, res -> {
+            MLModelGetResponse getResponse = MLModelGetResponse.fromActionResponse(res);
+            return getResponse;
+        });
+        return actionListener;
     }
 
     private ActionListener<MLTaskResponse> getMlPredictionTaskResponseActionListener(ActionListener<MLOutput> listener) {

@@ -12,20 +12,28 @@ import ai.djl.modality.Output;
 import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
+import ai.djl.ndarray.types.DataType;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.ServingTranslator;
 import ai.djl.translate.TranslatorContext;
+import lombok.extern.log4j.Log4j2;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.output.custom_model.MLModelTensorOutput;
+import org.opensearch.ml.common.model.MLResultDataType;
+import org.opensearch.ml.common.output.custom_model.MLModelTensor;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import  java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+@Log4j2
 public class GeneralSentenceTransformerTranslator implements ServingTranslator {
-    public static final int SIZE_LIMIT = 512;
     private HuggingFaceTokenizer tokenizer;
 
     @Override
@@ -36,51 +44,52 @@ public class GeneralSentenceTransformerTranslator implements ServingTranslator {
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
-        List<String> sentences = Arrays.asList(input.getAsString("doc"));
+        String sentence = input.getAsString("doc");
         NDManager manager = ctx.getNDManager();
         NDList ndList = new NDList();
-        for (String sentence : sentences) {
-            sentence = sentence.strip().toLowerCase(Locale.ROOT);
-            Encoding encode = tokenizer.encode(sentence);
-            long[] indices = encode.getIds();
-            NDArray indicesArray;
-            if (indices.length > SIZE_LIMIT) {
-                long[] truncatedIndices = new long[SIZE_LIMIT];
-                for (int i = 0; i < SIZE_LIMIT; i++) {
-                    truncatedIndices[i] = indices[i];
-                }
-                indicesArray = manager.create(truncatedIndices);
-            } else {
-                indicesArray = manager.create(indices);
-            }
-            indicesArray.setName("input1.input_ids");
+        sentence = sentence.strip().toLowerCase(Locale.ROOT);
+        Encoding encode = tokenizer.encode(sentence);
 
-            long[] attentionMask = encode.getAttentionMask();
-            NDArray attentionMaskArray;
-            if (attentionMask.length > SIZE_LIMIT) {
-                long[] truncatedAttentionMask = new long[SIZE_LIMIT];
-                for (int i = 0; i < SIZE_LIMIT; i++) {
-                    truncatedAttentionMask[i] = attentionMask[i];
-                }
-                attentionMaskArray = manager.create(truncatedAttentionMask);
-            } else {
-                attentionMaskArray = manager.create(attentionMask);
-            }
-            attentionMaskArray.setName("input1.attention_mask");
+        long[] indices = encode.getIds();
+        NDArray indicesArray;
+        indicesArray = manager.create(indices);
+        indicesArray.setName("input1.input_ids");
 
-            ndList.add(indicesArray);
-            ndList.add(attentionMaskArray);
-        }
+        long[] attentionMask = encode.getAttentionMask();
+        NDArray attentionMaskArray;
+        attentionMaskArray = manager.create(attentionMask);
+        attentionMaskArray.setName("input1.attention_mask");
+        ndList.add(indicesArray);
+        ndList.add(attentionMaskArray);
         return ndList;
     }
 
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
-        List<float[]> embeddings = new ArrayList<>();
-        float[] embedding = list.get("sentence_embedding").toFloatArray();
-        embeddings.add(embedding);
+        List<MLModelTensor> outputs = new ArrayList<>();
+        Iterator<NDArray> iterator = list.iterator();
+        while (iterator.hasNext()) {
+            NDArray ndArray = iterator.next();
+            String name = ndArray.getName();
+            DataType dataType = ndArray.getDataType();
+            String device = ndArray.getDevice().toString();
+            long[] shape = ndArray.getShape().getShape();
+            ByteBuffer buffer = ndArray.toByteBuffer();
+            Number[] data = ndArray.toArray();
+            MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
+            outputs.add(new MLModelTensor(name, data, shape, mlResultDataType, device, buffer));
+        }
+        MLModelTensorOutput barchModelTensorOutput = new MLModelTensorOutput(outputs);
         Output output = new Output(200, "OK");
-        output.add(Arrays.toString(embedding));
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
+            barchModelTensorOutput.writeTo(bytesStreamOutput);
+            bytesStreamOutput.flush();
+            byte[] bytes = bytesStreamOutput.bytes().toBytesRef().bytes;
+            output.add(bytes);
+        } catch (Exception e) {
+            log.error("Failed to process ML model output", e);
+            throw new MLException("Failed to parse result");
+        }
         return output;
     }
 

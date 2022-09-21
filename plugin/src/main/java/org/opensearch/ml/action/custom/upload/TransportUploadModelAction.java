@@ -22,15 +22,15 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.transport.custom.MLForwardAction;
-import org.opensearch.ml.common.transport.custom.MLForwardInput;
-import org.opensearch.ml.common.transport.custom.MLForwardRequest;
-import org.opensearch.ml.common.transport.custom.MLForwardRequestType;
-import org.opensearch.ml.common.transport.custom.MLForwardResponse;
-import org.opensearch.ml.common.transport.custom.load.LoadModelResponse;
-import org.opensearch.ml.common.transport.custom.upload.MLUploadInput;
-import org.opensearch.ml.common.transport.custom.upload.MLUploadModelAction;
-import org.opensearch.ml.common.transport.custom.upload.MLUploadModelRequest;
+import org.opensearch.ml.common.transport.model.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.model.forward.MLForwardInput;
+import org.opensearch.ml.common.transport.model.forward.MLForwardRequest;
+import org.opensearch.ml.common.transport.model.forward.MLForwardRequestType;
+import org.opensearch.ml.common.transport.model.forward.MLForwardResponse;
+import org.opensearch.ml.common.transport.model.load.LoadModelResponse;
+import org.opensearch.ml.common.transport.model.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.model.upload.MLUploadModelAction;
+import org.opensearch.ml.common.transport.model.upload.MLUploadModelRequest;
 import org.opensearch.ml.engine.algorithms.custom.CustomModelManager;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.task.MLTaskDispatcher;
@@ -109,6 +109,7 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
                             mlUploadInput.getName(),
                             mlUploadInput.getVersion(),
                             taskId,
+                            null,
                             node.getId(),
                             MLForwardRequestType.UPLOAD_MODEL,
                             mlTask,

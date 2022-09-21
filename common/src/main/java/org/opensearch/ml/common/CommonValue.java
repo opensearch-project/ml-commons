@@ -50,9 +50,43 @@ public class CommonValue {
             + "      \""
             + MLModel.TOTAL_CHUNKS_FIELD
             + "\" : {\"type\": \"long\"},\n"
+            + "      \""
+            + MLModel.MODEL_ID_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.DESCRIPTION_FIELD
+            + "\" : {\"type\": \"text\"},\n"
+            + "      \""
+            + MLModel.MODEL_FORMAT_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.MODEL_TASK_TYPE_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.MODEL_STATE_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.MODEL_CONTENT_SIZE_IN_BYTES_FIELD
+            + "\" : {\"type\": \"long\"},\n"
+            + "      \""
+            + MLModel.MODEL_CONTENT_MD5_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLModel.LATEST_UPLOADED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLModel.LATEST_LOADED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLModel.LATEST_UNLOADED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + USER_FIELD_MAPPING
             + "    }\n"
             + "}";
+    //TODO: add model config mapping
 
     public static final String ML_TASK_INDEX_MAPPING = "{\n"
             + "    \"_meta\": {\"schema_version\": "

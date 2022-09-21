@@ -24,18 +24,21 @@ public class MLEngine {
     public static Path DJL_CUSTOM_MODELS_PATH;
     public static Path DJL_BUILT_IN_MODELS_PATH;
     public static void setDjlCachePath(Path opensearchDataFolder) {
-//        DJL_CACHE_PATH = System.getProperty("opensearch.path.home") + "/data/djl/";
         DJL_CACHE_PATH = opensearchDataFolder.resolve("djl");
         DJL_CUSTOM_MODELS_PATH = DJL_CACHE_PATH.resolve("custom_models");
         DJL_BUILT_IN_MODELS_PATH = DJL_CACHE_PATH.resolve("built_in_models");
     }
 
-    public static Path getUploadModelPath(String modelName, Integer version) {
-        return DJL_CUSTOM_MODELS_PATH.resolve("upload").resolve(version + "").resolve(modelName);
+    public static Path getUploadModelPath(String modelId, String modelName, Integer version) {
+        return DJL_CUSTOM_MODELS_PATH.resolve("upload").resolve(modelId).resolve(version + "").resolve(modelName);
     }
 
     public static String getLoadModelZipPath(String modelName, Integer version) {
         return DJL_CUSTOM_MODELS_PATH.resolve("load").resolve(version + "").resolve(modelName).resolve(modelName) + ".zip";
+    }
+
+    public static String getLoadModelZipPath(String modelId, String modelName) {
+        return DJL_CUSTOM_MODELS_PATH.resolve("load").resolve(modelId).resolve(modelName) + ".zip";
     }
 
     public static Path getLoadModelChunkPath(String modelName, Integer version, Integer chunkNumber) {
@@ -46,8 +49,15 @@ public class MLEngine {
                 .resolve(chunkNumber + "");
     }
 
-    public static Path getCustomModelPath(String modelName, Integer version) {
-        return DJL_CUSTOM_MODELS_PATH.resolve("models").resolve(version + "").resolve(modelName);
+    public static Path getLoadModelChunkPath(String modelId, Integer chunkNumber) {
+        return DJL_CUSTOM_MODELS_PATH.resolve("load")
+                .resolve(modelId)
+                .resolve("chunks")
+                .resolve(chunkNumber + "");
+    }
+
+    public static Path getCustomModelPath(String modelId, String modelName, Integer version) {
+        return DJL_CUSTOM_MODELS_PATH.resolve("models").resolve(modelId).resolve(version + "").resolve(modelName);
     }
 
     public static Model train(Input input) {

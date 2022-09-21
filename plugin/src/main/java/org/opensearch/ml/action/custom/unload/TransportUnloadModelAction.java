@@ -18,12 +18,12 @@ import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.ml.common.transport.custom.unload.MLUnloadModelAction;
-import org.opensearch.ml.common.transport.custom.unload.UnloadModelInput;
-import org.opensearch.ml.common.transport.custom.unload.UnloadModelNodeRequest;
-import org.opensearch.ml.common.transport.custom.unload.UnloadModelNodeResponse;
-import org.opensearch.ml.common.transport.custom.unload.UnloadModelNodesRequest;
-import org.opensearch.ml.common.transport.custom.unload.UnloadModelNodesResponse;
+import org.opensearch.ml.common.transport.model.unload.MLUnloadModelAction;
+import org.opensearch.ml.common.transport.model.unload.UnloadModelInput;
+import org.opensearch.ml.common.transport.model.unload.UnloadModelNodeRequest;
+import org.opensearch.ml.common.transport.model.unload.UnloadModelNodeResponse;
+import org.opensearch.ml.common.transport.model.unload.UnloadModelNodesRequest;
+import org.opensearch.ml.common.transport.model.unload.UnloadModelNodesResponse;
 import org.opensearch.ml.engine.algorithms.custom.CustomModelManager;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -83,10 +83,8 @@ public class TransportUnloadModelAction extends
 
     private UnloadModelNodeResponse createUnloadModelNodeResponse(UnloadModelNodesRequest unloadModelNodesRequest) {
         UnloadModelInput unloadModelInput = unloadModelNodesRequest.getUnloadModelInput();
-        String[] modelNames = unloadModelInput.getModelNames();
-        int[] versions = unloadModelInput.getVersions();
 
-        Map<String, String> status = customModelManager.unloadModel(modelNames, versions);
+        Map<String, String> status = customModelManager.unloadModel(unloadModelInput);
         Map<String, String> modelUnloadStatus = new HashMap<>();
         modelUnloadStatus.putAll(status);
         for (String key : modelUnloadStatus.keySet()) {

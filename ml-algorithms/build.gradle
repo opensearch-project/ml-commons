@@ -46,6 +46,7 @@ dependencies {
 
     // https://mvnrepository.com/artifact/ai.djl/api
     implementation group: 'ai.djl', name: 'api', version: '0.19.0-SNAPSHOT'
+    implementation group: 'ai.djl.onnxruntime', name: 'onnxruntime-engine', version: '0.19.0-SNAPSHOT'
     implementation group: 'ai.djl.tensorflow', name: 'tensorflow-engine', version: '0.19.0-SNAPSHOT'
     implementation group: 'ai.djl.tensorflow', name: 'tensorflow-model-zoo', version: '0.19.0-SNAPSHOT'
     implementation group: 'ai.djl.mxnet', name: 'mxnet-engine', version: '0.19.0-SNAPSHOT'

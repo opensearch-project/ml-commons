@@ -9,4 +9,5 @@ public enum MLOutputType {
     TRAINING,
     PREDICTION,
     SAMPLE_ALGO,
+    BATCH_MODEL_TENSOR
 }

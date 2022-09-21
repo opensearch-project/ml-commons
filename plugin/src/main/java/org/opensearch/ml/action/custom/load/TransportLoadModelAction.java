@@ -29,15 +29,14 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.transport.custom.load.LoadModelInput;
-import org.opensearch.ml.common.transport.custom.load.LoadModelNodeResponse;
-import org.opensearch.ml.common.transport.custom.load.LoadModelNodesRequest;
-import org.opensearch.ml.common.transport.custom.load.LoadModelNodesResponse;
-import org.opensearch.ml.common.transport.custom.load.LoadModelResponse;
-import org.opensearch.ml.common.transport.custom.load.MLDeployModelInput;
-import org.opensearch.ml.common.transport.custom.load.MLLoadModelAction;
-import org.opensearch.ml.common.transport.custom.load.MLLoadModelOnNodeAction;
-import org.opensearch.ml.common.transport.custom.load.MLLoadModelRequest;
+import org.opensearch.ml.common.transport.model.load.LoadModelInput;
+import org.opensearch.ml.common.transport.model.load.LoadModelNodeResponse;
+import org.opensearch.ml.common.transport.model.load.LoadModelNodesRequest;
+import org.opensearch.ml.common.transport.model.load.LoadModelNodesResponse;
+import org.opensearch.ml.common.transport.model.load.LoadModelResponse;
+import org.opensearch.ml.common.transport.model.load.MLLoadModelAction;
+import org.opensearch.ml.common.transport.model.load.MLLoadModelOnNodeAction;
+import org.opensearch.ml.common.transport.model.load.MLLoadModelRequest;
 import org.opensearch.ml.engine.algorithms.custom.CustomModelManager;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -84,10 +83,8 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<LoadModelResponse> listener) {
         MLLoadModelRequest deployModelRequest = MLLoadModelRequest.fromActionRequest(request);
-        MLDeployModelInput input = deployModelRequest.getMlDeployModelInput();
+        String modelId = deployModelRequest.getModelId();
         try {
-            String modelName = input.getName();
-            Integer version = input.getVersion();
 
             DiscoveryNode[] eligibleNodes = mlTaskDispatcher.getEligibleNodes();
             List<String> nodeIds = Arrays.stream(eligibleNodes).map(n -> n.getId()).collect(Collectors.toList());
@@ -114,8 +111,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                 threadPool.executor(TASK_THREAD_POOL).execute(() -> {
 
                     LoadModelInput loadModelInput = new LoadModelInput(
-                        modelName,
-                        version,
+                        modelId,
                         taskId,
                         eligibleNodes.length,
                         clusterService.localNode().getId(),
@@ -126,7 +122,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                         List<LoadModelNodeResponse> nodes = r.getNodes();
                         mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MLTask.STATE_FIELD, MLTaskState.RUNNING), 5000);
                     }, e -> {
-                        log.error("Failed to load model " + modelName, e);
+                        log.error("Failed to load model " + modelId, e);
                         mlTaskManager
                             .updateMLTask(
                                 taskId,
@@ -139,11 +135,11 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                     client.execute(MLLoadModelOnNodeAction.INSTANCE, loadModelRequest, actionListener);
                 });
             }, exception -> {
-                log.error("Failed to create upload model task for " + modelName, exception);
+                log.error("Failed to create upload model task for " + modelId, exception);
                 listener.onFailure(exception);
             }));
         } catch (Exception e) {
-            log.error("Failed to download custom model " + input.getName(), e);
+            log.error("Failed to download custom model " + modelId, e);
             listener.onFailure(e);
         }
     }

@@ -15,11 +15,14 @@ import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLModelResultFilter;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.TextInputDataSet;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.model.MLModelTaskType;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
@@ -40,6 +43,13 @@ public class MLInput implements Input {
     public static final String INPUT_INDEX_FIELD = "input_index";
     public static final String INPUT_QUERY_FIELD = "input_query";
     public static final String INPUT_DATA_FIELD = "input_data";
+    
+    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
+    public static final String RETURN_BYTES_FIELD = "return_bytes";
+    public static final String RETURN_NUMBER_FIELD = "return_number";
+    public static final String TARGET_RESPONSE_FIELD = "target_response";
+    public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
+    public static final String TEXT_FIELD = "text";
 
     // Algorithm name
     private FunctionName algorithm;
@@ -47,18 +57,23 @@ public class MLInput implements Input {
     private MLAlgoParams parameters;
     // Input data to train model, run trained model to predict or run ML algorithms(no-model-based) directly.
     private MLInputDataset inputDataset;
+    // Model task type
+    private MLModelTaskType mlModelTaskType;
 
     private int version = 1;
 
     @Builder(toBuilder = true)
-    public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset) {
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, MLInputDataset inputDataset, MLModelTaskType mlModelTaskType) {
         validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
         this.inputDataset = inputDataset;
+        this.mlModelTaskType = mlModelTaskType;
     }
 
-    public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder,
+                   List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset,
+                   MLModelTaskType mlModelTaskType) {
         validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
@@ -67,6 +82,7 @@ public class MLInput implements Input {
         } else {
             this.inputDataset = createInputDataSet(searchSourceBuilder, sourceIndices, dataFrame);
         }
+        this.mlModelTaskType = mlModelTaskType;
     }
 
     private void validate(FunctionName algorithm) {
@@ -85,6 +101,9 @@ public class MLInput implements Input {
             this.inputDataset = MLCommonsClassLoader.initMLInstance(inputDataType, in, StreamInput.class);
         }
         this.version = in.readInt();
+        if (in.available() > 0 && in.readBoolean()) {
+            this.mlModelTaskType = in.readEnum(MLModelTaskType.class);
+        }
     }
 
     @Override
@@ -103,6 +122,12 @@ public class MLInput implements Input {
             out.writeBoolean(false);
         }
         out.writeInt(version);
+        if (mlModelTaskType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(mlModelTaskType);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -123,6 +148,7 @@ public class MLInput implements Input {
                     ((DataFrameInputDataset)inputDataset).getDataFrame().toXContent(builder, EMPTY_PARAMS);
                     builder.endObject();
                     break;
+                    //TODO: add text docs input
                 default:
                     break;
             }
@@ -139,6 +165,13 @@ public class MLInput implements Input {
         SearchSourceBuilder searchSourceBuilder = null;
         List<String> sourceIndices = new ArrayList<>();
         DataFrame dataFrame = null;
+
+        MLModelTaskType modelTaskType = MLModelTaskType.TEXT_EMBEDDING;
+        boolean returnBytes = false;
+        boolean returnNumber = true;
+        List<String> targetResponse = new ArrayList<>();
+        List<Integer> targetResponsePositions = new ArrayList<>();
+        List<String> textDocs = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -161,12 +194,55 @@ public class MLInput implements Input {
                     break;
                 case INPUT_DATA_FIELD:
                     dataFrame = DefaultDataFrame.parse(parser);
+                case MODEL_TASK_TYPE_FIELD:
+                    modelTaskType = MLModelTaskType.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case RETURN_BYTES_FIELD:
+                    returnBytes = parser.booleanValue();
+                    break;
+                case RETURN_NUMBER_FIELD:
+                    returnNumber = parser.booleanValue();
+                    break;
+                case TARGET_RESPONSE_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        targetResponse.add(parser.text());
+                    }
+                    break;
+                case TARGET_RESPONSE_POSITIONS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        targetResponsePositions.add(parser.intValue());
+                    }
+                    break;
+                case TEXT_FIELD://TODO: support query docs from index directly
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        textDocs.add(parser.text());
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, null);
+        MLModelTaskType mlModelTaskType = null;
+        MLInputDataset inputDataSet = null;
+        if (algorithm == FunctionName.CUSTOM) {
+            if (modelTaskType == null) {
+                throw new IllegalArgumentException("modle task type not set");
+            }
+            switch (modelTaskType) {
+                case TEXT_EMBEDDING:
+                    MLModelResultFilter filter = new MLModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
+                    inputDataSet = new TextInputDataSet(textDocs, filter);
+                    mlModelTaskType = MLModelTaskType.TEXT_EMBEDDING;
+                    break;
+                default:
+                    throw new IllegalArgumentException("unknown modle task type");
+            }
+        }
+        return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet, mlModelTaskType);
     }
 
     private MLInputDataset createInputDataSet(SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame) {

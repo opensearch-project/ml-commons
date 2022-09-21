@@ -66,12 +66,13 @@ import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
-import org.opensearch.ml.common.transport.custom.MLForwardAction;
-import org.opensearch.ml.common.transport.custom.load.MLLoadModelAction;
-import org.opensearch.ml.common.transport.custom.load.MLLoadModelOnNodeAction;
-import org.opensearch.ml.common.transport.custom.predict.MLPredictModelAction;
-import org.opensearch.ml.common.transport.custom.unload.MLUnloadModelAction;
-import org.opensearch.ml.common.transport.custom.upload.MLUploadModelAction;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.model.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.model.load.MLLoadModelAction;
+import org.opensearch.ml.common.transport.model.load.MLLoadModelOnNodeAction;
+import org.opensearch.ml.common.transport.model.predict.MLPredictModelAction;
+import org.opensearch.ml.common.transport.model.unload.MLUnloadModelAction;
+import org.opensearch.ml.common.transport.model.upload.MLUploadModelAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -93,10 +94,10 @@ import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.algorithms.sentence_transformer.SentenceTransformer;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
-import org.opensearch.ml.rest.RestMLCustomModelLoadAction;
-import org.opensearch.ml.rest.RestMLCustomModelPredictAction;
-import org.opensearch.ml.rest.RestMLCustomModelUnloadAction;
-import org.opensearch.ml.rest.RestMLCustomModelUploadAction;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.rest.RestMLLoadModelAction;
+import org.opensearch.ml.rest.RestMLUnloadModelAction;
+import org.opensearch.ml.rest.RestMLUploadModelAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
@@ -142,6 +143,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     private MLStats mlStats;
     private MLTaskManager mlTaskManager;
+    private MLModelManager mlModelManager;
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
     private MLTrainingTaskRunner mlTrainingTaskRunner;
@@ -224,6 +226,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, mlIndicesHandler);
+        mlModelManager = new MLModelManager(client, xContentRegistry);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client);
@@ -270,7 +273,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlCircuitBreakerService
         );
         customModelManager = new CustomModelManager();
-        mlModelUploader = new MLModelUploader(customModelManager, mlIndicesHandler, mlTaskManager, threadPool, client);
+        mlModelUploader = new MLModelUploader(customModelManager, mlIndicesHandler, mlTaskManager,mlModelManager, threadPool, client);
 
         // Register thread-safe ML objects here.
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, new LocalSampleCalculator(client, settings));
@@ -288,6 +291,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             .of(
                 mlStats,
                 mlTaskManager,
+                mlModelManager,
                 mlIndicesHandler,
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,
@@ -322,10 +326,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
         RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
-        RestMLCustomModelUploadAction restMLUploadModelAction = new RestMLCustomModelUploadAction();
-        RestMLCustomModelLoadAction restMLDeployModelAction = new RestMLCustomModelLoadAction();
-        RestMLCustomModelPredictAction restMLPredictAction = new RestMLCustomModelPredictAction();
-        RestMLCustomModelUnloadAction restMLCustomModelUnloadAction = new RestMLCustomModelUnloadAction(clusterService);
+        RestMLUploadModelAction restMLUploadModelAction = new RestMLUploadModelAction();
+        RestMLLoadModelAction restMLDeployModelAction = new RestMLLoadModelAction();
+        RestMLUnloadModelAction restMLCustomModelUnloadAction = new RestMLUnloadModelAction(clusterService);
         RestMLKNNSearchAction restMLKNNSearchAction = new RestMLKNNSearchAction(xContentRegistry);
 
         return ImmutableList
@@ -343,7 +346,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLSearchTaskAction,
                 restMLUploadModelAction,
                 restMLDeployModelAction,
-                restMLPredictAction,
                 restMLCustomModelUnloadAction,
                 restMLKNNSearchAction
             );
@@ -373,7 +375,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 ObjectDetectionInput.XCONTENT_REGISTRY_ENTRY,
                 Resnet18Input.XCONTENT_REGISTRY_ENTRY,
                 BertQAInput.XCONTENT_REGISTRY_ENTRY,
-                SentenceTransformerInput.XCONTENT_REGISTRY_ENTRY
+                SentenceTransformerInput.XCONTENT_REGISTRY_ENTRY,
+                TextEmbeddingModelConfig.XCONTENT_REGISTRY
             );
     }
 }
