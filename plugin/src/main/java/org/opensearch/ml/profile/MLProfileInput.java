@@ -14,6 +14,7 @@ import java.util.Set;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -27,6 +28,7 @@ public class MLProfileInput implements ToXContentObject, Writeable {
     public static final String MODELS = "model_ids";
     public static final String TASKS = "task_ids";
     public static final String NODE_IDS = "node_ids";
+    public static final String RETURN_ALL = "return_all";
 
     /**
      * Which models profiles will be retrieved
@@ -41,6 +43,11 @@ public class MLProfileInput implements ToXContentObject, Writeable {
      * Which node's profile will be retrieved.
      */
     private Set<String> nodeIds;
+    /**
+     * Should return all tasks in cache or not
+     */
+    @Setter
+    private boolean returnAllMLTasks;
 
     /**
      * Constructor
@@ -48,16 +55,18 @@ public class MLProfileInput implements ToXContentObject, Writeable {
      * @param taskIds
      */
     @Builder
-    public MLProfileInput(Set<String> modelIds, Set<String> taskIds, Set<String> nodeIds) {
+    public MLProfileInput(Set<String> modelIds, Set<String> taskIds, Set<String> nodeIds, boolean returnAllMLTasks) {
         this.modelIds = modelIds;
         this.taskIds = taskIds;
         this.nodeIds = nodeIds;
+        this.returnAllMLTasks = returnAllMLTasks;
     }
 
     public MLProfileInput() {
         this.modelIds = new HashSet<>();
         this.taskIds = new HashSet<>();
         this.nodeIds = new HashSet<>();
+        returnAllMLTasks = false;
     }
 
     @Override
@@ -65,18 +74,21 @@ public class MLProfileInput implements ToXContentObject, Writeable {
         out.writeOptionalStringCollection(modelIds);
         out.writeOptionalStringCollection(taskIds);
         out.writeOptionalStringCollection(nodeIds);
+        out.writeBoolean(returnAllMLTasks);
     }
 
     public MLProfileInput(StreamInput input) throws IOException {
         modelIds = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
         taskIds = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
         nodeIds = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
+        this.returnAllMLTasks = input.readBoolean();
     }
 
     public static MLProfileInput parse(XContentParser parser) throws IOException {
         Set<String> modelIds = new HashSet<>();
         Set<String> taskIds = new HashSet<>();
         Set<String> nodeIds = new HashSet<>();
+        boolean returnALlTasks = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
 
@@ -94,13 +106,16 @@ public class MLProfileInput implements ToXContentObject, Writeable {
                 case NODE_IDS:
                     parseField(parser, nodeIds);
                     break;
+                case RETURN_ALL:
+                    returnALlTasks = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
 
-        return MLProfileInput.builder().modelIds(modelIds).taskIds(taskIds).nodeIds(nodeIds).build();
+        return MLProfileInput.builder().modelIds(modelIds).taskIds(taskIds).nodeIds(nodeIds).returnAllMLTasks(returnALlTasks).build();
     }
 
     @Override
@@ -115,6 +130,7 @@ public class MLProfileInput implements ToXContentObject, Writeable {
         if (nodeIds != null) {
             builder.field(NODE_IDS, nodeIds);
         }
+        builder.field(RETURN_ALL, returnAllMLTasks);
         builder.endObject();
         return builder;
     }

@@ -95,7 +95,7 @@ public class MLProfileTransportAction extends
         Map<String, MLTask> mlLocalTasks = new HashMap<>();
         MLProfileInput mlProfileInput = mlProfileRequest.getMlProfileInput();
         mlTaskManager.getTaskCaches().forEach((key, value) -> {
-            if (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(key)) {
+            if (mlProfileInput.isReturnAllMLTasks() || (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(key))) {
                 log.info("Runtime task profile is found for model {}", value.getMlTask().getModelId());
                 mlLocalTasks.put(key, value.getMlTask());
                 return;
