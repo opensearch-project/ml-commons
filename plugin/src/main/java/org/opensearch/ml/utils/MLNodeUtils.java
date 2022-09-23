@@ -29,7 +29,7 @@ public class MLNodeUtils {
         return XContentHelper.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, bytesReference, XContentType.JSON);
     }
 
-    public static void parseField(XContentParser parser, Set<String> set) throws IOException {
+    public static void parseArrayField(XContentParser parser, Set<String> set) throws IOException {
         parseField(parser, set, null, String.class);
     }
 

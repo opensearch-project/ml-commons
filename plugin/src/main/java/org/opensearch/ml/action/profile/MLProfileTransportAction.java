@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.profile;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,15 +95,16 @@ public class MLProfileTransportAction extends
         log.info("Calculating ml profile response on node id:{}", clusterService.localNode().getId());
         Map<String, MLTask> mlLocalTasks = new HashMap<>();
         MLProfileInput mlProfileInput = mlProfileRequest.getMlProfileInput();
-        mlTaskManager.getTaskCaches().forEach((key, value) -> {
-            if (mlProfileInput.isReturnAllMLTasks() || (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(key))) {
-                log.info("Runtime task profile is found for model {}", value.getMlTask().getModelId());
-                mlLocalTasks.put(key, value.getMlTask());
+        Arrays.stream(mlTaskManager.getAllTaskIds()).forEach(taskId -> {
+            MLTask mlTask = mlTaskManager.get(taskId);
+            if (mlProfileInput.isReturnAllMLTasks() || (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(taskId))) {
+                log.info("Runtime task profile is found for model {}", mlTask.getModelId());
+                mlLocalTasks.put(taskId, mlTask);
                 return;
             }
-            if (!mlProfileInput.emptyModels() && mlProfileInput.getModelIds().contains(value.getMlTask().getModelId())) {
-                log.info("Runtime task profile is found for model {}", value.getMlTask().getModelId());
-                mlLocalTasks.put(key, value.getMlTask());
+            if (!mlProfileInput.emptyModels() && mlProfileInput.getModelIds().contains(mlTask.getModelId())) {
+                log.info("Runtime task profile is found for model {}", mlTask.getModelId());
+                mlLocalTasks.put(taskId, mlTask);
             }
         });
 

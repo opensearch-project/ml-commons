@@ -37,7 +37,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.transport.TransportService;
 
-public class MLTaskProfileTransportActionTests extends OpenSearchIntegTestCase {
+public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
     private MLProfileTransportAction action;
     private Environment environment;
     private MLTaskManager mlTaskManager;
@@ -72,7 +72,8 @@ public class MLTaskProfileTransportActionTests extends OpenSearchIntegTestCase {
         Map<String, MLTaskCache> taskCacheMap = new HashMap<>();
         taskCacheMap.put("test_id", new MLTaskCache(mlTask));
         mlTaskManager = mock(MLTaskManager.class);
-        when(mlTaskManager.getTaskCaches()).thenReturn(taskCacheMap);
+        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { "test_id" });
+        when(mlTaskManager.get("test_id")).thenReturn(mlTask);
 
         action = new MLProfileTransportAction(
             client().threadPool(),

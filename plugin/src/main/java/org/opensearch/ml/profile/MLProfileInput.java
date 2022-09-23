@@ -6,7 +6,7 @@
 package org.opensearch.ml.profile;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.utils.MLNodeUtils.parseField;
+import static org.opensearch.ml.utils.MLNodeUtils.parseArrayField;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -98,13 +98,13 @@ public class MLProfileInput implements ToXContentObject, Writeable {
 
             switch (fieldName) {
                 case MODELS:
-                    parseField(parser, modelIds);
+                    parseArrayField(parser, modelIds);
                     break;
                 case TASKS:
-                    parseField(parser, taskIds);
+                    parseArrayField(parser, taskIds);
                     break;
                 case NODE_IDS:
-                    parseField(parser, nodeIds);
+                    parseArrayField(parser, nodeIds);
                     break;
                 case RETURN_ALL:
                     returnALlTasks = parser.booleanValue();
@@ -136,14 +136,14 @@ public class MLProfileInput implements ToXContentObject, Writeable {
     }
 
     public boolean retrieveProfileOnAllNodes() {
-        return nodeIds.size() == 0;
+        return nodeIds == null || nodeIds.size() == 0;
     }
 
     public boolean emptyTasks() {
-        return taskIds.size() == 0;
+        return taskIds == null || taskIds.size() == 0;
     }
 
     public boolean emptyModels() {
-        return modelIds.size() == 0;
+        return modelIds == null || modelIds.size() == 0;
     }
 }

@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -25,6 +24,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.Strings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
@@ -38,7 +38,6 @@ import org.opensearch.rest.RestStatus;
  * MLTaskManager is responsible for managing MLTask.
  */
 @Log4j2
-@Getter
 public class MLTaskManager {
     private final Map<String, MLTaskCache> taskCaches;
     // TODO: make this value configurable as cluster setting
@@ -147,6 +146,14 @@ public class MLTaskManager {
             return taskCaches.get(taskId).getMlTask();
         }
         return null;
+    }
+
+    /**
+     * Get all taskIds from cache
+     * @return an array of all the keys in the taskCaches
+     */
+    public String[] getAllTaskIds() {
+        return Strings.toStringArray(taskCaches.keySet());
     }
 
     /**

@@ -6,6 +6,7 @@
 package org.opensearch.ml.stats;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.utils.MLNodeUtils.parseArrayField;
 import static org.opensearch.ml.utils.MLNodeUtils.parseField;
 
 import java.io.IOException;
@@ -177,7 +178,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
                     );
                     break;
                 case NODE_IDS:
-                    parseField(parser, nodeIds);
+                    parseArrayField(parser, nodeIds);
                     break;
                 case ALGORITHMS:
                     parseField(parser, algorithms, input -> FunctionName.from(input.toUpperCase(Locale.ROOT)), FunctionName.class);

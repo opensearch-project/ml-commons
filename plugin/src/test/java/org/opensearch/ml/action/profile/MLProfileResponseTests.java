@@ -31,7 +31,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
-public class MLTaskProfileResponseTests extends OpenSearchTestCase {
+public class MLProfileResponseTests extends OpenSearchTestCase {
     MLTask mlTask;
 
     @Before

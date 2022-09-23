@@ -289,4 +289,15 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
     }
 
+    public void testGetAllTaskIds() {
+        MLTask task1 = MLTask.builder().taskId("1").state(MLTaskState.CREATED).build();
+        MLTask task2 = MLTask.builder().taskId("2").state(MLTaskState.CREATED).build();
+        mlTaskManager.add(task1);
+        mlTaskManager.add(task2);
+
+        String[] taskIds = mlTaskManager.getAllTaskIds();
+        assertEquals(taskIds.length, 2);
+        assertNotEquals(taskIds, mlTaskManager.getAllTaskIds());
+    }
+
 }

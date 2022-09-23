@@ -21,7 +21,6 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLProfileInputTests extends OpenSearchTestCase {
-
     private MLProfileInput mlProfileInput;
 
     @Before
@@ -60,6 +59,9 @@ public class MLProfileInputTests extends OpenSearchTestCase {
     public void testEmptyModelIds() throws IOException {
         mlProfileInput = MLProfileInput.builder().build();
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startObject();
+        builder.field("Test_field", new HashSet<>());
+        builder.endObject();
         mlProfileInput.toXContent(builder, EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
         XContentParser parser = TestHelper.parser(content);

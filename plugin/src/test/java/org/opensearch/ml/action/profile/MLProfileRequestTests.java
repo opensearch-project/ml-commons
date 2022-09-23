@@ -11,7 +11,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.test.OpenSearchTestCase;
 
-public class MLTaskProfileRequestTests extends OpenSearchTestCase {
+public class MLProfileRequestTests extends OpenSearchTestCase {
 
     public void testSerializationDeserialization() throws IOException {
         MLProfileRequest mlTaskProfileRequest = new MLProfileRequest(new String[] { "testNodeId" }, new MLProfileInput());
