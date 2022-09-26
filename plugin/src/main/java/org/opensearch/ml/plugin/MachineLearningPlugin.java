@@ -35,6 +35,8 @@ import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
+import org.opensearch.ml.action.profile.MLProfileAction;
+import org.opensearch.ml.action.profile.MLProfileTransportAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
@@ -131,7 +133,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLModelSearchAction.INSTANCE, SearchModelTransportAction.class),
                 new ActionHandler<>(MLTaskGetAction.INSTANCE, GetTaskTransportAction.class),
                 new ActionHandler<>(MLTaskDeleteAction.INSTANCE, DeleteTaskTransportAction.class),
-                new ActionHandler<>(MLTaskSearchAction.INSTANCE, SearchTaskTransportAction.class)
+                new ActionHandler<>(MLTaskSearchAction.INSTANCE, SearchTaskTransportAction.class),
+                new ActionHandler<>(MLProfileAction.INSTANCE, MLProfileTransportAction.class)
             );
     }
 
@@ -263,6 +266,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
         RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
+        RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
 
         return ImmutableList
             .of(
@@ -276,7 +280,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLSearchModelAction,
                 restMLGetTaskAction,
                 restMLDeleteTaskAction,
-                restMLSearchTaskAction
+                restMLSearchTaskAction,
+                restMLProfileAction
             );
     }
 

@@ -13,8 +13,9 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.utils.RestActionUtils.splitCommaSeparatedParam;
 import static org.opensearch.ml.utils.TestHelper.getStatsRestRequest;
+import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,14 +41,10 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
-import org.opensearch.cluster.metadata.IndexMetadata;
-import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
-import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
-import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -118,7 +115,15 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         restAction = new RestMLStatsAction(mlStats, clusterService, indexUtils);
-
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(DiscoveryNodeRole.DATA_ROLE);
+        node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
         testState = setupTestClusterState();
         when(clusterService.state()).thenReturn(testState);
 
@@ -137,50 +142,6 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         super.tearDown();
         threadPool.shutdown();
         client.close();
-    }
-
-    private ClusterState setupTestClusterState() {
-        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
-        roleSet.add(DiscoveryNodeRole.DATA_ROLE);
-        node = new DiscoveryNode(
-            "node",
-            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
-            new HashMap<>(),
-            roleSet,
-            Version.CURRENT
-        );
-        Metadata metadata = new Metadata.Builder()
-            .indices(
-                ImmutableOpenMap
-                    .<String, IndexMetadata>builder()
-                    .fPut(
-                        ML_MODEL_INDEX,
-                        IndexMetadata
-                            .builder("test")
-                            .settings(
-                                Settings
-                                    .builder()
-                                    .put("index.number_of_shards", 1)
-                                    .put("index.number_of_replicas", 1)
-                                    .put("index.version.created", Version.CURRENT.id)
-                            )
-                            .build()
-                    )
-                    .build()
-            )
-            .build();
-        return new ClusterState(
-            clusterName,
-            123l,
-            "111111",
-            metadata,
-            null,
-            DiscoveryNodes.builder().add(node).build(),
-            null,
-            null,
-            0,
-            false
-        );
     }
 
     public void testPrepareRequest_AllStateLevels() throws Exception {
@@ -402,7 +363,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             .withPath(MachineLearningPlugin.ML_BASE_URI + "/{nodeId}/stats/")
             .withParams(param)
             .build();
-        Optional<String[]> nodeId = restAction.splitCommaSeparatedParam(fakeRestRequest, "nodeId");
+        Optional<String[]> nodeId = splitCommaSeparatedParam(fakeRestRequest, "nodeId");
         String[] array = nodeId.get();
         Assert.assertEquals(array[0], "111");
         Assert.assertEquals(array[1], "222");
