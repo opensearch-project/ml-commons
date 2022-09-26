@@ -24,6 +24,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.Strings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
@@ -145,6 +146,14 @@ public class MLTaskManager {
             return taskCaches.get(taskId).getMlTask();
         }
         return null;
+    }
+
+    /**
+     * Get all taskIds from cache
+     * @return an array of all the keys in the taskCaches
+     */
+    public String[] getAllTaskIds() {
+        return Strings.toStringArray(taskCaches.keySet());
     }
 
     /**

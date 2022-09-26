@@ -5,12 +5,23 @@
 
 package org.opensearch.ml.utils;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
+import org.opensearch.rest.BytesRestResponse;
+import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+
+import com.google.common.annotations.VisibleForTesting;
 
 public class RestActionUtils {
 
@@ -81,5 +92,40 @@ public class RestActionUtils {
                 return null;
             }
         }
+    }
+
+    /**
+     * Return all nodes in the cluster
+     * @param clusterService the cluster service
+     */
+    public static String[] getAllNodes(ClusterService clusterService) {
+        Iterator<DiscoveryNode> iterator = clusterService.state().nodes().iterator();
+        List<String> nodeIds = new ArrayList<>();
+        while (iterator.hasNext()) {
+            nodeIds.add(iterator.next().getId());
+        }
+        return nodeIds.toArray(new String[0]);
+    }
+
+    /**
+     *
+     * @param channel RestChannel
+     * @param status RestStatus enums
+     * @param errorMessage Error messages
+     * @param exception Reported Exception
+     */
+    public static void onFailure(RestChannel channel, RestStatus status, String errorMessage, Exception exception) {
+        BytesRestResponse bytesRestResponse;
+        try {
+            bytesRestResponse = new BytesRestResponse(channel, exception);
+        } catch (Exception e) {
+            bytesRestResponse = new BytesRestResponse(status, errorMessage);
+        }
+        channel.sendResponse(bytesRestResponse);
+    }
+
+    @VisibleForTesting
+    public static Optional<String[]> splitCommaSeparatedParam(RestRequest request, String paramName) {
+        return Optional.ofNullable(request.param(paramName)).map(s -> s.split(","));
     }
 }
