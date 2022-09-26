@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.RestActionUtils.splitCommaSeparatedParam;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -45,7 +46,6 @@ import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 @Log4j2
@@ -225,10 +225,5 @@ public class RestMLStatsAction extends BaseRestHandler {
             .filter(s -> mlStatsInput.retrieveStat(s.getKey()))
             .forEach(s -> clusterStats.put((MLClusterLevelStat) s.getKey(), s.getValue().getValue()));
         return clusterStats;
-    }
-
-    @VisibleForTesting
-    Optional<String[]> splitCommaSeparatedParam(RestRequest request, String paramName) {
-        return Optional.ofNullable(request.param(paramName)).map(s -> s.split(","));
     }
 }

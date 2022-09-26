@@ -9,6 +9,7 @@ import static org.apache.http.entity.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 import java.io.BufferedReader;
@@ -19,8 +20,11 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -61,6 +65,7 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
@@ -203,6 +208,17 @@ public class TestHelper {
         return request;
     }
 
+    public static RestRequest getProfileRestRequest(MLProfileInput input) throws IOException {
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String requestContent = TestHelper.xContentBuilderToString(builder);
+
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static RestRequest getStatsRestRequest() {
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry()).build();
         return request;
@@ -312,5 +328,49 @@ public class TestHelper {
                 );
         }
         return state(new ClusterName("test"), indexName, mapping, clusterManagerNode, clusterManagerNode, allNodes);
+    }
+
+    public static ClusterState setupTestClusterState() {
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(DiscoveryNodeRole.DATA_ROLE);
+        DiscoveryNode node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
+        Metadata metadata = new Metadata.Builder()
+            .indices(
+                ImmutableOpenMap
+                    .<String, IndexMetadata>builder()
+                    .fPut(
+                        ML_MODEL_INDEX,
+                        IndexMetadata
+                            .builder("test")
+                            .settings(
+                                Settings
+                                    .builder()
+                                    .put("index.number_of_shards", 1)
+                                    .put("index.number_of_replicas", 1)
+                                    .put("index.version.created", Version.CURRENT.id)
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
+        return new ClusterState(
+            new ClusterName("test cluster"),
+            123l,
+            "111111",
+            metadata,
+            null,
+            DiscoveryNodes.builder().add(node).build(),
+            null,
+            null,
+            0,
+            false
+        );
     }
 }
