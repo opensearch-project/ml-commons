@@ -30,21 +30,25 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 public class MLModelGetRequest extends ActionRequest {
 
     String modelId;
+    boolean returnContent;
 
     @Builder
-    public MLModelGetRequest(String modelId) {
+    public MLModelGetRequest(String modelId, boolean returnContent) {
         this.modelId = modelId;
+        this.returnContent = returnContent;
     }
 
     public MLModelGetRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
+        this.returnContent = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.modelId);
+        out.writeBoolean(returnContent);
     }
 
     @Override
