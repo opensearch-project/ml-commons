@@ -27,6 +27,7 @@ public class RestActionUtils {
 
     public static final String PARAMETER_ALGORITHM = "algorithm";
     public static final String PARAMETER_ASYNC = "async";
+    public static final String PARAMETER_RETURN_CONTENT = "return_content";
     public static final String PARAMETER_MODEL_ID = "model_id";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
@@ -42,6 +43,10 @@ public class RestActionUtils {
 
     public static boolean isAsync(RestRequest request) {
         return request.paramAsBoolean(PARAMETER_ASYNC, false);
+    }
+
+    public static boolean returnContent(RestRequest request) {
+        return request.paramAsBoolean(PARAMETER_RETURN_CONTENT, false);
     }
 
     /**
@@ -92,6 +97,17 @@ public class RestActionUtils {
                 return null;
             }
         }
+    }
+
+    /**
+     * Return FetchSourceContext
+     * @param returnModelContent if the model content should be returned
+     */
+    public static FetchSourceContext fetchSourceContext(boolean returnModelContent) {
+        if (!returnModelContent) {
+            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { "content", "model_content" });
+        }
+        return new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
     }
 
     /**

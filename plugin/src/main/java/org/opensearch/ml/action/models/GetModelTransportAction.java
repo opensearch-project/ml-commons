@@ -8,6 +8,7 @@ package org.opensearch.ml.action.models;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+import static org.opensearch.ml.utils.RestActionUtils.fetchSourceContext;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +30,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -55,7 +57,8 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLModelGetResponse> actionListener) {
         MLModelGetRequest mlModelGetRequest = MLModelGetRequest.fromActionRequest(request);
         String modelId = mlModelGetRequest.getModelId();
-        GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
+        FetchSourceContext fetchSourceContext = fetchSourceContext(mlModelGetRequest.isReturnContent());
+        GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.wrap(r -> {
