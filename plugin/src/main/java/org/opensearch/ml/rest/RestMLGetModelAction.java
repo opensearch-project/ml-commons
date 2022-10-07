@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.RestActionUtils.returnContent;
 
 import java.io.IOException;
 import java.util.List;
@@ -57,7 +58,8 @@ public class RestMLGetModelAction extends BaseRestHandler {
     @VisibleForTesting
     MLModelGetRequest getRequest(RestRequest request) throws IOException {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
+        boolean returnContent = returnContent(request);
 
-        return new MLModelGetRequest(modelId);
+        return new MLModelGetRequest(modelId, returnContent);
     }
 }
