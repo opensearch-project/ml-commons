@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
@@ -77,6 +78,9 @@ public class RestActionUtils {
         if (searchSourceBuilder.fetchSource() != null) {
             final String[] includes = searchSourceBuilder.fetchSource().includes();
             final String[] excludes = searchSourceBuilder.fetchSource().excludes();
+            if (!ArrayUtils.contains(includes, "model_content")) {
+                ArrayUtils.add(excludes, "model_content");
+            }
             String[] metadataExcludes = new String[excludes.length + 1];
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
                 if (excludes.length == 0) {
@@ -92,9 +96,9 @@ public class RestActionUtils {
         } else {
             // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
-                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, ArrayUtils.add(UI_METADATA_EXCLUDE, "model_content"));
             } else {
-                return null;
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { "model_content" });
             }
         }
     }
@@ -103,7 +107,7 @@ public class RestActionUtils {
      * Return FetchSourceContext
      * @param returnModelContent if the model content should be returned
      */
-    public static FetchSourceContext fetchSourceContext(boolean returnModelContent) {
+    public static FetchSourceContext getFetchSourceContext(boolean returnModelContent) {
         if (!returnModelContent) {
             return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { "content", "model_content" });
         }

@@ -138,7 +138,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
-            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"ui_metadata\"]}}",
+            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"ui_metadata\",\"model_content\"]}}",
             searchRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
@@ -184,7 +184,7 @@ public class RestMLSearchModelActionTests extends OpenSearchTestCase {
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_INDEX }, indices);
         assertEquals(
-            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"ui_metadata\"]}}",
+            "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"ui_metadata\",\"model_content\"]}}",
             searchRequest.source().toString()
         );
         ;

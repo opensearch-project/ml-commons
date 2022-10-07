@@ -8,7 +8,7 @@ package org.opensearch.ml.action.models;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
-import static org.opensearch.ml.utils.RestActionUtils.fetchSourceContext;
+import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -57,7 +57,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLModelGetResponse> actionListener) {
         MLModelGetRequest mlModelGetRequest = MLModelGetRequest.fromActionRequest(request);
         String modelId = mlModelGetRequest.getModelId();
-        FetchSourceContext fetchSourceContext = fetchSourceContext(mlModelGetRequest.isReturnContent());
+        FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
