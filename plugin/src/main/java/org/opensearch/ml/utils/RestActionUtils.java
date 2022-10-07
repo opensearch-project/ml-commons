@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
+import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -78,8 +81,11 @@ public class RestActionUtils {
         if (searchSourceBuilder.fetchSource() != null) {
             final String[] includes = searchSourceBuilder.fetchSource().includes();
             final String[] excludes = searchSourceBuilder.fetchSource().excludes();
-            if (!ArrayUtils.contains(includes, "model_content")) {
-                ArrayUtils.add(excludes, "model_content");
+            if (!ArrayUtils.contains(includes, MODEL_CONTENT_FIELD)) {
+                ArrayUtils.add(excludes, MODEL_CONTENT_FIELD);
+            }
+            if (!ArrayUtils.contains(includes, OLD_MODEL_CONTENT_FIELD)) {
+                ArrayUtils.add(excludes, OLD_MODEL_CONTENT_FIELD);
             }
             String[] metadataExcludes = new String[excludes.length + 1];
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
@@ -95,10 +101,11 @@ public class RestActionUtils {
             }
         } else {
             // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
+            String[] excludes = new String[] { OLD_MODEL_CONTENT_FIELD, MODEL_CONTENT_FIELD };
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
-                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, ArrayUtils.add(UI_METADATA_EXCLUDE, "model_content"));
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, ArrayUtils.add(excludes, "ui_metadata"));
             } else {
-                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { "model_content" });
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, excludes);
             }
         }
     }
@@ -109,7 +116,7 @@ public class RestActionUtils {
      */
     public static FetchSourceContext getFetchSourceContext(boolean returnModelContent) {
         if (!returnModelContent) {
-            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { "content", "model_content" });
+            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { OLD_MODEL_CONTENT_FIELD, MODEL_CONTENT_FIELD });
         }
         return new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
     }
