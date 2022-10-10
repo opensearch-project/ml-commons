@@ -10,8 +10,11 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -20,11 +23,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -48,6 +53,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     DeleteResponse deleteResponse;
+
+    @Mock
+    BulkByScrollResponse bulkByScrollResponse;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -76,7 +84,26 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).delete(any(), any());
 
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        verify(actionListener).onResponse(deleteResponse);
+    }
+
+    public void testDeleteModelChunks_Success() {
+        when(bulkByScrollResponse.getBulkFailures()).thenReturn(null);
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkByScrollResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        deleteModelTransportAction.deleteModelChunks("test_id", deleteResponse, actionListener);
         verify(actionListener).onResponse(deleteResponse);
     }
 
@@ -99,5 +126,33 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("thread context error", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_FailToDeleteModel() {
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("errorMessage"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        deleteModelTransportAction.deleteModelChunks("test_id", deleteResponse, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_FailToDeleteAllModelChunks() {
+        BulkItemResponse.Failure failure = new BulkItemResponse.Failure(ML_MODEL_INDEX, "test_id", new RuntimeException("Error!"));
+        when(bulkByScrollResponse.getBulkFailures()).thenReturn(Arrays.asList(failure));
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(bulkByScrollResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        deleteModelTransportAction.deleteModelChunks("test_id", deleteResponse, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to delete all model chunks", argumentCaptor.getValue().getMessage());
     }
 }
