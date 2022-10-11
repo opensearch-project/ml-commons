@@ -23,6 +23,7 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -37,6 +38,10 @@ import com.google.common.annotations.VisibleForTesting;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class DeleteModelTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
 
+    static final String TIMEOUT_MSG = "Timeout while deleting model of ";
+    static final String BULK_FAILURE_MSG = "Bulk failure while deleting model of ";
+    static final String SEARCH_FAILURE_MSG = "Search failure while deleting model of ";
+    static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks ";
     Client client;
 
     @Inject
@@ -78,12 +83,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
 
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
-            if (r.getBulkFailures() == null || r.getBulkFailures().size() == 0) {
+            if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
+                && (r.getSearchFailures() == null || r.getSearchFailures().size() == 0)) {
                 log.info("All model chunks are deleted for model {}", modelId);
                 actionListener.onResponse(deleteResponse);
             } else {
-                actionListener
-                    .onFailure(new OpenSearchStatusException("Failed to delete all model chunks", RestStatus.INTERNAL_SERVER_ERROR));
+                logFailure(r, modelId, actionListener);
             }
         }, e -> {
             log.info("Failed to delete ML model for " + modelId, e);
@@ -91,4 +96,16 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }));
     }
 
+    private void logFailure(BulkByScrollResponse response, String modelId, ActionListener<DeleteResponse> actionListener) {
+        String errorMessage = "";
+        if (response.isTimedOut()) {
+            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + "," + TIMEOUT_MSG + modelId;
+        } else if (!response.getBulkFailures().isEmpty()) {
+            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + "," + BULK_FAILURE_MSG + modelId;
+        } else {
+            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + "," + SEARCH_FAILURE_MSG + modelId;
+        }
+        log.info(response.toString());
+        actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
+    }
 }
