@@ -21,7 +21,7 @@ public class MLProfileRequest extends BaseNodesRequest<MLProfileRequest> {
 
     public MLProfileRequest(StreamInput input) throws IOException {
         super(input);
-        mlProfileInput = new MLProfileInput();
+        mlProfileInput = new MLProfileInput(input);
     }
 
     /**
