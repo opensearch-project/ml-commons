@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.profile;
 
 import java.io.IOException;
-import java.util.Locale;
 import java.util.Map;
 
 import lombok.Getter;
@@ -18,14 +17,19 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.ToXContentFragment;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.model.MLModelProfile;
 
+@Getter
 public class MLProfileNodeResponse extends BaseNodeResponse implements ToXContentFragment {
 
     /**
      * Node level MLTasks.
      */
-    @Getter
     private Map<String, MLTask> mlNodeTasks;
+    /**
+     * Node level ML model profile.
+     */
+    private Map<String, MLModelProfile> mlNodeModels;
 
     /**
      * Constructor
@@ -38,11 +42,15 @@ public class MLProfileNodeResponse extends BaseNodeResponse implements ToXConten
         if (in.readBoolean()) {
             this.mlNodeTasks = in.readMap(StreamInput::readString, MLTask::new);
         }
+        if (in.readBoolean()) {
+            this.mlNodeModels = in.readMap(StreamInput::readString, MLModelProfile::new);
+        }
     }
 
-    public MLProfileNodeResponse(DiscoveryNode node, Map<String, MLTask> nodeTasks) {
+    public MLProfileNodeResponse(DiscoveryNode node, Map<String, MLTask> nodeTasks, Map<String, MLModelProfile> mlNodeModels) {
         super(node);
         this.mlNodeTasks = nodeTasks;
+        this.mlNodeModels = mlNodeModels;
     }
 
     public static MLProfileNodeResponse readProfile(StreamInput in) throws IOException {
@@ -58,22 +66,41 @@ public class MLProfileNodeResponse extends BaseNodeResponse implements ToXConten
         } else {
             out.writeBoolean(false);
         }
+        if (mlNodeModels != null) {
+            out.writeBoolean(true);
+            out.writeMap(mlNodeModels, StreamOutput::writeString, (o, r) -> r.writeTo(o));
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        if (mlNodeTasks != null) {
-            for (Map.Entry<String, MLTask> task : mlNodeTasks.entrySet()) {
-                builder.field(task.getKey().toLowerCase(Locale.ROOT), task.getValue());
+        if (mlNodeTasks != null && mlNodeTasks.size() > 0) {
+            builder.startObject("tasks");
+            for (Map.Entry<String, MLTask> entry : mlNodeTasks.entrySet()) {
+                builder.field(entry.getKey(), entry.getValue());
             }
+            builder.endObject();
+        }
+        if (mlNodeModels != null && mlNodeModels.size() > 0) {
+            builder.startObject("models");
+            for (Map.Entry<String, MLModelProfile> entry : mlNodeModels.entrySet()) {
+                builder.field(entry.getKey(), entry.getValue());
+            }
+            builder.endObject();
         }
         return builder;
     }
 
     public boolean isEmpty() {
-        return getNodeTasksSize() == 0;
+        return (mlNodeTasks == null || mlNodeTasks.size() == 0) && (mlNodeModels == null || mlNodeModels.size() == 0);
     }
 
     public int getNodeTasksSize() {
         return mlNodeTasks == null ? 0 : mlNodeTasks.size();
+    }
+
+    public int getNodeModelsSize() {
+        return mlNodeModels == null ? 0 : mlNodeModels.size();
     }
 }

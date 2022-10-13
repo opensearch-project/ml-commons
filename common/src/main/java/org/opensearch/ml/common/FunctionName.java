@@ -15,7 +15,8 @@ public enum FunctionName {
     BATCH_RCF,
     ANOMALY_LOCALIZATION,
     RCF_SUMMARIZE,
-    LOGISTIC_REGRESSION;
+    LOGISTIC_REGRESSION,
+    TEXT_EMBEDDING;
 
     public static FunctionName from(String value) {
         try {

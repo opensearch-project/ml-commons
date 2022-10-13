@@ -14,6 +14,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -23,7 +24,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 @Setter
 @Getter
 public class TextEmbeddingModelConfig extends MLModelConfig {
-    public static final String PARSE_FIELD_NAME = MLModelTaskType.TEXT_EMBEDDING.name();
+    public static final String PARSE_FIELD_NAME = FunctionName.TEXT_EMBEDDING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             TextEmbeddingModelConfig.class,
             new ParseField(PARSE_FIELD_NAME),
@@ -102,9 +103,15 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(MODEL_TYPE_FIELD, modelType);
-        builder.field(EMBEDDING_DIMENSION_FIELD, embeddingDimension);
-        builder.field(FRAMEWORK_TYPE_FIELD, frameworkType);
+        if (modelType != null) {
+            builder.field(MODEL_TYPE_FIELD, modelType);
+        }
+        if (embeddingDimension != null) {
+            builder.field(EMBEDDING_DIMENSION_FIELD, embeddingDimension);
+        }
+        if (frameworkType != null) {
+            builder.field(FRAMEWORK_TYPE_FIELD, frameworkType);
+        }
         if (allConfig != null) {
             builder.field(ALL_CONFIG_FIELD, allConfig);
         }
@@ -124,5 +131,5 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
             }
         }
     }
-
+    
 }

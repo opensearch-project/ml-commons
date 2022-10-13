@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
@@ -90,6 +91,7 @@ public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
         testInitMLTaskIndex();
     }
 
+    @Ignore
     public void testInitMLModelIndexIfAbsentWithExistingIndex() throws ExecutionException, InterruptedException, IOException {
         testInitMLIndexIfAbsentWithExistingIndex(ML_MODEL_INDEX, OLD_ML_MODEL_INDEX_MAPPING_V0);
     }

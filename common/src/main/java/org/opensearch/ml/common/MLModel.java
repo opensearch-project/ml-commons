@@ -17,12 +17,10 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.MLModelTaskType;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Base64;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
@@ -37,15 +35,14 @@ public class MLModel implements ToXContentObject {
 
     public static final String DESCRIPTION_FIELD = "description";
     public static final String MODEL_FORMAT_FIELD = "model_format";
-    public static final String MODEL_TASK_TYPE_FIELD = "model_task_type";
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
     public static final String MODEL_CONTENT_HASH_FIELD = "model_content_hash";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
-    public static final String LATEST_UPLOADED_TIME_FIELD = "latest_uploaded_time";
-    public static final String LATEST_LOADED_TIME_FIELD = "latest_loaded_time";
-    public static final String LATEST_UNLOADED_TIME_FIELD = "latest_unloaded_time";
+    public static final String LAST_UPLOADED_TIME_FIELD = "last_uploaded_time";
+    public static final String LAST_LOADED_TIME_FIELD = "last_loaded_time";
+    public static final String LAST_UNLOADED_TIME_FIELD = "last_unloaded_time";
 
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String CHUNK_NUMBER_FIELD = "chunk_number";
@@ -60,15 +57,14 @@ public class MLModel implements ToXContentObject {
     @Setter
     private String description;
     private MLModelFormat modelFormat;
-    private MLModelTaskType modelTaskType;
     private MLModelState modelState;
     private Long modelContentSizeInBytes;
     private String modelContentHash;
     private MLModelConfig modelConfig;
     private Instant createdTime;
-    private Instant latestUploadedTime;
-    private Instant latestLoadedTime;
-    private Instant latestUnloadedTime;
+    private Instant lastUploadedTime;
+    private Instant lastLoadedTime;
+    private Instant lastUnloadedTime;
 
     @Setter
     private String modelId; // model chunk doc only
@@ -76,7 +72,7 @@ public class MLModel implements ToXContentObject {
     private Integer totalChunks; // model chunk doc only
 
     @Builder
-    public MLModel(String name, FunctionName algorithm, Integer version, String content, User user, String description, MLModelFormat modelFormat, MLModelTaskType modelTaskType, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Instant createdTime, Instant latestUploadedTime, Instant latestLoadedTime, Instant latestUnloadedTime, String modelId, Integer chunkNumber, Integer totalChunks) {
+    public MLModel(String name, FunctionName algorithm, Integer version, String content, User user, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Instant createdTime, Instant lastUploadedTime, Instant lastLoadedTime, Instant lastUnloadedTime, String modelId, Integer chunkNumber, Integer totalChunks) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -84,25 +80,17 @@ public class MLModel implements ToXContentObject {
         this.user = user;
         this.description = description;
         this.modelFormat = modelFormat;
-        this.modelTaskType = modelTaskType;
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
         this.modelContentHash = modelContentHash;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
-        this.latestUploadedTime = latestUploadedTime;
-        this.latestLoadedTime = latestLoadedTime;
-        this.latestUnloadedTime = latestUnloadedTime;
+        this.lastUploadedTime = lastUploadedTime;
+        this.lastLoadedTime = lastLoadedTime;
+        this.lastUnloadedTime = lastUnloadedTime;
         this.modelId = modelId;
         this.chunkNumber = chunkNumber;
         this.totalChunks = totalChunks;
-    }
-
-    public MLModel(FunctionName algorithm, Model model) {
-        this.name = model.getName();
-        this.algorithm = algorithm;
-        this.version = model.getVersion();
-        this.content = Base64.getEncoder().encodeToString(model.getContent());
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -121,9 +109,6 @@ public class MLModel implements ToXContentObject {
                 modelFormat = input.readEnum(MLModelFormat.class);
             }
             if (input.readBoolean()) {
-                modelTaskType = input.readEnum(MLModelTaskType.class);
-            }
-            if (input.readBoolean()) {
                 modelState = input.readEnum(MLModelState.class);
             }
             modelContentSizeInBytes = input.readOptionalLong();
@@ -132,9 +117,9 @@ public class MLModel implements ToXContentObject {
                 modelConfig = new TextEmbeddingModelConfig(input);
             }
             createdTime = input.readOptionalInstant();
-            latestUploadedTime = input.readOptionalInstant();
-            latestLoadedTime = input.readOptionalInstant();
-            latestUnloadedTime = input.readOptionalInstant();
+            lastUploadedTime = input.readOptionalInstant();
+            lastLoadedTime = input.readOptionalInstant();
+            lastUnloadedTime = input.readOptionalInstant();
             modelId = input.readOptionalString();
             chunkNumber = input.readOptionalInt();
             totalChunks = input.readOptionalInt();
@@ -159,12 +144,6 @@ public class MLModel implements ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
-        if (modelTaskType != null) {
-            out.writeBoolean(true);
-            out.writeEnum(modelTaskType);
-        } else {
-            out.writeBoolean(false);
-        }
         if (modelState != null) {
             out.writeBoolean(true);
             out.writeEnum(modelState);
@@ -180,9 +159,9 @@ public class MLModel implements ToXContentObject {
             out.writeBoolean(false);
         }
         out.writeOptionalInstant(createdTime);
-        out.writeOptionalInstant(latestUploadedTime);
-        out.writeOptionalInstant(latestLoadedTime);
-        out.writeOptionalInstant(latestUnloadedTime);
+        out.writeOptionalInstant(lastUploadedTime);
+        out.writeOptionalInstant(lastLoadedTime);
+        out.writeOptionalInstant(lastUnloadedTime);
         out.writeOptionalString(modelId);
         out.writeOptionalInt(chunkNumber);
         out.writeOptionalInt(totalChunks);
@@ -212,9 +191,6 @@ public class MLModel implements ToXContentObject {
         if (modelFormat != null) {
             builder.field(MODEL_FORMAT_FIELD, modelFormat);
         }
-        if (modelTaskType != null) {
-            builder.field(MODEL_TASK_TYPE_FIELD, modelTaskType);
-        }
         if (modelState != null) {
             builder.field(MODEL_STATE_FIELD, modelState);
         }
@@ -230,14 +206,14 @@ public class MLModel implements ToXContentObject {
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
-        if (latestUploadedTime != null) {
-            builder.field(LATEST_UPLOADED_TIME_FIELD, latestUploadedTime.toEpochMilli());
+        if (lastUploadedTime != null) {
+            builder.field(LAST_UPLOADED_TIME_FIELD, lastUploadedTime.toEpochMilli());
         }
-        if (latestLoadedTime != null) {
-            builder.field(LATEST_LOADED_TIME_FIELD, latestLoadedTime.toEpochMilli());
+        if (lastLoadedTime != null) {
+            builder.field(LAST_LOADED_TIME_FIELD, lastLoadedTime.toEpochMilli());
         }
-        if (latestUnloadedTime != null) {
-            builder.field(LATEST_UNLOADED_TIME_FIELD, latestUnloadedTime.toEpochMilli());
+        if (lastUnloadedTime != null) {
+            builder.field(LAST_UNLOADED_TIME_FIELD, lastUnloadedTime.toEpochMilli());
         }
         if (modelId != null) {
             builder.field(MODEL_ID_FIELD, modelId);
@@ -262,7 +238,6 @@ public class MLModel implements ToXContentObject {
 
         String description = null;;
         MLModelFormat modelFormat = null;
-        MLModelTaskType modelTaskType = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
         String modelContentHash = null;
@@ -314,9 +289,6 @@ public class MLModel implements ToXContentObject {
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text());
                     break;
-                case MODEL_TASK_TYPE_FIELD:
-                    modelTaskType = MLModelTaskType.from(parser.text());
-                    break;
                 case MODEL_STATE_FIELD:
                     modelState = MLModelState.from(parser.text());
                     break;
@@ -332,13 +304,13 @@ public class MLModel implements ToXContentObject {
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case LATEST_UPLOADED_TIME_FIELD:
+                case LAST_UPLOADED_TIME_FIELD:
                     lastUploadedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case LATEST_LOADED_TIME_FIELD:
+                case LAST_LOADED_TIME_FIELD:
                     lastLoadedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case LATEST_UNLOADED_TIME_FIELD:
+                case LAST_UNLOADED_TIME_FIELD:
                     lastUnloadedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 default:
@@ -354,24 +326,22 @@ public class MLModel implements ToXContentObject {
                 .user(user)
                 .description(description)
                 .modelFormat(modelFormat)
-                .modelTaskType(modelTaskType)
                 .modelState(modelState)
                 .modelContentSizeInBytes(modelContentSizeInBytes)
                 .modelContentHash(modelContentHash)
                 .modelConfig(modelConfig)
                 .createdTime(createdTime)
-                .latestUploadedTime(lastUploadedTime)
-                .latestLoadedTime(lastLoadedTime)
-                .latestUnloadedTime(lastUnloadedTime)
+                .lastUploadedTime(lastUploadedTime)
+                .lastLoadedTime(lastLoadedTime)
+                .lastUnloadedTime(lastUnloadedTime)
                 .modelId(modelId)
                 .chunkNumber(chunkNumber)
                 .totalChunks(totalChunks)
                 .build();
-    }
+        }
 
     public static MLModel fromStream(StreamInput in) throws IOException {
         MLModel mlModel = new MLModel(in);
         return mlModel;
     }
-
 }

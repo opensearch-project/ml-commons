@@ -7,10 +7,12 @@ package org.opensearch.ml.rest;
 
 import java.io.IOException;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLTaskState;
 
+@Ignore
 public class RestMLDeleteTaskActionIT extends MLCommonsRestTestCase {
 
     @Rule

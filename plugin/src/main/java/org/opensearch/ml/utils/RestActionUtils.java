@@ -5,16 +5,12 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
-import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
@@ -31,8 +27,9 @@ public class RestActionUtils {
 
     public static final String PARAMETER_ALGORITHM = "algorithm";
     public static final String PARAMETER_ASYNC = "async";
-    public static final String PARAMETER_RETURN_CONTENT = "return_content";
     public static final String PARAMETER_MODEL_ID = "model_id";
+    public static final String PARAMETER_LOAD_MODEL = "load";
+    public static final String PARAMETER_VERSION = "version";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
@@ -47,10 +44,6 @@ public class RestActionUtils {
 
     public static boolean isAsync(RestRequest request) {
         return request.paramAsBoolean(PARAMETER_ASYNC, false);
-    }
-
-    public static boolean returnContent(RestRequest request) {
-        return request.paramAsBoolean(PARAMETER_RETURN_CONTENT, false);
     }
 
     /**
@@ -81,12 +74,6 @@ public class RestActionUtils {
         if (searchSourceBuilder.fetchSource() != null) {
             final String[] includes = searchSourceBuilder.fetchSource().includes();
             final String[] excludes = searchSourceBuilder.fetchSource().excludes();
-            if (!ArrayUtils.contains(includes, MODEL_CONTENT_FIELD)) {
-                ArrayUtils.add(excludes, MODEL_CONTENT_FIELD);
-            }
-            if (!ArrayUtils.contains(includes, OLD_MODEL_CONTENT_FIELD)) {
-                ArrayUtils.add(excludes, OLD_MODEL_CONTENT_FIELD);
-            }
             String[] metadataExcludes = new String[excludes.length + 1];
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
                 if (excludes.length == 0) {
@@ -101,24 +88,12 @@ public class RestActionUtils {
             }
         } else {
             // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
-            String[] excludes = new String[] { OLD_MODEL_CONTENT_FIELD, MODEL_CONTENT_FIELD };
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
-                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, ArrayUtils.add(excludes, "ui_metadata"));
+                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, UI_METADATA_EXCLUDE);
             } else {
-                return new FetchSourceContext(true, Strings.EMPTY_ARRAY, excludes);
+                return null;
             }
         }
-    }
-
-    /**
-     * Return FetchSourceContext
-     * @param returnModelContent if the model content should be returned
-     */
-    public static FetchSourceContext getFetchSourceContext(boolean returnModelContent) {
-        if (!returnModelContent) {
-            return new FetchSourceContext(true, Strings.EMPTY_ARRAY, new String[] { OLD_MODEL_CONTENT_FIELD, MODEL_CONTENT_FIELD });
-        }
-        return new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
     }
 
     /**

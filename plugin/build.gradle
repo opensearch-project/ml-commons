@@ -47,9 +47,10 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     implementation group: 'com.google.guava', name: 'guava', version: '31.0.1-jre'
-    implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.0'
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
+    implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.17.1"
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
@@ -231,7 +232,34 @@ List<String> jacocoExclusions = [
         // TODO: add more unit test to meet the minimal test coverage.
         'org.opensearch.ml.constant.CommonValue',
         'org.opensearch.ml.plugin.MachineLearningPlugin*',
-        'org.opensearch.ml.indices.MLIndicesHandler'
+        'org.opensearch.ml.indices.MLIndicesHandler',
+        'org.opensearch.ml.rest.RestMLKNNSearchAction*',
+        'org.opensearch.ml.rest.RestMLPredictionAction',
+        'org.opensearch.ml.rest.RestMLUploadModelAction',
+        'org.opensearch.ml.rest.RestMLUnloadModelAction',
+        'org.opensearch.ml.rest.RestMLLoadModelAction',
+        'org.opensearch.ml.action.prediction.*',
+        'org.opensearch.ml.action.trained_model.*',
+        'org.opensearch.ml.model.MLModelCache',
+        'org.opensearch.ml.model.MLModelManager',
+        'org.opensearch.ml.task.*',
+        'org.opensearch.ml.action.tasks.GetTaskTransportAction',
+        'org.opensearch.ml.cluster.DiscoveryNodeFilterer.HotDataNodePredicate',
+        'org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener',
+        'org.opensearch.ml.cluster.SyncUpModelRoutingCron',
+        'org.opensearch.ml.cluster.DiscoveryNodeFilterer',
+        'org.opensearch.ml.action.models.GetModelTransportAction',
+        'org.opensearch.ml.model.MLPredictRequestStats',
+        'org.opensearch.ml.model.MLModelProfile',
+        'org.opensearch.ml.cluster.MLSyncUpCron',
+        'org.opensearch.ml.cluster.*',
+        'org.opensearch.ml.action.profile.MLProfileTransportAction',
+        'org.opensearch.ml.rest.RestMLProfileAction',
+        'org.opensearch.ml.rest.RestMLUploadModelMetaAction',
+        'org.opensearch.ml.rest.RestMLUploadModelChunkAction',
+        'org.opensearch.ml.action.models.upload_chunk.TransportUploadModelMetaAction',
+        'org.opensearch.ml.action.models.upload_chunk.MLModelChunkUploader',
+        'org.opensearch.ml.action.models.upload_chunk.MLModelMetaUploader'
 ]
 
 jacocoTestCoverageVerification {
@@ -263,6 +291,8 @@ configurations.all {
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
+    resolutionStrategy.force 'net.java.dev.jna:jna:5.10.0'
+    resolutionStrategy.force 'com.google.guava:guava:31.0.1-jre'
 }
 
 apply plugin: 'nebula.ospackage'

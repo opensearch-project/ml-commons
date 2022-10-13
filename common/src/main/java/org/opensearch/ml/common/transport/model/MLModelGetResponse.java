@@ -36,7 +36,7 @@ public class MLModelGetResponse extends ActionResponse implements ToXContentObje
 
     public MLModelGetResponse(StreamInput in) throws IOException {
         super(in);
-        mlModel = mlModel.fromStream(in);
+        mlModel = MLModel.fromStream(in);
     }
 
     @Override

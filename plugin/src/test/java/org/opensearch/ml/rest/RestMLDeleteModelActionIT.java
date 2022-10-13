@@ -9,12 +9,14 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.http.HttpEntity;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestStatus;
 
+@Ignore
 public class RestMLDeleteModelActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();

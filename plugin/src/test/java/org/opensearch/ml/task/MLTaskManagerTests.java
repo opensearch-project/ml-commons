@@ -78,7 +78,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         expectedEx.expectMessage("Task not found");
         mlTaskManager.add(mlTask);
         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, true);
-        Assert.assertSame(mlTaskManager.get(mlTask.getTaskId()).getState(), MLTaskState.RUNNING);
+        Assert.assertSame(mlTaskManager.getMLTask(mlTask.getTaskId()).getState(), MLTaskState.RUNNING);
         mlTaskManager.updateTaskState("not exist", MLTaskState.RUNNING, true);
     }
 
@@ -87,7 +87,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         expectedEx.expectMessage("Task not found");
         mlTaskManager.add(mlTask);
         mlTaskManager.updateTaskError(mlTask.getTaskId(), "error message", true);
-        Assert.assertEquals("error message", mlTaskManager.get(mlTask.getTaskId()).getError());
+        Assert.assertEquals("error message", mlTaskManager.getMLTask(mlTask.getTaskId()).getError());
         mlTaskManager.updateTaskError("not exist", "error message", true);
     }
 
@@ -205,13 +205,13 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void testGetTask() {
         mlTaskManager.add(mlTask);
         Assert.assertTrue(mlTaskManager.contains(mlTask.getTaskId()));
-        MLTask task = mlTaskManager.get(this.mlTask.getTaskId());
+        MLTask task = mlTaskManager.getMLTask(this.mlTask.getTaskId());
         Assert.assertEquals(mlTask, task);
     }
 
     public void testGetTask_NonExisting() {
         Assert.assertFalse(mlTaskManager.contains(mlTask.getTaskId()));
-        MLTask task = mlTaskManager.get(this.mlTask.getTaskId());
+        MLTask task = mlTaskManager.getMLTask(this.mlTask.getTaskId());
         Assert.assertNull(task);
     }
 

@@ -7,4 +7,17 @@ grant {
     permission java.lang.RuntimePermission "accessDeclaredMembers";
     permission java.lang.RuntimePermission "getClassLoader";
     permission java.lang.reflect.ReflectPermission "suppressAccessChecks";
+
+    // Upload model
+    permission java.net.SocketPermission "*", "connect,resolve";
+
+    // Load model
+    permission java.lang.RuntimePermission "createClassLoader";
+    permission java.lang.RuntimePermission "loadLibrary.*";
+    permission java.lang.RuntimePermission "setContextClassLoader";
+    permission java.util.PropertyPermission "PYTORCH_PRECXX11", "read,write";
+    permission java.util.PropertyPermission "DJL_CACHE_DIR", "read,write";
+    permission java.util.PropertyPermission "java.library.path", "read,write";
+    permission java.util.PropertyPermission "*", "read,write";
+    permission java.lang.RuntimePermission "shutdownHooks";
 };

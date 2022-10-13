@@ -38,6 +38,10 @@ public class MLModelGetRequest extends ActionRequest {
         this.returnContent = returnContent;
     }
 
+    public MLModelGetRequest(String modelId) {
+        this(modelId, false);
+    }
+
     public MLModelGetRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
@@ -48,7 +52,7 @@ public class MLModelGetRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(this.modelId);
-        out.writeBoolean(returnContent);
+        out.writeBoolean(this.returnContent);
     }
 
     @Override
