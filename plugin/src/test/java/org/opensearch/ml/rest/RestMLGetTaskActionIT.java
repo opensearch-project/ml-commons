@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import java.io.IOException;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.ResponseException;
@@ -14,6 +15,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
+@Ignore
 public class RestMLGetTaskActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();

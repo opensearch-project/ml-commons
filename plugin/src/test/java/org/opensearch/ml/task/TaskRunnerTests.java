@@ -26,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -45,6 +46,8 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     @Mock
     MLTaskManager mlTaskManager;
     MLStats mlStats;
+    @Mock
+    DiscoveryNodeHelper nodeHelper;
     @Mock
     MLTaskDispatcher mlTaskDispatcher;
     @Mock
@@ -69,7 +72,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         mlStats = new MLStats(stats);
 
         MockitoAnnotations.openMocks(this);
-        mlTaskRunner = new MLTaskRunner(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService) {
+        mlTaskRunner = new MLTaskRunner(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService) {
             @Override
             public String getTransportActionName() {
                 return null;

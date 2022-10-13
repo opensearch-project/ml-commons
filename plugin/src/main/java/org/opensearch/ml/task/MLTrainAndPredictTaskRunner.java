@@ -17,13 +17,13 @@ import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -48,6 +48,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     private final ClusterService clusterService;
     private final Client client;
     private final MLInputDatasetHandler mlInputDatasetHandler;
+    protected final DiscoveryNodeHelper nodeFilter;
 
     public MLTrainAndPredictTaskRunner(
         ThreadPool threadPool,
@@ -57,13 +58,15 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         MLStats mlStats,
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
-        MLCircuitBreakerService mlCircuitBreakerService
+        MLCircuitBreakerService mlCircuitBreakerService,
+        DiscoveryNodeHelper nodeFilter
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
+        super(mlTaskManager, mlStats, nodeFilter, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
+        this.nodeFilter = nodeFilter;
     }
 
     @Override
@@ -98,30 +101,26 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             .async(false)
             .build();
         MLInput mlInput = request.getMlInput();
-
-        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
-            ActionListener<DataFrame> dataFrameActionListener = ActionListener
-                .wrap(dataFrame -> { trainAndPredict(mlTask, dataFrame, request, listener); }, e -> {
-                    log.error("Failed to generate DataFrame from search query", e);
-                    handlePredictFailure(mlTask, listener, e, false);
-                });
+        MLInputDataset inputDataset = mlInput.getInputDataset();
+        if (inputDataset.getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+            ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
+                MLInput newInput = mlInput.toBuilder().inputDataset(dataSet).build();
+                trainAndPredict(mlTask, newInput, listener);
+            }, e -> {
+                log.error("Failed to generate DataFrame from search query", e);
+                handlePredictFailure(mlTask, listener, e, false);
+            });
             mlInputDatasetHandler
                 .parseSearchQueryInput(
-                    mlInput.getInputDataset(),
+                    inputDataset,
                     new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
                 );
         } else {
-            DataFrame inputDataFrame = mlInputDatasetHandler.parseDataFrameInput(mlInput.getInputDataset());
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> { trainAndPredict(mlTask, inputDataFrame, request, listener); });
+            threadPool.executor(TASK_THREAD_POOL).execute(() -> { trainAndPredict(mlTask, mlInput, listener); });
         }
     }
 
-    private void trainAndPredict(
-        MLTask mlTask,
-        DataFrame inputDataFrame,
-        MLTrainingTaskRequest request,
-        ActionListener<MLTaskResponse> listener
-    ) {
+    private void trainAndPredict(MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
         mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
@@ -130,12 +129,11 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
         mlTaskManager.add(mlTask);
-        MLInput mlInput = request.getMlInput();
 
         // run train and predict
         try {
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
-            MLOutput output = MLEngine.trainAndPredict(mlInput.toBuilder().inputDataset(new DataFrameInputDataset(inputDataFrame)).build());
+            MLOutput output = MLEngine.trainAndPredict(mlInput);
             handleAsyncMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {
                 ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());

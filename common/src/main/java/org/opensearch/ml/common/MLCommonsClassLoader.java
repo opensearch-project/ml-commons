@@ -45,11 +45,17 @@ public class MLCommonsClassLoader {
     }
 
     public static void loadClassMapping() {
-        loadMLAlgoParameterClassMapping();
-        loadMLOutputClassMapping();
-        loadMLInputDataSetClassMapping();
-        loadExecuteInputClassMapping();
-        loadExecuteOutputClassMapping();
+        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+        try {
+            Thread.currentThread().setContextClassLoader(MLCommonsClassLoader.class.getClassLoader());
+            loadMLAlgoParameterClassMapping();
+            loadMLOutputClassMapping();
+            loadMLInputDataSetClassMapping();
+            loadExecuteInputClassMapping();
+            loadExecuteOutputClassMapping();
+        } finally {
+            Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
     }
 
     /**
@@ -62,10 +68,12 @@ public class MLCommonsClassLoader {
         // Load ML algorithm parameter class
         for (Class<?> clazz : classes) {
             MLAlgoParameter mlAlgoParameter = clazz.getAnnotation(MLAlgoParameter.class);
-            FunctionName[] algorithms = mlAlgoParameter.algorithms();
-            if (algorithms != null && algorithms.length > 0) {
-                for(FunctionName name : algorithms){
-                    parameterClassMap.put(name, clazz);
+            if (mlAlgoParameter != null) {
+                FunctionName[] algorithms = mlAlgoParameter.algorithms();
+                if (algorithms != null && algorithms.length > 0) {
+                    for(FunctionName name : algorithms){
+                        parameterClassMap.put(name, clazz);
+                    }
                 }
             }
         }
@@ -90,9 +98,11 @@ public class MLCommonsClassLoader {
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLAlgoOutput.class);
         for (Class<?> clazz : classes) {
             MLAlgoOutput mlAlgoOutput = clazz.getAnnotation(MLAlgoOutput.class);
-            MLOutputType mlOutputType = mlAlgoOutput.value();
-            if (mlOutputType != null) {
-                parameterClassMap.put(mlOutputType, clazz);
+            if (mlAlgoOutput != null) {
+                MLOutputType mlOutputType = mlAlgoOutput.value();
+                if (mlOutputType != null) {
+                    parameterClassMap.put(mlOutputType, clazz);
+                }
             }
         }
     }
@@ -105,9 +115,11 @@ public class MLCommonsClassLoader {
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(InputDataSet.class);
         for (Class<?> clazz : classes) {
             InputDataSet inputDataSet = clazz.getAnnotation(InputDataSet.class);
-            MLInputDataType value = inputDataSet.value();
-            if (value != null) {
-                parameterClassMap.put(value, clazz);
+            if (inputDataSet != null) {
+                MLInputDataType value = inputDataSet.value();
+                if (value != null) {
+                    parameterClassMap.put(value, clazz);
+                }
             }
         }
     }
@@ -120,10 +132,12 @@ public class MLCommonsClassLoader {
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(ExecuteInput.class);
         for (Class<?> clazz : classes) {
             ExecuteInput executeInput = clazz.getAnnotation(ExecuteInput.class);
-            FunctionName[] algorithms = executeInput.algorithms();
-            if (algorithms != null && algorithms.length > 0) {
-                for(FunctionName name : algorithms){
-                    executeInputClassMap.put(name, clazz);
+            if (executeInput != null) {
+                FunctionName[] algorithms = executeInput.algorithms();
+                if (algorithms != null && algorithms.length > 0) {
+                    for(FunctionName name : algorithms){
+                        executeInputClassMap.put(name, clazz);
+                    }
                 }
             }
         }
@@ -137,10 +151,12 @@ public class MLCommonsClassLoader {
         Set<Class<?>> classes = reflections.getTypesAnnotatedWith(ExecuteOutput.class);
         for (Class<?> clazz : classes) {
             ExecuteOutput executeOutput = clazz.getAnnotation(ExecuteOutput.class);
-            FunctionName[] algorithms = executeOutput.algorithms();
-            if (algorithms != null && algorithms.length > 0) {
-                for(FunctionName name : algorithms){
-                    executeOutputClassMap.put(name, clazz);
+            if (executeOutput != null) {
+                FunctionName[] algorithms = executeOutput.algorithms();
+                if (algorithms != null && algorithms.length > 0) {
+                    for(FunctionName name : algorithms){
+                        executeOutputClassMap.put(name, clazz);
+                    }
                 }
             }
         }

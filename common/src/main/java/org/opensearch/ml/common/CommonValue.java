@@ -16,6 +16,14 @@ public class CommonValue {
     public static final String USER = "user";
     public static final String META = "_meta";
     public static final String SCHEMA_VERSION_FIELD = "schema_version";
+    public static final String DELETED = "deleted";
+    public static final String NOT_FOUND = "not_found";
+
+    public static final String BOX_TYPE_KEY = "box_type";
+    //hot node
+    public static String HOT_BOX_TYPE = "hot";
+    // warm node
+    public static String WARM_BOX_TYPE = "warm";
 
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
@@ -65,9 +73,6 @@ public class CommonValue {
             + MLModel.MODEL_FORMAT_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
-            + MLModel.MODEL_TASK_TYPE_FIELD
-            + "\" : {\"type\": \"keyword\"},\n"
-            + "      \""
             + MLModel.MODEL_STATE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
@@ -87,13 +92,13 @@ public class CommonValue {
             + MLModel.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LATEST_UPLOADED_TIME_FIELD
+            + MLModel.LAST_UPLOADED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LATEST_LOADED_TIME_FIELD
+            + MLModel.LAST_LOADED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LATEST_UNLOADED_TIME_FIELD
+            + MLModel.LAST_UNLOADED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + USER_FIELD_MAPPING
             + "    }\n"

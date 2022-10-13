@@ -14,6 +14,7 @@ import org.opensearch.common.xcontent.ToXContentObject;
 
 import java.io.IOException;
 
+@Setter
 @Getter
 public abstract class MLModelConfig implements ToXContentObject, NamedWriteable {
 

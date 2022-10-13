@@ -9,6 +9,7 @@ import static org.opensearch.ml.utils.TestHelper.parser;
 
 import java.io.IOException;
 
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.xcontent.XContentParser;
@@ -36,6 +37,7 @@ public class MLInputTests extends OpenSearchTestCase {
         assertEquals(expectedQuery, inputDataset.getSearchSourceBuilder().toString());
     }
 
+    @Ignore
     public void testParseKmeansInputDataFrame() throws IOException {
         String query = "{\"input_data\":{\"column_metas\":[{\"name\":\"total_sum\",\"column_type\":\"DOUBLE\"},{\"name\":\"is_error\","
             + "\"column_type\":\"BOOLEAN\"}],\"rows\":[{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":15},"

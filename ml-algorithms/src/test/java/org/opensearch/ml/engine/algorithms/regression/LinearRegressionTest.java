@@ -10,11 +10,12 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-import org.opensearch.ml.common.Model;
 
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
@@ -26,7 +27,9 @@ public class LinearRegressionTest {
 
     private LinearRegressionParams parameters;
     private DataFrame trainDataFrame;
+    private DataFrameInputDataset trainDataFrameInputDataSet;
     private DataFrame predictionDataFrame;
+    private DataFrameInputDataset predictionDataFrameInputDataSet;
 
     @Before
     public void setUp() {
@@ -40,14 +43,16 @@ public class LinearRegressionTest {
                 .target("price")
                 .build();
         trainDataFrame = constructLinearRegressionTrainDataFrame();
+        trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
         predictionDataFrame = constructLinearRegressionPredictionDataFrame();
+        predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
     }
 
     @Test
     public void predict() {
         LinearRegression regression = new LinearRegression(parameters);
-        Model model = regression.train(trainDataFrame);
-        MLPredictionOutput output = (MLPredictionOutput)regression.predict(predictionDataFrame, model);
+        MLModel model = regression.train(trainDataFrameInputDataSet);
+        MLPredictionOutput output = (MLPredictionOutput)regression.predict(predictionDataFrameInputDataSet, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
@@ -57,7 +62,7 @@ public class LinearRegressionTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for linear regression prediction.");
         LinearRegression regression = new LinearRegression(parameters);
-        regression.predict(predictionDataFrame, null);
+        regression.predict(predictionDataFrameInputDataSet, null);
     }
 
     @Test
@@ -106,9 +111,9 @@ public class LinearRegressionTest {
 
     private void trainAndVerify(LinearRegressionParams params) {
         LinearRegression regression = new LinearRegression(params);
-        Model model = regression.train(trainDataFrame);
+        MLModel model = regression.train(trainDataFrameInputDataSet);
         Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion());
+        Assert.assertEquals(1, model.getVersion().intValue());
         Assert.assertNotNull(model.getContent());
     }
 
@@ -118,7 +123,7 @@ public class LinearRegressionTest {
         exceptionRule.expectMessage("Empty target when generating dataset from data frame.");
         parameters.setTarget(null);
         LinearRegression regression = new LinearRegression(parameters);
-        Model model = regression.train(trainDataFrame);
+        MLModel model = regression.train(trainDataFrameInputDataSet);
     }
 
     @Test
@@ -127,7 +132,7 @@ public class LinearRegressionTest {
         exceptionRule.expectMessage("No matched target when generating dataset from data frame.");
         parameters.setTarget("not found");
         LinearRegression regression = new LinearRegression(parameters);
-        Model model = regression.train(trainDataFrame);
+        MLModel model = regression.train(trainDataFrameInputDataSet);
     }
 
     @Test

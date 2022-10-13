@@ -11,8 +11,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.Model;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 
@@ -25,7 +26,9 @@ public class LogisticRegressionTest {
 
     private LogisticRegressionParams parameters;
     private DataFrame trainDataFrame;
+    private DataFrameInputDataset trainDataFrameInputDataSet;
     private DataFrame predictionDataFrame;
+    private DataFrameInputDataset predictionDataFrameInputDataSet;
 
     @Before
     public void setUp() {
@@ -37,7 +40,9 @@ public class LogisticRegressionTest {
                 .target("class")
                 .build();
         trainDataFrame = constructLogisticRegressionTrainDataFrame();
+        trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
         predictionDataFrame = constructLogisticRegressionPredictionDataFrame();
+        predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
     }
 
     @Test
@@ -87,14 +92,14 @@ public class LogisticRegressionTest {
         exceptionRule.expectMessage("Empty target when generating dataset from data frame.");
         parameters.setTarget(null);
         LogisticRegression classification = new LogisticRegression(parameters);
-        Model model = classification.train(trainDataFrame);
+        MLModel model = classification.train(trainDataFrameInputDataSet);
     }
 
     @Test
     public void predict() {
         LogisticRegression classification = new LogisticRegression(parameters);
-        Model model = classification.train(trainDataFrame);
-        MLPredictionOutput output = (MLPredictionOutput)classification.predict(predictionDataFrame, model);
+        MLModel model = classification.train(trainDataFrameInputDataSet);
+        MLPredictionOutput output = (MLPredictionOutput)classification.predict(predictionDataFrameInputDataSet, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
@@ -104,7 +109,7 @@ public class LogisticRegressionTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for logistic regression prediction.");
         LogisticRegression classification = new LogisticRegression(parameters);
-        classification.predict(predictionDataFrame, null);
+        classification.predict(predictionDataFrameInputDataSet, null);
     }
 
     @Test
@@ -137,9 +142,9 @@ public class LogisticRegressionTest {
 
     private void trainAndVerify(LogisticRegressionParams params) {
         LogisticRegression classification = new LogisticRegression(params);
-        Model model = classification.train(trainDataFrame);
+        MLModel model = classification.train(trainDataFrameInputDataSet);
         Assert.assertEquals(FunctionName.LOGISTIC_REGRESSION.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion());
+        Assert.assertEquals(1, model.getVersion().intValue());
         Assert.assertNotNull(model.getContent());
     }
 }

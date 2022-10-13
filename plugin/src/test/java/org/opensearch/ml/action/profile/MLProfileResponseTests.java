@@ -28,11 +28,15 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.model.MLModelProfile;
+import org.opensearch.ml.model.MLPredictRequestStats;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLProfileResponseTests extends OpenSearchTestCase {
     MLTask mlTask;
+    MLModelProfile mlModelProfile;
 
     @Before
     public void setup() {
@@ -52,6 +56,13 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
             .error("error")
             .user(new User())
             .async(false)
+            .build();
+        mlModelProfile = MLModelProfile
+            .builder()
+            .predictor("test_predictor")
+            .workerNodes(new String[] { "node1", "node2" })
+            .modelState(MLModelState.LOADED)
+            .predictStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
             .build();
     }
 
@@ -73,9 +84,12 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
         List<MLProfileNodeResponse> nodes = new ArrayList<>();
 
         DiscoveryNode node1 = new DiscoveryNode("node1", buildNewFakeTransportAddress(), Version.CURRENT);
-        Map<String, MLTask> nodeLevelProdile1 = new HashMap<>();
-        nodeLevelProdile1.put("task_1", mlTask);
-        nodes.add(new MLProfileNodeResponse(node1, nodeLevelProdile1));
+        Map<String, MLTask> nodeLevelTaskProdile1 = new HashMap<>();
+        nodeLevelTaskProdile1.put("task_1", mlTask);
+
+        Map<String, MLModelProfile> nodelLevelModelProfile = new HashMap<>();
+        nodelLevelModelProfile.put("model1", mlModelProfile);
+        nodes.add(new MLProfileNodeResponse(node1, nodeLevelTaskProdile1, nodelLevelModelProfile));
 
         List<FailedNodeException> failures = new ArrayList<>();
         MLProfileResponse response = new MLProfileResponse(clusterName, nodes, failures);
@@ -84,10 +98,14 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"nodes\":{\"node1\":{\"task_1\":{\"task_id\":\"test_id\",\"model_id\":\"model_id\","
-                + "\"task_type\":\"TRAINING\",\"function_name\":\"AD_LIBSVM\",\"state\":\"CREATED\",\"input_type\":\"DATA_FRAME\","
-                + "\"progress\":0.4,\"output_index\":\"test_index\",\"worker_node\":\"test_node\",\"create_time\":123,\"last_update_time\":123,"
-                + "\"error\":\"error\",\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},\"is_async\":false}}}}",
+            "{\"nodes\":{\"node1\":{\"tasks\":{\"task_1\":{\"task_id\":\"test_id\",\"model_id\":\"model_id\","
+                + "\"task_type\":\"TRAINING\",\"function_name\":\"AD_LIBSVM\",\"state\":\"CREATED\",\"input_type\":"
+                + "\"DATA_FRAME\",\"progress\":0.4,\"output_index\":\"test_index\",\"worker_node\":\"test_node\","
+                + "\"create_time\":123,\"last_update_time\":123,\"error\":\"error\",\"user\":{\"name\":\"\","
+                + "\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+                + "\"is_async\":false}},\"models\":{\"model1\":{\"model_state\":\"LOADED\",\"predictor\":\"test_predictor\","
+                + "\"worker_nodes\":[\"node1\",\"node2\"],\"predict_request_stats\":{\"count\":10,\"max\":20.0,"
+                + "\"min\":5.0,\"average\":11.0}}}}}}",
             taskContent
         );
     }

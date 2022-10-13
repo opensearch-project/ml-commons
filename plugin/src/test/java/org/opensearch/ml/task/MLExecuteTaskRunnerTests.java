@@ -26,6 +26,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -68,6 +69,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
 
     @Mock
     ActionListener<MLExecuteTaskResponse> listener;
+    @Mock
+    DiscoveryNodeHelper nodeHelper;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -105,7 +108,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
                 mlStats,
                 mlInputDatasetHandler,
                 mlTaskDispatcher,
-                mlCircuitBreakerService
+                mlCircuitBreakerService,
+                nodeHelper
             )
         );
 

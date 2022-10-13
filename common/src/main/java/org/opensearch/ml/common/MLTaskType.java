@@ -9,5 +9,7 @@ public enum MLTaskType {
     TRAINING,
     PREDICTION,
     TRAINING_AND_PREDICTION,
-    EXECUTION
+    EXECUTION,
+    UPLOAD_MODEL,
+    LOAD_MODEL
 }
