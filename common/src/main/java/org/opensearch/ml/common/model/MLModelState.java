@@ -17,7 +17,7 @@ public enum MLModelState {
         try {
             return MLModelState.valueOf(value);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Wrong model format");
+            throw new IllegalArgumentException("Wrong model state");
         }
     }
 }

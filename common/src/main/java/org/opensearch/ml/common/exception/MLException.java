@@ -33,6 +33,15 @@ public class MLException extends RuntimeException {
     }
 
     /**
+     * Constructor with specified error message adn cause.
+     * @param message error message
+     * @param cause exception cause
+     */
+    public MLException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    /**
      * Returns if the exception should be counted in stats.
      *
      * @return true if should count the exception in stats; otherwise return false

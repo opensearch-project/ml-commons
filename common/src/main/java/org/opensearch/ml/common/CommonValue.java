@@ -74,11 +74,11 @@ public class CommonValue {
             + MLModel.MODEL_CONFIG_FIELD
             + "\" : {\"properties\":{\""
             + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
-            + EMBEDDING_DIMENSION_FIELD + "\":{\"type\":\"long\"},\""
+            + EMBEDDING_DIMENSION_FIELD + "\":{\"type\":\"integer\"},\""
             + FRAMEWORK_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
             + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
             + "      \""
-            + MLModel.MODEL_CONTENT_HASH_FIELD
+            + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
             + MLModel.CREATED_TIME_FIELD

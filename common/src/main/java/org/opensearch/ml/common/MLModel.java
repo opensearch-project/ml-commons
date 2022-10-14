@@ -38,7 +38,8 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    public static final String MODEL_CONTENT_HASH_FIELD = "model_content_hash";
+    //SHA256 hash value of model content.
+    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPLOADED_TIME_FIELD = "last_uploaded_time";
@@ -206,7 +207,7 @@ public class MLModel implements ToXContentObject {
             builder.field(MODEL_CONTENT_SIZE_IN_BYTES_FIELD, modelContentSizeInBytes);
         }
         if (modelContentHash != null) {
-            builder.field(MODEL_CONTENT_HASH_FIELD, modelContentHash);
+            builder.field(MODEL_CONTENT_HASH_VALUE_FIELD, modelContentHash);
         }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
@@ -303,7 +304,7 @@ public class MLModel implements ToXContentObject {
                 case MODEL_CONTENT_SIZE_IN_BYTES_FIELD:
                     modelContentSizeInBytes = parser.longValue();
                     break;
-                case MODEL_CONTENT_HASH_FIELD:
+                case MODEL_CONTENT_HASH_VALUE_FIELD:
                     modelContentHash = parser.text();
                     break;
                 case MODEL_CONFIG_FIELD:
