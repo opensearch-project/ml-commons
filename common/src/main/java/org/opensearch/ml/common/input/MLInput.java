@@ -15,10 +15,12 @@ import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -40,6 +42,12 @@ public class MLInput implements Input {
     public static final String INPUT_INDEX_FIELD = "input_index";
     public static final String INPUT_QUERY_FIELD = "input_query";
     public static final String INPUT_DATA_FIELD = "input_data";
+    // For trained model
+    public static final String RETURN_BYTES_FIELD = "return_bytes";
+    public static final String RETURN_NUMBER_FIELD = "return_number";
+    public static final String TARGET_RESPONSE_FIELD = "target_response";
+    public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
+    public static final String TEXT_DOCS_FIELD = "text_docs";
 
     // Algorithm name
     private FunctionName algorithm;
@@ -58,7 +66,8 @@ public class MLInput implements Input {
         this.inputDataset = inputDataset;
     }
 
-    public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
+    public MLInput(FunctionName algorithm, MLAlgoParams parameters, SearchSourceBuilder searchSourceBuilder,
+                   List<String> sourceIndices, DataFrame dataFrame, MLInputDataset inputDataset) {
         validate(algorithm);
         this.algorithm = algorithm;
         this.parameters = parameters;
@@ -123,6 +132,25 @@ public class MLInput implements Input {
                     ((DataFrameInputDataset)inputDataset).getDataFrame().toXContent(builder, EMPTY_PARAMS);
                     builder.endObject();
                     break;
+                case TEXT_DOCS:
+                    TextDocsInputDataSet textInputDataSet = (TextDocsInputDataSet) this.inputDataset;
+                    List<String> docs = textInputDataSet.getDocs();
+                    ModelResultFilter resultFilter = textInputDataSet.getResultFilter();
+                    if (docs != null && docs.size() > 0) {
+                        builder.field(TEXT_DOCS_FIELD, docs.toArray(new String[0]));
+                    }
+                    if (resultFilter != null) {
+                        builder.field(RETURN_BYTES_FIELD, resultFilter.isReturnBytes());
+                        builder.field(RETURN_NUMBER_FIELD, resultFilter.isReturnNumber());
+                        List<String> targetResponse = resultFilter.getTargetResponse();
+                        if (targetResponse != null && targetResponse.size() > 0) {
+                            builder.field(TARGET_RESPONSE_FIELD, targetResponse.toArray(new String[0]));
+                        }
+                        List<Integer> targetPositions = resultFilter.getTargetResponsePositions();
+                        if (targetPositions != null && targetPositions.size() > 0) {
+                            builder.field(TARGET_RESPONSE_POSITIONS_FIELD, targetPositions.toArray(new Integer[0]));
+                        }
+                    }
                 default:
                     break;
             }
@@ -139,6 +167,12 @@ public class MLInput implements Input {
         SearchSourceBuilder searchSourceBuilder = null;
         List<String> sourceIndices = new ArrayList<>();
         DataFrame dataFrame = null;
+
+        boolean returnBytes = false;
+        boolean returnNumber = true;
+        List<String> targetResponse = new ArrayList<>();
+        List<Integer> targetResponsePositions = new ArrayList<>();
+        List<String> textDocs = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -161,12 +195,42 @@ public class MLInput implements Input {
                     break;
                 case INPUT_DATA_FIELD:
                     dataFrame = DefaultDataFrame.parse(parser);
+                    break;
+                case RETURN_BYTES_FIELD:
+                    returnBytes = parser.booleanValue();
+                    break;
+                case RETURN_NUMBER_FIELD:
+                    returnNumber = parser.booleanValue();
+                    break;
+                case TARGET_RESPONSE_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        targetResponse.add(parser.text());
+                    }
+                    break;
+                case TARGET_RESPONSE_POSITIONS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        targetResponsePositions.add(parser.intValue());
+                    }
+                    break;
+                case TEXT_DOCS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        textDocs.add(parser.text());
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, null);
+        MLInputDataset inputDataSet = null;
+        if (algorithm == FunctionName.TEXT_EMBEDDING) {
+            ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
+            inputDataSet = new TextDocsInputDataSet(textDocs, filter);
+        }
+        return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }
 
     private MLInputDataset createInputDataSet(SearchSourceBuilder searchSourceBuilder, List<String> sourceIndices, DataFrame dataFrame) {
