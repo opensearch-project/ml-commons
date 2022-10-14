@@ -42,11 +42,17 @@ public class MLInput implements Input {
     public static final String INPUT_INDEX_FIELD = "input_index";
     public static final String INPUT_QUERY_FIELD = "input_query";
     public static final String INPUT_DATA_FIELD = "input_data";
+
     // For trained model
+    // Return bytes in model output
     public static final String RETURN_BYTES_FIELD = "return_bytes";
+    // Return bytes in model output. This can be used together with return_bytes.
     public static final String RETURN_NUMBER_FIELD = "return_number";
+    // Filter target response with name in model output
     public static final String TARGET_RESPONSE_FIELD = "target_response";
+    // Filter target response with position in model output
     public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
+    // Input text sentences for text embedding  model
     public static final String TEXT_DOCS_FIELD = "text_docs";
 
     // Algorithm name

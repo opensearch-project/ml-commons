@@ -29,11 +29,9 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.Model;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -147,16 +145,11 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         mlTaskManager.add(mlTask);
         try {
             if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
-                ActionListener<DataFrame> dataFrameActionListener = ActionListener
-                    .wrap(
-                        dataFrame -> {
-                            train(mlTask, mlInput.toBuilder().inputDataset(new DataFrameInputDataset(dataFrame)).build(), internalListener);
-                        },
-                        e -> {
-                            log.error("Failed to generate DataFrame from search query", e);
-                            internalListener.onFailure(e);
-                        }
-                    );
+                ActionListener<MLInputDataset> dataFrameActionListener = ActionListener
+                    .wrap(dataSet -> { train(mlTask, mlInput.toBuilder().inputDataset(dataSet).build(), internalListener); }, e -> {
+                        log.error("Failed to generate DataFrame from search query", e);
+                        internalListener.onFailure(e);
+                    });
                 mlInputDatasetHandler
                     .parseSearchQueryInput(
                         mlInput.getInputDataset(),
@@ -182,18 +175,16 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         try {
             // run training
             mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
-            Model model = MLEngine.train(mlInput);
+            MLModel mlModel = MLEngine.train(mlInput);
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {
                     listener.onFailure(new RuntimeException("No response to create ML task index"));
                     return;
                 }
                 // TODO: put the user into model for backend role based access control.
-                MLModel mlModel = new MLModel(mlInput.getAlgorithm(), model);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
                         log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
-                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                         String returnedTaskId = mlTask.isAsync() ? mlTask.getTaskId() : null;
                         MLTrainingOutput output = new MLTrainingOutput(r.getId(), returnedTaskId, MLTaskState.COMPLETED.name());
                         listener.onResponse(MLTaskResponse.builder().output(output).build());

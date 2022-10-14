@@ -33,7 +33,7 @@ public class MLException extends RuntimeException {
     }
 
     /**
-     * Constructor with specified error message adn cause.
+     * Constructor with specified error message and cause.
      * @param message error message
      * @param cause exception cause
      */

@@ -5,14 +5,16 @@
 
 package org.opensearch.ml.engine.algorithms.clustering;
 
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-import org.opensearch.ml.common.Model;
 import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
@@ -42,11 +44,12 @@ public class KMeans implements TrainAndPredictable {
 
     //The number of threads.
     private int numThreads = Math.max(Runtime.getRuntime().availableProcessors() / 2, 1); //Assume cpu-bound.
-    
+
     //The random seed.
     private long seed = System.currentTimeMillis();
     private KMeansTrainer.Distance distance;
 
+    private KMeansModel kMeansModel;
     public KMeans() {}
 
     public KMeans(MLAlgoParams parameters) {
@@ -83,17 +86,21 @@ public class KMeans implements TrainAndPredictable {
     }
 
     @Override
-    public MLOutput predict(DataFrame dataFrame, Model model) {
-        if (model == null) {
-            throw new IllegalArgumentException("No model found for KMeans prediction.");
-        }
+    public void initModel(MLModel model, Map<String, Object> params) {
+        this.kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model);
+    }
 
-        List<Prediction<ClusterID>> predictions;
+    @Override
+    public void close() {
+        this.kMeansModel = null;
+    }
+
+    @Override
+    public MLOutput predict(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans prediction data from opensearch", TribuoOutputType.CLUSTERID);
-        KMeansModel kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model.getContent());
-        predictions = kMeansModel.predict(predictionDataset);
-
+        List<Prediction<ClusterID>> predictions = kMeansModel.predict(predictionDataset);
         List<Map<String, Object>> listClusterID = new ArrayList<>();
         predictions.forEach(e -> listClusterID.add(Collections.singletonMap("ClusterID", e.getOutput().getID())));
 
@@ -101,23 +108,36 @@ public class KMeans implements TrainAndPredictable {
     }
 
     @Override
-    public Model train(DataFrame dataFrame) {
+    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+        if (model == null) {
+            throw new IllegalArgumentException("No model found for KMeans prediction.");
+        }
+        this.kMeansModel = (KMeansModel) ModelSerDeSer.deserialize(model);
+        return predict(inputDataset);
+    }
+
+    @Override
+    public MLModel train(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans training data from opensearch", TribuoOutputType.CLUSTERID);
         Integer centroids = Optional.ofNullable(parameters.getCentroids()).orElse(DEFAULT_CENTROIDS);
         Integer iterations = Optional.ofNullable(parameters.getIterations()).orElse(DEFAULT_ITERATIONS);
         KMeansTrainer trainer = new KMeansTrainer(centroids, iterations, distance, numThreads, seed);
         KMeansModel kMeansModel = trainer.train(trainDataset);
-        Model model = new Model();
-        model.setName(FunctionName.KMEANS.name());
-        model.setVersion(1);
-        model.setContent(ModelSerDeSer.serialize(kMeansModel));
 
+        MLModel model = MLModel.builder()
+                .name(FunctionName.KMEANS.name())
+                .algorithm(FunctionName.KMEANS)
+                .version(1)
+                .content(ModelSerDeSer.serializeToBase64(kMeansModel))
+                .build();
         return model;
     }
 
     @Override
-    public MLOutput trainAndPredict(DataFrame dataFrame) {
+    public MLOutput trainAndPredict(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         MutableDataset<ClusterID> trainDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),
                 "KMeans training and predicting data from opensearch", TribuoOutputType.CLUSTERID);
         Integer centroids = Optional.ofNullable(parameters.getCentroids()).orElse(DEFAULT_CENTROIDS);

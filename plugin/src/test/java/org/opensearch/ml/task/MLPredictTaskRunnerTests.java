@@ -50,6 +50,7 @@ import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.engine.algorithms.rcf.BatchRandomCutForest;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -98,6 +99,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
     MLStats mlStats;
     DataFrame dataFrame;
+    DataFrameInputDataset dataFrameInputDataSet;
     DiscoveryNode localNode;
     DiscoveryNode remoteNode;
     MLInputDatasetHandler mlInputDatasetHandler;
@@ -109,6 +111,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     String errorMessage = "test error";
     GetResponse getResponse;
     MLInput mlInputWithDataFrame;
+    String modelId = "test_modelId";
 
     @Before
     public void setup() throws IOException {
@@ -145,7 +148,8 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             )
         );
 
-        dataFrame = TestData.constructTestDataFrame(100);
+        dataFrame = TestData.constructTestDataFrame(300);
+        dataFrameInputDataSet = new DataFrameInputDataset(dataFrame);
 
         MLInputDataset dataFrameInputDataSet = new DataFrameInputDataset(dataFrame);
         BatchRCFParams batchRCFParams = BatchRCFParams.builder().build();
@@ -175,13 +179,15 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
+        BatchRandomCutForest batchRCF = new BatchRandomCutForest();
+        MLModel trainedModel = batchRCF.train(dataFrameInputDataSet);
         MLModel mlModel = MLModel
             .builder()
             .user(User.parse(USER_STRING))
             .version(111)
             .name("test")
             .algorithm(FunctionName.BATCH_RCF)
-            .content("content")
+            .content(trainedModel.getContent())
             .build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
@@ -195,7 +201,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -206,7 +211,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(requestWithQuery, transportService, listener);
         verify(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
-        verify(mlInputDatasetHandler, never()).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -246,7 +250,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -260,7 +263,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client, never()).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -274,7 +276,6 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         verify(mlInputDatasetHandler, never()).parseSearchQueryInput(any(), any());
-        verify(mlInputDatasetHandler).parseDataFrameInput(requestWithDataFrame.getMlInput().getInputDataset());
         verify(mlTaskManager).add(any(MLTask.class));
         verify(client).get(any(), any());
         verify(mlTaskManager).remove(anyString());
@@ -296,14 +297,14 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         if (failedToParseQueryInput) {
             doAnswer(invocation -> {
-                ActionListener<DataFrame> actionListener = invocation.getArgument(1);
+                ActionListener<MLInputDataset> actionListener = invocation.getArgument(1);
                 actionListener.onFailure(new RuntimeException(errorMessage));
                 return null;
             }).when(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         } else {
             doAnswer(invocation -> {
-                ActionListener<DataFrame> actionListener = invocation.getArgument(1);
-                actionListener.onResponse(dataFrame);
+                ActionListener<MLInputDataset> actionListener = invocation.getArgument(1);
+                actionListener.onResponse(dataFrameInputDataSet);
                 return null;
             }).when(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
         }

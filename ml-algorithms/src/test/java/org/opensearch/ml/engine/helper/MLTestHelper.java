@@ -12,6 +12,7 @@ import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +23,11 @@ import java.util.Random;
 public class MLTestHelper {
 
     public static final String TIME_FIELD = "timestamp";
+
+    public static DataFrameInputDataset concstructDataFrameInputDataSet(int size) {
+        return new DataFrameInputDataset(constructTestDataFrame(size));
+    }
+
     public static DataFrame constructTestDataFrame(int size) {
         return constructTestDataFrame(size, false);
     }
