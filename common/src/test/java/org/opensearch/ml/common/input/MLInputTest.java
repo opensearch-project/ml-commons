@@ -5,11 +5,22 @@
 
 package org.opensearch.ml.common.input;
 
+import lombok.NonNull;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.Strings;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.common.xcontent.ToXContent;
+import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.ColumnValue;
@@ -19,12 +30,25 @@ import org.opensearch.ml.common.dataframe.DoubleValue;
 import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
+import org.opensearch.ml.common.output.model.ModelResultFilter;
+import org.opensearch.search.SearchModule;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class MLInputTest {
 
@@ -63,6 +87,109 @@ public class MLInputTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("algorithm can't be null");
         MLInput.builder().build();
+    }
+
+    @Test
+    public void parse_LinearRegression() throws IOException {
+        String indexName = "index1";
+        SearchQueryInputDataset inputDataset = SearchQueryInputDataset.builder()
+                .indices(Arrays.asList(indexName))
+                .searchSourceBuilder(new SearchSourceBuilder().query(new MatchAllQueryBuilder()).size(1))
+                .build();
+        String expectedInputStr = "{\"algorithm\":\"LINEAR_REGRESSION\",\"input_index\":[\"index1\"],\"input_query\":{\"size\":1,\"query\":{\"match_all\":{\"boost\":1.0}}}}";
+        testParse(FunctionName.LINEAR_REGRESSION, inputDataset, expectedInputStr,  parsedInput -> {
+            assertNotNull(parsedInput.getInputDataset());
+            assertEquals(1, ((SearchQueryInputDataset)parsedInput.getInputDataset()).getIndices().size());
+            assertEquals(indexName, ((SearchQueryInputDataset)parsedInput.getInputDataset()).getIndices().get(0));
+        });
+
+        @NonNull DataFrame dataFrame = new DefaultDataFrame(new ColumnMeta[]{ColumnMeta.builder().name("value").columnType(ColumnType.FLOAT).build()});
+        dataFrame.appendRow(new Float[]{1.0f});
+        DataFrameInputDataset dataFrameInputDataset = DataFrameInputDataset.builder().dataFrame(dataFrame).build();
+        expectedInputStr = "{\"algorithm\":\"LINEAR_REGRESSION\",\"input_data\":{\"column_metas\":[{\"name\":\"value\",\"column_type\":\"FLOAT\"}],\"rows\":[{\"values\":[{\"column_type\":\"FLOAT\",\"value\":1.0}]}]}}";
+        testParse(FunctionName.LINEAR_REGRESSION, dataFrameInputDataset, expectedInputStr,  parsedInput -> {
+            assertNotNull(parsedInput.getInputDataset());
+            assertEquals(1, ((DataFrameInputDataset)parsedInput.getInputDataset()).getDataFrame().size());
+            assertEquals(1.0f, ((DataFrameInputDataset)parsedInput.getInputDataset()).getDataFrame().getRow(0).getValue(0).floatValue(), 1e-5);
+        });
+    }
+
+    @Test
+    public void parse_TextEmbedding() throws IOException {
+        String sentence = "test sentence";
+        String column = "column1";
+        Integer position = 1;
+        ModelResultFilter resultFilter = ModelResultFilter.builder()
+                .targetResponse(Arrays.asList(column))
+                .targetResponsePositions(Arrays.asList(position))
+                .build();
+        TextDocsInputDataSet inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList(sentence)).resultFilter(resultFilter).build();
+        String expectedInputStr = "{\"algorithm\":\"TEXT_EMBEDDING\",\"text_docs\":[\"test sentence\"],\"return_bytes\":false,\"return_number\":false,\"target_response\":[\"column1\"],\"target_response_positions\":[1]}";
+        testParse(FunctionName.TEXT_EMBEDDING, inputDataset, expectedInputStr, parsedInput -> {
+            assertNotNull(parsedInput.getInputDataset());
+            TextDocsInputDataSet parsedInputDataSet = (TextDocsInputDataSet) parsedInput.getInputDataset();
+            assertEquals(1, parsedInputDataSet.getDocs().size());
+            assertEquals(sentence, parsedInputDataSet.getDocs().get(0));
+            assertEquals(1, parsedInputDataSet.getResultFilter().getTargetResponse().size());
+            assertEquals(column, parsedInputDataSet.getResultFilter().getTargetResponse().get(0));
+            assertEquals(position, parsedInputDataSet.getResultFilter().getTargetResponsePositions().get(0));
+        });
+    }
+
+    @Test
+    public void parse_TextEmbedding_NullResultFilter() throws IOException {
+        String sentence = "test sentence";
+        TextDocsInputDataSet inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList(sentence)).build();
+        String expectedInputStr = "{\"algorithm\":\"TEXT_EMBEDDING\",\"text_docs\":[\"test sentence\"]}";
+        testParse(FunctionName.TEXT_EMBEDDING, inputDataset, expectedInputStr, parsedInput -> {
+            assertNotNull(parsedInput.getInputDataset());
+            assertEquals(1, ((TextDocsInputDataSet)parsedInput.getInputDataset()).getDocs().size());
+            assertEquals(sentence, ((TextDocsInputDataSet)parsedInput.getInputDataset()).getDocs().get(0));
+        });
+    }
+
+    private void testParse(FunctionName algorithm, MLInputDataset inputDataset, String expectedInputStr, Consumer<MLInput> verify) throws IOException {
+        MLInput input = MLInput.builder().inputDataset(inputDataset).algorithm(algorithm).build();
+        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = Strings.toString(builder);
+        assertEquals(expectedInputStr, jsonStr);
+
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
+        MLInput parsedInput = MLInput.parse(parser, algorithm.name());
+        assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
+        assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
+        verify.accept(parsedInput);
+    }
+
+
+    @Test
+    public void readInputStream_Success() throws IOException {
+        readInputStream(input, parsedInput -> {
+            assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
+        });
+    }
+
+    @Test
+    public void readInputStream_NullFields() throws IOException {
+        MLInput input = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).build();
+        readInputStream(input, parsedInput -> {
+            assertNull(parsedInput.getParameters());
+            assertNull(parsedInput.getInputDataset());
+        });
+    }
+
+    private void readInputStream(MLInput input, Consumer<MLInput> verify) throws IOException {
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        input.writeTo(bytesStreamOutput);
+
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        MLInput parsedInput = new MLInput(streamInput);
+        assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
+        verify.accept(parsedInput);
     }
 
 }

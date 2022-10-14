@@ -8,6 +8,7 @@ package org.opensearch.ml.common.model;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.CommonValue;
 
 import static org.junit.Assert.assertEquals;
 
@@ -25,7 +26,12 @@ public class MLModelStateTests {
     @Test
     public void from_wrongValue() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong model format");
+        exceptionRule.expectMessage("Wrong model state");
         MLModelState.from("test_wrong_value");
+    }
+
+    @Test
+    public void testA() {
+        System.out.println(CommonValue.ML_MODEL_INDEX_MAPPING);
     }
 }
