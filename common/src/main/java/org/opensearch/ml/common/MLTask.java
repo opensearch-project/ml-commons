@@ -53,7 +53,8 @@ public class MLTask implements ToXContentObject, Writeable {
     private final MLInputDataType inputType;
     private Float progress;
     private final String outputIndex;
-    private final String workerNode;
+    @Setter
+    private String workerNode;
     private final Instant createTime;
     private Instant lastUpdateTime;
     @Setter
@@ -100,7 +101,11 @@ public class MLTask implements ToXContentObject, Writeable {
         this.taskType = input.readEnum(MLTaskType.class);
         this.functionName = input.readEnum(FunctionName.class);
         this.state = input.readEnum(MLTaskState.class);
-        this.inputType = input.readEnum(MLInputDataType.class);
+        if (input.readBoolean()) {
+            this.inputType = input.readEnum(MLInputDataType.class);
+        } else {
+            this.inputType = null;
+        }
         this.progress = input.readOptionalFloat();
         this.outputIndex = input.readOptionalString();
         this.workerNode = input.readString();
@@ -122,7 +127,12 @@ public class MLTask implements ToXContentObject, Writeable {
         out.writeEnum(taskType);
         out.writeEnum(functionName);
         out.writeEnum(state);
-        out.writeEnum(inputType);
+        if (inputType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(inputType);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalFloat(progress);
         out.writeOptionalString(outputIndex);
         out.writeString(workerNode);

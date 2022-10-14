@@ -27,5 +27,6 @@ public enum MLTaskState {
     RUNNING,
     COMPLETED,
     FAILED,
-    CANCELLED
+    CANCELLED,
+    COMPLETED_WITH_ERROR
 }
