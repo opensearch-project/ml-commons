@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.task;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -83,16 +86,23 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     }
 
     public void run(Request request, TransportService transportService, ActionListener<Response> listener) {
-        if (mlCircuitBreakerService.isOpen()) {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-            throw new MLLimitExceededException("Circuit breaker is open");
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                if (mlCircuitBreakerService.isOpen()) {
+                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+                    throw new MLLimitExceededException("Circuit breaker is open");
+                }
+                if (!request.isDispatchTask()) {
+                    log.info("Run ML request {} locally", request.getRequestID());
+                    executeTask(request, listener);
+                    return null;
+                }
+                dispatchTask(request, transportService, listener);
+                return null;
+            });
+        } catch (PrivilegedActionException e) {
+            throw new RuntimeException("Can't load class mapping in ML engine", e);
         }
-        if (!request.isDispatchTask()) {
-            log.info("Run ML request {} locally", request.getRequestID());
-            executeTask(request, listener);
-            return;
-        }
-        dispatchTask(request, transportService, listener);
     }
 
     protected ActionListener<MLTaskResponse> wrappedCleanupListener(ActionListener<MLTaskResponse> listener, String taskId) {

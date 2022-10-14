@@ -41,6 +41,8 @@ import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.model.load.MLLoadModelRequest;
@@ -69,6 +71,7 @@ public class MLModelUploader {
     private final ThreadPool threadPool;
     private final Client client;
     private final MLStats mlStats;
+    protected final MLCircuitBreakerService mlCircuitBreakerService;
 
     public MLModelUploader(
         ModelHelper modelHelper,
@@ -77,7 +80,8 @@ public class MLModelUploader {
         MLModelManager mlModelManager,
         ThreadPool threadPool,
         Client client,
-        MLStats mlStats
+        MLStats mlStats,
+        MLCircuitBreakerService mlCircuitBreakerService
     ) {
         this.modelHelper = modelHelper;
         this.mlIndicesHandler = mlIndicesHandler;
@@ -86,6 +90,7 @@ public class MLModelUploader {
         this.threadPool = threadPool;
         this.client = client;
         this.mlStats = mlStats;
+        this.mlCircuitBreakerService = mlCircuitBreakerService;
     }
 
     public void uploadMLModel(MLUploadInput uploadInput, MLTask mlTask) {
@@ -94,6 +99,10 @@ public class MLModelUploader {
         mlStats
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.UPLOAD, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
+        if (mlCircuitBreakerService.isOpen()) {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+            throw new MLLimitExceededException("Circuit breaker is open, please check your memory and disk usage!");
+        }
         try {
             if (uploadInput.getUrl() != null) {
                 uploadModel(uploadInput, mlTask);

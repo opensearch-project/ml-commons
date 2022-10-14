@@ -242,9 +242,27 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, mlIndicesHandler);
         modelHelper = new ModelHelper();
-        mlModelManager = new MLModelManager(clusterService, client, threadPool, xContentRegistry, modelHelper, settings, mlStats);
+        mlModelManager = new MLModelManager(
+            clusterService,
+            client,
+            threadPool,
+            xContentRegistry,
+            modelHelper,
+            settings,
+            mlStats,
+            mlCircuitBreakerService
+        );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
-        mlModelUploader = new MLModelUploader(modelHelper, mlIndicesHandler, mlTaskManager, mlModelManager, threadPool, client, mlStats);
+        mlModelUploader = new MLModelUploader(
+            modelHelper,
+            mlIndicesHandler,
+            mlTaskManager,
+            mlModelManager,
+            threadPool,
+            client,
+            mlStats,
+            mlCircuitBreakerService
+        );
         mlModelMetaUploader = new MLModelMetaUploader(mlIndicesHandler, threadPool, client);
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
 

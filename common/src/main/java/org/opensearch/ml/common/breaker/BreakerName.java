@@ -6,5 +6,6 @@
 package org.opensearch.ml.common.breaker;
 
 public enum BreakerName {
-    MEMORY
+    MEMORY,
+    DISK
 }
