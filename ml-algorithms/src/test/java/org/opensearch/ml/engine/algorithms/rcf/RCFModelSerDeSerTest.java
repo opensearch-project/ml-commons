@@ -14,9 +14,11 @@ import com.amazon.randomcutforest.state.RandomCutForestState;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.Model;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
+import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
 import java.util.Arrays;
 
@@ -36,26 +38,26 @@ public class RCFModelSerDeSerTest {
     public void testModelSerDeSerBatchRCF() {
         BatchRCFParams params = BatchRCFParams.builder().build();
         BatchRandomCutForest batchRCF = new BatchRandomCutForest(params);
-        Model model = batchRCF.train(constructTestDataFrame(500));
+        MLModel model = batchRCF.train(new DataFrameInputDataset(constructTestDataFrame(500)));
 
-        RandomCutForestState deserializedState = RCFModelSerDeSer.deserializeRCF(model.getContent());
+        RandomCutForestState deserializedState = RCFModelSerDeSer.deserializeRCF(model);
         RandomCutForest forest = rcfMapper.toModel(deserializedState);
         assertNotNull(forest);
         byte[] serializedModel = RCFModelSerDeSer.serializeRCF(deserializedState);
-        assertTrue(Arrays.equals(serializedModel, model.getContent()));
+        assertTrue(Arrays.equals(serializedModel, ModelSerDeSer.decodeBase64(model.getContent())));
     }
 
     @Test
     public void testModelSerDeSerFitRCF() {
         FitRCFParams params = FitRCFParams.builder().timeField(TIME_FIELD).build();
         FixedInTimeRandomCutForest fitRCF = new FixedInTimeRandomCutForest(params);
-        Model model = fitRCF.train(constructTestDataFrame(500, true));
+        MLModel model = fitRCF.train(new DataFrameInputDataset(constructTestDataFrame(500, true)));
 
-        ThresholdedRandomCutForestState deserializedState = RCFModelSerDeSer.deserializeTRCF(model.getContent());
+        ThresholdedRandomCutForestState deserializedState = RCFModelSerDeSer.deserializeTRCF(model);
         ThresholdedRandomCutForest forest = trcfMapper.toModel(deserializedState);
         assertNotNull(forest);
         byte[] serializedModel = RCFModelSerDeSer.serializeTRCF(deserializedState);
-        assertTrue(Arrays.equals(serializedModel, model.getContent()));
+        assertTrue(Arrays.equals(serializedModel, ModelSerDeSer.decodeBase64(model.getContent())));
     }
 
 }

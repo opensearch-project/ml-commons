@@ -165,8 +165,8 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
         }).when(mlTaskDispatcher).dispatchTask(any());
 
         doAnswer(invocation -> {
-            ActionListener<DataFrame> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(dataFrame);
+            ActionListener<MLInputDataset> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new DataFrameInputDataset(dataFrame));
             return null;
         }).when(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
 

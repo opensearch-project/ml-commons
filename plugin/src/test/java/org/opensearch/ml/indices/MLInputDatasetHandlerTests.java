@@ -34,6 +34,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -43,7 +44,7 @@ import org.opensearch.test.OpenSearchTestCase;
 public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
     Client client;
     MLInputDatasetHandler mlInputDatasetHandler;
-    ActionListener<DataFrame> listener;
+    ActionListener<MLInputDataset> listener;
     DataFrame dataFrame;
     SearchResponse searchResponse;
 
@@ -59,9 +60,9 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
         dataFrame = DataFrameBuilder.load(mapList);
         client = mock(Client.class);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
-        listener = spy(new ActionListener<DataFrame>() {
+        listener = spy(new ActionListener<MLInputDataset>() {
             @Override
-            public void onResponse(DataFrame dataFrame) {}
+            public void onResponse(MLInputDataset inputDataset) {}
 
             @Override
             public void onFailure(Exception e) {}
@@ -111,7 +112,7 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
             .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
             .build();
         mlInputDatasetHandler.parseSearchQueryInput(searchQueryInputDataset, listener);
-        ArgumentCaptor<DataFrame> captor = ArgumentCaptor.forClass(DataFrame.class);
+        ArgumentCaptor<MLInputDataset> captor = ArgumentCaptor.forClass(MLInputDataset.class);
         verify(listener, times(1)).onResponse(captor.capture());
         Assert.assertEquals(captor.getAllValues().size(), 1);
     }

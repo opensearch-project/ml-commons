@@ -95,13 +95,6 @@ public class MLModel implements ToXContentObject {
         this.totalChunks = totalChunks;
     }
 
-    public MLModel(FunctionName algorithm, Model model) {
-        this.name = model.getName();
-        this.algorithm = algorithm;
-        this.version = model.getVersion();
-        this.content = Base64.getEncoder().encodeToString(model.getContent());
-    }
-
     public MLModel(StreamInput input) throws IOException{
         name = input.readOptionalString();
         algorithm = input.readEnum(FunctionName.class);
