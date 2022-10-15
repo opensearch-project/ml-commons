@@ -53,7 +53,7 @@ public class MLInputDatasetHandler {
      * @param mlInputDataset MLInputDataset
      * @param listener ActionListener
      */
-    public void parseSearchQueryInput(MLInputDataset mlInputDataset, ActionListener<DataFrame> listener) {
+    public void parseSearchQueryInput(MLInputDataset mlInputDataset, ActionListener<MLInputDataset> listener) {
         if (!mlInputDataset.getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             throw new IllegalArgumentException("Input dataset is not SEARCH_QUERY type.");
         }
@@ -77,7 +77,8 @@ public class MLInputDatasetHandler {
                 input.add(hit.getSourceAsMap());
             }
             DataFrame dataFrame = DataFrameBuilder.load(input);
-            listener.onResponse(dataFrame);
+            MLInputDataset dfInputDataset = new DataFrameInputDataset(dataFrame);
+            listener.onResponse(dfInputDataset);
             return;
         }, e -> {
             log.error("Failed to search" + e);

@@ -5,14 +5,16 @@
 
 package org.opensearch.ml.engine.algorithms.regression;
 
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-import org.opensearch.ml.common.Model;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
@@ -41,6 +43,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.serializeToBase64;
 
 @Function(FunctionName.LINEAR_REGRESSION)
 public class LinearRegression implements Trainable, Predictable {
@@ -71,6 +75,7 @@ public class LinearRegression implements Trainable, Predictable {
     private int loggingInterval;
     private int minibatchSize;
     private long seed;
+    private org.tribuo.Model<Regressor> regressionModel;
 
     public LinearRegression() {}
 
@@ -191,13 +196,23 @@ public class LinearRegression implements Trainable, Predictable {
         seed = Optional.ofNullable(parameters.getSeed()).orElse(DEFAULT_SEED);
     }
 
-    @Override
-    public MLOutput predict(DataFrame dataFrame, Model model) {
-        if (model == null) {
-            throw new IllegalArgumentException("No model found for linear regression prediction.");
-        }
 
-        org.tribuo.Model<Regressor> regressionModel = (org.tribuo.Model<Regressor>) ModelSerDeSer.deserialize(model.getContent());
+    @Override
+    public void initModel(MLModel model, Map<String, Object> params) {
+        this.regressionModel = (org.tribuo.Model<Regressor>) ModelSerDeSer.deserialize(model);
+    }
+
+    @Override
+    public void close() {
+        this.regressionModel = null;
+    }
+
+    @Override
+    public MLOutput predict(MLInputDataset inputDataset) {
+        if (regressionModel == null) {
+            throw new IllegalArgumentException("model not loaded");
+        }
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         MutableDataset<Regressor> predictionDataset = TribuoUtil.generateDataset(dataFrame, new RegressionFactory(),
                 "Linear regression prediction data from opensearch", TribuoOutputType.REGRESSOR);
         List<Prediction<Regressor>> predictions = regressionModel.predict(predictionDataset);
@@ -208,16 +223,29 @@ public class LinearRegression implements Trainable, Predictable {
     }
 
     @Override
-    public Model train(DataFrame dataFrame) {
+    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+        if (model == null) {
+            throw new IllegalArgumentException("No model found for linear regression prediction.");
+        }
+
+        regressionModel = (org.tribuo.Model<Regressor>) ModelSerDeSer.deserialize(model);
+        return predict(inputDataset);
+    }
+
+    @Override
+    public MLModel train(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         MutableDataset<Regressor> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new RegressionFactory(),
                 "Linear regression training data from opensearch", TribuoOutputType.REGRESSOR, parameters.getTarget());
         Integer epochs = Optional.ofNullable(parameters.getEpochs()).orElse(DEFAULT_EPOCHS);
         LinearSGDTrainer linearSGDTrainer = new LinearSGDTrainer(objective, optimiser, epochs, loggingInterval, minibatchSize, seed);
         org.tribuo.Model<Regressor> regressionModel = linearSGDTrainer.train(trainDataset);
-        Model model = new Model();
-        model.setName(FunctionName.LINEAR_REGRESSION.name());
-        model.setVersion(1);
-        model.setContent(ModelSerDeSer.serialize(regressionModel));
+        MLModel model = MLModel.builder()
+                .name(FunctionName.LINEAR_REGRESSION.name())
+                .algorithm(FunctionName.LINEAR_REGRESSION)
+                .version(1)
+                .content(serializeToBase64(regressionModel))
+                .build();
 
         return model;
     }

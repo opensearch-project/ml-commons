@@ -10,12 +10,14 @@ import com.amazon.randomcutforest.state.RandomCutForestMapper;
 import com.amazon.randomcutforest.state.RandomCutForestState;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.Model;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnValue;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataframe.Row;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.output.MLOutput;
@@ -28,6 +30,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.decodeBase64;
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.encodeBase64;
 
 /**
  * Use RCF to detect non-time-series data.
@@ -48,6 +53,8 @@ public class BatchRandomCutForest implements TrainAndPredictable {
 
     private static final RandomCutForestMapper rcfMapper = new RandomCutForestMapper();
 
+    private RandomCutForest forest;
+
     public BatchRandomCutForest(){}
 
     public BatchRandomCutForest(MLAlgoParams parameters) {
@@ -63,31 +70,53 @@ public class BatchRandomCutForest implements TrainAndPredictable {
     }
 
     @Override
-    public MLOutput predict(DataFrame dataFrame, Model model) {
-        if (model == null) {
-            throw new IllegalArgumentException("No model found for batch RCF prediction.");
-        }
-        RandomCutForestState state = RCFModelSerDeSer.deserializeRCF(model.getContent());
-        RandomCutForest forest = rcfMapper.toModel(state);
+    public void initModel(MLModel model, Map<String, Object> params) {
+        RandomCutForestState state = RCFModelSerDeSer.deserializeRCF(model);
+        forest = rcfMapper.toModel(state);
+    }
+
+    @Override
+    public void close() {
+        forest = null;
+    }
+
+    @Override
+    public MLOutput predict(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         List<Map<String, Object>> predictResult = process(dataFrame, forest, 0);
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
     }
 
     @Override
-    public Model train(DataFrame dataFrame) {
+    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+        if (model == null) {
+            throw new IllegalArgumentException("No model found for batch RCF prediction.");
+        }
+        RandomCutForestState state = RCFModelSerDeSer.deserializeRCF(model);
+        forest = rcfMapper.toModel(state);
+        return predict(inputDataset);
+    }
+
+    @Override
+    public MLModel train(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         RandomCutForest forest = createRandomCutForest(dataFrame);
         Integer actualTrainingDataSize = trainingDataSize == null ? dataFrame.size() : trainingDataSize;
         process(dataFrame, forest, actualTrainingDataSize);
-        Model model = new Model();
-        model.setName(FunctionName.BATCH_RCF.name());
-        model.setVersion(1);
+
         RandomCutForestState state = rcfMapper.toState(forest);
-        model.setContent(RCFModelSerDeSer.serializeRCF(state));
+        MLModel model = MLModel.builder()
+                .name(FunctionName.BATCH_RCF.name())
+                .algorithm(FunctionName.BATCH_RCF)
+                .version(1)
+                .content(encodeBase64(RCFModelSerDeSer.serializeRCF(state)))
+                .build();
         return model;
     }
 
     @Override
-    public MLOutput trainAndPredict(DataFrame dataFrame) {
+    public MLOutput trainAndPredict(MLInputDataset inputDataset) {
+        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         RandomCutForest forest = createRandomCutForest(dataFrame);
         Integer actualTrainingDataSize = trainingDataSize == null ? dataFrame.size() : trainingDataSize;
         List<Map<String, Object>> predictResult = process(dataFrame, forest, actualTrainingDataSize);
