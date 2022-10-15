@@ -12,9 +12,12 @@ import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
 import io.protostuff.runtime.RuntimeSchema;
 import lombok.experimental.UtilityClass;
+import org.opensearch.ml.common.MLModel;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.decodeBase64;
 
 @UtilityClass
 public class RCFModelSerDeSer {
@@ -34,8 +37,16 @@ public class RCFModelSerDeSer {
         return serialize(model, trcfSchema);
     }
 
+    public static RandomCutForestState deserializeRCF(MLModel model) {
+        return deserializeRCF(decodeBase64(model.getContent()));
+    }
+
     public static RandomCutForestState deserializeRCF(byte[] bytes) {
         return deserialize(bytes, rcfSchema);
+    }
+
+    public static ThresholdedRandomCutForestState deserializeTRCF(MLModel model) {
+        return deserializeTRCF(decodeBase64(model.getContent()));
     }
 
     public static ThresholdedRandomCutForestState deserializeTRCF(byte[] bytes) {
