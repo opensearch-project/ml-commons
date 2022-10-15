@@ -16,7 +16,7 @@ public class CommonValue {
     public static final String USER = "user";
     public static final String META = "_meta";
     public static final String SCHEMA_VERSION_FIELD = "schema_version";
-    public static final String DELETED = "deleted";
+    public static final String UNLOADED = "unloaded";
     public static final String NOT_FOUND = "not_found";
 
     public static final String BOX_TYPE_KEY = "box_type";
