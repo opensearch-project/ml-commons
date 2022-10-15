@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.action.trained_model.unload;
 
-import static org.opensearch.ml.common.CommonValue.UNLOADED;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
+import static org.opensearch.ml.common.CommonValue.UNLOADED;
 
 import java.io.IOException;
 import java.util.ArrayList;

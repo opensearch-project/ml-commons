@@ -6,9 +6,9 @@
 package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.UNLOADED;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
+import static org.opensearch.ml.common.CommonValue.UNLOADED;
 import static org.opensearch.ml.engine.MLEngine.getLoadModelChunkPath;
 import static org.opensearch.ml.engine.MLEngine.getLoadModelZipPath;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
