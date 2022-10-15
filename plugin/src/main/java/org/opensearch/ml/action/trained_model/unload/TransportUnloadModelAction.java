@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.action.trained_model.unload;
 
-import static org.opensearch.ml.common.CommonValue.DELETED;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
+import static org.opensearch.ml.common.CommonValue.UNLOADED;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -93,7 +93,7 @@ public class TransportUnloadModelAction extends
                 Map<String, String> modelUnloadStatus = r.getModelUnloadStatus();
                 for (Map.Entry<String, String> entry : modelUnloadStatus.entrySet()) {
                     String status = entry.getValue();
-                    if (DELETED.equals(status) || NOT_FOUND.equals(status)) {
+                    if (UNLOADED.equals(status) || NOT_FOUND.equals(status)) {
                         String modelId = entry.getKey();
                         if (!removedNodeMap.containsKey(modelId)) {
                             removedNodeMap.put(modelId, new ArrayList<>());

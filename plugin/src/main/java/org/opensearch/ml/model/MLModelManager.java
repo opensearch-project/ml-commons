@@ -6,9 +6,9 @@
 package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.DELETED;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
+import static org.opensearch.ml.common.CommonValue.UNLOADED;
 import static org.opensearch.ml.engine.MLEngine.getLoadModelChunkPath;
 import static org.opensearch.ml.engine.MLEngine.getLoadModelZipPath;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
@@ -304,7 +304,7 @@ public class MLModelManager {
             log.debug("unload models {}", Arrays.toString(modelIds));
             for (String modelId : modelIds) {
                 if (modelCache.hasModel(modelId)) {
-                    modelUnloadStatus.put(modelId, DELETED);
+                    modelUnloadStatus.put(modelId, UNLOADED);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
                 } else {
                     modelUnloadStatus.put(modelId, NOT_FOUND);
@@ -317,7 +317,7 @@ public class MLModelManager {
         } else {
             log.debug("unload all models {}", Arrays.toString(getLocalLoadedModels()));
             for (String modelId : getLocalLoadedModels()) {
-                modelUnloadStatus.put(modelId, DELETED);
+                modelUnloadStatus.put(modelId, UNLOADED);
                 mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
                 mlStats
                     .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNLOAD, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
