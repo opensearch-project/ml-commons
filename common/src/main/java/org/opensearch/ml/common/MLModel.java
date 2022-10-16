@@ -73,7 +73,7 @@ public class MLModel implements ToXContentObject {
     private Integer chunkNumber; // model chunk doc only
     private Integer totalChunks; // model chunk doc only
 
-    @Builder
+    @Builder(toBuilder = true)
     public MLModel(String name, FunctionName algorithm, Integer version, String content, User user, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Instant createdTime, Instant lastUploadedTime, Instant lastLoadedTime, Instant lastUnloadedTime, String modelId, Integer chunkNumber, Integer totalChunks) {
         this.name = name;
         this.algorithm = algorithm;

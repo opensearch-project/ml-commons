@@ -52,7 +52,7 @@ public class MLInput implements Input {
     public static final String TARGET_RESPONSE_FIELD = "target_response";
     // Filter target response with position in model output
     public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
-    // Input text sentences for text embedding  model
+    // Input text sentences for text embedding model
     public static final String TEXT_DOCS_FIELD = "text_docs";
 
     // Algorithm name
