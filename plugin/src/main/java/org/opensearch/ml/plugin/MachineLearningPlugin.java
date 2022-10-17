@@ -66,6 +66,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
@@ -157,6 +158,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         Settings settings = environment.settings();
+        MLEngine.setDjlCachePath(environment.dataFiles()[0]);
 
         JvmService jvmService = new JvmService(environment.settings());
         MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init();

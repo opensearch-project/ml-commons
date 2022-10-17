@@ -27,7 +27,7 @@ public class TextDocsInputDataSet extends MLInputDataset{
 
     private List<String> docs;
 
-    @Builder
+    @Builder(toBuilder = true)
     public TextDocsInputDataSet(List<String> docs, ModelResultFilter resultFilter) {
         super(MLInputDataType.TEXT_DOCS);
         this.resultFilter = resultFilter;
