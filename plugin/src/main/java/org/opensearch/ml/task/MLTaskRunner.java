@@ -6,7 +6,6 @@
 package org.opensearch.ml.task;
 
 import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,6 +18,7 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -100,8 +100,13 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
                 dispatchTask(request, transportService, listener);
                 return null;
             });
-        } catch (PrivilegedActionException e) {
-            throw new RuntimeException("Can't load class mapping in ML engine", e);
+        } catch (MLLimitExceededException mlLimitExceededException) {
+            log.error("Failed to run task due to open circuit", mlLimitExceededException);
+            throw mlLimitExceededException;
+        } catch (Exception e) {
+            String errorMsg = "Failed to run task ";
+            log.error(errorMsg, e);
+            throw new MLException(errorMsg, e);
         }
     }
 
