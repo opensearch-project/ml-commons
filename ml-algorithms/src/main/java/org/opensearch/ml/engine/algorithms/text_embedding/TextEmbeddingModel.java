@@ -136,6 +136,8 @@ public class TextEmbeddingModel implements Predictable {
                 try {
                     System.setProperty("PYTORCH_PRECXX11", "true");
                     System.setProperty("DJL_CACHE_DIR", DJL_CACHE_PATH.toAbsolutePath().toString());
+                    // DJL will read "/usr/java/packages/lib" if don't set "java.library.path". That will throw
+                    // access denied exception
                     System.setProperty("java.library.path", DJL_CACHE_PATH.toAbsolutePath().toString());
                     Thread.currentThread().setContextClassLoader(ai.djl.Model.class.getClassLoader());
                     Path modelPath = getModelCachePath(modelId, modelName, version);
@@ -157,11 +159,11 @@ public class TextEmbeddingModel implements Predictable {
                         }
                     }
                     Map<String, Object> arguments = new HashMap<>();
-                    arguments.put("engine", engine);
                     Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
                             .setTypes(Input.class, Output.class)
                             .optApplication(Application.UNDEFINED)
                             .optArguments(arguments)
+                            .optEngine(engine)
                             .optModelPath(modelPath);
                     TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
                     TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();

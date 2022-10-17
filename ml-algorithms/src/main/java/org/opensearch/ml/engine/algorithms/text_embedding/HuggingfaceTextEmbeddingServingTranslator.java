@@ -16,6 +16,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
@@ -42,7 +43,7 @@ public class HuggingfaceTextEmbeddingServingTranslator implements Translator<Inp
      * {@inheritDoc}
      */
     @Override
-    public NDList processInput(TranslatorContext ctx, Input input) throws Exception{
+    public NDList processInput(TranslatorContext ctx, Input input) throws Exception {
         String text = input.getData().getAsString();
         return translator.processInput(ctx, text);
     }
@@ -53,13 +54,13 @@ public class HuggingfaceTextEmbeddingServingTranslator implements Translator<Inp
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) throws Exception {
         float[] ret = translator.processOutput(ctx, list);
-        List<ModelTensor> outputs = new ArrayList<>();
         Number[] data = new Float[ret.length];
-        for (int i=0;i<ret.length; i++) {
+        for (int i = 0; i < ret.length; i++) {
             data[i] = ret[i];
         }
         long[] shape = new long[]{1, ret.length};
-        outputs.add(new ModelTensor(SENTENCE_EMBEDDING, data, shape, MLResultDataType.FLOAT32, null));
+        ModelTensor tensor = new ModelTensor(SENTENCE_EMBEDDING, data, shape, MLResultDataType.FLOAT32, null);
+        List<ModelTensor> outputs = Collections.singletonList(tensor);
 
         Output output = new Output();
         ModelTensors modelTensorOutput = new ModelTensors(outputs);
