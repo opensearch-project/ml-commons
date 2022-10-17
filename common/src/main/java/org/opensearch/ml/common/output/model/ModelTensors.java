@@ -7,13 +7,17 @@ package org.opensearch.ml.common.output.model;
 
 import lombok.Builder;
 import lombok.Getter;
+import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.ml.common.exception.MLException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -96,6 +100,28 @@ public class ModelTensors implements Writeable, ToXContentObject {
         }
         if (!returnNUmber) {
             output.setData(null);
+        }
+    }
+
+    public byte[] toBytes() {
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
+            this.writeTo(bytesStreamOutput);
+            bytesStreamOutput.flush();
+            byte[] bytes = bytesStreamOutput.bytes().toBytesRef().bytes;
+            return bytes;
+        } catch (Exception e) {
+            throw new MLException("Failed to parse result", e);
+        }
+    }
+
+    public static ModelTensors fromBytes(byte[] bytes) {
+        ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+        try (StreamInput streamInput = BytesReference.fromByteBuffer(byteBuffer).streamInput()) {
+            ModelTensors tensorOutput = new ModelTensors(streamInput);
+            return tensorOutput;
+        } catch (Exception e) {
+            String errorMsg = "Failed to parse output";
+            throw new MLException(errorMsg, e);
         }
     }
 }

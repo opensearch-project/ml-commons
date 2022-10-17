@@ -15,12 +15,63 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
  * This is the interface to all ml algorithms.
  */
 public class MLEngine {
+
+    public static Path DJL_CACHE_PATH;
+    public static Path DJL_MODELS_CACHE_PATH;
+    public static void setDjlCachePath(Path opensearchDataFolder) {
+        DJL_CACHE_PATH = opensearchDataFolder.resolve("djl");
+        DJL_MODELS_CACHE_PATH = DJL_CACHE_PATH.resolve("models_cache");
+    }
+
+    public static Path getUploadModelPath(String modelId, String modelName, Integer version) {
+        return getUploadModelPath(modelId).resolve(version + "").resolve(modelName);
+    }
+
+    public static Path getUploadModelPath(String modelId) {
+        return getUploadModelRootPath().resolve(modelId);
+    }
+
+    public static Path getUploadModelRootPath() {
+        return DJL_MODELS_CACHE_PATH.resolve("upload");
+    }
+
+    public static Path getLoadModelPath(String modelId) {
+        return getLoadModelRootPath().resolve(modelId);
+    }
+
+    public static String getLoadModelZipPath(String modelId, String modelName) {
+        return DJL_MODELS_CACHE_PATH.resolve("load").resolve(modelId).resolve(modelName) + ".zip";
+    }
+
+    public static Path getLoadModelRootPath() {
+        return DJL_MODELS_CACHE_PATH.resolve("load");
+    }
+
+    public static Path getLoadModelChunkPath(String modelId, Integer chunkNumber) {
+        return DJL_MODELS_CACHE_PATH.resolve("load")
+                .resolve(modelId)
+                .resolve("chunks")
+                .resolve(chunkNumber + "");
+    }
+
+    public static Path getModelCachePath(String modelId, String modelName, Integer version) {
+        return getModelCachePath(modelId).resolve(version + "").resolve(modelName);
+    }
+
+    public static Path getModelCachePath(String modelId) {
+        return getModelCacheRootPath().resolve(modelId);
+    }
+
+    public static Path getModelCacheRootPath() {
+        return DJL_MODELS_CACHE_PATH.resolve("models");
+    }
 
     public static MLModel train(Input input) {
         validateMLInput(input);
