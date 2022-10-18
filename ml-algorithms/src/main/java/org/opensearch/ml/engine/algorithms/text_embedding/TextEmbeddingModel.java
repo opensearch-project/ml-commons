@@ -45,9 +45,9 @@ import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkT
 import static org.opensearch.ml.engine.MLEngine.DJL_CACHE_PATH;
 import static org.opensearch.ml.engine.MLEngine.getLoadModelPath;
 import static org.opensearch.ml.engine.MLEngine.getModelCachePath;
-import static org.opensearch.ml.engine.ModelHelper.ONNX;
+import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
 import static org.opensearch.ml.engine.ModelHelper.ONNX_ENGINE;
-import static org.opensearch.ml.engine.ModelHelper.PT;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
 import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
@@ -149,7 +149,7 @@ public class TextEmbeddingModel implements Predictable {
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();
-                        if (name.endsWith(PT) || name.endsWith(ONNX)) {
+                        if (name.endsWith(PYTORCH_FILE_EXTENSION) || name.endsWith(ONNX_FILE_EXTENSION)) {
                             if (findModelFile) {
                                 throw new IllegalArgumentException("found multiple models");
                             }
@@ -183,7 +183,7 @@ public class TextEmbeddingModel implements Predictable {
                     this.model = model;
                     return null;
                 } catch (Exception e) {
-                    String errorMessage = "Failed to load model " + modelName + ", version: " + version;
+                    String errorMessage = "Failed to load model " + modelId;
                     log.error(errorMessage, e);
                     close();
                     throw new MLException(errorMessage, e);
