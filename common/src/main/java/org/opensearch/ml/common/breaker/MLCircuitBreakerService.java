@@ -62,6 +62,8 @@ public class MLCircuitBreakerService {
         // Register memory circuit breaker
         registerBreaker(BreakerName.MEMORY, new MemoryCircuitBreaker(this.jvmService));
         log.info("Registered ML memory breaker.");
+        registerBreaker(BreakerName.DISK, new DiskCircuitBreaker());
+        log.info("Registered ML disk breaker.");
 
         return this;
     }

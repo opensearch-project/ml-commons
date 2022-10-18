@@ -45,7 +45,9 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLEngine;
@@ -74,6 +76,7 @@ public class MLModelManager {
     private volatile Integer maxModelPerNode;
 
     private final MLStats mlStats;
+    protected final MLCircuitBreakerService mlCircuitBreakerService;
 
     public MLModelManager(
         ClusterService clusterService,
@@ -82,7 +85,8 @@ public class MLModelManager {
         NamedXContentRegistry xContentRegistry,
         ModelHelper modelHelper,
         Settings settings,
-        MLStats mlStats
+        MLStats mlStats,
+        MLCircuitBreakerService mlCircuitBreakerService
     ) {
         this.client = client;
         this.threadPool = threadPool;
@@ -91,6 +95,7 @@ public class MLModelManager {
         this.modelCache = new MLModelCache(clusterService, settings);
         this.mlStats = mlStats;
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
+        this.mlCircuitBreakerService = mlCircuitBreakerService;
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
     }
 
@@ -116,6 +121,11 @@ public class MLModelManager {
                             modelCache.setModelState(modelId, MLModelState.LOADED);
                             listener.onResponse("successful");
                             return;
+                        }
+                        // check circuit breaker before loading custom model chunks
+                        if (mlCircuitBreakerService.isOpen()) {
+                            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+                            throw new MLLimitExceededException("Circuit breaker is open, please check your memory and disk usage!");
                         }
                         retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// load model trunks
                             String hash = modelHelper.calculateFileHash(modelZipFile);

@@ -92,7 +92,6 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
         // //TODO: track executing task; track upload failures
         // mlStats.createCounterStatIfAbsent(FunctionName.TEXT_EMBEDDING, ActionName.UPLOAD,
         // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
-
         MLTask mlTask = MLTask
             .builder()
             .async(true)
