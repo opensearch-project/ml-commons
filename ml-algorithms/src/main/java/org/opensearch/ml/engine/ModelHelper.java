@@ -16,8 +16,8 @@ import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
  */
 @Log4j2
 public class ModelHelper {
-    public static final String PT = ".pt";
-    public static final String ONNX = ".onnx";
+    public static final String PYTORCH_FILE_EXTENSION = ".pt";
+    public static final String ONNX_FILE_EXTENSION = ".onnx";
     public static final String PYTORCH_ENGINE = "PyTorch";
     public static final String ONNX_ENGINE = "OnnxRuntime";
 
