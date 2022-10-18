@@ -31,7 +31,7 @@ public class LoadModelNodeResponse extends BaseNodeResponse implements ToXConten
      * Constructor
      *
      * @param in StreamInput
-     * @throws IOException throws an IO exception if the StreamInput cannot be reML from
+     * @throws IOException throws an IO exception if the StreamInput cannot be read from
      */
     public LoadModelNodeResponse(StreamInput in) throws IOException {
         super(in);
@@ -42,11 +42,11 @@ public class LoadModelNodeResponse extends BaseNodeResponse implements ToXConten
     }
 
     /**
-     * Creates a new UnloadNodeResponse object and reMLs in the stats from an input stream
+     * Creates a new UnloadNodeResponse object and read the stats from an input stream
      *
-     * @param in StreamInput to reML from
-     * @return UnloadModelNodeResponse object corresponding to the input stream
-     * @throws IOException throws an IO exception if the StreamInput cannot be reML from
+     * @param in StreamInput to read from
+     * @return LoadModelNodeResponse object corresponding to the input stream
+     * @throws IOException throws an IO exception if the StreamInput cannot be read from
      */
     public static LoadModelNodeResponse readStats(StreamInput in) throws IOException {
         return new LoadModelNodeResponse(in);

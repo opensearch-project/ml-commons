@@ -5,8 +5,7 @@
 
 package org.opensearch.ml.common;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
@@ -25,10 +24,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-
+@Log4j2
 public class MLCommonsClassLoader {
 
-    private static final Logger logger = LogManager.getLogger(MLCommonsClassLoader.class);
     private static Map<Enum<?>, Class<?>> parameterClassMap = new HashMap<>();
     private static Map<Enum<?>, Class<?>> executeInputClassMap = new HashMap<>();
     private static Map<Enum<?>, Class<?>> executeOutputClassMap = new HashMap<>();
@@ -191,7 +189,7 @@ public class MLCommonsClassLoader {
             if (cause instanceof MLException) {
                 throw (MLException)cause;
             } else {
-                logger.error("Failed to init instance for type " + type, e);
+                log.error("Failed to init instance for type " + type, e);
                 return null;
             }
         }

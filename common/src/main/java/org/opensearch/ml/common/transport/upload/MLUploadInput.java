@@ -31,7 +31,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 @Data
 public class MLUploadInput implements ToXContentObject, Writeable {
 
-    public static final String FUNCTION_NAME_FIELD = "function";
+    public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String NAME_FIELD = "name";
     public static final String VERSION_FIELD = "version";
     public static final String URL_FIELD = "url";
