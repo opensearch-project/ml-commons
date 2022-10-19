@@ -29,7 +29,8 @@ import static org.opensearch.ml.common.CommonValue.USER;
 public class MLModel implements ToXContentObject {
     public static final String ALGORITHM_FIELD = "algorithm";
     public static final String MODEL_NAME_FIELD = "name";
-    public static final String MODEL_VERSION_FIELD = "version";
+    public static final String OLD_MODEL_VERSION_FIELD = "version";
+    public static final String MODEL_VERSION_FIELD = "model_version";
     public static final String OLD_MODEL_CONTENT_FIELD = "content";
     public static final String MODEL_CONTENT_FIELD = "model_content";
 
@@ -51,7 +52,7 @@ public class MLModel implements ToXContentObject {
 
     private String name;
     private FunctionName algorithm;
-    private Integer version;
+    private String version;
     private String content;
     private User user;
 
@@ -73,7 +74,7 @@ public class MLModel implements ToXContentObject {
     private Integer totalChunks; // model chunk doc only
 
     @Builder(toBuilder = true)
-    public MLModel(String name, FunctionName algorithm, Integer version, String content, User user, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Instant createdTime, Instant lastUploadedTime, Instant lastLoadedTime, Instant lastUnloadedTime, String modelId, Integer chunkNumber, Integer totalChunks) {
+    public MLModel(String name, FunctionName algorithm, String version, String content, User user, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Instant createdTime, Instant lastUploadedTime, Instant lastLoadedTime, Instant lastUnloadedTime, String modelId, Integer chunkNumber, Integer totalChunks) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -97,7 +98,7 @@ public class MLModel implements ToXContentObject {
     public MLModel(StreamInput input) throws IOException{
         name = input.readOptionalString();
         algorithm = input.readEnum(FunctionName.class);
-        version = input.readInt();
+        version = input.readString();
         content = input.readOptionalString();
         if (input.readBoolean()) {
             this.user = new User(input);
@@ -130,7 +131,7 @@ public class MLModel implements ToXContentObject {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(name);
         out.writeEnum(algorithm);
-        out.writeInt(version);
+        out.writeString(version);
         out.writeOptionalString(content);
         if (user != null) {
             out.writeBoolean(true); // user exists
@@ -232,7 +233,8 @@ public class MLModel implements ToXContentObject {
     public static MLModel parse(XContentParser parser) throws IOException {
         String name = null;
         FunctionName algorithm = null;
-        Integer version = null;
+        String version = null;
+        Integer oldVersion = null;
         String content = null;
         String oldContent = null;
         User user = null;
@@ -267,7 +269,10 @@ public class MLModel implements ToXContentObject {
                     oldContent = parser.text();
                     break;
                 case MODEL_VERSION_FIELD:
-                    version = parser.intValue(false);
+                    version = parser.text();
+                    break;
+                case OLD_MODEL_VERSION_FIELD:
+                    oldVersion = parser.intValue(false);
                     break;
                 case CHUNK_NUMBER_FIELD:
                     chunkNumber = parser.intValue(false);
@@ -322,7 +327,7 @@ public class MLModel implements ToXContentObject {
         return MLModel.builder()
                 .name(name)
                 .algorithm(algorithm)
-                .version(version)
+                .version(version == null ? oldVersion + "" : version)
                 .content(content == null ? oldContent : content)
                 .user(user)
                 .description(description)

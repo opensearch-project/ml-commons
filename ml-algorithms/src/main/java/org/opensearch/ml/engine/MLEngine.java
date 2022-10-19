@@ -30,8 +30,8 @@ public class MLEngine {
         DJL_MODELS_CACHE_PATH = DJL_CACHE_PATH.resolve("models_cache");
     }
 
-    public static Path getUploadModelPath(String modelId, String modelName, Integer version) {
-        return getUploadModelPath(modelId).resolve(version + "").resolve(modelName);
+    public static Path getUploadModelPath(String modelId, String modelName, String version) {
+        return getUploadModelPath(modelId).resolve(version).resolve(modelName);
     }
 
     public static Path getUploadModelPath(String modelId) {
@@ -61,8 +61,8 @@ public class MLEngine {
                 .resolve(chunkNumber + "");
     }
 
-    public static Path getModelCachePath(String modelId, String modelName, Integer version) {
-        return getModelCachePath(modelId).resolve(version + "").resolve(modelName);
+    public static Path getModelCachePath(String modelId, String modelName, String version) {
+        return getModelCachePath(modelId).resolve(version).resolve(modelName);
     }
 
     public static Path getModelCachePath(String modelId) {

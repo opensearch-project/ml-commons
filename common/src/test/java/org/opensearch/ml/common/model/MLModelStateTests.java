@@ -30,8 +30,4 @@ public class MLModelStateTests {
         MLModelState.from("test_wrong_value");
     }
 
-    @Test
-    public void testA() {
-        System.out.println(CommonValue.ML_MODEL_INDEX_MAPPING);
-    }
 }

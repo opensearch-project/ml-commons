@@ -47,7 +47,7 @@ import static org.opensearch.ml.engine.utils.ModelSerDeSer.serializeToBase64;
 
 @Function(FunctionName.LOGISTIC_REGRESSION)
 public class LogisticRegression implements Trainable, Predictable {
-
+    public static final String VERSION = "1.0.0";
     private static final LogisticRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
     private static final LogisticRegressionParams.OptimizerType DEFAULT_OPTIMIZER_TYPE = LogisticRegressionParams.OptimizerType.ADA_GRAD;
     private static final LogisticRegressionParams.MomentumType DEFAULT_MOMENTUM_TYPE = LogisticRegressionParams.MomentumType.STANDARD;
@@ -183,7 +183,7 @@ public class LogisticRegression implements Trainable, Predictable {
         MLModel model = MLModel.builder()
                 .name(FunctionName.LOGISTIC_REGRESSION.name())
                 .algorithm(FunctionName.LOGISTIC_REGRESSION)
-                .version(1)
+                .version(VERSION)
                 .content(serializeToBase64(classificationModel))
                 .build();
         return model;

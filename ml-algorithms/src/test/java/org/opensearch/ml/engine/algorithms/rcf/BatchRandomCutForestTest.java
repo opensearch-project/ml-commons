@@ -77,7 +77,7 @@ public class BatchRandomCutForestTest {
     public void train() {
         MLModel model = forest.train(trainDataFrameInputDataSet);
         Assert.assertEquals(FunctionName.BATCH_RCF.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion().intValue());
+        Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 

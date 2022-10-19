@@ -90,7 +90,7 @@ public class MLEngineTest {
     public void trainKMeans() {
         MLModel model = trainKMeansModel();
         Assert.assertEquals(FunctionName.KMEANS.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion().intValue());
+        Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 
@@ -98,7 +98,7 @@ public class MLEngineTest {
     public void trainLinearRegression() {
         MLModel model = trainLinearRegressionModel();
         Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion().intValue());
+        Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 

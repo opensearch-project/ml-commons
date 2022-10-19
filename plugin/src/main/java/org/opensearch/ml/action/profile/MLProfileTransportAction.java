@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -21,6 +22,8 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.env.Environment;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.monitor.jvm.JvmService;
@@ -32,16 +35,17 @@ public class MLProfileTransportAction extends
     TransportNodesAction<MLProfileRequest, MLProfileResponse, MLProfileNodeRequest, MLProfileNodeResponse> {
     private MLTaskManager mlTaskManager;
     private final JvmService jvmService;
+    private final MLModelManager mlModelManager;
 
     /**
      * Constructor
-     *
      * @param threadPool ThreadPool to use
      * @param clusterService ClusterService
      * @param transportService TransportService
      * @param actionFilters Action Filters
      * @param mlTaskManager mlTaskCache object
      * @param environment OpenSearch Environment
+     * @param mlModelManager ML model manager
      */
     @Inject
     public MLProfileTransportAction(
@@ -50,7 +54,8 @@ public class MLProfileTransportAction extends
         TransportService transportService,
         ActionFilters actionFilters,
         MLTaskManager mlTaskManager,
-        Environment environment
+        Environment environment,
+        MLModelManager mlModelManager
     ) {
         super(
             MLProfileAction.NAME,
@@ -65,6 +70,7 @@ public class MLProfileTransportAction extends
         );
         this.mlTaskManager = mlTaskManager;
         this.jvmService = new JvmService(environment.settings());
+        this.mlModelManager = mlModelManager;
     }
 
     @Override
@@ -92,22 +98,29 @@ public class MLProfileTransportAction extends
     }
 
     private MLProfileNodeResponse createMLProfileNodeResponse(MLProfileRequest mlProfileRequest) {
-        log.info("Calculating ml profile response on node id:{}", clusterService.localNode().getId());
+        log.debug("Calculating ml profile response on node id:{}", clusterService.localNode().getId());
         Map<String, MLTask> mlLocalTasks = new HashMap<>();
+        Map<String, MLModelProfile> mlLocalModels = new HashMap<>();
         MLProfileInput mlProfileInput = mlProfileRequest.getMlProfileInput();
+        Set<String> targetModelIds = mlProfileInput.getModelIds();
         Arrays.stream(mlTaskManager.getAllTaskIds()).forEach(taskId -> {
-            MLTask mlTask = mlTaskManager.get(taskId);
-            if (mlProfileInput.isReturnAllMLTasks() || (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(taskId))) {
-                log.info("Runtime task profile is found for model {}", mlTask.getModelId());
+            MLTask mlTask = mlTaskManager.getMLTask(taskId);
+            if (mlProfileInput.isReturnAllTasks() || (!mlProfileInput.emptyTasks() && mlProfileInput.getTaskIds().contains(taskId))) {
+                log.debug("Runtime task profile is found for model {}", mlTask.getModelId());
                 mlLocalTasks.put(taskId, mlTask);
-                return;
             }
-            if (!mlProfileInput.emptyModels() && mlProfileInput.getModelIds().contains(mlTask.getModelId())) {
-                log.info("Runtime task profile is found for model {}", mlTask.getModelId());
+            if (mlProfileInput.isReturnAllTasks() || (!mlProfileInput.emptyModels() && targetModelIds.contains(mlTask.getModelId()))) {
+                log.debug("Runtime task profile is found for model {}", mlTask.getModelId());
                 mlLocalTasks.put(taskId, mlTask);
             }
         });
+        Arrays.stream(mlModelManager.getAllModelIds()).forEach(modelId -> {
+            if (mlProfileInput.isReturnAllModels() || (!mlProfileInput.emptyModels() && targetModelIds.contains(modelId))) {
+                log.debug("Runtime model profile is found for model {}", modelId);
+                mlLocalModels.put(modelId, mlModelManager.getModelProfile(modelId));
+            }
+        });
 
-        return new MLProfileNodeResponse(clusterService.localNode(), mlLocalTasks);
+        return new MLProfileNodeResponse(clusterService.localNode(), mlLocalTasks, mlLocalModels);
     }
 }

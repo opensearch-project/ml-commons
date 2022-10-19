@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.task;
 
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,6 +15,7 @@ import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
@@ -36,6 +40,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     public static final int TIMEOUT_IN_MILLIS = 2000;
     protected final MLTaskManager mlTaskManager;
     protected final MLStats mlStats;
+    protected final DiscoveryNodeHelper nodeHelper;
     protected final MLTaskDispatcher mlTaskDispatcher;
     protected final MLCircuitBreakerService mlCircuitBreakerService;
     private final ClusterService clusterService;
@@ -43,12 +48,14 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     public MLTaskRunner(
         MLTaskManager mlTaskManager,
         MLStats mlStats,
+        DiscoveryNodeHelper nodeHelper,
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService,
         ClusterService clusterService
     ) {
         this.mlTaskManager = mlTaskManager;
         this.mlStats = mlStats;
+        this.nodeHelper = nodeHelper;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlCircuitBreakerService = mlCircuitBreakerService;
         this.clusterService = clusterService;
@@ -79,16 +86,23 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     }
 
     public void run(Request request, TransportService transportService, ActionListener<Response> listener) {
-        if (mlCircuitBreakerService.isOpen()) {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-            throw new MLLimitExceededException("Circuit breaker is open");
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                if (mlCircuitBreakerService.isOpen()) {
+                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+                    throw new MLLimitExceededException("Circuit breaker is open");
+                }
+                if (!request.isDispatchTask()) {
+                    log.info("Run ML request {} locally", request.getRequestID());
+                    executeTask(request, listener);
+                    return null;
+                }
+                dispatchTask(request, transportService, listener);
+                return null;
+            });
+        } catch (PrivilegedActionException e) {
+            throw new RuntimeException("Can't load class mapping in ML engine", e);
         }
-        if (!request.isDispatchTask()) {
-            log.info("Run ML request {} locally", request.getRequestID());
-            executeTask(request, listener);
-            return;
-        }
-        dispatchTask(request, transportService, listener);
     }
 
     protected ActionListener<MLTaskResponse> wrappedCleanupListener(ActionListener<MLTaskResponse> listener, String taskId) {
@@ -99,15 +113,16 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
         return internalListener;
     }
 
-    protected void dispatchTask(Request request, TransportService transportService, ActionListener<Response> listener) {
-        mlTaskDispatcher.dispatchTask(ActionListener.wrap(node -> {
-            if (clusterService.localNode().getId().equals(node.getId())) {
+    public void dispatchTask(Request request, TransportService transportService, ActionListener<Response> listener) {
+        mlTaskDispatcher.dispatch(ActionListener.wrap(node -> {
+            String nodeId = node.getId();
+            if (clusterService.localNode().getId().equals(nodeId)) {
                 // Execute ML task locally
-                log.info("Execute ML request {} locally on node {}", request.getRequestID(), node.getId());
+                log.info("Execute ML request {} locally on node {}", request.getRequestID(), nodeId);
                 executeTask(request, listener);
             } else {
                 // Execute ML task remotely
-                log.info("Execute ML request {} remotely on node {}", request.getRequestID(), node.getId());
+                log.info("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
                 request.setDispatchTask(false);
                 transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
             }

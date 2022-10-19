@@ -13,6 +13,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.input.Input;
@@ -38,6 +39,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     private final ClusterService clusterService;
     private final Client client;
     private final MLInputDatasetHandler mlInputDatasetHandler;
+    protected final DiscoveryNodeHelper nodeHelper;
 
     public MLExecuteTaskRunner(
         ThreadPool threadPool,
@@ -47,13 +49,15 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         MLStats mlStats,
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
-        MLCircuitBreakerService mlCircuitBreakerService
+        MLCircuitBreakerService mlCircuitBreakerService,
+        DiscoveryNodeHelper nodeHelper
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
+        super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
+        this.nodeHelper = nodeHelper;
     }
 
     @Override

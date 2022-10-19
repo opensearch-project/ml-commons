@@ -55,6 +55,9 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -80,6 +83,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     private NodeClient client;
     private DiscoveryNode node;
     private MLTask mlTask;
+    private MLModelProfile mlModelProfile;
     private ClusterName clusterName;
     ClusterState testState;
 
@@ -118,6 +122,13 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
             .user(new User())
             .async(false)
             .build();
+        mlModelProfile = MLModelProfile
+            .builder()
+            .predictor("test_predictor")
+            .workerNodes(new String[] { "node1", "node2" })
+            .modelState(MLModelState.LOADED)
+            .predictStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
+            .build();
 
         clusterName = new ClusterName("test cluster");
         testState = setupTestClusterState();
@@ -127,7 +138,9 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
             ActionListener<MLProfileResponse> actionListener = invocation.getArgument(2);
             Map<String, MLTask> nodeTasks = new HashMap<>();
             nodeTasks.put("test_id", mlTask);
-            MLProfileNodeResponse nodeResponse = new MLProfileNodeResponse(node, nodeTasks);
+            Map<String, MLModelProfile> nodeModels = new HashMap<>();
+            nodeModels.put("test_id", mlModelProfile);
+            MLProfileNodeResponse nodeResponse = new MLProfileNodeResponse(node, nodeTasks, nodeModels);
             MLProfileResponse profileResponse = new MLProfileResponse(clusterName, Arrays.asList(nodeResponse), new ArrayList<>());
             actionListener.onResponse(profileResponse);
             return null;
@@ -157,12 +170,16 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route modelRoute = routes.get(0);
-        RestHandler.Route taskRoute = routes.get(1);
-        RestHandler.Route route = routes.get(2);
+        RestHandler.Route modelsRoute = routes.get(1);
+        RestHandler.Route taskRoute = routes.get(2);
+        RestHandler.Route tasksRoute = routes.get(3);
+        RestHandler.Route route = routes.get(4);
         assertEquals(RestRequest.Method.GET, modelRoute.getMethod());
-        assertEquals("/_plugins/_ml/profile/model/{model_id}", modelRoute.getPath());
-        assertEquals("/_plugins/_ml/profile/task/{task_id}", taskRoute.getPath());
-        assertEquals("/_plugins/_ml/profile/", route.getPath());
+        assertEquals("/_plugins/_ml/profile/models/{model_id}", modelRoute.getPath());
+        assertEquals("/_plugins/_ml/profile/models", modelsRoute.getPath());
+        assertEquals("/_plugins/_ml/profile/tasks/{task_id}", taskRoute.getPath());
+        assertEquals("/_plugins/_ml/profile/tasks", tasksRoute.getPath());
+        assertEquals("/_plugins/_ml/profile", route.getPath());
     }
 
     public void test_PrepareRequest_TaskRequest() throws Exception {
@@ -209,7 +226,8 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLProfileResponse> actionListener = invocation.getArgument(2);
             Map<String, MLTask> nodeTasks = new HashMap<>();
-            MLProfileNodeResponse nodeResponse = new MLProfileNodeResponse(node, nodeTasks);
+            Map<String, MLModelProfile> nodeModels = new HashMap<>();
+            MLProfileNodeResponse nodeResponse = new MLProfileNodeResponse(node, nodeTasks, nodeModels);
             MLProfileResponse profileResponse = new MLProfileResponse(clusterName, Arrays.asList(nodeResponse), new ArrayList<>());
             actionListener.onResponse(profileResponse);
             return null;

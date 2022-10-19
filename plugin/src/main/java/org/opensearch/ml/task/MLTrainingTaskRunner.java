@@ -25,6 +25,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -57,6 +58,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     private final Client client;
     private final MLIndicesHandler mlIndicesHandler;
     private final MLInputDatasetHandler mlInputDatasetHandler;
+    protected final DiscoveryNodeHelper nodeHelper;
 
     public MLTrainingTaskRunner(
         ThreadPool threadPool,
@@ -67,14 +69,16 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         MLIndicesHandler mlIndicesHandler,
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
-        MLCircuitBreakerService mlCircuitBreakerService
+        MLCircuitBreakerService mlCircuitBreakerService,
+        DiscoveryNodeHelper nodeHelper
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
+        super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
         this.mlIndicesHandler = mlIndicesHandler;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
+        this.nodeHelper = nodeHelper;
     }
 
     @Override
@@ -142,6 +146,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         mlStats
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
+        mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
         try {
             if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {

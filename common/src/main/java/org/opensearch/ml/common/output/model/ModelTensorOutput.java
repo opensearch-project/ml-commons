@@ -36,7 +36,7 @@ public class ModelTensorOutput extends MLOutput {
 
 
     public ModelTensorOutput(StreamInput in) throws IOException {
-        super(in.readEnum(MLOutputType.class));
+        super(OUTPUT_TYPE);
         if (in.readBoolean()) {
             mlModelOutputs = new ArrayList<>();
             int size = in.readInt();

@@ -35,6 +35,7 @@ import java.util.Optional;
 
 @Function(FunctionName.KMEANS)
 public class KMeans implements TrainAndPredictable {
+    public static final String VERSION = "1.0.0";
     private static final KMeansParams.DistanceType DEFAULT_DISTANCE_TYPE = KMeansParams.DistanceType.EUCLIDEAN;
     private static int DEFAULT_CENTROIDS = 2;
     private static int DEFAULT_ITERATIONS = 10;
@@ -129,7 +130,7 @@ public class KMeans implements TrainAndPredictable {
         MLModel model = MLModel.builder()
                 .name(FunctionName.KMEANS.name())
                 .algorithm(FunctionName.KMEANS)
-                .version(1)
+                .version(VERSION)
                 .content(ModelSerDeSer.serializeToBase64(kMeansModel))
                 .build();
         return model;
