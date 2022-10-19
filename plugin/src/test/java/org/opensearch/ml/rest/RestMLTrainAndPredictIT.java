@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.apache.http.HttpEntity;
+import org.apache.hc.core5.http.HttpEntity;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
