@@ -51,6 +51,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
@@ -276,6 +277,7 @@ configurations.all {
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
+    resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
 }
 
 apply plugin: 'nebula.ospackage'
