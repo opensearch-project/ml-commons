@@ -25,8 +25,14 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.client.MLConstants.ACTION;
+import static org.opensearch.ml.client.MLConstants.ALGORITHM;
+import static org.opensearch.ml.client.MLConstants.TRAIN;
 
 public class MachineLearningClientTest {
 
@@ -89,6 +95,11 @@ public class MachineLearningClientTest {
             @Override
             public void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener) {
                 listener.onResponse(MLTrainingOutput.builder().modelId(modekId).build());
+            }
+
+            @Override
+            public void execute(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener) {
+                listener.onResponse(output);
             }
 
             @Override
@@ -195,6 +206,19 @@ public class MachineLearningClientTest {
                 .inputDataset(new DataFrameInputDataset(input))
                 .build();
         assertEquals(output, machineLearningClient.trainAndPredict(mlInput).actionGet());
+    }
+
+    @Test
+    public void execute() {
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.SAMPLE_ALGO)
+                .parameters(mlParameters)
+                .inputDataset(new DataFrameInputDataset(input))
+                .build();
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAIN);
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        assertEquals(output, machineLearningClient.execute(mlInput, args).actionGet());
     }
 
     @Test

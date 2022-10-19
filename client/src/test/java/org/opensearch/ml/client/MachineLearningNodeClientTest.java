@@ -64,6 +64,7 @@ import org.opensearch.search.suggest.Suggest;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -73,6 +74,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.client.MLConstants.ACTION;
+import static org.opensearch.ml.client.MLConstants.AD_TIME_FIELD;
+import static org.opensearch.ml.client.MLConstants.ALGORITHM;
+import static org.opensearch.ml.client.MLConstants.MODELID;
+import static org.opensearch.ml.client.MLConstants.PREDICT;
+import static org.opensearch.ml.client.MLConstants.TRAIN;
+import static org.opensearch.ml.client.MLConstants.TRAINANDPREDICT;
 
 public class MachineLearningNodeClientTest {
 
@@ -234,6 +242,174 @@ public class MachineLearningNodeClientTest {
                 .inputDataset(input)
                 .build();
         machineLearningNodeClient.trainAndPredict(mlInput, trainingActionListener);
+
+        verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
+        verify(trainingActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(MLTaskState.COMPLETED.name(), ((MLPredictionOutput)argumentCaptor.getValue()).getStatus());
+        assertEquals(output, ((MLPredictionOutput)argumentCaptor.getValue()).getPredictionResult());
+    }
+
+    @Test
+    public void execute_predict() {
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, PREDICT);
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(MODELID, "123");
+        execute_predict(args);
+    }
+
+    @Test
+    public void execute_predict_null_model_id() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("The model ID is required for prediction.");
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, PREDICT);
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        execute_predict(args);
+    }
+
+    private void execute_predict(Map<String, Object> args) {
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
+                    .status("Success")
+                    .predictionResult(output)
+                    .taskId("taskId")
+                    .build();
+            actionListener.onResponse(MLTaskResponse.builder()
+                    .output(predictionOutput)
+                    .build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.SAMPLE_ALGO)
+                .inputDataset(input)
+                .build();
+        machineLearningNodeClient.execute(mlInput, args, dataFrameActionListener);
+
+        verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class), any());
+        verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
+        assertEquals(output, ((MLPredictionOutput)dataFrameArgumentCaptor.getValue()).getPredictionResult());
+    }
+
+    @Test
+    public void execute_train() {
+        String modelId = "test_model_id";
+        String status = "InProgress";
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            MLTrainingOutput output = MLTrainingOutput.builder()
+                    .status(status)
+                    .modelId(modelId)
+                    .build();
+            actionListener.onResponse(MLTaskResponse.builder()
+                    .output(output)
+                    .build());
+            return null;
+        }).when(client).execute(eq(MLTrainingTaskAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAIN);
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.SAMPLE_ALGO)
+                .inputDataset(input)
+                .build();
+        machineLearningNodeClient.execute(mlInput, args, trainingActionListener);
+
+        verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
+        verify(trainingActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(modelId, ((MLTrainingOutput)argumentCaptor.getValue()).getModelId());
+        assertEquals(status, ((MLTrainingOutput)argumentCaptor.getValue()).getStatus());
+    }
+
+    @Test
+    public void execute_null_action() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("The parameter action is required.");
+        Map<String, Object> args = new HashMap<>();
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        execute_trainandpredict(args);
+    }
+
+    @Test
+    public void execute_unsupported_action() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported action.");
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, "unsupported");
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        execute_trainandpredict(args);
+    }
+
+    @Test
+    public void execute_null_algorithm() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("The parameter algorithm is required.");
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAINANDPREDICT);
+        execute_trainandpredict(args);
+    }
+
+    @Test
+    public void execute_unsupported_algorithm() {
+        String algo = "dummyAlgo";
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage(String.format("unsupported algorithm: %s.", algo));
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAINANDPREDICT);
+        args.put(ALGORITHM, algo);
+        execute_trainandpredict(args);
+    }
+
+    @Test
+    public void execute_trainandpredict_kmeans() {
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAINANDPREDICT);
+        args.put(ALGORITHM, MLConstants.KMEANS);
+        execute_trainandpredict(args);
+    }
+
+    @Test
+    public void execute_trainandpredict_batch_rcf() {
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAINANDPREDICT);
+        args.put(ALGORITHM, MLConstants.AD);
+        execute_trainandpredict(args);
+    }
+
+    @Test
+    public void execute_trainandpredict_fit_rcf() {
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAINANDPREDICT);
+        args.put(ALGORITHM, MLConstants.AD);
+        args.put(AD_TIME_FIELD, "ts");
+        execute_trainandpredict(args);
+    }
+
+    private void execute_trainandpredict(Map<String, Object> args) {
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
+                    .status(MLTaskState.COMPLETED.name())
+                    .predictionResult(output)
+                    .taskId("taskId")
+                    .build();
+            actionListener.onResponse(MLTaskResponse.builder()
+                    .output(predictionOutput)
+                    .build());
+            return null;
+        }).when(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        MLInput mlInput = MLInput.builder()
+                .algorithm(FunctionName.SAMPLE_ALGO)
+                .inputDataset(input)
+                .build();
+        machineLearningNodeClient.execute(mlInput, args, trainingActionListener);
 
         verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());

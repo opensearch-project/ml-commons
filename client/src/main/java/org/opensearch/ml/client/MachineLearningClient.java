@@ -17,6 +17,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.MLTask;
 
+import java.util.Map;
+
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.
  */
@@ -86,6 +88,26 @@ public interface MachineLearningClient {
      * @param listener a listener to be notified of the result
      */
     void train(MLInput mlInput, boolean asyncTask, ActionListener<MLOutput> listener);
+
+    /**
+     * Execute train/predict/trainandpredict.
+     * @param mlInput ML input
+     * @param args algorithm parameters
+     * @return ActionFuture of MLOutput
+     */
+    default ActionFuture<MLOutput> execute(MLInput mlInput, Map<String, Object> args) {
+        PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
+        execute(mlInput, args, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Execute train/predict/trainandpredict.
+     * @param mlInput ML input
+     * @param args algorithm parameters
+     * @param listener a listener to be notified of the result
+     */
+    void execute(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener);
 
     /**
      * Get MLModel and return ActionFuture.
