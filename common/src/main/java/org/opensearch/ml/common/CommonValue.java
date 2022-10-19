@@ -16,6 +16,14 @@ public class CommonValue {
     public static final String USER = "user";
     public static final String META = "_meta";
     public static final String SCHEMA_VERSION_FIELD = "schema_version";
+    public static final String UNLOADED = "unloaded";
+    public static final String NOT_FOUND = "not_found";
+
+    public static final String BOX_TYPE_KEY = "box_type";
+    //hot node
+    public static String HOT_BOX_TYPE = "hot";
+    // warm node
+    public static String WARM_BOX_TYPE = "warm";
 
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
@@ -44,8 +52,11 @@ public class CommonValue {
             + MLModel.MODEL_NAME_FIELD
             + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
-            + MLModel.MODEL_VERSION_FIELD
+            + MLModel.OLD_MODEL_VERSION_FIELD
             + "\" : {\"type\": \"long\"},\n"
+            + "      \""
+            + MLModel.MODEL_VERSION_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
             + MLModel.MODEL_CONTENT_FIELD
             + "\" : {\"type\": \"binary\"},\n"

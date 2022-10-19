@@ -10,10 +10,12 @@ import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -31,6 +33,9 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.rest.RestStatus;
 
@@ -44,6 +49,7 @@ public class MLTaskManager {
     public final static int MAX_ML_TASK_PER_NODE = 10;
     private final Client client;
     private final MLIndicesHandler mlIndicesHandler;
+    private final Map<MLTaskType, AtomicInteger> runningTasksCount;
 
     /**
      * Constructor to create ML task manager.
@@ -55,6 +61,28 @@ public class MLTaskManager {
         this.client = client;
         this.mlIndicesHandler = mlIndicesHandler;
         taskCaches = new ConcurrentHashMap<>();
+        runningTasksCount = new ConcurrentHashMap<>();
+    }
+
+    public synchronized String checkLimitAndAddRunningTask(MLTask mlTask, Integer limit) {
+        AtomicInteger runningTaskCount = runningTasksCount.computeIfAbsent(mlTask.getTaskType(), it -> new AtomicInteger(0));
+        if (runningTaskCount.get() < 0) {
+            runningTaskCount.set(0);
+        }
+        log.debug("Task id: {}, current running task {}: {}", mlTask.getTaskId(), mlTask.getTaskType(), runningTaskCount.get());
+        if (runningTaskCount.get() >= limit) {
+            String error = "exceed max running task limit";
+            log.info(error + " for task " + mlTask.getTaskId());
+            return error;
+        }
+        if (contains(mlTask.getTaskId())) {
+            getMLTask(mlTask.getTaskId()).setState(MLTaskState.RUNNING);
+        } else {
+            mlTask.setState(MLTaskState.RUNNING);
+            add(mlTask);
+        }
+        runningTaskCount.incrementAndGet();
+        return null;
     }
 
     /**
@@ -66,12 +94,16 @@ public class MLTaskManager {
     public synchronized void add(MLTask mlTask) {
         // todo: once circuit break is in place, we need to add those checks
         // to make sure we have some limitation while adding new tasks.
+        add(mlTask, null);
+    }
+
+    public synchronized void add(MLTask mlTask, List<String> workerNodes) {
         String taskId = mlTask.getTaskId();
         if (contains(taskId)) {
             throw new IllegalArgumentException("Duplicate taskId");
         }
-        taskCaches.put(taskId, new MLTaskCache(mlTask));
-        log.info("add ML task to cache " + taskId);
+        taskCaches.put(taskId, new MLTaskCache(mlTask, workerNodes));
+        log.debug("add ML task to cache " + taskId);
     }
 
     /**
@@ -98,7 +130,7 @@ public class MLTaskManager {
         if (!contains(taskId)) {
             throw new IllegalArgumentException("Task not found");
         }
-        MLTask task = get(taskId);
+        MLTask task = getMLTask(taskId);
         task.setState(state);
         task.setError(error);
         if (isAsyncTask) {
@@ -130,8 +162,20 @@ public class MLTaskManager {
      */
     public void remove(String taskId) {
         if (contains(taskId)) {
-            taskCaches.remove(taskId);
-            log.info("remove ML task from cache " + taskId);
+            MLTaskCache taskCache = taskCaches.remove(taskId);
+            MLTask mlTask = taskCache.getMlTask();
+
+            if (mlTask.getState() != MLTaskState.CREATED) {
+                // Task initial state is CREATED. It will move forward to RUNNING state once it starts on worker node.
+                // When finished or failed, it's possible to move to COMPLETED/FAILED state.
+                // So if its state is not CREATED when remove it, the task already started on worker node, we should
+                // decrement running task count.
+                AtomicInteger runningTaskCount = runningTasksCount.get(mlTask.getTaskType());
+                if (runningTaskCount != null) {
+                    runningTaskCount.decrementAndGet();
+                }
+            }
+            log.debug("remove ML task from cache " + taskId);
         }
     }
 
@@ -141,11 +185,31 @@ public class MLTaskManager {
      * @param taskId ML task id
      * @return ML task
      */
-    public MLTask get(String taskId) {
+    public MLTask getMLTask(String taskId) {
         if (contains(taskId)) {
             return taskCaches.get(taskId).getMlTask();
         }
         return null;
+    }
+
+    public MLTaskCache getMLTaskCache(String taskId) {
+        if (contains(taskId)) {
+            return taskCaches.get(taskId);
+        }
+        return null;
+    }
+
+    public List<String> getWorkNodes(String taskId) {
+        if (taskCaches.containsKey(taskId)) {
+            return taskCaches.get(taskId).getWorkerNodes();
+        }
+        return null;
+    }
+
+    public void addNodeError(String taskId, String workerNodeId, String error) {
+        if (taskCaches.containsKey(taskId)) {
+            taskCaches.get(taskId).addError(workerNodeId, error);
+        }
     }
 
     /**
@@ -237,13 +301,13 @@ public class MLTaskManager {
         long timeoutInMillis
     ) {
         if (!taskCaches.containsKey(taskId)) {
-            listener.onFailure(new RuntimeException("Can't find task"));
+            listener.onFailure(new MLResourceNotFoundException("Can't find task"));
             return;
         }
         Semaphore semaphore = taskCaches.get(taskId).getUpdateTaskIndexSemaphore();
         try {
             if (semaphore != null && !semaphore.tryAcquire(timeoutInMillis, TimeUnit.MILLISECONDS)) {
-                listener.onFailure(new RuntimeException("Other updating request not finished yet"));
+                listener.onFailure(new MLException("Other updating request not finished yet"));
                 return;
             }
         } catch (InterruptedException e) {
@@ -275,5 +339,49 @@ public class MLTaskManager {
             log.error("Failed to update ML task " + taskId, e);
             listener.onFailure(e);
         }
+    }
+
+    public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields) {
+        updateMLTaskDirectly(
+            taskId,
+            updatedFields,
+            ActionListener
+                .wrap(
+                    r -> { log.debug("updated ML task directly: {}", taskId); },
+                    e -> { log.error("Failed to update ML task " + taskId, e); }
+                )
+        );
+    }
+
+    public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
+        try {
+            if (updatedFields == null || updatedFields.size() == 0) {
+                listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
+                return;
+            }
+            UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
+            Map<String, Object> updatedContent = new HashMap<>();
+            updatedContent.putAll(updatedFields);
+            updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
+            updateRequest.doc(updatedContent);
+            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
+        } catch (Exception e) {
+            log.error("Failed to update ML task " + taskId, e);
+            listener.onFailure(e);
+        }
+    }
+
+    public boolean containsModel(String modelId) {
+        for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
+            if (modelId.equals(entry.getValue().mlTask.getModelId())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

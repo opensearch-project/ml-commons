@@ -47,6 +47,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder()
                 .mlInput(mlInput)
                 .modelId(modelId)
+                .dispatchTask(true)
                 .build();
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, getMlPredictionTaskResponseActionListener(listener));
     }
@@ -57,6 +58,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
 
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
                 .mlInput(mlInput)
+                .dispatchTask(true)
                 .build();
 
         client.execute(MLTrainAndPredictionTaskAction.INSTANCE, request, getMlPredictionTaskResponseActionListener(listener));
@@ -68,6 +70,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         MLTrainingTaskRequest trainingTaskRequest = MLTrainingTaskRequest.builder()
                 .mlInput(mlInput)
                 .async(asyncTask)
+                .dispatchTask(true)
                 .build();
 
         client.execute(MLTrainingTaskAction.INSTANCE, trainingTaskRequest, getMlPredictionTaskResponseActionListener(listener));

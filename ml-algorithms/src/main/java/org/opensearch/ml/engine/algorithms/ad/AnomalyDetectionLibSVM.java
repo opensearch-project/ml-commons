@@ -44,7 +44,7 @@ import java.util.Optional;
  */
 @Function(FunctionName.AD_LIBSVM)
 public class AnomalyDetectionLibSVM implements Trainable, Predictable {
-    public static final int VERSION = 1;
+    public static final String VERSION = "1.0.0";
     private static double DEFAULT_GAMMA = 1.0;
     private static double DEFAULT_NU = 0.1;
     private static KernelType DEFAULT_KERNEL_TYPE = KernelType.RBF;

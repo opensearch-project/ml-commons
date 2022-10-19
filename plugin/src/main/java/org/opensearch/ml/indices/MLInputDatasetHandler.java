@@ -35,18 +35,18 @@ import org.opensearch.search.SearchHits;
 public class MLInputDatasetHandler {
     Client client;
 
-    /**
-     * Retrieve DataFrame from DataFrameInputDataset
-     * @param mlInputDataset MLInputDataset
-     * @return DataFrame
-     */
-    public DataFrame parseDataFrameInput(MLInputDataset mlInputDataset) {
-        if (!mlInputDataset.getInputDataType().equals(MLInputDataType.DATA_FRAME)) {
-            throw new IllegalArgumentException("Input dataset is not DATA_FRAME type.");
-        }
-        DataFrameInputDataset inputDataset = (DataFrameInputDataset) mlInputDataset;
-        return inputDataset.getDataFrame();
-    }
+    // /**
+    // * Retrieve DataFrame from DataFrameInputDataset
+    // * @param mlInputDataset MLInputDataset
+    // * @return DataFrame
+    // */
+    // public DataFrame parseDataFrameInput(MLInputDataset mlInputDataset) {
+    // if (!mlInputDataset.getInputDataType().equals(MLInputDataType.DATA_FRAME)) {
+    // throw new IllegalArgumentException("Input dataset is not DATA_FRAME type.");
+    // }
+    // DataFrameInputDataset inputDataset = (DataFrameInputDataset) mlInputDataset;
+    // return inputDataset.getDataFrame();
+    // }
 
     /**
      * Create DataFrame based on given search query

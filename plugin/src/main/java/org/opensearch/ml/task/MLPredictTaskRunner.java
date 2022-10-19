@@ -24,6 +24,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -31,6 +32,8 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -38,6 +41,7 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -45,13 +49,16 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
+import org.opensearch.transport.TransportService;
 
 /**
  * MLPredictTaskRunner is responsible for running predict tasks.
@@ -63,6 +70,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final Client client;
     private final MLInputDatasetHandler mlInputDatasetHandler;
     private final NamedXContentRegistry xContentRegistry;
+    private final MLModelManager mlModelManager;
+    private final DiscoveryNodeHelper nodeHelper;
 
     public MLPredictTaskRunner(
         ThreadPool threadPool,
@@ -73,14 +82,18 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        MLModelManager mlModelManager,
+        DiscoveryNodeHelper nodeHelper
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
+        super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.xContentRegistry = xContentRegistry;
+        this.mlModelManager = mlModelManager;
+        this.nodeHelper = nodeHelper;
     }
 
     @Override
@@ -91,6 +104,38 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     @Override
     protected TransportResponseHandler<MLTaskResponse> getResponseHandler(ActionListener<MLTaskResponse> listener) {
         return new ActionListenerResponseHandler<>(listener, MLTaskResponse::new);
+    }
+
+    @Override
+    public void dispatchTask(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
+        String modelId = request.getModelId();
+        MLInput input = request.getMlInput();
+        FunctionName algorithm = input.getAlgorithm();
+        try {
+            ActionListener<DiscoveryNode> actionListener = ActionListener.wrap(node -> {
+                if (clusterService.localNode().getId().equals(node.getId())) {
+                    log.debug("Execute ML predict request {} locally on node {}", request.getRequestID(), node.getId());
+                    executeTask(request, listener);
+                } else {
+                    log.debug("Execute ML predict request {} remotely on node {}", request.getRequestID(), node.getId());
+                    request.setDispatchTask(false);
+                    transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
+                }
+            }, e -> { listener.onFailure(e); });
+            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+            if (workerNodes == null || workerNodes.length == 0) {
+                if (algorithm == FunctionName.TEXT_EMBEDDING) {
+                    listener.onFailure(new MLException("model not loaded"));
+                    return;
+                } else {
+                    workerNodes = nodeHelper.getEligibleNodeIds();
+                }
+            }
+            mlTaskDispatcher.dispatchPredictTask(workerNodes, actionListener);
+        } catch (Exception e) {
+            log.error("Failed to predict model " + modelId, e);
+            listener.onFailure(e);
+        }
     }
 
     /**
@@ -107,7 +152,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .builder()
             .taskId(UUID.randomUUID().toString())
             .modelId(modelId)
-            .modelId(request.getModelId())
             .taskType(MLTaskType.PREDICTION)
             .inputType(inputDataType)
             .functionName(request.getMlInput().getFunctionName())
@@ -150,10 +194,33 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         mlStats
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
+        mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
 
+        FunctionName algorithm = mlInput.getAlgorithm();
+        MLInputDataset inputDataset = mlInput.getInputDataset();
         // run predict
         if (modelId != null) {
+            try {
+                Predictable predictable = mlModelManager.getPredictable(modelId);
+                if (predictable != null) {
+                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictable.predict(inputDataset));
+                    if (output instanceof MLPredictionOutput) {
+                        ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
+                    }
+
+                    // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
+                    handleAsyncMLTaskComplete(mlTask);
+                    MLTaskResponse response = MLTaskResponse.builder().output(output).build();
+                    internalListener.onResponse(response);
+                    return;
+                } else if (algorithm == FunctionName.TEXT_EMBEDDING) {
+                    throw new MLException("model not loaded");
+                }
+            } catch (Exception e) {
+                handlePredictFailure(mlTask, internalListener, e, false);
+            }
+
             // search model by model id.
             try (ThreadContext.StoredContext context = threadPool.getThreadContext().stashContext()) {
                 ActionListener<GetResponse> getResponseListener = ActionListener.wrap(r -> {
@@ -178,7 +245,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             handlePredictFailure(mlTask, internalListener, e, false);
                             return;
                         }
-
                         // run predict
                         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
                         MLOutput output = MLEngine.predict(mlInput, mlModel);

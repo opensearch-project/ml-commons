@@ -52,7 +52,7 @@ public class TextEmbeddingModelTest {
     private String modelId;
     private String modelName;
     private FunctionName functionName;
-    private Integer version;
+    private String version;
     private TextEmbeddingModelConfig modelConfig;
     private MLModel model;
     private ModelHelper modelHelper;
@@ -68,7 +68,7 @@ public class TextEmbeddingModelTest {
         modelId = "test_model_id";
         modelName = "test_model_name";
         functionName = FunctionName.TEXT_EMBEDDING;
-        version = 1;
+        version = "1";
         modelConfig = TextEmbeddingModelConfig.builder()
                 .modelType("bert")
                 .embeddingDimension(dimension)
@@ -79,7 +79,7 @@ public class TextEmbeddingModelTest {
                 .name("test_model_name")
                 .modelId("test_model_id")
                 .algorithm(FunctionName.TEXT_EMBEDDING)
-                .version(1)
+                .version("1.0.0")
                 .modelConfig(modelConfig)
                 .build();
         modelHelper = new ModelHelper();

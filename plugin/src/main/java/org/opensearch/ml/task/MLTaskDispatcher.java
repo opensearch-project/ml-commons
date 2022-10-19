@@ -5,10 +5,11 @@
 
 package org.opensearch.ml.task;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
+
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import javax.naming.LimitExceededException;
@@ -17,14 +18,14 @@ import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.stats.MLNodeLevelStat;
-import org.opensearch.ml.utils.MLNodeUtils;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -36,23 +37,71 @@ import com.google.common.collect.ImmutableSet;
 public class MLTaskDispatcher {
     // todo: move to a config class
     private final short DEFAULT_JVM_HEAP_USAGE_THRESHOLD = 85;
+    private final String ROUND_ROBIN = "round_robin";
+    private final String LEAST_LOAD = "least_load";
     private final ClusterService clusterService;
     private final Client client;
+    private AtomicInteger nextNode;
     private volatile Integer maxMLBatchTaskPerNode;
+    private volatile String dispatchPolicy;
+    private DiscoveryNodeHelper nodeHelper;
 
-    public MLTaskDispatcher(ClusterService clusterService, Client client) {
+    public MLTaskDispatcher(ClusterService clusterService, Client client, Settings settings, DiscoveryNodeHelper nodeHelper) {
         this.clusterService = clusterService;
         this.client = client;
+        this.nodeHelper = nodeHelper;
         this.maxMLBatchTaskPerNode = MLTaskManager.MAX_ML_TASK_PER_NODE;
+        this.nextNode = new AtomicInteger(0);
+        this.dispatchPolicy = ML_COMMONS_TASK_DISPATCH_POLICY.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TASK_DISPATCH_POLICY, it -> dispatchPolicy = it);
     }
 
     /**
-     * Select least loaded node based on ML_EXECUTING_TASK_COUNT and JVM_HEAP_USAGE
-     * @param listener Action listener
+     * Dispatch task to target node.
+     * @param actionListener action listener
      */
-    public void dispatchTask(ActionListener<DiscoveryNode> listener) {
-        DiscoveryNode[] mlNodes = getEligibleNodes();
-        MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(mlNodes);
+    public void dispatch(ActionListener<DiscoveryNode> actionListener) {
+        if (ROUND_ROBIN.equals(dispatchPolicy)) {
+            dispatchTaskWithRoundRobin(actionListener);
+        } else if (LEAST_LOAD.equals(dispatchPolicy)) {
+            dispatchTaskWithLeastLoad(actionListener);
+        } else {
+            throw new IllegalArgumentException("Unknown policy");
+        }
+    }
+
+    public void dispatchPredictTask(String[] nodeIds, ActionListener<DiscoveryNode> actionListener) {
+        if (nodeIds == null || nodeIds.length == 0) {
+            throw new IllegalArgumentException("Model not loaded yet");
+        }
+        if (ROUND_ROBIN.equals(dispatchPolicy)) {
+            dispatchTaskWithRoundRobin(
+                nodeIds,
+                ActionListener.wrap(nodeId -> actionListener.onResponse(nodeHelper.getNode(nodeId)), e -> actionListener.onFailure(e))
+            );
+        } else if (LEAST_LOAD.equals(dispatchPolicy)) {
+            dispatchTaskWithLeastLoad(nodeIds, actionListener);
+        } else {
+            throw new IllegalArgumentException("Unknown policy");
+        }
+    }
+
+    private <T> void dispatchTaskWithRoundRobin(T[] nodes, ActionListener<T> listener) {
+        int currentNode = nextNode.getAndIncrement();
+        if (currentNode > nodes.length - 1) {
+            currentNode = 0;
+            nextNode.set(currentNode + 1);
+        }
+        listener.onResponse(nodes[currentNode]);
+    }
+
+    private void dispatchTaskWithLeastLoad(String[] nodeIds, ActionListener<DiscoveryNode> listener) {
+        DiscoveryNode[] nodes = nodeHelper.getNodes(nodeIds);
+        dispatchTaskWithLeastLoad(nodes, listener);
+    }
+
+    private void dispatchTaskWithLeastLoad(DiscoveryNode[] nodes, ActionListener<DiscoveryNode> listener) {
+        MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(nodes);
         MLStatsNodesRequest
             .addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE));
 
@@ -107,32 +156,14 @@ public class MLTaskDispatcher {
         }));
     }
 
-    /**
-     * Get eligible node to run ML task. If there are nodes with ml role, will return all these
-     * ml nodes; otherwise return all data nodes.
-     *
-     * @return array of discovery node
-     */
-    protected DiscoveryNode[] getEligibleNodes() {
-        ClusterState state = this.clusterService.state();
-        final List<DiscoveryNode> eligibleMLNodes = new ArrayList<>();
-        final List<DiscoveryNode> eligibleDataNodes = new ArrayList<>();
-        for (DiscoveryNode node : state.nodes()) {
-            if (MLNodeUtils.isMLNode(node)) {
-                eligibleMLNodes.add(node);
-            }
-            if (node.isDataNode()) {
-                eligibleDataNodes.add(node);
-            }
-        }
-        if (eligibleMLNodes.size() > 0) {
-            DiscoveryNode[] mlNodes = eligibleMLNodes.toArray(new DiscoveryNode[0]);
-            log.debug("Find {} dedicated ML nodes: {}", eligibleMLNodes.size(), Arrays.toString(mlNodes));
-            return mlNodes;
-        } else {
-            DiscoveryNode[] dataNodes = eligibleDataNodes.toArray(new DiscoveryNode[0]);
-            log.debug("Find no dedicated ML nodes. But have {} data nodes: {}", eligibleDataNodes.size(), Arrays.toString(dataNodes));
-            return dataNodes;
-        }
+    private void dispatchTaskWithLeastLoad(ActionListener<DiscoveryNode> listener) {
+        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+        dispatchTaskWithLeastLoad(eligibleNodes, listener);
     }
+
+    private void dispatchTaskWithRoundRobin(ActionListener<DiscoveryNode> listener) {
+        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+        dispatchTaskWithRoundRobin(eligibleNodes, listener);
+    }
+
 }

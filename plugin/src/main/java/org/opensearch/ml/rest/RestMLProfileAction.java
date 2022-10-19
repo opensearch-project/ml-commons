@@ -61,15 +61,16 @@ public class RestMLProfileAction extends BaseRestHandler {
     public List<Route> routes() {
         return ImmutableList
             .of(
-                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/model/{model_id}"),
-                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/task/{task_id}"),
-                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/")
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/models/{model_id}"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/models"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/tasks/{task_id}"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile/tasks"),
+                new Route(RestRequest.Method.GET, ML_BASE_URI + "/profile")
             );
     }
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        log.info("Prepare request for {}", request.getHttpRequest());
         boolean hasContent = request.hasContent();
         MLProfileInput mlProfileInput;
         if (hasContent) {
@@ -90,7 +91,7 @@ public class RestMLProfileAction extends BaseRestHandler {
                 builder.startObject();
                 // node level profile
                 List<MLProfileNodeResponse> nodeProfiles = r.getNodes().stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-                log.info("Build MLProfileNodeResponse for size of {}", nodeProfiles.size());
+                log.debug("Build MLProfileNodeResponse for size of {}", nodeProfiles.size());
                 if (nodeProfiles.size() > 0) {
                     r.toXContent(builder, ToXContent.EMPTY_PARAMS);
                 }
@@ -107,18 +108,24 @@ public class RestMLProfileAction extends BaseRestHandler {
     MLProfileInput createMLProfileInputFromRequestParams(RestRequest request) {
         MLProfileInput mlProfileInput = new MLProfileInput();
         Optional<String[]> modelIds = splitCommaSeparatedParam(request, PARAMETER_MODEL_ID);
+        String uri = request.getHttpRequest().uri();
+        boolean profileModel = uri.contains("models");
+        boolean profileTask = uri.contains("tasks");
         if (modelIds.isPresent()) {
             mlProfileInput.getModelIds().addAll(Arrays.asList(modelIds.get()));
+        } else if (profileModel) { // For this case, the URI will be /_plugins/_ml/profile/models
+            mlProfileInput.setReturnAllModels(true);
         }
         Optional<String[]> taskIds = splitCommaSeparatedParam(request, PARAMETER_TASK_ID);
         if (taskIds.isPresent()) {
             mlProfileInput.getTaskIds().addAll(Arrays.asList(taskIds.get()));
+        } else if (profileTask) { // For this case, the URI will be /_plugins/_ml/profile/tasks
+            mlProfileInput.setReturnAllTasks(true);
         }
-        if (modelIds.isEmpty() && taskIds.isEmpty()) {
-            // return all tasks in cache memory
-            mlProfileInput.setReturnAllMLTasks(true);
+        if (!profileModel && !profileTask) { // For this case, the URI will be /_plugins/_ml/profile
+            mlProfileInput.setReturnAllTasks(true);
+            mlProfileInput.setReturnAllModels(true);
         }
-
         return mlProfileInput;
     }
 }

@@ -19,7 +19,7 @@ public class MLProfileNodeRequestTests extends OpenSearchTestCase {
 
     public void testConstructorSerialization() throws IOException {
         Set<String> taskIds = Stream.of("id1", "id2", "id3").collect(Collectors.toCollection(HashSet::new));
-        MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), taskIds, new HashSet<>(), false);
+        MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), taskIds, new HashSet<>(), false, false);
         MLProfileNodeRequest mlProfileNodeRequest = new MLProfileNodeRequest(
             new MLProfileRequest(new String[] { "testNodeId" }, mlProfileInput)
         );

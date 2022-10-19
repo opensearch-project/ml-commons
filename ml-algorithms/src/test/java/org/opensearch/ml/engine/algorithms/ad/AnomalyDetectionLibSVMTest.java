@@ -108,7 +108,7 @@ public class AnomalyDetectionLibSVMTest {
     public void train() {
         MLModel model = anomalyDetection.train(trainDataFrameInputDataset);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
-        Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion().intValue());
+        Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 
@@ -118,7 +118,7 @@ public class AnomalyDetectionLibSVMTest {
         AnomalyDetectionLibSVM anomalyDetection = new AnomalyDetectionLibSVM(parameters);
         MLModel model = anomalyDetection.train(trainDataFrameInputDataset);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
-        Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion().intValue());
+        Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
 
         parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.POLY).build();
