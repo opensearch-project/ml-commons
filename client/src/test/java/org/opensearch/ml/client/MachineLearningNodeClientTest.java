@@ -377,7 +377,7 @@ public class MachineLearningNodeClientTest {
     public void execute_trainandpredict_batch_rcf() {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAINANDPREDICT);
-        args.put(ALGORITHM, MLConstants.AD);
+        args.put(ALGORITHM, MLConstants.RCF);
         execute_trainandpredict(args);
     }
 
@@ -385,7 +385,7 @@ public class MachineLearningNodeClientTest {
     public void execute_trainandpredict_fit_rcf() {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAINANDPREDICT);
-        args.put(ALGORITHM, MLConstants.AD);
+        args.put(ALGORITHM, MLConstants.RCF);
         args.put(AD_TIME_FIELD, "ts");
         execute_trainandpredict(args);
     }

@@ -241,7 +241,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         switch (algo.toLowerCase(Locale.ROOT)) {
             case MLConstants.KMEANS:
                 return KMEANS;
-            case MLConstants.AD:
+            case MLConstants.RCF:
                 return arguments.get(AD_TIME_FIELD) == null ?
                         BATCH_RCF : FIT_RCF;
             default:

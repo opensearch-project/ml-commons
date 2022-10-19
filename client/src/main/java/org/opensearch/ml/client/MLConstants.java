@@ -14,7 +14,7 @@ public class MLConstants {
     // algorithm
     public static final String ALGORITHM = "algorithm";
     public static final String KMEANS = "kmeans";
-    public static final String AD = "ad";
+    public static final String RCF = "rcf";
     // common parameters
     public static final String ASYNC = "async";
     public static final String MODELID = "modelid";
