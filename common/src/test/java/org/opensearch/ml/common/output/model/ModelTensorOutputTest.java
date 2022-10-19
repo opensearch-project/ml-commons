@@ -62,6 +62,8 @@ public class ModelTensorOutputTest {
         input.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
+        assertEquals(MLOutputType.MODEL_TENSOR, outputType);
         verify.accept(new ModelTensorOutput(streamInput));
     }
 }

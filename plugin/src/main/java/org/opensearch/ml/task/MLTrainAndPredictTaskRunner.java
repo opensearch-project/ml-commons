@@ -17,6 +17,7 @@ import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -47,6 +48,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     private final ClusterService clusterService;
     private final Client client;
     private final MLInputDatasetHandler mlInputDatasetHandler;
+    protected final DiscoveryNodeHelper nodeFilter;
 
     public MLTrainAndPredictTaskRunner(
         ThreadPool threadPool,
@@ -56,13 +58,15 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         MLStats mlStats,
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
-        MLCircuitBreakerService mlCircuitBreakerService
+        MLCircuitBreakerService mlCircuitBreakerService,
+        DiscoveryNodeHelper nodeFilter
     ) {
-        super(mlTaskManager, mlStats, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
+        super(mlTaskManager, mlStats, nodeFilter, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
+        this.nodeFilter = nodeFilter;
     }
 
     @Override
@@ -98,7 +102,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             .build();
         MLInput mlInput = request.getMlInput();
         MLInputDataset inputDataset = mlInput.getInputDataset();
-        if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
+        if (inputDataset.getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
             ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
                 MLInput newInput = mlInput.toBuilder().inputDataset(dataSet).build();
                 trainAndPredict(mlTask, newInput, listener);
@@ -124,6 +128,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         mlStats
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.TRAIN_PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
+        mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
 
         // run train and predict

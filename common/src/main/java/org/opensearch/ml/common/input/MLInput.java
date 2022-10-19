@@ -254,11 +254,4 @@ public class MLInput implements Input {
         return this.algorithm;
     }
 
-    public DataFrame getDataFrame() {
-        if (inputDataset == null || !(inputDataset instanceof DataFrameInputDataset)) {
-            return null;
-        }
-        return ((DataFrameInputDataset)inputDataset).getDataFrame();
-    }
-
 }

@@ -108,7 +108,7 @@ public class RCFSummarizeTest {
     public void trainWithRegularInputExpectNotNullOutput() {
         MLModel model = rcfSummarize.train(trainDataFrameInputDataSet);
         Assert.assertEquals(FunctionName.RCF_SUMMARIZE.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion().intValue());
+        Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 

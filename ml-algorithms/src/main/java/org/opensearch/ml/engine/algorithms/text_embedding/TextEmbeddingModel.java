@@ -121,7 +121,7 @@ public class TextEmbeddingModel implements Predictable {
         }
     }
 
-    protected void loadTextEmbeddingModel(File modelZipFile, String modelId, String modelName, FunctionName functionName, Integer version,
+    protected void loadTextEmbeddingModel(File modelZipFile, String modelId, String modelName, FunctionName functionName, String version,
                                        MLModelConfig modelConfig,
                                        String engine) {
         try {

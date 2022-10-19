@@ -131,5 +131,5 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
             }
         }
     }
-    
+
 }

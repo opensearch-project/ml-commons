@@ -34,6 +34,8 @@ public class RestActionUtils {
     public static final String PARAMETER_RETURN_CONTENT = "return_content";
     public static final String PARAMETER_MODEL_ID = "model_id";
     public static final String PARAMETER_TASK_ID = "task_id";
+    public static final String PARAMETER_LOAD_MODEL = "load";
+    public static final String PARAMETER_VERSION = "version";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 

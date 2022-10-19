@@ -5,10 +5,22 @@
 
 package org.opensearch.ml.task;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Assert;
@@ -78,7 +90,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         expectedEx.expectMessage("Task not found");
         mlTaskManager.add(mlTask);
         mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, true);
-        Assert.assertSame(mlTaskManager.get(mlTask.getTaskId()).getState(), MLTaskState.RUNNING);
+        Assert.assertSame(mlTaskManager.getMLTask(mlTask.getTaskId()).getState(), MLTaskState.RUNNING);
         mlTaskManager.updateTaskState("not exist", MLTaskState.RUNNING, true);
     }
 
@@ -87,7 +99,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         expectedEx.expectMessage("Task not found");
         mlTaskManager.add(mlTask);
         mlTaskManager.updateTaskError(mlTask.getTaskId(), "error message", true);
-        Assert.assertEquals("error message", mlTaskManager.get(mlTask.getTaskId()).getError());
+        Assert.assertEquals("error message", mlTaskManager.getMLTask(mlTask.getTaskId()).getError());
         mlTaskManager.updateTaskError("not exist", "error message", true);
     }
 
@@ -205,13 +217,13 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void testGetTask() {
         mlTaskManager.add(mlTask);
         Assert.assertTrue(mlTaskManager.contains(mlTask.getTaskId()));
-        MLTask task = mlTaskManager.get(this.mlTask.getTaskId());
+        MLTask task = mlTaskManager.getMLTask(this.mlTask.getTaskId());
         Assert.assertEquals(mlTask, task);
     }
 
     public void testGetTask_NonExisting() {
         Assert.assertFalse(mlTaskManager.contains(mlTask.getTaskId()));
-        MLTask task = mlTaskManager.get(this.mlTask.getTaskId());
+        MLTask task = mlTaskManager.getMLTask(this.mlTask.getTaskId());
         Assert.assertNull(task);
     }
 
@@ -226,7 +238,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.add(task3);
         mlTaskManager.add(task4);
         mlTaskManager.add(task5);
-        Assert.assertEquals(mlTaskManager.getRunningTaskCount(), 1);
+        Assert.assertEquals(1, mlTaskManager.getRunningTaskCount());
     }
 
     public void testClear() {
@@ -300,4 +312,51 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         assertNotEquals(taskIds, mlTaskManager.getAllTaskIds());
     }
 
+    public void testCheckLimitAndAddRunningTask() {
+        MLTask task1 = MLTask.builder().taskId("1").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
+        MLTask task2 = MLTask.builder().taskId("2").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
+        int limit = 1;
+        String error1 = mlTaskManager.checkLimitAndAddRunningTask(task1, limit);
+        MLTask mlTask = mlTaskManager.getMLTask("1");
+        assertEquals(MLTaskState.RUNNING, mlTask.getState());
+        assertNull(error1);
+
+        String error2 = mlTaskManager.checkLimitAndAddRunningTask(task2, limit);
+        assertEquals("exceed max running task limit", error2);
+
+        mlTaskManager.remove(task1.getTaskId());
+        assertEquals(0, mlTaskManager.getRunningTaskCount());
+        assertNull(mlTaskManager.checkLimitAndAddRunningTask(task2, limit));
+    }
+
+    public void testMLTaskCache() {
+        MLTask task = MLTask.builder().taskId("1").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
+        String node1 = "node1_id";
+        String node2 = "node2_id";
+        mlTaskManager.add(task, Arrays.asList(node1, node2));
+        MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(task.getTaskId());
+        assertNotNull(mlTaskCache);
+        assertEquals(task, mlTaskCache.getMlTask());
+        assertFalse(mlTaskCache.hasError());
+
+        List<String> workNodes = mlTaskManager.getWorkNodes(task.getTaskId());
+        assertEquals(2, workNodes.size());
+        assertEquals(node1, workNodes.get(0));
+        assertEquals(node2, workNodes.get(1));
+
+        String wrongTaskId = "wrong_task_id";
+        assertNull(mlTaskManager.getWorkNodes(wrongTaskId));
+
+        String error = "error_message1";
+        mlTaskManager.addNodeError(task.getTaskId(), node1, error);
+        mlTaskManager.addNodeError(wrongTaskId, node1, error);
+
+        assertNull(mlTaskManager.getMLTaskCache(wrongTaskId));
+        assertTrue(mlTaskCache.hasError());
+        assertFalse(mlTaskCache.allNodeFailed());
+        assertEquals("{node1_id=error_message1}", mlTaskManager.getMLTaskCache(task.getTaskId()).getErrors().toString());
+
+        mlTaskManager.addNodeError(task.getTaskId(), node2, error);
+        assertTrue(mlTaskCache.allNodeFailed());
+    }
 }

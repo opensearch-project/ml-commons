@@ -9,7 +9,10 @@ public enum ActionName {
     TRAIN,
     PREDICT,
     TRAIN_PREDICT,
-    EXECUTE;
+    EXECUTE,
+    UPLOAD,
+    LOAD,
+    UNLOAD;
 
     public static ActionName from(String value) {
         try {

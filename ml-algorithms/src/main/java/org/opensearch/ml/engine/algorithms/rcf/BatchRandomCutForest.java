@@ -40,6 +40,7 @@ import static org.opensearch.ml.engine.utils.ModelSerDeSer.encodeBase64;
 @Log4j2
 @Function(FunctionName.BATCH_RCF)
 public class BatchRandomCutForest implements TrainAndPredictable {
+    public static final String VERSION = "1.0.0";
     private static final int DEFAULT_NUMBER_OF_TREES = 30;
     private static final int DEFAULT_OUTPUT_AFTER = 32;
     private static final int DEFAULT_SAMPLES_SIZE = 256; // how many nodes per tree
@@ -108,7 +109,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
         MLModel model = MLModel.builder()
                 .name(FunctionName.BATCH_RCF.name())
                 .algorithm(FunctionName.BATCH_RCF)
-                .version(1)
+                .version(VERSION)
                 .content(encodeBase64(RCFModelSerDeSer.serializeRCF(state)))
                 .build();
         return model;
