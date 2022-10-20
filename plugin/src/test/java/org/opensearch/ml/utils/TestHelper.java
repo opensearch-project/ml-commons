@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.utils;
 
-import static org.apache.http.entity.ContentType.APPLICATION_JSON;
+import static org.apache.hc.core5.http.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
@@ -26,11 +26,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.nio.entity.NStringEntity;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.Version;
 import org.opensearch.client.Request;
@@ -119,7 +117,7 @@ public class TestHelper {
         String jsonEntity,
         List<Header> headers
     ) throws IOException {
-        HttpEntity httpEntity = Strings.isBlank(jsonEntity) ? null : new NStringEntity(jsonEntity, ContentType.APPLICATION_JSON);
+        HttpEntity httpEntity = Strings.isBlank(jsonEntity) ? null : new StringEntity(jsonEntity, APPLICATION_JSON);
         return makeRequest(client, method, endpoint, params, httpEntity, headers);
     }
 
