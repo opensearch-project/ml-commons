@@ -11,7 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import org.apache.http.HttpEntity;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
@@ -32,7 +33,7 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_train_predict_it";
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws IOException, ParseException {
         ingestIrisData(irisIndex);
     }
 

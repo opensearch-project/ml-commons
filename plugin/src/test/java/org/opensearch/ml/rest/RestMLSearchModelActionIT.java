@@ -10,7 +10,7 @@ import static org.opensearch.ml.utils.TestData.matchAllSearchQuery;
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.http.HttpEntity;
+import org.apache.hc.core5.http.HttpEntity;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;

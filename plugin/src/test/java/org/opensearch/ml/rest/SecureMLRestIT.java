@@ -10,7 +10,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
-import org.apache.http.HttpHost;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -46,7 +47,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws IOException, ParseException {
         if (!isHttps()) {
             throw new IllegalArgumentException("Secure Tests are running but HTTPS is not set");
         }
