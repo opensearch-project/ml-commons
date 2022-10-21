@@ -52,6 +52,10 @@ import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.unload.TransportUnloadModelAction;
 import org.opensearch.ml.action.upload.TransportUploadModelAction;
+import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
+import org.opensearch.ml.action.upload_chunk.MLModelMetaUploader;
+import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
+import org.opensearch.ml.action.upload_chunk.TransportUploadModelMetaAction;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
 import org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener;
@@ -84,6 +88,8 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.unload.MLUnloadModelAction;
 import org.opensearch.ml.common.transport.upload.MLUploadModelAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaAction;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
@@ -107,6 +113,8 @@ import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUnloadModelAction;
 import org.opensearch.ml.rest.RestMLUploadModelAction;
+import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
+import org.opensearch.ml.rest.RestMLUploadModelMetaAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -158,6 +166,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private ModelHelper modelHelper;
     private DiscoveryNodeHelper nodeHelper;
 
+    private MLModelMetaUploader mlModelMetaUploader;
+    private MLModelChunkUploader mlModelChunkUploader;
+
     private Client client;
     private ClusterService clusterService;
     private ThreadPool threadPool;
@@ -186,6 +197,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLLoadModelAction.INSTANCE, TransportLoadModelAction.class),
                 new ActionHandler<>(MLLoadModelOnNodeAction.INSTANCE, TransportLoadModelOnNodeAction.class),
                 new ActionHandler<>(MLUnloadModelAction.INSTANCE, TransportUnloadModelAction.class),
+                new ActionHandler<>(MLUploadModelMetaAction.INSTANCE, TransportUploadModelMetaAction.class),
+                new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class)
             );
@@ -246,6 +259,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlTaskManager
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
+
+        mlModelMetaUploader = new MLModelMetaUploader(mlIndicesHandler, threadPool, client);
+        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
         mlTrainingTaskRunner = new MLTrainingTaskRunner(
@@ -332,6 +348,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlExecuteTaskRunner,
                 mlSearchHandler,
                 mlTaskDispatcher,
+                mlModelMetaUploader,
+                mlModelChunkUploader,
                 modelHelper,
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
@@ -364,6 +382,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLUploadModelAction restMLUploadModelAction = new RestMLUploadModelAction();
         RestMLLoadModelAction restMLLoadModelAction = new RestMLLoadModelAction();
         RestMLUnloadModelAction restMLUnloadModelAction = new RestMLUnloadModelAction(clusterService);
+        RestMLUploadModelMetaAction restMLUploadModelMetaAction = new RestMLUploadModelMetaAction();
+        RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction();
 
         return ImmutableList
             .of(
@@ -381,7 +401,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLProfileAction,
                 restMLUploadModelAction,
                 restMLLoadModelAction,
-                restMLUnloadModelAction
+                restMLUnloadModelAction,
+                restMLUploadModelMetaAction,
+                restMLUploadModelChunkAction
             );
     }
 
