@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.rest;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -15,8 +23,8 @@ import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -25,14 +33,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
 
 public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
 
@@ -98,10 +98,10 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
         params.put("model_id", "r50D4oMBAiM5tNuwVM4C");
         params.put("chunk_number", "1");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-                .withMethod(method)
-                .withParams(params)
-                .withContent(content, null)
-                .build();
+            .withMethod(method)
+            .withParams(params)
+            .withContent(content, null)
+            .build();
         return request;
     }
 }

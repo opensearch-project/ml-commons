@@ -5,21 +5,22 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
-import org.opensearch.client.node.NodeClient;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
-import org.opensearch.rest.BaseRestHandler;
-import org.opensearch.rest.RestRequest;
-import org.opensearch.rest.action.RestToXContentListener;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import org.opensearch.client.node.NodeClient;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
+import org.opensearch.rest.BaseRestHandler;
+import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.action.RestToXContentListener;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 public class RestMLUploadModelChunkAction extends BaseRestHandler {
     private static final String ML_UPLOAD_MODEL_CHUNK_ACTION = "ml_upload_model_chunk_action";

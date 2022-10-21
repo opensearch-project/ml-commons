@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.action.upload_chunk;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -27,10 +31,6 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
 
 public class TransportUploadModelMetaActionTests extends OpenSearchTestCase {
 
@@ -72,16 +72,32 @@ public class TransportUploadModelMetaActionTests extends OpenSearchTestCase {
     }
 
     public void testTransportUploadModelMetaActionConstructor() {
-        TransportUploadModelMetaAction action = new TransportUploadModelMetaAction(transportService, actionFilters,
-                modelHelper, mlIndicesHandler, mlTaskManager, clusterService, client, mlTaskDispatcher,
-                mlModelMetaUploader);
+        TransportUploadModelMetaAction action = new TransportUploadModelMetaAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlIndicesHandler,
+            mlTaskManager,
+            clusterService,
+            client,
+            mlTaskDispatcher,
+            mlModelMetaUploader
+        );
         assertNotNull(action);
     }
 
     public void testTransportUploadModelMetaActionDoExecute() {
-        TransportUploadModelMetaAction action = new TransportUploadModelMetaAction(transportService, actionFilters,
-                modelHelper, mlIndicesHandler, mlTaskManager, clusterService, client, mlTaskDispatcher,
-                mlModelMetaUploader);
+        TransportUploadModelMetaAction action = new TransportUploadModelMetaAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlIndicesHandler,
+            mlTaskManager,
+            clusterService,
+            client,
+            mlTaskDispatcher,
+            mlModelMetaUploader
+        );
         MLUploadModelMetaRequest actionRequest = prepareRequest();
         action.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<MLUploadModelMetaResponse> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelMetaResponse.class);
@@ -89,17 +105,18 @@ public class TransportUploadModelMetaActionTests extends OpenSearchTestCase {
     }
 
     private MLUploadModelMetaRequest prepareRequest() {
-        MLUploadModelMetaInput input = MLUploadModelMetaInput.builder()
-                .name("Model Name")
-                .version("1")
-                .description("Custom Model Test")
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .functionName(FunctionName.BATCH_RCF)
-                .modelContentHash("14555")
-                .modelContentSizeInBytes(1000L)
-                .modelConfig(new TextEmbeddingModelConfig("CUSTOM", 123, FrameworkType.SENTENCE_TRANSFORMERS, "all config"))
-                .totalChunks(2)
-                .build();
+        MLUploadModelMetaInput input = MLUploadModelMetaInput
+            .builder()
+            .name("Model Name")
+            .version("1")
+            .description("Custom Model Test")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .functionName(FunctionName.BATCH_RCF)
+            .modelContentHash("14555")
+            .modelContentSizeInBytes(1000L)
+            .modelConfig(new TextEmbeddingModelConfig("CUSTOM", 123, FrameworkType.SENTENCE_TRANSFORMERS, "all config"))
+            .totalChunks(2)
+            .build();
         return new MLUploadModelMetaRequest(input);
     }
 

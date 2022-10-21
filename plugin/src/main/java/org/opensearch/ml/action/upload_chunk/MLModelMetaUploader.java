@@ -5,7 +5,13 @@
 
 package org.opensearch.ml.action.upload_chunk;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+
+import java.time.Instant;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.WriteRequest;
@@ -21,11 +27,6 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaInput;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.threadpool.ThreadPool;
-
-import java.time.Instant;
-
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
 
 @Log4j2
 public class MLModelMetaUploader {

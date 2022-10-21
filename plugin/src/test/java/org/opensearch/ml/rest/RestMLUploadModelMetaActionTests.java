@@ -5,7 +5,14 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.gson.Gson;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -28,13 +35,7 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import com.google.gson.Gson;
 
 public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
 
@@ -98,17 +99,36 @@ public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
         RestRequest.Method method = RestRequest.Method.POST;
         Map<String, String> params = new HashMap<>();
         final var requestContent = prepareCustomModel();
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withMethod(method)
-                .withParams(params).withContent(new BytesArray(requestContent), XContentType.JSON).build();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
         return request;
     }
 
     private String prepareCustomModel() {
-        final Map<String, Object> modelConfig = Map.of("model_type", "bert", "embedding_dimension", 384, "framework_type",
-                "sentence_transformers", "all_config", "All Config");
-        final Map<String, Object> model = Map.of("name", "all-MiniLM-L6-v3", "version", "1", "model_format", "TORCH_SCRIPT", "model_task_type",
-                "TEXT_EMBEDDING", "model_content_hash", "123456677555433", "model_content_size_in_bytes", 12345,
-                "total_chunks", 2, "model_config", modelConfig);
+        final Map<String, Object> modelConfig = Map
+            .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
+        final Map<String, Object> model = Map
+            .of(
+                "name",
+                "all-MiniLM-L6-v3",
+                "version",
+                "1",
+                "model_format",
+                "TORCH_SCRIPT",
+                "model_task_type",
+                "TEXT_EMBEDDING",
+                "model_content_hash",
+                "123456677555433",
+                "model_content_size_in_bytes",
+                12345,
+                "total_chunks",
+                2,
+                "model_config",
+                modelConfig
+            );
         return new Gson().toJson(model).toString();
     }
 }

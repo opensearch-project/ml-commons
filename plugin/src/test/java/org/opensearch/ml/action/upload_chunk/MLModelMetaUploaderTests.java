@@ -5,6 +5,12 @@
 
 package org.opensearch.ml.action.upload_chunk;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+import java.util.concurrent.ExecutorService;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -22,12 +28,6 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaInput;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
-
-import java.util.concurrent.ExecutorService;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
 
 public class MLModelMetaUploaderTests extends OpenSearchTestCase {
 
@@ -86,20 +86,12 @@ public class MLModelMetaUploaderTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        MLModelMetaUploader mlModelChunkUploader = new MLModelMetaUploader(
-                mlIndicesHandler,
-                threadPool,
-                client
-        );
+        MLModelMetaUploader mlModelChunkUploader = new MLModelMetaUploader(mlIndicesHandler, threadPool, client);
         assertNotNull(mlModelChunkUploader);
     }
 
     public void testUploadModel() {
-        MLModelMetaUploader modelMetaUploader = new MLModelMetaUploader(
-                mlIndicesHandler,
-                threadPool,
-                client
-        );
+        MLModelMetaUploader modelMetaUploader = new MLModelMetaUploader(mlIndicesHandler, threadPool, client);
         MLUploadModelMetaInput mlUploadInput = prepareRequest();
         modelMetaUploader.uploadModelMeta(mlUploadInput, actionListener);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
@@ -107,17 +99,18 @@ public class MLModelMetaUploaderTests extends OpenSearchTestCase {
     }
 
     private MLUploadModelMetaInput prepareRequest() {
-        MLUploadModelMetaInput input = MLUploadModelMetaInput.builder()
-                .name("Model Name")
-                .version("1")
-                .description("Custom Model Test")
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .functionName(FunctionName.BATCH_RCF)
-                .modelContentHash("14555")
-                .modelContentSizeInBytes(1000L)
-                .modelConfig(new TextEmbeddingModelConfig("CUSTOM", 123, FrameworkType.SENTENCE_TRANSFORMERS, "all config"))
-                .totalChunks(2)
-                .build();
+        MLUploadModelMetaInput input = MLUploadModelMetaInput
+            .builder()
+            .name("Model Name")
+            .version("1")
+            .description("Custom Model Test")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .functionName(FunctionName.BATCH_RCF)
+            .modelContentHash("14555")
+            .modelContentSizeInBytes(1000L)
+            .modelConfig(new TextEmbeddingModelConfig("CUSTOM", 123, FrameworkType.SENTENCE_TRANSFORMERS, "all config"))
+            .totalChunks(2)
+            .build();
         return input;
     }
 }

@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaAction;
@@ -16,12 +21,8 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 public class RestMLUploadModelMetaAction extends BaseRestHandler {
     private static final String ML_UPLOAD_MODEL_META_ACTION = "ml_upload_model__meta_action";
