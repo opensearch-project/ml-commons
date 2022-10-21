@@ -37,11 +37,11 @@ import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskA
 import java.util.Map;
 import java.util.function.Function;
 
-import static org.opensearch.ml.client.MLConstants.ASYNC;
-import static org.opensearch.ml.client.MLConstants.MODELID;
-import static org.opensearch.ml.client.MLConstants.PREDICT;
-import static org.opensearch.ml.client.MLConstants.TRAIN;
-import static org.opensearch.ml.client.MLConstants.TRAINANDPREDICT;
+import static org.opensearch.ml.common.input.Constants.ASYNC;
+import static org.opensearch.ml.common.input.Constants.MODELID;
+import static org.opensearch.ml.common.input.Constants.PREDICT;
+import static org.opensearch.ml.common.input.Constants.TRAIN;
+import static org.opensearch.ml.common.input.Constants.TRAINANDPREDICT;
 import static org.opensearch.ml.common.input.InputHelper.convertArgumentToMLParameter;
 import static org.opensearch.ml.common.input.InputHelper.getAction;
 import static org.opensearch.ml.common.input.InputHelper.getFunctionName;

@@ -8,10 +8,16 @@ package org.opensearch.ml.common.input;
 public class Constants {
     // train, predict, trainandpredict
     public static final String ACTION = "action";
+    public static final String TRAIN = "train";
+    public static final String PREDICT = "predict";
+    public static final String TRAINANDPREDICT = "trainandpredict";
     // algorithm
     public static final String ALGORITHM = "algorithm";
     public static final String KMEANS = "kmeans";
     public static final String RCF = "rcf";
+    // common parameters
+    public static final String ASYNC = "async";
+    public static final String MODELID = "modelid";
     // Only need to define the below key strings for KMEANS and AD, as
     // these strings are set to keywords in ast of PPL.
     // KMEANS constants

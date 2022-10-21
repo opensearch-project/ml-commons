@@ -74,12 +74,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.client.MLConstants.ACTION;
-import static org.opensearch.ml.client.MLConstants.ALGORITHM;
-import static org.opensearch.ml.client.MLConstants.MODELID;
-import static org.opensearch.ml.client.MLConstants.PREDICT;
-import static org.opensearch.ml.client.MLConstants.TRAIN;
-import static org.opensearch.ml.client.MLConstants.TRAINANDPREDICT;
+import static org.opensearch.ml.common.input.Constants.ACTION;
+import static org.opensearch.ml.common.input.Constants.ALGORITHM;
+import static org.opensearch.ml.common.input.Constants.KMEANS;
+import static org.opensearch.ml.common.input.Constants.MODELID;
+import static org.opensearch.ml.common.input.Constants.PREDICT;
+import static org.opensearch.ml.common.input.Constants.RCF;
+import static org.opensearch.ml.common.input.Constants.TRAIN;
+import static org.opensearch.ml.common.input.Constants.TRAINANDPREDICT;
 
 public class MachineLearningNodeClientTest {
 
@@ -252,7 +254,7 @@ public class MachineLearningNodeClientTest {
     public void execute_predict() {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, PREDICT);
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         args.put(MODELID, "123");
         execute_predict(args);
     }
@@ -263,7 +265,7 @@ public class MachineLearningNodeClientTest {
         exceptionRule.expectMessage("The model ID is required for prediction.");
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, PREDICT);
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         execute_predict(args);
     }
 
@@ -312,7 +314,7 @@ public class MachineLearningNodeClientTest {
         ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAIN);
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         MLInput mlInput = MLInput.builder()
                 .algorithm(FunctionName.SAMPLE_ALGO)
                 .inputDataset(input)
@@ -330,7 +332,7 @@ public class MachineLearningNodeClientTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("The parameter action is required.");
         Map<String, Object> args = new HashMap<>();
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         execute_trainandpredict(args);
     }
 
@@ -340,7 +342,7 @@ public class MachineLearningNodeClientTest {
         exceptionRule.expectMessage("Unsupported action.");
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, "unsupported");
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         execute_trainandpredict(args);
     }
 
@@ -368,7 +370,7 @@ public class MachineLearningNodeClientTest {
     public void execute_trainandpredict_kmeans() {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAINANDPREDICT);
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         execute_trainandpredict(args);
     }
 
@@ -376,7 +378,7 @@ public class MachineLearningNodeClientTest {
     public void execute_trainandpredict_batch_rcf() {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAINANDPREDICT);
-        args.put(ALGORITHM, MLConstants.RCF);
+        args.put(ALGORITHM, RCF);
         execute_trainandpredict(args);
     }
 
@@ -384,7 +386,7 @@ public class MachineLearningNodeClientTest {
     public void execute_trainandpredict_fit_rcf() {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAINANDPREDICT);
-        args.put(ALGORITHM, MLConstants.RCF);
+        args.put(ALGORITHM, RCF);
         args.put("timeField", "ts");
         execute_trainandpredict(args);
     }

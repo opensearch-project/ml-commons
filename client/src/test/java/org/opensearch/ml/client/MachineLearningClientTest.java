@@ -30,9 +30,10 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.client.MLConstants.ACTION;
-import static org.opensearch.ml.client.MLConstants.ALGORITHM;
-import static org.opensearch.ml.client.MLConstants.TRAIN;
+import static org.opensearch.ml.common.input.Constants.ACTION;
+import static org.opensearch.ml.common.input.Constants.ALGORITHM;
+import static org.opensearch.ml.common.input.Constants.KMEANS;
+import static org.opensearch.ml.common.input.Constants.TRAIN;
 
 public class MachineLearningClientTest {
 
@@ -217,7 +218,7 @@ public class MachineLearningClientTest {
                 .build();
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAIN);
-        args.put(ALGORITHM, MLConstants.KMEANS);
+        args.put(ALGORITHM, KMEANS);
         assertEquals(output, machineLearningClient.run(mlInput, args).actionGet());
     }
 
