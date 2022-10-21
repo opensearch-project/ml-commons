@@ -13,6 +13,7 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.RCFSummarizeParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -28,8 +29,10 @@ public class RCFSummarizeTest {
     private RCFSummarize rcfSummarize;
     private DataFrame trainDataFrame;
     private DataFrameInputDataset trainDataFrameInputDataSet;
+    private MLInput trainDataFrameInput;
     private DataFrame predictionDataFrame;
     private DataFrameInputDataset predictionDataFrameInputDataSet;
+    private MLInput predictionDataFrameInput;
     private int trainSize = 100;
     private int predictionSize = 10;
 
@@ -51,8 +54,8 @@ public class RCFSummarizeTest {
 
     @Test
     public void predictWithTrivalModelExpectBoNorminalOutput() {
-        MLModel model = rcfSummarize.train(trainDataFrameInputDataSet);
-        MLPredictionOutput output = (MLPredictionOutput) rcfSummarize.predict(predictionDataFrameInputDataSet, model);
+        MLModel model = rcfSummarize.train(trainDataFrameInput);
+        MLPredictionOutput output = (MLPredictionOutput) rcfSummarize.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(predictionSize, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
@@ -65,20 +68,20 @@ public class RCFSummarizeTest {
                 .maxK(2).initialK(10)
                 .build();
         RCFSummarize rcfSummarize = new RCFSummarize(parameters);
-        MLPredictionOutput output = (MLPredictionOutput) rcfSummarize.trainAndPredict(trainDataFrameInputDataSet);
+        MLPredictionOutput output = (MLPredictionOutput) rcfSummarize.trainAndPredict(trainDataFrameInput);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(trainSize, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
 
         parameters = parameters.toBuilder().distanceType(RCFSummarizeParams.DistanceType.L2).build();
         rcfSummarize = new RCFSummarize(parameters);
-        output = (MLPredictionOutput) rcfSummarize.trainAndPredict(trainDataFrameInputDataSet);
+        output = (MLPredictionOutput) rcfSummarize.trainAndPredict(trainDataFrameInput);
         predictions = output.getPredictionResult();
         Assert.assertEquals(trainSize, predictions.size());
 
         parameters = parameters.toBuilder().distanceType(RCFSummarizeParams.DistanceType.LInfinity).build();
         rcfSummarize = new RCFSummarize(parameters);
-        output = (MLPredictionOutput) rcfSummarize.trainAndPredict(trainDataFrameInputDataSet);
+        output = (MLPredictionOutput) rcfSummarize.trainAndPredict(trainDataFrameInput);
         predictions = output.getPredictionResult();
         Assert.assertEquals(trainSize, predictions.size());
     }
@@ -101,12 +104,12 @@ public class RCFSummarizeTest {
     public void predictWithNullModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for RCFSummarize prediction.");
-        rcfSummarize.predict(predictionDataFrameInputDataSet, null);
+        rcfSummarize.predict(predictionDataFrameInput, null);
     }
 
     @Test
     public void trainWithRegularInputExpectNotNullOutput() {
-        MLModel model = rcfSummarize.train(trainDataFrameInputDataSet);
+        MLModel model = rcfSummarize.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.RCF_SUMMARIZE.name(), model.getName());
         Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
@@ -115,10 +118,12 @@ public class RCFSummarizeTest {
     private void constructRCFSummarizePredictionDataFrame() {
         predictionDataFrame = constructTestDataFrame(predictionSize);
         predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
+        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.RCF_SUMMARIZE).inputDataset(predictionDataFrameInputDataSet).build();
     }
 
     private void constructRCFSummarizeTrainDataFrame() {
         trainDataFrame = constructTestDataFrame(trainSize);
         trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
+        trainDataFrameInput = MLInput.builder().algorithm(FunctionName.RCF_SUMMARIZE).inputDataset(trainDataFrameInputDataSet).build();
     }
 }

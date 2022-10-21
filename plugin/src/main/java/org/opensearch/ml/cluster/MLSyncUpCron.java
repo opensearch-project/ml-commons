@@ -40,26 +40,42 @@ public class MLSyncUpCron implements Runnable {
         MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
         client.execute(MLSyncUpAction.INSTANCE, syncUpRequest, ActionListener.wrap(r -> {
             List<MLSyncUpNodeResponse> responses = r.getNodes();
-            Map<String, Set<String>> modelRoutingTable = new HashMap<>();
+            // key is model id, value is set of worker node ids
+            Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
+            // key is task id, value is set of worker node ids
+            Map<String, Set<String>> runningLoadModelTasks = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
                 String[] loadedModelIds = response.getLoadedModelIds();
                 if (loadedModelIds != null && loadedModelIds.length > 0) {
                     for (String modelId : loadedModelIds) {
-                        Set<String> workerNodes = modelRoutingTable.computeIfAbsent(modelId, it -> new HashSet<>());
+                        Set<String> workerNodes = modelWorkerNodes.computeIfAbsent(modelId, it -> new HashSet<>());
+                        workerNodes.add(nodeId);
+                    }
+                }
+                String[] runningLoadModelTaskIds = response.getRunningLoadModelTaskIds();
+                if (runningLoadModelTaskIds != null && runningLoadModelTaskIds.length > 0) {
+                    for (String taskId : runningLoadModelTaskIds) {
+                        Set<String> workerNodes = runningLoadModelTasks.computeIfAbsent(taskId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
                 }
             }
-            for (Map.Entry<String, Set<String>> entry : modelRoutingTable.entrySet()) {
-                log.debug("will sync model routing job for model: {}: {}", entry.getKey(), entry.getValue().toArray(new String[0]));
+            for (Map.Entry<String, Set<String>> entry : modelWorkerNodes.entrySet()) {
+                log.debug("will sync model worker nodes for model: {}: {}", entry.getKey(), entry.getValue().toArray(new String[0]));
             }
-            MLSyncUpInput.MLSyncUpInputBuilder inputBuilder = MLSyncUpInput.builder();
-            if (modelRoutingTable.size() == 0) {
+            for (Map.Entry<String, Set<String>> entry : runningLoadModelTasks.entrySet()) {
+                log.debug("will sync running task: {}: {}", entry.getKey(), entry.getValue().toArray(new String[0]));
+            }
+            MLSyncUpInput.MLSyncUpInputBuilder inputBuilder = MLSyncUpInput
+                .builder()
+                .syncRunningLoadModelTasks(true)
+                .runningLoadModelTasks(runningLoadModelTasks);
+            if (modelWorkerNodes.size() == 0) {
                 log.debug("No loaded model found. Will clear model routing on all nodes");
                 inputBuilder.clearRoutingTable(true);
             } else {
-                inputBuilder.modelRoutingTable(modelRoutingTable);
+                inputBuilder.modelRoutingTable(modelWorkerNodes);
             }
             MLSyncUpInput syncUpInput2 = inputBuilder.build();
             MLSyncUpNodesRequest syncUpRequest2 = new MLSyncUpNodesRequest(allNodes, syncUpInput2);

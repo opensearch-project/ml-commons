@@ -20,17 +20,20 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
 
     private String modelStatus;
     private String[] loadedModelIds;
+    private String[] runningLoadModelTaskIds;
 
-    public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] loadedModelIds) {
+    public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] loadedModelIds, String[] runningLoadModelTaskIds) {
         super(node);
         this.modelStatus = modelStatus;
         this.loadedModelIds = loadedModelIds;
+        this.runningLoadModelTaskIds = runningLoadModelTaskIds;
     }
 
     public MLSyncUpNodeResponse(StreamInput in) throws IOException {
         super(in);
         this.modelStatus = in.readOptionalString();
         this.loadedModelIds = in.readOptionalStringArray();
+        this.runningLoadModelTaskIds = in.readOptionalStringArray();
     }
 
     public static MLSyncUpNodeResponse readStats(StreamInput in) throws IOException {
@@ -42,6 +45,7 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
         super.writeTo(out);
         out.writeOptionalString(modelStatus);
         out.writeOptionalStringArray(loadedModelIds);
+        out.writeOptionalStringArray(runningLoadModelTaskIds);
     }
 
 }

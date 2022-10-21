@@ -86,13 +86,13 @@ public class ModelHelper {
                 String fileName = ((ZipEntry) zipEntries.nextElement()).getName();
                 if (fileName.endsWith(PYTORCH_FILE_EXTENSION) || fileName.endsWith(ONNX_FILE_EXTENSION)) {
                     if (hasModelFile) {
-                        throw new IllegalArgumentException("Find multiple model files");
+                        throw new IllegalArgumentException("Find multiple model files, but expected only one");
                     }
                     hasModelFile = true;
                 }
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
                     if (hasTokenizerFile) {
-                        throw new IllegalArgumentException("Can't find tokenizer files");
+                        throw new IllegalArgumentException("Find multiple tokenizer files");
                     }
                     hasTokenizerFile = true;
                 }

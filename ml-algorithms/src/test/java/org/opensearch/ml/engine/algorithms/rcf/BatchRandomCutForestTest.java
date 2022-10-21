@@ -17,6 +17,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -31,8 +32,10 @@ public class BatchRandomCutForestTest {
     private BatchRandomCutForest forest;
     private DataFrame trainDataFrame;
     private DataFrameInputDataset trainDataFrameInputDataSet;
+    private MLInput trainDataFrameInput;
     private DataFrame predictionDataFrame;
     private DataFrameInputDataset predictionDataFrameInputDataSet;
+    private MLInput predictionDataFrameInput;
     private int dataSize = 500;
 
     @Before
@@ -48,8 +51,10 @@ public class BatchRandomCutForestTest {
         forest = new BatchRandomCutForest(parameters);
         trainDataFrame = constructRCFDataFrame(false);
         trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
+        trainDataFrameInput = MLInput.builder().algorithm(FunctionName.BATCH_RCF).inputDataset(trainDataFrameInputDataSet).build();
         predictionDataFrame = constructRCFDataFrame(true);
         predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
+        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.BATCH_RCF).inputDataset(predictionDataFrameInputDataSet).build();
     }
 
     @Test
@@ -60,8 +65,8 @@ public class BatchRandomCutForestTest {
 
     @Test
     public void predict() {
-        MLModel model = forest.train(trainDataFrameInputDataSet);
-        MLPredictionOutput output = (MLPredictionOutput) forest.predict(predictionDataFrameInputDataSet, model);
+        MLModel model = forest.train(trainDataFrameInput);
+        MLPredictionOutput output = (MLPredictionOutput) forest.predict(predictionDataFrameInput, model);
         verifyPredictionResult(output);
     }
 
@@ -69,13 +74,13 @@ public class BatchRandomCutForestTest {
     public void predictWithNullModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for batch RCF prediction");
-        MLPredictionOutput output = (MLPredictionOutput) forest.predict(predictionDataFrameInputDataSet, null);
+        MLPredictionOutput output = (MLPredictionOutput) forest.predict(predictionDataFrameInput, null);
         verifyPredictionResult(output);
     }
 
     @Test
     public void train() {
-        MLModel model = forest.train(trainDataFrameInputDataSet);
+        MLModel model = forest.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.BATCH_RCF.name(), model.getName());
         Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
@@ -83,7 +88,7 @@ public class BatchRandomCutForestTest {
 
     @Test
     public void trainAndPredict() {
-        MLPredictionOutput output = (MLPredictionOutput) forest.trainAndPredict(trainDataFrameInputDataSet);
+        MLPredictionOutput output = (MLPredictionOutput) forest.trainAndPredict(trainDataFrameInput);
         verifyPredictionResult(output);
     }
 

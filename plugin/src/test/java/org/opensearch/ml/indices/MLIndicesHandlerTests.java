@@ -12,8 +12,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_SCHEMA_VERSION;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_SCHEMA_VERSION;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
 
 import java.io.IOException;
@@ -91,14 +93,15 @@ public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
     }
 
     public void testInitMLModelIndexIfAbsentWithExistingIndex() throws ExecutionException, InterruptedException, IOException {
-        testInitMLIndexIfAbsentWithExistingIndex(ML_MODEL_INDEX, OLD_ML_MODEL_INDEX_MAPPING_V0);
+        testInitMLIndexIfAbsentWithExistingIndex(ML_MODEL_INDEX, OLD_ML_MODEL_INDEX_MAPPING_V0, ML_MODEL_INDEX_SCHEMA_VERSION);
     }
 
     public void testInitMLTaskIndexIfAbsentWithExistingIndex() throws ExecutionException, InterruptedException, IOException {
-        testInitMLIndexIfAbsentWithExistingIndex(ML_TASK_INDEX, OLD_ML_TASK_INDEX_MAPPING_V0);
+        testInitMLIndexIfAbsentWithExistingIndex(ML_TASK_INDEX, OLD_ML_TASK_INDEX_MAPPING_V0, ML_TASK_INDEX_SCHEMA_VERSION);
     }
 
-    private void testInitMLIndexIfAbsentWithExistingIndex(String indexName, String oldIndexMapping) throws ExecutionException,
+    private void testInitMLIndexIfAbsentWithExistingIndex(String indexName, String oldIndexMapping, int schemaVersion)
+        throws ExecutionException,
         InterruptedException,
         IOException {
         mlIndicesHandler
@@ -120,7 +123,7 @@ public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
             assertTrue(r);
             Integer indexSchemaVersion = getIndexSchemaVersion(indexName);
             if (indexSchemaVersion != null) {
-                assertEquals(1, indexSchemaVersion.intValue());
+                assertEquals(schemaVersion, indexSchemaVersion.intValue());
                 mlIndicesHandler
                     .shouldUpdateIndex(
                         indexName,

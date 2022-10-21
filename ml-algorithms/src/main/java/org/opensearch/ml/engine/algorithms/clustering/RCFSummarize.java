@@ -10,10 +10,12 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.RCFSummarizeParams;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.TrainAndPredictable;
@@ -112,8 +114,8 @@ public class RCFSummarize implements TrainAndPredictable {
     }
 
     @Override
-    public MLModel train(MLInputDataset inputDataset) {
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+    public MLModel train(MLInput mlInput) {
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         Tuple<String[], float[][]> featureNamesValues = TribuoUtil.transformDataFrameFloat(dataFrame);
         SampleSummary summary = Summarizer.summarize(featureNamesValues.v2(),
                 parameters.getMaxK(),
@@ -128,6 +130,7 @@ public class RCFSummarize implements TrainAndPredictable {
                 .algorithm(FunctionName.RCF_SUMMARIZE)
                 .version(VERSION)
                 .content(ModelSerDeSer.serializeToBase64(new SerializableSummary(summary)))
+                .modelState(MLModelState.TRAINED)
                 .build();
         return model;
     }
@@ -143,9 +146,9 @@ public class RCFSummarize implements TrainAndPredictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset) {
+    public MLOutput predict(MLInput mlInput) {
         Iterable<float[]> centroidsLst = Arrays.asList(summary.summaryPoints);
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         Tuple<String[], float[][]> featureNamesValues = TribuoUtil.transformDataFrameFloat(dataFrame);
         List<Integer> predictions = new ArrayList<>();
         Arrays.stream(featureNamesValues.v2()).forEach(e->predictions.add(MathUtil.findNearest(e, centroidsLst, distance)));
@@ -157,18 +160,18 @@ public class RCFSummarize implements TrainAndPredictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+    public MLOutput predict(MLInput mlInput, MLModel model) {
         if (model == null) {
             throw new IllegalArgumentException("No model found for RCFSummarize prediction.");
         }
 
         summary = ((SerializableSummary)ModelSerDeSer.deserialize(model)).getSummary();
-        return predict(inputDataset);
+        return predict(mlInput);
     }
 
     @Override
-    public MLOutput trainAndPredict(MLInputDataset inputDataset) {
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+    public MLOutput trainAndPredict(MLInput mlInput) {
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         Tuple<String[], float[][]> featureNamesValues = TribuoUtil.transformDataFrameFloat(dataFrame);
         SampleSummary summary = Summarizer.summarize(featureNamesValues.v2(),
                 parameters.getMaxK(),

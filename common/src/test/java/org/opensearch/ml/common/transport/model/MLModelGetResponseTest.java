@@ -16,6 +16,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.model.MLModelState;
 
 import java.io.IOException;
 
@@ -34,6 +35,7 @@ public class MLModelGetResponseTest {
                 .version("1.0.0")
                 .content("content")
                 .user(new User())
+                .modelState(MLModelState.TRAINED)
                 .build();
     }
 
@@ -62,6 +64,6 @@ public class MLModelGetResponseTest {
                 "\"algorithm\":\"KMEANS\"," +
                 "\"model_version\":\"1.0.0\"," +
                 "\"model_content\":\"content\"," +
-                "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}}", jsonStr);
+                "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},\"model_state\":\"TRAINED\"}", jsonStr);
     }
 }

@@ -20,6 +20,7 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.DoubleValue;
 import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -39,8 +40,10 @@ public class AnomalyDetectionLibSVMTest {
     private AnomalyDetectionLibSVM anomalyDetection;
     private DataFrame trainDataFrame;
     private DataFrameInputDataset trainDataFrameInputDataset;
+    private MLInput trainDataFrameInput;
     private DataFrame predictionDataFrame;
     private DataFrameInputDataset predictionDataFrameInputDataset;
+    private MLInput predictionDataFrameInput;
     private List<Event.EventType> predictionLabels;
     private double gamma = 1.0;
     private double nu = 0.1;
@@ -58,9 +61,11 @@ public class AnomalyDetectionLibSVMTest {
         Dataset<Event> test = pair.getB();
         trainDataFrame = constructDataFrame(data, true, null);
         trainDataFrameInputDataset = new DataFrameInputDataset(trainDataFrame);
+        trainDataFrameInput = MLInput.builder().algorithm(FunctionName.AD_LIBSVM).inputDataset(trainDataFrameInputDataset).build();
         predictionLabels = new ArrayList<>();
         predictionDataFrame = constructDataFrame(test, false, predictionLabels);
         predictionDataFrameInputDataset = new DataFrameInputDataset(predictionDataFrame);
+        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.AD_LIBSVM).inputDataset(predictionDataFrameInputDataset).build();
     }
 
     private DataFrame constructDataFrame(Dataset<Event> data, boolean training, List<Event.EventType> labels) {
@@ -106,7 +111,7 @@ public class AnomalyDetectionLibSVMTest {
 
     @Test
     public void train() {
-        MLModel model = anomalyDetection.train(trainDataFrameInputDataset);
+        MLModel model = anomalyDetection.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
         Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
@@ -116,24 +121,24 @@ public class AnomalyDetectionLibSVMTest {
     public void trainWithFullParams() {
         AnomalyDetectionLibSVMParams parameters = AnomalyDetectionLibSVMParams.builder().gamma(gamma).nu(nu).cost(1.0).coeff(0.01).epsilon(0.001).degree(1).kernelType(AnomalyDetectionLibSVMParams.ADKernelType.LINEAR).build();
         AnomalyDetectionLibSVM anomalyDetection = new AnomalyDetectionLibSVM(parameters);
-        MLModel model = anomalyDetection.train(trainDataFrameInputDataset);
+        MLModel model = anomalyDetection.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
         Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
 
         parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.POLY).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
-        model = anomalyDetection.train(trainDataFrameInputDataset);
+        model = anomalyDetection.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
 
         parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.RBF).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
-        model = anomalyDetection.train(trainDataFrameInputDataset);
+        model = anomalyDetection.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
 
         parameters = parameters.toBuilder().kernelType(AnomalyDetectionLibSVMParams.ADKernelType.SIGMOID).build();
         anomalyDetection = new AnomalyDetectionLibSVM(parameters);
-        model = anomalyDetection.train(trainDataFrameInputDataset);
+        model = anomalyDetection.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
     }
 
@@ -141,13 +146,13 @@ public class AnomalyDetectionLibSVMTest {
     public void predict_NullModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for KMeans prediction");
-        anomalyDetection.predict(predictionDataFrameInputDataset, null);
+        anomalyDetection.predict(predictionDataFrameInput, null);
     }
 
     @Test
     public void predict() {
-        MLModel model = anomalyDetection.train(trainDataFrameInputDataset);
-        MLPredictionOutput output = (MLPredictionOutput) anomalyDetection.predict(predictionDataFrameInputDataset, model);
+        MLModel model = anomalyDetection.train(trainDataFrameInput);
+        MLPredictionOutput output = (MLPredictionOutput) anomalyDetection.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         int i = 0;
         int truePositive = 0;

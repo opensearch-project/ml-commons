@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine;
 
-import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 
 
@@ -16,9 +16,9 @@ public interface TrainAndPredictable extends Trainable, Predictable {
 
     /**
      * Train model with given input data. Then predict with the same data.
-     * @param inputDataset training data
+     * @param mlInput training data
      * @return ML model with serialized model content
      */
-    MLOutput trainAndPredict(MLInputDataset inputDataset);
+    MLOutput trainAndPredict(MLInput mlInput);
 
 }

@@ -198,13 +198,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         mlTaskManager.add(mlTask);
 
         FunctionName algorithm = mlInput.getAlgorithm();
-        MLInputDataset inputDataset = mlInput.getInputDataset();
         // run predict
         if (modelId != null) {
             try {
                 Predictable predictable = mlModelManager.getPredictable(modelId);
                 if (predictable != null) {
-                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictable.predict(inputDataset));
+                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictable.predict(mlInput));
                     if (output instanceof MLPredictionOutput) {
                         ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                     }

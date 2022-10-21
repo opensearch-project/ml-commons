@@ -19,6 +19,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -66,16 +67,16 @@ public class TextEmbeddingModel implements Predictable {
     private ZooModel model;
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+    public MLOutput predict(MLInput mlInput, MLModel model) {
         throw new MLException("model not loaded");
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset) {
+    public MLOutput predict(MLInput mlInput) {
         if (modelHelper == null || modelId == null) {
             throw new MLException("model not loaded");
         }
-        return predictTextEmbedding(modelId, inputDataset);
+        return predictTextEmbedding(modelId, mlInput.getInputDataset());
     }
 
     @Override
@@ -181,6 +182,11 @@ public class TextEmbeddingModel implements Predictable {
                     Predictor<Input, Output> predictor = model.newPredictor();
                     this.predictor = predictor;
                     this.model = model;
+
+                    Input input = new Input();
+                    input.add("warm up sentence");
+                    // First request takes longer time. Predict once to warm up model.
+                    this.predictor.predict(input);
                     return null;
                 } catch (Exception e) {
                     String errorMessage = "Failed to load model " + modelId;

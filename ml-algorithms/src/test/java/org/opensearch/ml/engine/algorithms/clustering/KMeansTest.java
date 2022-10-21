@@ -13,6 +13,7 @@ import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -27,8 +28,10 @@ public class KMeansTest {
     private KMeans kMeans;
     private DataFrame trainDataFrame;
     private DataFrameInputDataset trainDataFrameInputDataSet;
+    private MLInput trainDataFrameInput;
     private DataFrame predictionDataFrame;
     private DataFrameInputDataset predictionDataFrameInputDataset;
+    private MLInput predictionDataFrameInput;
     private int trainSize = 100;
     private int predictionSize = 10;
 
@@ -47,8 +50,8 @@ public class KMeansTest {
 
     @Test
     public void predict() {
-        MLModel model = kMeans.train(trainDataFrameInputDataSet);
-        MLPredictionOutput output = (MLPredictionOutput) kMeans.predict(predictionDataFrameInputDataset, model);
+        MLModel model = kMeans.train(trainDataFrameInput);
+        MLPredictionOutput output = (MLPredictionOutput) kMeans.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(predictionSize, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
@@ -58,12 +61,12 @@ public class KMeansTest {
     public void predictWithNullModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No model found for KMeans prediction");
-        kMeans.predict(predictionDataFrameInputDataset, null);
+        kMeans.predict(predictionDataFrameInput, null);
     }
 
     @Test
     public void train() {
-        MLModel model = kMeans.train(trainDataFrameInputDataSet);
+        MLModel model = kMeans.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.KMEANS.name(), model.getName());
         Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
@@ -77,20 +80,20 @@ public class KMeansTest {
                 .centroids(2)
                 .build();
         KMeans kMeans = new KMeans(parameters);
-        MLPredictionOutput output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInputDataSet);
+        MLPredictionOutput output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInput);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(trainSize, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
 
         parameters = parameters.toBuilder().distanceType(KMeansParams.DistanceType.COSINE).build();
         kMeans = new KMeans(parameters);
-        output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInputDataSet);
+        output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInput);
         predictions = output.getPredictionResult();
         Assert.assertEquals(trainSize, predictions.size());
 
         parameters = parameters.toBuilder().distanceType(KMeansParams.DistanceType.L1).build();
         kMeans = new KMeans(parameters);
-        output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInputDataSet);
+        output = (MLPredictionOutput) kMeans.trainAndPredict(trainDataFrameInput);
         predictions = output.getPredictionResult();
         Assert.assertEquals(trainSize, predictions.size());
     }
@@ -112,11 +115,13 @@ public class KMeansTest {
     private void constructKMeansPredictionDataFrame() {
         predictionDataFrame = constructTestDataFrame(predictionSize);
         predictionDataFrameInputDataset = new DataFrameInputDataset(predictionDataFrame);
+        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(predictionDataFrameInputDataset).build();
     }
 
     private void constructKMeansTrainDataFrame() {
         trainDataFrame = constructTestDataFrame(trainSize);
         trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
+        trainDataFrameInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(trainDataFrameInputDataSet).build();
     }
 
 }
