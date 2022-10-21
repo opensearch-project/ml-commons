@@ -95,9 +95,9 @@ public interface MachineLearningClient {
      * @param args algorithm parameters
      * @return ActionFuture of MLOutput
      */
-    default ActionFuture<MLOutput> execute(MLInput mlInput, Map<String, Object> args) {
+    default ActionFuture<MLOutput> run(MLInput mlInput, Map<String, Object> args) {
         PlainActionFuture<MLOutput> actionFuture = PlainActionFuture.newFuture();
-        execute(mlInput, args, actionFuture);
+        run(mlInput, args, actionFuture);
         return actionFuture;
     }
 
@@ -107,7 +107,7 @@ public interface MachineLearningClient {
      * @param args algorithm parameters
      * @param listener a listener to be notified of the result
      */
-    void execute(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener);
+    void run(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener);
 
     /**
      * Get MLModel and return ActionFuture.

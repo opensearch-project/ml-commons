@@ -98,7 +98,7 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void execute(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener) {
+            public void run(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener) {
                 listener.onResponse(output);
             }
 
@@ -218,7 +218,7 @@ public class MachineLearningClientTest {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAIN);
         args.put(ALGORITHM, MLConstants.KMEANS);
-        assertEquals(output, machineLearningClient.execute(mlInput, args).actionGet());
+        assertEquals(output, machineLearningClient.run(mlInput, args).actionGet());
     }
 
     @Test

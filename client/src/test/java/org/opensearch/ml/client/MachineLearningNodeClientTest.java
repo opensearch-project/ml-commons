@@ -75,7 +75,6 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.client.MLConstants.ACTION;
-import static org.opensearch.ml.client.MLConstants.AD_TIME_FIELD;
 import static org.opensearch.ml.client.MLConstants.ALGORITHM;
 import static org.opensearch.ml.client.MLConstants.MODELID;
 import static org.opensearch.ml.client.MLConstants.PREDICT;
@@ -287,7 +286,7 @@ public class MachineLearningNodeClientTest {
                 .algorithm(FunctionName.SAMPLE_ALGO)
                 .inputDataset(input)
                 .build();
-        machineLearningNodeClient.execute(mlInput, args, dataFrameActionListener);
+        machineLearningNodeClient.run(mlInput, args, dataFrameActionListener);
 
         verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class), any());
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
@@ -318,7 +317,7 @@ public class MachineLearningNodeClientTest {
                 .algorithm(FunctionName.SAMPLE_ALGO)
                 .inputDataset(input)
                 .build();
-        machineLearningNodeClient.execute(mlInput, args, trainingActionListener);
+        machineLearningNodeClient.run(mlInput, args, trainingActionListener);
 
         verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
@@ -386,7 +385,7 @@ public class MachineLearningNodeClientTest {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAINANDPREDICT);
         args.put(ALGORITHM, MLConstants.RCF);
-        args.put(AD_TIME_FIELD, "ts");
+        args.put("timeField", "ts");
         execute_trainandpredict(args);
     }
 
@@ -409,7 +408,7 @@ public class MachineLearningNodeClientTest {
                 .algorithm(FunctionName.SAMPLE_ALGO)
                 .inputDataset(input)
                 .build();
-        machineLearningNodeClient.execute(mlInput, args, trainingActionListener);
+        machineLearningNodeClient.run(mlInput, args, trainingActionListener);
 
         verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
