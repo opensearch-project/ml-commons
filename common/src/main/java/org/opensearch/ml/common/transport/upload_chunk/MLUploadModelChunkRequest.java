@@ -29,9 +29,6 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @ToString
 public class MLUploadModelChunkRequest extends ActionRequest {
 
-    /**
-     * the name of algorithm
-     */
     MLUploadModelChunkInput mlUploadInput;
 
     @Builder

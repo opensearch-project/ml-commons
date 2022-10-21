@@ -53,7 +53,7 @@ public class RestMLUploadModelChunkAction extends BaseRestHandler {
     }
 
     /**
-     * Creates a MLTrainingTaskRequest from a RestRequest
+     * Creates a MLUploadModelChunkRequest from a RestRequest
      *
      * @param request RestRequest
      * @return MLUploadModelChunkRequest

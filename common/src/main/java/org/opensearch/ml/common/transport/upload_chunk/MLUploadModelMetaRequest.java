@@ -29,9 +29,6 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @ToString
 public class MLUploadModelMetaRequest extends ActionRequest {
 
-    /**
-     * the name of algorithm
-     */
     MLUploadModelMetaInput mlUploadModelMetaInput;
 
     @Builder

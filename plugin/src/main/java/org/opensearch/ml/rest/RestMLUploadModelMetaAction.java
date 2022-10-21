@@ -49,10 +49,10 @@ public class RestMLUploadModelMetaAction extends BaseRestHandler {
     }
 
     /**
-     * Creates a MLTrainingTaskRequest from a RestRequest
+     * Creates a MLUploadModelMetaRequest from a RestRequest
      *
      * @param request RestRequest
-     * @return MLTrainingTaskRequest
+     * @return MLUploadModelMetaRequest
      */
     @VisibleForTesting
     MLUploadModelMetaRequest getRequest(RestRequest request) throws IOException {

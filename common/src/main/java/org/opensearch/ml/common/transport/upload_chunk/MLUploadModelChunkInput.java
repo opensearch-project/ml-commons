@@ -18,9 +18,6 @@ import java.io.IOException;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
-/**
- * ML input data: algorithm name, parameters and input data set.
- */
 @Data
 public class MLUploadModelChunkInput implements ToXContentObject, Writeable {
 
