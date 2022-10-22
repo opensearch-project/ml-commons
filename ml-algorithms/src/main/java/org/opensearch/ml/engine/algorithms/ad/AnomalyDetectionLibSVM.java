@@ -11,8 +11,10 @@ import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.Predictable;
@@ -82,7 +84,8 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset) {
+    public MLOutput predict(MLInput mlInput) {
+        MLInputDataset inputDataset = mlInput.getInputDataset();
         DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         if (libSVMAnomalyModel == null) {
             throw new IllegalArgumentException("model not loaded");
@@ -104,18 +107,18 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+    public MLOutput predict(MLInput mlInput, MLModel model) {
         if (model == null) {
             throw new IllegalArgumentException("No model found for KMeans prediction.");
         }
 
         libSVMAnomalyModel = (LibSVMModel) ModelSerDeSer.deserialize(model);
-        return predict(inputDataset);
+        return predict(mlInput);
     }
 
     @Override
-    public MLModel train(MLInputDataset inputDataset) {
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+    public MLModel train(MLInput mlInput) {
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         KernelType kernelType = parseKernelType();
         SVMParameters params = new SVMParameters<>(new SVMAnomalyType(SVMAnomalyType.SVMMode.ONE_CLASS), kernelType);
         Double gamma = Optional.ofNullable(parameters.getGamma()).orElse(DEFAULT_GAMMA);
@@ -147,6 +150,7 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
                 .algorithm(FunctionName.AD_LIBSVM)
                 .version(VERSION)
                 .content(ModelSerDeSer.serializeToBase64(libSVMModel))
+                .modelState(MLModelState.TRAINED)
                 .build();
         return model;
     }

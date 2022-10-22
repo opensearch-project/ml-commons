@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.model;
 
 public enum MLModelState {
+    TRAINED,
     UPLOADING,
     UPLOADED,
     LOADING,

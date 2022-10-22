@@ -9,9 +9,10 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
-import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.sample.SampleAlgoOutput;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
@@ -47,9 +48,9 @@ public class SampleAlgo implements Trainable, Predictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset) {
+    public MLOutput predict(MLInput mlInput) {
         AtomicReference<Double> sum = new AtomicReference<>((double) 0);
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         dataFrame.forEach(row -> {
             row.forEach(item -> sum.updateAndGet(v -> v + item.doubleValue()));
         });
@@ -57,20 +58,21 @@ public class SampleAlgo implements Trainable, Predictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+    public MLOutput predict(MLInput mlInput, MLModel model) {
         if (model == null) {
             throw new IllegalArgumentException("No model found for sample algo.");
         }
-        return predict(inputDataset);
+        return predict(mlInput);
     }
 
     @Override
-    public MLModel train(MLInputDataset inputDataset) {
+    public MLModel train(MLInput mlInput) {
         MLModel model = MLModel.builder()
                 .name(FunctionName.SAMPLE_ALGO.name())
                 .algorithm(FunctionName.SAMPLE_ALGO)
                 .version(VERSION)
                 .content(ModelSerDeSer.serializeToBase64("This is a sample testing model with parameter: " + sampleParam))
+                .modelState(MLModelState.TRAINED)
                 .build();
         return model;
     }

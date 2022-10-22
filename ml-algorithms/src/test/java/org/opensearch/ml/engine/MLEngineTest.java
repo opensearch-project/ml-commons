@@ -71,7 +71,7 @@ public class MLEngineTest {
         Predictable predictor = MLEngine.load(model, null);
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
-        MLPredictionOutput output = (MLPredictionOutput)predictor.predict(inputDataset);
+        MLPredictionOutput output = (MLPredictionOutput)predictor.predict(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build());
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
@@ -83,7 +83,7 @@ public class MLEngineTest {
         Predictable predictor = new LinearRegression();
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
-        predictor.predict(inputDataset);
+        predictor.predict(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build());
     }
 
     @Test

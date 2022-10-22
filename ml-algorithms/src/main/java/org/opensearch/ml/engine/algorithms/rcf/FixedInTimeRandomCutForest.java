@@ -23,8 +23,10 @@ import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.TrainAndPredictable;
@@ -57,6 +59,8 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
     private static final int DEFAULT_SAMPLES_SIZE = 256; // how many nodes per tree
     private static final double DEFAULT_TIME_DECAY = 0.0001;
     private static final double DEFAULT_ANOMALY_RATE = 0.005;
+    private static final String DEFAULT_TIME_FIELD = "timestamp";
+    private static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
     private static final String DEFAULT_TIME_ZONE = "UTC";
 
     private Integer numberOfTrees;
@@ -77,22 +81,16 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
     public FixedInTimeRandomCutForest(){}
 
     public FixedInTimeRandomCutForest(MLAlgoParams parameters) {
-        if (parameters == null) {
-            throw new MLValidationException("Parameters can't be null");
-        }
-        FitRCFParams rcfParams = (FitRCFParams) parameters;
-        if (rcfParams.getTimeField() == null) {
-            throw new MLValidationException("Time field can't be null");
-        }
+        FitRCFParams rcfParams = parameters == null ? FitRCFParams.builder().build() : (FitRCFParams)parameters;
         this.numberOfTrees = Optional.ofNullable(rcfParams.getNumberOfTrees()).orElse(DEFAULT_NUMBER_OF_TREES);
         this.shingleSize = Optional.ofNullable(rcfParams.getShingleSize()).orElse(DEFAULT_SHINGLE_SIZE);
         this.sampleSize = Optional.ofNullable(rcfParams.getSampleSize()).orElse(DEFAULT_SAMPLES_SIZE);
         this.outputAfter = Optional.ofNullable(rcfParams.getOutputAfter()).orElse(DEFAULT_OUTPUT_AFTER);
         this.timeDecay = Optional.ofNullable(rcfParams.getTimeDecay()).orElse(DEFAULT_TIME_DECAY);
         this.anomalyRate = Optional.ofNullable(rcfParams.getAnomalyRate()).orElse(DEFAULT_ANOMALY_RATE);
-        this.timeField = rcfParams.getTimeField();
+        this.timeField = Optional.ofNullable(rcfParams.getTimeField()).orElse(DEFAULT_TIME_FIELD);
 
-        this.dateFormat = rcfParams.getDateFormat();
+        this.dateFormat = Optional.ofNullable(rcfParams.getDateFormat()).orElse(DEFAULT_DATE_FORMAT);
         this.timeZone = Optional.ofNullable(rcfParams.getTimeZone()).orElse(DEFAULT_TIME_ZONE);
         if (dateFormat != null) {
             simpleDateFormat = new SimpleDateFormat(dateFormat);
@@ -113,27 +111,27 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset) {
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
-        List<Map<String, Object>> predictResult = process(dataFrame, forest);
+    public MLOutput predict(MLInput mlInput) {
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        List<Map<String, Object>> predictResult = process(dataFrame, forest, mlInput.getParameters());
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
     }
 
     @Override
-    public MLOutput predict(MLInputDataset inputDataset, MLModel model) {
+    public MLOutput predict(MLInput mlInput, MLModel model) {
         if (model == null) {
             throw new IllegalArgumentException("No model found for FIT RCF prediction.");
         }
         ThresholdedRandomCutForestState state = RCFModelSerDeSer.deserializeTRCF(model);
         forest = trcfMapper.toModel(state);
-        return predict(inputDataset);
+        return predict(mlInput);
     }
 
     @Override
-    public MLModel train(MLInputDataset inputDataset) {
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+    public MLModel train(MLInput mlInput) {
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         ThresholdedRandomCutForest forest = createThresholdedRandomCutForest(dataFrame);
-        process(dataFrame, forest);
+        process(dataFrame, forest, mlInput.getParameters());
 
         ThresholdedRandomCutForestState state = trcfMapper.toState(forest);
         MLModel model = MLModel.builder()
@@ -141,19 +139,31 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
                 .algorithm(FunctionName.FIT_RCF)
                 .version(VERSION)
                 .content(encodeBase64(RCFModelSerDeSer.serializeTRCF(state)))
+                .modelState(MLModelState.TRAINED)
                 .build();
         return model;
     }
 
     @Override
-    public MLOutput trainAndPredict(MLInputDataset inputDataset) {
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+    public MLOutput trainAndPredict(MLInput mlInput) {
+        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         ThresholdedRandomCutForest forest = createThresholdedRandomCutForest(dataFrame);
-        List<Map<String, Object>> predictResult = process(dataFrame, forest);
+        List<Map<String, Object>> predictResult = process(dataFrame, forest, null);
         return MLPredictionOutput.builder().predictionResult(DataFrameBuilder.load(predictResult)).build();
     }
 
-    private List<Map<String, Object>> process(DataFrame dataFrame, ThresholdedRandomCutForest forest) {
+    private List<Map<String, Object>> process(DataFrame dataFrame, ThresholdedRandomCutForest forest, MLAlgoParams parameters) {
+        String timeField = this.timeField;
+        DateFormat dateFormat = this.simpleDateFormat;
+        if (parameters != null) {
+            FitRCFParams rcfParams = (FitRCFParams) parameters;
+            timeField = Optional.ofNullable(rcfParams.getTimeField()).orElse(DEFAULT_TIME_FIELD);
+            String timeZone = Optional.ofNullable(rcfParams.getTimeZone()).orElse(DEFAULT_TIME_ZONE);
+            dateFormat = new SimpleDateFormat(Optional.ofNullable(rcfParams.getDateFormat()).orElse(DEFAULT_DATE_FORMAT));
+            dateFormat.setTimeZone(TimeZone.getTimeZone(timeZone));
+        }
+
+
         List<Double> pointList = new ArrayList<>();
         ColumnMeta[] columnMetas = dataFrame.columnMetas();
         List<Map<String, Object>> predictResult = new ArrayList<>();
@@ -164,6 +174,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
                 ColumnMeta columnMeta = columnMetas[i];
                 ColumnValue value = row.getValue(i);
 
+
                 // TODO: sort dataframe by time field with asc order. Currently consider the date already sorted by time.
                 if (timeField != null && timeField.equals(columnMeta.getName())) {
                     ColumnType columnType = columnMeta.getColumnType();
@@ -171,7 +182,7 @@ public class FixedInTimeRandomCutForest implements TrainAndPredictable {
                         timestamp = value.longValue();
                     } else if (columnType == ColumnType.STRING) {
                         try {
-                            timestamp = simpleDateFormat.parse(value.stringValue()).getTime();
+                            timestamp = dateFormat.parse(value.stringValue()).getTime();
                         } catch (ParseException e) {
                             log.error("Failed to parse timestamp " + value.stringValue(), e);
                             throw new MLValidationException("Failed to parse timestamp " + value.stringValue());

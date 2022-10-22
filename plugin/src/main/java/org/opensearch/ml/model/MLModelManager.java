@@ -420,7 +420,7 @@ public class MLModelManager {
                                 listener.onFailure(new IllegalArgumentException("model content changed"));
                                 return;
                             }
-                            log.error("Model content matches original hash value, continue loading");
+                            log.debug("Model content matches original hash value, continue loading");
                             Predictable predictable = MLEngine
                                 .load(mlModel, ImmutableMap.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper));
                             modelCache.addPredictable(modelId, predictable);
@@ -436,11 +436,12 @@ public class MLModelManager {
                             listener.onFailure(e);
                         }));
                     }, e -> {
+                        log.error("Failed to load model " + modelId, e);
                         mlStats
                             .createCounterStatIfAbsent(functionName, ActionName.LOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
                             .increment();
                         modelCache.removeModelState(modelId);
-                        listener.onFailure(new MLResourceNotFoundException("ML model not found"));
+                        listener.onFailure(new MLException("Failed to load model " + modelId, e));
                     }));
                 } catch (Exception e) {
                     mlStats.createCounterStatIfAbsent(functionName, ActionName.LOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();

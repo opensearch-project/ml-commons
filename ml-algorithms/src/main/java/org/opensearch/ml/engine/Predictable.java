@@ -6,7 +6,7 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 
 import java.util.Map;
@@ -19,18 +19,18 @@ public interface Predictable {
     /**
      * Predict with given input data and model.
      * Will reload model into memory with model content.
-     * @param inputDataset input data set
+     * @param mlInput input data
      * @param model the java serialized model
      * @return predicted results
      */
-    MLOutput predict(MLInputDataset inputDataset, MLModel model);
+    MLOutput predict(MLInput mlInput, MLModel model);
 
     /**
      * Predict with given input data with loaded model.
-     * @param inputDataset input data set
+     * @param mlInput input data
      * @return predicted results
      */
-    MLOutput predict(MLInputDataset inputDataset);
+    MLOutput predict(MLInput mlInput);
 
     /**
      * Init model (load model into memory) with ML model content and params.

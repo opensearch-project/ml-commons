@@ -35,7 +35,7 @@ public class MLProfileNodeResponse extends BaseNodeResponse implements ToXConten
      * Constructor
      *
      * @param in StreamInput
-     * @throws IOException throws an IO exception if the StreamInput cannot be reML from
+     * @throws IOException throws an IO exception if the StreamInput cannot be read from
      */
     public MLProfileNodeResponse(StreamInput in) throws IOException {
         super(in);
