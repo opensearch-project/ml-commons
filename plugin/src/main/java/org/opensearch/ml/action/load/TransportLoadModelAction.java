@@ -194,6 +194,10 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                                                 ),
                                             5000
                                         );
+                                    MLModelState state = algorithm == FunctionName.TEXT_EMBEDDING
+                                        ? MLModelState.UPLOADED
+                                        : MLModelState.TRAINED;
+                                    mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, state));
                                     mlTaskManager.remove(taskId);
                                 });
                                 mlModelManager

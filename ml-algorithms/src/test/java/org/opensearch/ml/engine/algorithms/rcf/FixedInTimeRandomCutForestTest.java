@@ -15,6 +15,7 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 
@@ -26,8 +27,10 @@ public class FixedInTimeRandomCutForestTest {
     private FixedInTimeRandomCutForest forest;
     private DataFrame trainDataFrame;
     private DataFrameInputDataset trainDataFrameInputDataSet;
+    private MLInput trainDataFrameInput;
     private DataFrame predictionDataFrame;
     private DataFrameInputDataset predictionDataFrameInputDataSet;
+    private MLInput predictionDataFrameInput;
     private int dataSize = 500;
 
     @Before
@@ -42,14 +45,16 @@ public class FixedInTimeRandomCutForestTest {
         forest = new FixedInTimeRandomCutForest(parameters);
         trainDataFrame = constructRCFDataFrame(false);
         trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
+        trainDataFrameInput = MLInput.builder().algorithm(FunctionName.FIT_RCF).inputDataset(trainDataFrameInputDataSet).build();
         predictionDataFrame = constructRCFDataFrame(true);
         predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
+        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.FIT_RCF).inputDataset(predictionDataFrameInputDataSet).build();
     }
 
     @Test
     public void predict() {
-        MLModel model = forest.train(trainDataFrameInputDataSet);
-        MLPredictionOutput output = (MLPredictionOutput) forest.predict(predictionDataFrameInputDataSet, model);
+        MLModel model = forest.train(trainDataFrameInput);
+        MLPredictionOutput output = (MLPredictionOutput) forest.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(dataSize, predictions.size());
         int anomalyCount = 0;
@@ -65,7 +70,7 @@ public class FixedInTimeRandomCutForestTest {
 
     @Test
     public void train() {
-        MLModel model = forest.train(trainDataFrameInputDataSet);
+        MLModel model = forest.train(trainDataFrameInput);
         Assert.assertEquals(FunctionName.FIT_RCF.name(), model.getName());
         Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());

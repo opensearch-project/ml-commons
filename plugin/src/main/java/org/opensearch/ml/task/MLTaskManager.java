@@ -9,9 +9,14 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -383,5 +388,40 @@ public class MLTaskManager {
             }
         }
         return false;
+    }
+
+    public String[] getLocalRunningLoadModelTasks() {
+        List<String> runningLoadModelTaskIds = new ArrayList<>();
+        for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
+            MLTask mlTask = entry.getValue().getMlTask();
+            if (mlTask.getTaskType() == MLTaskType.LOAD_MODEL && mlTask.getState() != MLTaskState.CREATED) {
+                runningLoadModelTaskIds.add(entry.getKey());
+            }
+        }
+        return runningLoadModelTaskIds.toArray(new String[0]);
+    }
+
+    public void syncRunningLoadModelTasks(Map<String, Set<String>> runningLoadModelTasks) {
+        Instant ttlEndTime = Instant.now().minus(120, ChronoUnit.SECONDS);
+        Set<String> staleTasks = new HashSet<>();
+
+        boolean noRunningTask = runningLoadModelTasks == null || runningLoadModelTasks.size() == 0;
+        for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
+            String taskId = entry.getKey();
+            MLTask mlTask = entry.getValue().getMlTask();
+            boolean exceedTTL = mlTask.getLastUpdateTime().isBefore(ttlEndTime);
+            if (exceedTTL
+                && mlTask.getTaskType() == MLTaskType.LOAD_MODEL
+                && mlTask.getState() == MLTaskState.CREATED
+                && (noRunningTask || !runningLoadModelTasks.containsKey(taskId))) {
+                staleTasks.add(entry.getKey());
+            }
+        }
+        if (staleTasks.size() > 0) {
+            log.debug("remove stale load tasks : {}", Arrays.toString(staleTasks.toArray(new String[0])));
+            for (String taskId : staleTasks) {
+                taskCaches.remove(taskId);
+            }
+        }
     }
 }

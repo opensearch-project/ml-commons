@@ -80,7 +80,7 @@ public class MLEngine {
         if (trainable == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
         }
-        return trainable.train(mlInput.getInputDataset());
+        return trainable.train(mlInput);
     }
 
     public static Predictable load(MLModel mlModel, Map<String, Object> params) {
@@ -96,7 +96,7 @@ public class MLEngine {
         if (predictable == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
         }
-        return predictable.predict(mlInput.getInputDataset(), model);
+        return predictable.predict(mlInput, model);
     }
 
     public static MLOutput trainAndPredict(Input input) {
@@ -106,7 +106,7 @@ public class MLEngine {
         if (trainAndPredictable == null) {
             throw new IllegalArgumentException("Unsupported algorithm: " + mlInput.getAlgorithm());
         }
-        return trainAndPredictable.trainAndPredict(mlInput.getInputDataset());
+        return trainAndPredictable.trainAndPredict(mlInput);
     }
 
     public static Output execute(Input input) {

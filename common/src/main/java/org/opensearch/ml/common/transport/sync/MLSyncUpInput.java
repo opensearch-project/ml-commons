@@ -18,18 +18,34 @@ import java.util.Set;
 @Data
 public class MLSyncUpInput implements Writeable {
     private boolean getLoadedModels;
+    // key is model id, value is set of added worker node ids
     private Map<String, String[]> addedWorkerNodes;
+    // key is model id, value is set of removed worker node ids
     private Map<String, String[]> removedWorkerNodes;
+    // key is model id, value is set of worker node ids
     private Map<String, Set<String>> modelRoutingTable;
+    // key is task id, value is set of worker node ids
+    private Map<String, Set<String>> runningLoadModelTasks;
+    // clear model routing table if no running model in cluster
     private boolean clearRoutingTable;
+    // sync running load model tasks
+    private boolean syncRunningLoadModelTasks;
 
     @Builder
-    public MLSyncUpInput(boolean getLoadedModels, Map<String, String[]> addedWorkerNodes, Map<String, String[]> removedWorkerNodes,  Map<String, Set<String>> modelRoutingTable, boolean clearRoutingTable) {
+    public MLSyncUpInput(boolean getLoadedModels,
+                         Map<String, String[]> addedWorkerNodes,
+                         Map<String, String[]> removedWorkerNodes,
+                         Map<String, Set<String>> modelRoutingTable,
+                         Map<String, Set<String>> runningLoadModelTasks,
+                         boolean clearRoutingTable,
+                         boolean syncRunningLoadModelTasks) {
         this.getLoadedModels = getLoadedModels;
         this.addedWorkerNodes = addedWorkerNodes;
         this.removedWorkerNodes = removedWorkerNodes;
         this.modelRoutingTable = modelRoutingTable;
+        this.runningLoadModelTasks = runningLoadModelTasks;
         this.clearRoutingTable = clearRoutingTable;
+        this.syncRunningLoadModelTasks = syncRunningLoadModelTasks;
     }
 
     public MLSyncUpInput(){}
@@ -45,7 +61,11 @@ public class MLSyncUpInput implements Writeable {
         if (in.readBoolean()) {
             modelRoutingTable = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
         }
+        if (in.readBoolean()) {
+            runningLoadModelTasks = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
+        }
         this.clearRoutingTable = in.readBoolean();
+        this.syncRunningLoadModelTasks = in.readBoolean();
     }
 
     @Override
@@ -69,7 +89,14 @@ public class MLSyncUpInput implements Writeable {
         } else {
             out.writeBoolean(false);
         }
+        if (runningLoadModelTasks != null && runningLoadModelTasks.size() > 0) {
+            out.writeBoolean(true);
+            out.writeMap(runningLoadModelTasks, StreamOutput::writeString, StreamOutput::writeStringCollection);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeBoolean(clearRoutingTable);
+        out.writeBoolean(syncRunningLoadModelTasks);
     }
 
 }

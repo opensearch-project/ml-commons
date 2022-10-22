@@ -115,6 +115,7 @@ public class TransportSyncUpOnNodeAction extends
         Map<String, String[]> addedWorkerNodes = syncUpInput.getAddedWorkerNodes();
         Map<String, String[]> removedWorkerNodes = syncUpInput.getRemovedWorkerNodes();
         Map<String, Set<String>> modelRoutingTable = syncUpInput.getModelRoutingTable();
+        Map<String, Set<String>> runningLoadModelTasks = syncUpInput.getRunningLoadModelTasks();
 
         if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
             for (Map.Entry<String, String[]> entry : addedWorkerNodes.entrySet()) {
@@ -128,8 +129,10 @@ public class TransportSyncUpOnNodeAction extends
         }
 
         String[] loadedModelIds = null;
+        String[] runningLoadModelTaskIds = null;
         if (syncUpInput.isGetLoadedModels()) {
             loadedModelIds = mlModelManager.getLocalLoadedModels();
+            runningLoadModelTaskIds = mlTaskManager.getLocalRunningLoadModelTasks();
         }
 
         if (syncUpInput.isClearRoutingTable()) {
@@ -141,9 +144,13 @@ public class TransportSyncUpOnNodeAction extends
             mlModelManager.syncModelRouting(modelRoutingTable);
         }
 
+        if (syncUpInput.isSyncRunningLoadModelTasks()) {
+            mlTaskManager.syncRunningLoadModelTasks(runningLoadModelTasks);
+        }
+
         cleanUpLocalCacheFiles();
 
-        return new MLSyncUpNodeResponse(clusterService.localNode(), "ok", loadedModelIds);
+        return new MLSyncUpNodeResponse(clusterService.localNode(), "ok", loadedModelIds, runningLoadModelTaskIds);
     }
 
     private void cleanUpLocalCacheFiles() {

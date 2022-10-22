@@ -29,6 +29,8 @@ import static org.opensearch.ml.common.CommonValue.USER;
 public class MLModel implements ToXContentObject {
     public static final String ALGORITHM_FIELD = "algorithm";
     public static final String MODEL_NAME_FIELD = "name";
+    // We use int type for version in first release 1.3. In 2.4, we changed to
+    // use String type for version. Keep this old version field for old models.
     public static final String OLD_MODEL_VERSION_FIELD = "version";
     public static final String MODEL_VERSION_FIELD = "model_version";
     public static final String OLD_MODEL_CONTENT_FIELD = "content";

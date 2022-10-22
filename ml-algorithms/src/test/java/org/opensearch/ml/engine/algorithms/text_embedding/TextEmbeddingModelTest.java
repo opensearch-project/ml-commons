@@ -15,7 +15,9 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -81,6 +83,7 @@ public class TextEmbeddingModelTest {
                 .algorithm(FunctionName.TEXT_EMBEDDING)
                 .version("1.0.0")
                 .modelConfig(modelConfig)
+                .modelState(MLModelState.TRAINED)
                 .build();
         modelHelper = new ModelHelper();
         params = new HashMap<>();
@@ -97,7 +100,8 @@ public class TextEmbeddingModelTest {
     @Test
     public void initModel_predict_TorchScript_SentenceTransformer() {
         textEmbeddingModel.initModel(model, params);
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(inputDataSet);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -115,7 +119,8 @@ public class TextEmbeddingModelTest {
         textEmbeddingModel.initModel(model, params);
         ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList(SENTENCE_EMBEDDING)).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(textDocsInputDataSet);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -138,7 +143,7 @@ public class TextEmbeddingModelTest {
                 .frameworkType(HUGGINGFACE_TRANSFORMERS).build();
         MLModel mlModel = model.toBuilder().modelFormat(MLModelFormat.TORCH_SCRIPT).modelConfig(hugginfaceModelConfig).build();
         textEmbeddingModel.initModel(mlModel, params);
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(inputDataSet);
+        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -158,7 +163,8 @@ public class TextEmbeddingModelTest {
                 .frameworkType(HUGGINGFACE_TRANSFORMERS).build();
         MLModel mlModel = model.toBuilder().modelFormat(MLModelFormat.ONNX).modelConfig(onnxModelConfig).build();
         textEmbeddingModel.initModel(mlModel, params);
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(inputDataSet);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -227,7 +233,7 @@ public class TextEmbeddingModelTest {
     public void predict_NullModelHelper() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("model not loaded");
-        textEmbeddingModel.predict(inputDataSet);
+        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -240,7 +246,7 @@ public class TextEmbeddingModelTest {
         } catch (Exception e) {
             assertEquals("model id is null", e.getMessage());
         }
-        textEmbeddingModel.predict(inputDataSet);
+        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -249,7 +255,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model not loaded");
         textEmbeddingModel.initModel(model, params);
         textEmbeddingModel.close();
-        textEmbeddingModel.predict(inputDataSet);
+        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -263,7 +269,7 @@ public class TextEmbeddingModelTest {
     public void predict_BeforeInitingModel() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("model not loaded");
-        textEmbeddingModel.predict(inputDataSet, model);
+        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
     }
 
 

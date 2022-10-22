@@ -14,8 +14,10 @@ import com.amazon.randomcutforest.state.RandomCutForestState;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
@@ -38,7 +40,7 @@ public class RCFModelSerDeSerTest {
     public void testModelSerDeSerBatchRCF() {
         BatchRCFParams params = BatchRCFParams.builder().build();
         BatchRandomCutForest batchRCF = new BatchRandomCutForest(params);
-        MLModel model = batchRCF.train(new DataFrameInputDataset(constructTestDataFrame(500)));
+        MLModel model = batchRCF.train(MLInput.builder().algorithm(FunctionName.BATCH_RCF).inputDataset(new DataFrameInputDataset(constructTestDataFrame(500))).build());
 
         RandomCutForestState deserializedState = RCFModelSerDeSer.deserializeRCF(model);
         RandomCutForest forest = rcfMapper.toModel(deserializedState);
@@ -51,7 +53,7 @@ public class RCFModelSerDeSerTest {
     public void testModelSerDeSerFitRCF() {
         FitRCFParams params = FitRCFParams.builder().timeField(TIME_FIELD).build();
         FixedInTimeRandomCutForest fitRCF = new FixedInTimeRandomCutForest(params);
-        MLModel model = fitRCF.train(new DataFrameInputDataset(constructTestDataFrame(500, true)));
+        MLModel model = fitRCF.train(MLInput.builder().algorithm(FunctionName.FIT_RCF).inputDataset(new DataFrameInputDataset(constructTestDataFrame(500, true))).build());
 
         ThresholdedRandomCutForestState deserializedState = RCFModelSerDeSer.deserializeTRCF(model);
         ThresholdedRandomCutForest forest = trcfMapper.toModel(deserializedState);
