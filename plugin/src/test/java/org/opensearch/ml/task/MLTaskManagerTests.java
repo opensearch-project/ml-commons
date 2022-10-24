@@ -20,8 +20,8 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -339,10 +339,10 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         assertEquals(task, mlTaskCache.getMlTask());
         assertFalse(mlTaskCache.hasError());
 
-        List<String> workNodes = mlTaskManager.getWorkNodes(task.getTaskId());
+        Set<String> workNodes = mlTaskManager.getWorkNodes(task.getTaskId());
         assertEquals(2, workNodes.size());
-        assertEquals(node1, workNodes.get(0));
-        assertEquals(node2, workNodes.get(1));
+        assertTrue(workNodes.contains(node1));
+        assertTrue(workNodes.contains(node2));
 
         String wrongTaskId = "wrong_task_id";
         assertNull(mlTaskManager.getWorkNodes(wrongTaskId));

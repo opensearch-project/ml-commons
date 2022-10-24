@@ -7,6 +7,7 @@ package org.opensearch.ml.task;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
@@ -22,7 +23,7 @@ public class MLTaskCache {
     // List of worker nodes.
     // For example when load model on ML nodes, these ML nodes are worker nodes. When model
     // loaded/failed on some node, the node will be removed from worker nodes.
-    List<String> workerNodes;
+    Set<String> workerNodes;
     Map<String, String> errors;
     // This is the original worker node count. It may not equal to size of workerNodes as
     // worker node may be removed later.
@@ -34,8 +35,9 @@ public class MLTaskCache {
         if (mlTask.isAsync()) {
             updateTaskIndexSemaphore = new Semaphore(1);
         }
-        this.workerNodes = workerNodes;
+        this.workerNodes = ConcurrentHashMap.newKeySet();
         if (workerNodes != null) {
+            this.workerNodes.addAll(workerNodes);
             workerNodeSize = workerNodes.size();
         }
         this.errors = new ConcurrentHashMap<>();

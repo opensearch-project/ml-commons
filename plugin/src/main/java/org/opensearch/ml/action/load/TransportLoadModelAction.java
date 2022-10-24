@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.load;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -161,7 +161,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                         mlTaskManager.add(mlTask, nodeIds);
                         listener.onResponse(new LoadModelResponse(taskId, MLTaskState.CREATED.name()));
                         threadPool
-                            .executor(TASK_THREAD_POOL)
+                            .executor(LOAD_THREAD_POOL)
                             .execute(
                                 () -> updateModelLoadStatusAndTriggerOnNodesAction(
                                     modelId,

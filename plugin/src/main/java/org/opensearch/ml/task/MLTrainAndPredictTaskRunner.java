@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -113,10 +113,10 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             mlInputDatasetHandler
                 .parseSearchQueryInput(
                     inputDataset,
-                    new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
+                    new ThreadedActionListener<>(log, threadPool, TRAIN_THREAD_POOL, dataFrameActionListener, false)
                 );
         } else {
-            threadPool.executor(TASK_THREAD_POOL).execute(() -> { trainAndPredict(mlTask, mlInput, listener); });
+            threadPool.executor(TRAIN_THREAD_POOL).execute(() -> { trainAndPredict(mlTask, mlInput, listener); });
         }
     }
 

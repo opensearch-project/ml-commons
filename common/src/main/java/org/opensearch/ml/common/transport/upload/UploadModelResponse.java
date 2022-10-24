@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.transport.upload;
 
+import lombok.Getter;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -13,6 +14,7 @@ import org.opensearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
+@Getter
 public class UploadModelResponse extends ActionResponse implements ToXContentObject {
     public static final String TASK_ID_FIELD = "task_id";
     public static final String STATUS_FIELD = "status";

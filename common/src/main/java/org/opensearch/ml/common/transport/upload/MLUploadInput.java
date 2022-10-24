@@ -54,12 +54,23 @@ public class MLUploadInput implements ToXContentObject, Writeable {
     public MLUploadInput(FunctionName functionName, String modelName, String version, String url, MLModelFormat modelFormat, MLModelConfig modelConfig, boolean loadModel, String[] modelNodeIds) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
+        } else {
+            this.functionName = functionName;
         }
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
         }
         if (version == null) {
             throw new IllegalArgumentException("model version is null");
+        }
+        if (modelFormat == null) {
+            throw new IllegalArgumentException("model format is null");
+        }
+        if (modelConfig == null) {
+            throw new IllegalArgumentException("model config is null");
+        }
+        if (url == null) {
+            throw new IllegalArgumentException("model file url is null");
         }
         this.modelName = modelName;
         this.version = version;

@@ -14,8 +14,10 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -32,7 +34,17 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 
+import java.util.Map;
 import java.util.function.Function;
+
+import static org.opensearch.ml.common.input.Constants.ASYNC;
+import static org.opensearch.ml.common.input.Constants.MODELID;
+import static org.opensearch.ml.common.input.Constants.PREDICT;
+import static org.opensearch.ml.common.input.Constants.TRAIN;
+import static org.opensearch.ml.common.input.Constants.TRAINANDPREDICT;
+import static org.opensearch.ml.common.input.InputHelper.convertArgumentToMLParameter;
+import static org.opensearch.ml.common.input.InputHelper.getAction;
+import static org.opensearch.ml.common.input.InputHelper.getFunctionName;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor
@@ -55,7 +67,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void trainAndPredict(MLInput mlInput, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
-
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
                 .mlInput(mlInput)
                 .dispatchTask(true)
@@ -74,6 +85,35 @@ public class MachineLearningNodeClient implements MachineLearningClient {
                 .build();
 
         client.execute(MLTrainingTaskAction.INSTANCE, trainingTaskRequest, getMlPredictionTaskResponseActionListener(listener));
+    }
+
+    @Override
+    public void run(MLInput mlInput, Map<String, Object> args, ActionListener<MLOutput> listener) {
+        String action = getAction(args);
+        if (action == null) {
+            throw new IllegalArgumentException("The parameter action is required.");
+        }
+        FunctionName functionName = getFunctionName(args);
+        MLAlgoParams mlAlgoParams = convertArgumentToMLParameter(args, functionName);
+        mlInput.setAlgorithm(functionName);
+        mlInput.setParameters(mlAlgoParams);
+        switch (action) {
+            case TRAIN:
+                boolean asyncTask = args.containsKey(ASYNC) ? (boolean) args.get(ASYNC) : false;
+                train(mlInput, asyncTask, listener);
+                break;
+            case PREDICT:
+                String modelId = (String) args.get(MODELID);
+                if (modelId == null)
+                    throw new IllegalArgumentException("The model ID is required for prediction.");
+                predict(modelId, mlInput, listener);
+                break;
+            case TRAINANDPREDICT:
+                trainAndPredict(mlInput, listener);
+                break;
+            default:
+                throw new  IllegalArgumentException("Unsupported action.");
+        }
     }
 
     @Override
@@ -171,5 +211,4 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             throw new IllegalArgumentException("input data set can't be null");
         }
     }
-
 }
