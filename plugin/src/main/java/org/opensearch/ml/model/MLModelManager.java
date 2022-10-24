@@ -402,8 +402,6 @@ public class MLModelManager {
                         String hash = calculateFileHash(modelZipFile);
                         if (modelContentHash != null && !modelContentHash.equals(hash)) {
                             log.error("Model content hash can't match original hash value");
-                            log.info("ylwudebug4 modelContentHash1--- {}", modelContentHash);
-                            log.info("ylwudebug4 modelContentHash2--- {}", hash);
                             modelCacheHelper.removeModel(modelId);
                             modelHelper.deleteFileCache(modelId);
                             listener.onFailure(new IllegalArgumentException("model content changed"));

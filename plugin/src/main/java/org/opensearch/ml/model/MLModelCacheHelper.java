@@ -58,7 +58,7 @@ public class MLModelCacheHelper {
      * @param state model state
      */
     public synchronized void setModelState(String modelId, MLModelState state) {
-        log.debug("update model {}  to state {}", modelId, state);
+        log.debug("Updating State of Model {}  to state {}", modelId, state);
         getExistingModelCache(modelId).setModelState(state);
     }
 
@@ -126,7 +126,7 @@ public class MLModelCacheHelper {
     public void removeModel(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache != null) {
-            log.debug("remove model from cache: {}", modelId);
+            log.debug("removing model {} from cache", modelId);
             modelCache.clear();
             modelCaches.remove(modelId);
         }
