@@ -158,7 +158,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.deleteModelChunks("test_id", deleteResponse, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(OS_STATUS_EXCEPTION_MESSAGE + "," + BULK_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
+        assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + BULK_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void test_FailToDeleteAllModelChunks_TimeOut() {
@@ -174,7 +174,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.deleteModelChunks("test_id", deleteResponse, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(OS_STATUS_EXCEPTION_MESSAGE + "," + TIMEOUT_MSG + "test_id", argumentCaptor.getValue().getMessage());
+        assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + TIMEOUT_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void test_FailToDeleteAllModelChunks_SearchFailure() {
@@ -196,6 +196,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.deleteModelChunks("test_id", deleteResponse, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(OS_STATUS_EXCEPTION_MESSAGE + "," + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
+        assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 }

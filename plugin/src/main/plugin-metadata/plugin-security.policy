@@ -20,4 +20,8 @@ grant {
     permission java.util.PropertyPermission "java.library.path", "read,write";
     permission java.util.PropertyPermission "*", "read,write";
     permission java.lang.RuntimePermission "shutdownHooks";
+
+    // Circuit Breaker
+    permission java.lang.RuntimePermission "getFileSystemAttributes";
+    permission java.io.FilePermission "/", "read";
 };
