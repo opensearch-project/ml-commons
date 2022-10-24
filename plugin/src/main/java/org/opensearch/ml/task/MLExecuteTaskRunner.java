@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -77,7 +77,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
      */
     @Override
     protected void executeTask(MLExecuteTaskRequest request, ActionListener<MLExecuteTaskResponse> listener) {
-        threadPool.executor(TASK_THREAD_POOL).execute(() -> {
+        threadPool.executor(EXECUTE_THREAD_POOL).execute(() -> {
             try {
                 mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
                 mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();

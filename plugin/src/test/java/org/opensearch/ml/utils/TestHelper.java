@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -48,6 +50,7 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.collect.ImmutableOpenMap;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
@@ -73,6 +76,7 @@ import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
 
 public class TestHelper {
 
@@ -372,5 +376,13 @@ public class TestHelper {
             0,
             false
         );
+    }
+
+    public static ClusterSettings clusterSetting(Settings settings, Setting<?>... setting) {
+        final Set<Setting<?>> settingsSet = Stream
+            .concat(ClusterSettings.BUILT_IN_CLUSTER_SETTINGS.stream(), Sets.newHashSet(setting).stream())
+            .collect(Collectors.toSet());
+        ClusterSettings clusterSettings = new ClusterSettings(settings, settingsSet);
+        return clusterSettings;
     }
 }

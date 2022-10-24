@@ -117,7 +117,10 @@ public class MLProfileTransportAction extends
         Arrays.stream(mlModelManager.getAllModelIds()).forEach(modelId -> {
             if (mlProfileInput.isReturnAllModels() || (!mlProfileInput.emptyModels() && targetModelIds.contains(modelId))) {
                 log.debug("Runtime model profile is found for model {}", modelId);
-                mlLocalModels.put(modelId, mlModelManager.getModelProfile(modelId));
+                MLModelProfile modelProfile = mlModelManager.getModelProfile(modelId);
+                if (modelProfile != null) {
+                    mlLocalModels.put(modelId, modelProfile);
+                }
             }
         });
 

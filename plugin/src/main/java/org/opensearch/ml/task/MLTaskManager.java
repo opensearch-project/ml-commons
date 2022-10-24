@@ -204,7 +204,7 @@ public class MLTaskManager {
         return null;
     }
 
-    public List<String> getWorkNodes(String taskId) {
+    public Set<String> getWorkNodes(String taskId) {
         if (taskCaches.containsKey(taskId)) {
             return taskCaches.get(taskId).getWorkerNodes();
         }
@@ -402,7 +402,7 @@ public class MLTaskManager {
     }
 
     public void syncRunningLoadModelTasks(Map<String, Set<String>> runningLoadModelTasks) {
-        Instant ttlEndTime = Instant.now().minus(120, ChronoUnit.SECONDS);
+        Instant ttlEndTime = Instant.now().minus(10, ChronoUnit.MINUTES);
         Set<String> staleTasks = new HashSet<>();
 
         boolean noRunningTask = runningLoadModelTasks == null || runningLoadModelTasks.size() == 0;

@@ -9,7 +9,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -172,16 +172,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     handleAsyncMLTaskFailure(mlTask, e);
                     listener.onFailure(e);
                 });
-                mlInputDatasetHandler
-                    .parseSearchQueryInput(
-                        mlInput.getInputDataset(),
-                        new ThreadedActionListener<>(log, threadPool, TASK_THREAD_POOL, dataFrameActionListener, false)
-                    );
+                mlInputDatasetHandler.parseSearchQueryInput(mlInput.getInputDataset(), threadedActionListener(dataFrameActionListener));
                 break;
             case DATA_FRAME:
             case TEXT_DOCS:
             default:
-                threadPool.executor(TASK_THREAD_POOL).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
+                threadPool.executor(PREDICT_THREAD_POOL).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
                 break;
         }
     }
@@ -201,9 +197,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         // run predict
         if (modelId != null) {
             try {
-                Predictable predictable = mlModelManager.getPredictable(modelId);
-                if (predictable != null) {
-                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictable.predict(mlInput));
+                Predictable predictor = mlModelManager.getPredictor(modelId);
+                if (predictor != null) {
+                    MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
                     if (output instanceof MLPredictionOutput) {
                         ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                     }
@@ -222,7 +218,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
             // search model by model id.
             try (ThreadContext.StoredContext context = threadPool.getThreadContext().stashContext()) {
-                ActionListener<GetResponse> getResponseListener = ActionListener.wrap(r -> {
+                ActionListener<GetResponse> getModelListener = ActionListener.wrap(r -> {
                     if (r == null || !r.isExists()) {
                         internalListener.onFailure(new ResourceNotFoundException("No model found, please check the modelId."));
                         return;
@@ -265,7 +261,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     handlePredictFailure(mlTask, internalListener, e, true);
                 });
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
-                client.get(getRequest, ActionListener.runBefore(getResponseListener, () -> context.restore()));
+                client.get(getRequest, threadedActionListener(ActionListener.runBefore(getModelListener, () -> context.restore())));
             } catch (Exception e) {
                 log.error("Failed to get model " + mlTask.getModelId(), e);
                 handlePredictFailure(mlTask, internalListener, e, true);
@@ -275,6 +271,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             log.error("ModelId is invalid", e);
             handlePredictFailure(mlTask, internalListener, e, false);
         }
+    }
+
+    private <T> ThreadedActionListener<T> threadedActionListener(ActionListener<T> listener) {
+        return new ThreadedActionListener<>(log, threadPool, PREDICT_THREAD_POOL, listener, false);
     }
 
     private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure) {

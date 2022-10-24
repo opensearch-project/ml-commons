@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.cluster;
 
-import static org.opensearch.ml.plugin.MachineLearningPlugin.TASK_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 
 import lombok.extern.log4j.Log4j2;
@@ -62,7 +62,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
     private void startSyncModelRoutingCron() {
         if (jobInterval > 0) {
             syncModelRoutingCron = threadPool
-                .scheduleWithFixedDelay(new MLSyncUpCron(client, nodeHelper), TimeValue.timeValueSeconds(jobInterval), TASK_THREAD_POOL);
+                .scheduleWithFixedDelay(new MLSyncUpCron(client, nodeHelper), TimeValue.timeValueSeconds(jobInterval), GENERAL_THREAD_POOL);
         } else {
             log.debug("Stop ML syncup job as its interval is: {}", jobInterval);
         }
