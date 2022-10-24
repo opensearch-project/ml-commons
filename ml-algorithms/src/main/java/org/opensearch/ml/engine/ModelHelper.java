@@ -91,9 +91,6 @@ public class ModelHelper {
                     hasModelFile = true;
                 }
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
-                    if (hasTokenizerFile) {
-                        throw new IllegalArgumentException("Find multiple tokenizer files");
-                    }
                     hasTokenizerFile = true;
                 }
             }

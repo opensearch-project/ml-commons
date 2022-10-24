@@ -23,6 +23,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -92,13 +93,13 @@ public class FileUtils {
 
     /**
      * Merge files into one big file.
-     * @param files array of files
+     * @param files chunk files
      * @param mergedFile merged file
      */
-    public static void mergeFiles(File[] files, File mergedFile) {
+    public static void mergeFiles(Queue<File> files, File mergedFile) {
         boolean failed = false;
-        for (int i = 0; i< files.length ; i++) {
-            File f = files[i];
+        while (!files.isEmpty()) {
+            File f = files.poll();
             try (InputStream inStream = new BufferedInputStream(new FileInputStream(f))) {
                 if (!failed) {
                     int fileLength = (int) f.length();
@@ -108,11 +109,11 @@ public class FileUtils {
                     write(fileContent, mergedFile, true);
                 }
                 org.apache.commons.io.FileUtils.deleteQuietly(f);
-                if (i == files.length - 1) {
+                if (files.isEmpty()) {
                     org.apache.commons.io.FileUtils.deleteQuietly(f.getParentFile());
                 }
             } catch (IOException e) {
-                log.error("Failed to merge file " + f.getAbsolutePath() + " to " + mergedFile.getAbsolutePath());
+                log.error("Failed to merge file " + f.getAbsolutePath() + " to " + mergedFile.getAbsolutePath(), e);
                 failed = true;
             }
         }
