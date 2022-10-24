@@ -7,7 +7,7 @@ package org.opensearch.ml.action.forward;
 
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Set;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -105,7 +105,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         try {
             switch (requestType) {
                 case LOAD_MODEL_DONE:
-                    List<String> workNodes = mlTaskManager.getWorkNodes(taskId);
+                    Set<String> workNodes = mlTaskManager.getWorkNodes(taskId);
                     if (workNodes != null) {
                         workNodes.remove(workerNodeId);
                     }
@@ -114,6 +114,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         mlTaskManager.addNodeError(taskId, workerNodeId, error);
                     } else {
                         mlModelManager.addModelWorkerNode(modelId, workerNodeId);
+                        syncModelWorkerNodes(modelId);
                     }
 
                     if (workNodes == null || workNodes.size() == 0) {
@@ -122,23 +123,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         if (mlTaskCache.allNodeFailed()) {
                             taskState = MLTaskState.FAILED;
                         } else {
-                            DiscoveryNode[] allNodes = nodeFilter.getAllNodes();
-                            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
-                            if (allNodes.length > 1 && workerNodes.length > 0) {
-                                log.debug("sync model routing to other nodes. model loaded on nodes: {}", Arrays.toString(workerNodes));
-                                MLSyncUpInput syncUpInput = MLSyncUpInput
-                                    .builder()
-                                    .addedWorkerNodes(ImmutableMap.of(modelId, workerNodes))
-                                    .build();
-                                MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
-                                client
-                                    .execute(
-                                        MLSyncUpAction.INSTANCE,
-                                        syncUpRequest,
-                                        ActionListener
-                                            .wrap(r -> { log.debug("Sync up successfully"); }, e -> { log.error("Failed to sync up", e); })
-                                    );
-                            }
+                            syncModelWorkerNodes(modelId);
                         }
                         ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
                         builder.put(MLTask.STATE_FIELD, taskState);
@@ -179,6 +164,22 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         } catch (Exception e) {
             log.error("Failed to execute forward action", e);
             listener.onFailure(e);
+        }
+    }
+
+    private void syncModelWorkerNodes(String modelId) {
+        DiscoveryNode[] allNodes = nodeFilter.getAllNodes();
+        String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+        if (allNodes.length > 1 && workerNodes.length > 0) {
+            log.debug("Sync to other nodes about worker nodes of model {}: {}", modelId, Arrays.toString(workerNodes));
+            MLSyncUpInput syncUpInput = MLSyncUpInput.builder().addedWorkerNodes(ImmutableMap.of(modelId, workerNodes)).build();
+            MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
+            client
+                .execute(
+                    MLSyncUpAction.INSTANCE,
+                    syncUpRequest,
+                    ActionListener.wrap(r -> log.debug("Sync up successfully"), e -> log.error("Failed to sync up", e))
+                );
         }
     }
 }

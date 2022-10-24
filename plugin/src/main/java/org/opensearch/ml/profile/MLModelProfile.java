@@ -8,6 +8,7 @@ package org.opensearch.ml.profile;
 import java.io.IOException;
 
 import lombok.Builder;
+import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.common.io.stream.StreamInput;
@@ -17,6 +18,7 @@ import org.opensearch.common.xcontent.ToXContentFragment;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.model.MLModelState;
 
+@Getter
 @Log4j2
 public class MLModelProfile implements ToXContentFragment, Writeable {
 

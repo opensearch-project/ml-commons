@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +27,7 @@ import org.opensearch.common.settings.IndexScopedSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.settings.SettingsFilter;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
@@ -136,7 +136,13 @@ import org.opensearch.watcher.ResourceWatcherService;
 import com.google.common.collect.ImmutableList;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
-    public static final String TASK_THREAD_POOL = "OPENSEARCH_ML_TASK_THREAD_POOL";
+    public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
+    public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
+    public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
+    public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
+    public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+    public static final String UPLOAD_THREAD_POOL = "opensearch_ml_upload";
+    public static final String LOAD_THREAD_POOL = "opensearch_ml_load";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     private MLStats mlStats;
@@ -381,9 +387,56 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     @Override
     public List<ExecutorBuilder<?>> getExecutorBuilders(Settings settings) {
-        FixedExecutorBuilder ml = new FixedExecutorBuilder(settings, TASK_THREAD_POOL, 4, 4, "ml.task_thread_pool", false);
+        FixedExecutorBuilder generalThreadPool = new FixedExecutorBuilder(
+            settings,
+            GENERAL_THREAD_POOL,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder uploadThreadPool = new FixedExecutorBuilder(
+            settings,
+            UPLOAD_THREAD_POOL,
+            Math.max(4, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + UPLOAD_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder loadThreadPool = new FixedExecutorBuilder(
+            settings,
+            LOAD_THREAD_POOL,
+            Math.max(4, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + LOAD_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder executeThreadPool = new FixedExecutorBuilder(
+            settings,
+            EXECUTE_THREAD_POOL,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + EXECUTE_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder trainThreadPool = new FixedExecutorBuilder(
+            settings,
+            TRAIN_THREAD_POOL,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + TRAIN_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder predictThreadPool = new FixedExecutorBuilder(
+            settings,
+            PREDICT_THREAD_POOL,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+            10,
+            ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
+            false
+        );
 
-        return Collections.singletonList(ml);
+        return ImmutableList.of(generalThreadPool, uploadThreadPool, loadThreadPool, executeThreadPool, trainThreadPool, predictThreadPool);
     }
 
     @Override
