@@ -42,7 +42,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     static final String TIMEOUT_MSG = "Timeout while deleting model of ";
     static final String BULK_FAILURE_MSG = "Bulk failure while deleting model of ";
     static final String SEARCH_FAILURE_MSG = "Search failure while deleting model of ";
-    static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks ";
+    static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks";
     Client client;
 
     @Inject
@@ -67,7 +67,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
                 @Override
                 public void onFailure(Exception e) {
-                    log.error("Failed to delete ML model meta Data" + modelId, e);
+                    log.error("Failed to delete model meta data for model: " + modelId, e);
                     if (e instanceof ResourceNotFoundException) {
                         deleteModelChunks(modelId, null, actionListener);
                     }
@@ -107,11 +107,11 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void returnFailure(BulkByScrollResponse response, String modelId, ActionListener<DeleteResponse> actionListener) {
         String errorMessage = "";
         if (response.isTimedOut()) {
-            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + "," + TIMEOUT_MSG + modelId;
+            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + ", " + TIMEOUT_MSG + modelId;
         } else if (!response.getBulkFailures().isEmpty()) {
-            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + "," + BULK_FAILURE_MSG + modelId;
+            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + ", " + BULK_FAILURE_MSG + modelId;
         } else {
-            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + "," + SEARCH_FAILURE_MSG + modelId;
+            errorMessage = OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + modelId;
         }
         log.debug(response.toString());
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));

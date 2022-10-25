@@ -11,8 +11,11 @@ import org.junit.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.env.Environment;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.jvm.JvmStats;
+
+import java.nio.file.Path;
 
 import static org.mockito.Mockito.when;
 
@@ -80,7 +83,7 @@ public class MLCircuitBreakerServiceTests {
 
     @Test
     public void testInit() {
-        Assert.assertNotNull(mlCircuitBreakerService.init());
+        Assert.assertNotNull(mlCircuitBreakerService.init(Path.of("/")));
     }
 
     @Test
