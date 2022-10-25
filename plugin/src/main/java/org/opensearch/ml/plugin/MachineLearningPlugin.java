@@ -215,7 +215,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
 
         JvmService jvmService = new JvmService(environment.settings());
-        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init();
+        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init(environment.dataFiles()[0]);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
         // cluster level stats
