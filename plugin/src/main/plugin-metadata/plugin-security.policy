@@ -23,5 +23,4 @@ grant {
 
     // Circuit Breaker
     permission java.lang.RuntimePermission "getFileSystemAttributes";
-    permission java.io.FilePermission "/", "read";
 };
