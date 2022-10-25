@@ -10,6 +10,7 @@ import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTT
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_PASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_PEMCERT_FILEPATH;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT;
 import static org.opensearch.ml.utils.TestData.trainModelDataJson;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -56,10 +58,16 @@ import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.upload.MLUploadInput;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.utils.TestData;
@@ -75,6 +83,7 @@ import com.google.gson.JsonArray;
 
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
+    public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
 
     protected boolean isHttps() {
         boolean isHttps = Optional.ofNullable(System.getProperty("https")).map("true"::equalsIgnoreCase).orElse(false);
@@ -267,10 +276,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         int expectedMinimumTotalAlgoRequestCount
     ) throws IOException {
         Response statsResponse = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/stats", null, "", null);
-        HttpEntity entity = statsResponse.getEntity();
-        assertNotNull(statsResponse);
-        String entityString = TestHelper.httpEntityToString(entity);
-        Map<String, Object> map = gson.fromJson(entityString, Map.class);
+        Map<String, Object> map = parseResponseToMap(statsResponse);
         int totalFailureCount = 0;
         int totalAlgoFailureCount = 0;
         int totalRequestCount = 0;
@@ -478,10 +484,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 TestHelper.toHttpEntity(kmeansInput),
                 null
             );
-        HttpEntity entity = response.getEntity();
-        assertNotNull(response);
-        String entityString = TestHelper.httpEntityToString(entity);
-        Map map = gson.fromJson(entityString, Map.class);
+        Map map = parseResponseToMap(response);
         Map<String, Object> predictionResult = (Map<String, Object>) map.get("prediction_result");
         if (function != null) {
             function.accept(predictionResult);
@@ -572,12 +575,112 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     private void verifyResponse(Consumer<Map<String, Object>> verificationConsumer, Response response) throws IOException {
-        HttpEntity entity = response.getEntity();
-        assertNotNull(response);
-        String entityString = TestHelper.httpEntityToString(entity);
-        Map<String, Object> map = gson.fromJson(entityString, Map.class);
+        Map<String, Object> map = parseResponseToMap(response);
         if (verificationConsumer != null) {
             verificationConsumer.accept(map);
         }
+    }
+
+    public MLUploadInput createUploadModelInput() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+        return MLUploadInput
+            .builder()
+            .modelName("test_model_name")
+            .version("1.0.0")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .url(
+                "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true"
+            )
+            .loadModel(false)
+            .build();
+    }
+
+    public String uploadModel(String input) throws IOException {
+        Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/_upload", null, input, null);
+        return parseTaskIdFromResponse(response);
+    }
+
+    public String loadModel(String modelId) throws IOException {
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_load", null, (String) null, null);
+        return parseTaskIdFromResponse(response);
+    }
+
+    private String parseTaskIdFromResponse(Response response) throws IOException {
+        Map map = parseResponseToMap(response);
+        String taskId = (String) map.get(TASK_ID_FIELD);
+        return taskId;
+    }
+
+    private Map parseResponseToMap(Response response) throws IOException {
+        HttpEntity entity = response.getEntity();
+        assertNotNull(response);
+        String entityString = TestHelper.httpEntityToString(entity);
+        return gson.fromJson(entityString, Map.class);
+    }
+
+    public Map getModelProfile(String modelId, Consumer verifyFunction) throws IOException {
+        Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/profile/models/" + modelId, null, (String) null, null);
+        Map profile = parseResponseToMap(response);
+        Map<String, Object> nodeProfiles = (Map) profile.get("nodes");
+        for (Map.Entry<String, Object> entry : nodeProfiles.entrySet()) {
+            Map<String, Object> modelProfiles = (Map) entry.getValue();
+            assertNotNull(modelProfiles);
+            assertEquals(1, modelProfiles.size());
+            for (Map.Entry<String, Object> modelProfileEntry : modelProfiles.entrySet()) {
+                Map<String, Object> modelProfile = (Map) ((Map) modelProfileEntry.getValue()).get(modelId);
+                if (verifyFunction != null) {
+                    verifyFunction.accept(modelProfile);
+                }
+            }
+        }
+        return profile;
+    }
+
+    public Consumer<Map<String, Object>> verifyTextEmbeddingModelLoaded() {
+        return (modelProfile) -> {
+            assertEquals(MLModelState.LOADED.name(), modelProfile.get("model_state"));
+            assertTrue(
+                ((String) modelProfile.get("predictor"))
+                    .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
+            );
+            List<String> workNodes = (List) modelProfile.get("worker_nodes");
+            assertTrue(workNodes.size() > 0);
+        };
+    }
+
+    public Map unloadModel(String modelId) throws IOException {
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_unload", null, (String) null, null);
+        return parseResponseToMap(response);
+    }
+
+    public String getTaskState(String taskId) throws IOException {
+        Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
+        Map<String, Object> task = parseResponseToMap(response);
+        return (String) task.get("state");
+    }
+
+    public void waitForTask(String taskId, MLTaskState targetState) throws InterruptedException {
+        AtomicBoolean taskDone = new AtomicBoolean(false);
+        waitUntil(() -> {
+            try {
+                String state = getTaskState(taskId);
+                if (targetState.name().equals(state)) {
+                    taskDone.set(true);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            return taskDone.get();
+        }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
+        assertTrue(taskDone.get());
     }
 }

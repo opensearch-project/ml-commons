@@ -235,7 +235,7 @@ public class MLModelManager {
                                 client.index(indexRequest, ActionListener.wrap(r -> {
                                     uploaded.getAndIncrement();
                                     if (uploaded.get() == chunkFiles.size()) {
-                                        updateModelUpdateStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
+                                        updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
                                     } else {
                                         file.delete();
                                     }
@@ -301,7 +301,7 @@ public class MLModelManager {
         return null;
     }
 
-    private void updateModelUpdateStateAsDone(
+    private void updateModelUploadStateAsDone(
         MLUploadInput uploadInput,
         String taskId,
         String modelId,
@@ -356,9 +356,9 @@ public class MLModelManager {
     }
 
     private void handleException(String taskId, Exception e) {
-        mlTaskManager.remove(taskId);
         Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, ExceptionUtils.getStackTrace(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS);
+        mlTaskManager.remove(taskId);
     }
 
     /**
