@@ -201,6 +201,9 @@ public class MLModelManager {
                         log.info("create new model meta doc {} for upload task {}", modelId, taskId);
                         modelHelper.downloadAndSplit(modelId, modelName, version, uploadInput.getUrl(), ActionListener.wrap(result -> {
                             Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
+                            if (modelSizeInBytes / 1024 / 1024 / 1024 >= 4L) {
+                                throw new MLException("Failed to save oversize model");
+                            }
                             List<String> chunkFiles = (List<String>) result.get(CHUNK_FILES);
                             String hashValue = (String) result.get(MODEL_FILE_HASH);
                             Semaphore semaphore = new Semaphore(1);
