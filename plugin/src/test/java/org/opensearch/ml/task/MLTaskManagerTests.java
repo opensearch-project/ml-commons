@@ -5,11 +5,10 @@
 
 package org.opensearch.ml.task;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -20,8 +19,8 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -51,6 +50,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     MLTask mlTask;
     Client client;
     ThreadPool threadPool;
+    ExecutorService executorService;
     ThreadContext threadContext;
     MLIndicesHandler mlIndicesHandler;
 
@@ -61,13 +61,20 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void setup() {
         this.client = mock(Client.class);
         this.threadPool = mock(ThreadPool.class);
+        this.executorService = mock(ExecutorService.class);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(threadPool.executor(anyString())).thenReturn(executorService);
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any(Runnable.class));
 
         this.mlIndicesHandler = mock(MLIndicesHandler.class);
-        this.mlTaskManager = spy(new MLTaskManager(client, mlIndicesHandler));
+        this.mlTaskManager = spy(new MLTaskManager(client, threadPool, mlIndicesHandler));
         this.mlTask = MLTask
             .builder()
             .taskId("task id")
@@ -83,45 +90,6 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.add(mlTask);
         Assert.assertTrue(mlTaskManager.contains(mlTask.getTaskId()));
         mlTaskManager.add(mlTask);
-    }
-
-    public void testUpdateTaskState() {
-        expectedEx.expect(RuntimeException.class);
-        expectedEx.expectMessage("Task not found");
-        mlTaskManager.add(mlTask);
-        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, true);
-        Assert.assertSame(mlTaskManager.getMLTask(mlTask.getTaskId()).getState(), MLTaskState.RUNNING);
-        mlTaskManager.updateTaskState("not exist", MLTaskState.RUNNING, true);
-    }
-
-    public void testUpdateTaskError() {
-        expectedEx.expect(RuntimeException.class);
-        expectedEx.expectMessage("Task not found");
-        mlTaskManager.add(mlTask);
-        mlTaskManager.updateTaskError(mlTask.getTaskId(), "error message", true);
-        Assert.assertEquals("error message", mlTaskManager.getMLTask(mlTask.getTaskId()).getError());
-        mlTaskManager.updateTaskError("not exist", "error message", true);
-    }
-
-    public void testUpdateTaskStateAndError() {
-        mlTaskManager.add(mlTask);
-        String error = "error message";
-        mlTaskManager.updateTaskStateAndError(mlTask.getTaskId(), MLTaskState.FAILED, error, true);
-        ArgumentCaptor<Map> updatedFields = ArgumentCaptor.forClass(Map.class);
-        ArgumentCaptor<Long> timeoutValue = ArgumentCaptor.forClass(Long.class);
-        verify(mlTaskManager).updateMLTask(eq(mlTask.getTaskId()), updatedFields.capture(), timeoutValue.capture());
-        Map map = updatedFields.getValue();
-        Assert.assertEquals(2, map.size());
-        Assert.assertEquals(MLTaskState.FAILED.name(), map.get("state"));
-        Assert.assertEquals(error, map.get("error"));
-        Long value = timeoutValue.getValue();
-        Assert.assertEquals(0, value.longValue());
-    }
-
-    public void testUpdateTaskStateAndError_SyncTask() {
-        mlTaskManager.add(mlTask);
-        mlTaskManager.updateTaskStateAndError(mlTask.getTaskId(), MLTaskState.FAILED, "test error", false);
-        verify(mlTaskManager, never()).updateMLTask(eq(mlTask.getTaskId()), any(), anyLong());
     }
 
     public void testUpdateMLTaskWithNullOrEmptyMap() {

@@ -68,7 +68,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
             Map<String, Object> updatedFields = ImmutableMap
                 .of(MLTask.STATE_FIELD, MLTaskState.FAILED.name(), MLTask.ERROR_FIELD, e.getMessage());
             // wait for 2 seconds to make sure failed state persisted
-            mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS);
+            mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS, true);
         }
     }
 
@@ -81,7 +81,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
                 updatedFields.put(MLTask.MODEL_ID_FIELD, mlTask.getModelId());
             }
             // wait for 2 seconds to make sure completed state persisted
-            mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS);
+            mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS, true);
         }
     }
 

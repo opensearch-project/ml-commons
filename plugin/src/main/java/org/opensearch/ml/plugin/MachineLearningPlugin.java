@@ -231,7 +231,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.mlStats = new MLStats(stats);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
-        mlTaskManager = new MLTaskManager(client, mlIndicesHandler);
+        mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper();
         mlModelManager = new MLModelManager(
             clusterService,

@@ -179,7 +179,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         });
         try {
             // run training
-            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
+            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
             MLModel mlModel = MLEngine.train(mlInput);
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {

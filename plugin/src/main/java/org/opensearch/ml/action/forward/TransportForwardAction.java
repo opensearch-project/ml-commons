@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.forward;
 
+import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Set;
@@ -130,7 +132,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         if (mlTaskCache.hasError()) {
                             builder.put(MLTask.ERROR_FIELD, mlTaskCache.getErrors().toString());
                         }
-                        mlTaskManager.updateMLTask(taskId, builder.build(), 5000);
+                        mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         if (!mlTaskCache.allNodeFailed()) {
                             MLModelState modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_LOADED : MLModelState.LOADED;
@@ -149,8 +151,6 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         } else {
                             log.debug("load model failed on all nodes, model id: {}", modelId);
                         }
-
-                        mlTaskManager.remove(taskId);
                     }
                     listener.onResponse(new MLForwardResponse("ok", null));
                     break;
