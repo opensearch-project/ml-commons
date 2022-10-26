@@ -36,6 +36,8 @@ import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegist
 
 import java.io.File;
 import java.nio.file.Path;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -294,9 +296,20 @@ public class MLModelManager {
         if (error != null) {
             return error;
         }
-        if (mlCircuitBreakerService.isOpen()) {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                if (mlCircuitBreakerService.isOpen()) {
+                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+                    throw new MLLimitExceededException("Circuit breaker is open");
+                }
+                return null;
+            });
+        } catch (MLLimitExceededException mlLimitExceededException) {
+            log.error(mlLimitExceededException.getMessage(), mlLimitExceededException);
             return "Circuit breaker is open, please check your memory and disk usage!";
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            return e.getMessage();
         }
         return null;
     }
@@ -394,9 +407,17 @@ public class MLModelManager {
                         return;
                     }
                     // check circuit breaker before loading custom model chunks
-                    if (mlCircuitBreakerService.isOpen()) {
-                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-                        throw new MLLimitExceededException("Circuit breaker is open, please check your memory and disk usage!");
+                    try {
+                        AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                            if (mlCircuitBreakerService.isOpen()) {
+                                mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+                                throw new MLLimitExceededException("Circuit breaker is open, please check your memory and disk usage!");
+                            }
+                            return null;
+                        });
+                    } catch (MLLimitExceededException mlLimitExceededException) {
+                        log.error(mlLimitExceededException.getMessage(), mlLimitExceededException);
+                        throw mlLimitExceededException;
                     }
                     retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// load model trunks
                         String hash = calculateFileHash(modelZipFile);
