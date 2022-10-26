@@ -18,7 +18,6 @@ import java.security.PrivilegedExceptionAction;
 public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
 
     public static final long DEFAULT_DISK_SHORTAGE_THRESHOLD = 10L;
-    public static final String DEFAULT_DISK_DIR = "/";
     private String diskDir;
 
     public DiskCircuitBreaker(String diskDir) {

@@ -324,8 +324,7 @@ public class MLModelManager {
                 modelSizeInBytes
             );
         updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
-            mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS);
-            mlTaskManager.remove(taskId);
+            mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
             if (uploadInput.isLoadModel()) {
                 loadModelAfterUploading(uploadInput, modelId);
             }
@@ -357,8 +356,7 @@ public class MLModelManager {
 
     private void handleException(String taskId, Exception e) {
         Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, ExceptionUtils.getStackTrace(e), STATE_FIELD, FAILED);
-        mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS);
-        mlTaskManager.remove(taskId);
+        mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
     /**

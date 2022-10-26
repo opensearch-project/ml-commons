@@ -13,6 +13,7 @@ import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTT
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT;
+import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestData.trainModelDataJson;
 
 import java.io.IOException;
@@ -595,9 +596,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .functionName(FunctionName.TEXT_EMBEDDING)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
-            .url(
-                "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true"
-            )
+            .url(SENTENCE_TRANSFORMER_MODEL_URL)
             .loadModel(false)
             .build();
     }
