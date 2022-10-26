@@ -35,7 +35,6 @@ import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -214,7 +213,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener.onResponse(localNode);
             return null;
         }).when(mlTaskDispatcher).dispatch(any());
-        doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskState(anyString(), any(MLTaskState.class), anyBoolean());
+        doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskStateAsRunning(anyString(), anyBoolean());
         taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());

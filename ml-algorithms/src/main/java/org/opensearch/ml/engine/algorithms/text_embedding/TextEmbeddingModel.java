@@ -155,8 +155,11 @@ public class TextEmbeddingModel implements Predictable {
                                 throw new IllegalArgumentException("found multiple models");
                             }
                             findModelFile = true;
-                            String suffix = name.substring(name.lastIndexOf("."));
-                            file.renameTo(new File(modelPath.resolve(modelName + suffix).toUri()));
+                            int dotIndex = name.lastIndexOf(".");
+                            String suffix = name.substring(dotIndex);
+                            if (!modelName.equals(name.substring(0, dotIndex))) {
+                                file.renameTo(new File(modelPath.resolve(modelName + suffix).toUri()));
+                            }
                         }
                     }
                     Map<String, Object> arguments = new HashMap<>();

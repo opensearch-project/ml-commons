@@ -85,6 +85,8 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
 
     @InjectMocks
     private TransportLoadModelAction transportLoadModelAction;
+    @Mock
+    private ExecutorService executorService;
 
     @Mock
     MLTask mlTask;
@@ -111,7 +113,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
         ThreadContext threadContext = new ThreadContext(Settings.EMPTY);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        ExecutorService executorService = mock(ExecutorService.class);
+        executorService = mock(ExecutorService.class);
         when(threadPool.executor(anyString())).thenReturn(executorService);
 
         MLStat mlStat = mock(MLStat.class);
@@ -192,12 +194,13 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
             listener.onResponse(indexResponse);
             return null;
         }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+        when(mlTaskManager.contains(anyString())).thenReturn(true);
 
-        doThrow(NullPointerException.class).when(threadPool).executor(anyString());
+        doThrow(RuntimeException.class).when(threadPool).executor(anyString());
 
         ActionListener<LoadModelResponse> loadModelResponseListener = mock(ActionListener.class);
         transportLoadModelAction.doExecute(mock(Task.class), mlLoadModelRequest, loadModelResponseListener);
-        verify(mlTaskManager).remove(anyString());
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUpdateModelLoadStatusAndTriggerOnNodesAction_success() throws NoSuchFieldException, IllegalAccessException {
@@ -233,7 +236,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
                 eligibleNodes,
                 FunctionName.ANOMALY_LOCALIZATION
             );
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong());
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUpdateModelLoadStatusAndTriggerOnNodesAction_whenMLTaskManagerThrowException_ListenerOnFailureExecuted() {
@@ -248,7 +251,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
                 eligibleNodes,
                 FunctionName.TEXT_EMBEDDING
             );
-        verify(mlTaskManager).remove(anyString());
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
 }

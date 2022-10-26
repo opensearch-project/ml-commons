@@ -6,6 +6,7 @@
 package org.opensearch.ml.task;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -100,14 +101,15 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         String errorMessage = "test error";
         mlTaskRunner.handleAsyncMLTaskFailure(mlTask, new RuntimeException(errorMessage));
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), argumentCaptor.capture(), anyLong());
+        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), argumentCaptor.capture(), anyLong(), anyBoolean());
         assertEquals(errorMessage, argumentCaptor.getValue().get(MLTask.ERROR_FIELD));
+        assertNull(mlTaskManager.getMLTask(mlTask.getTaskId()));
     }
 
     public void testHandleAsyncMLTaskFailure_SyncTask() {
         MLTask syncMlTask = mlTask.toBuilder().async(false).build();
         mlTaskRunner.handleAsyncMLTaskFailure(syncMlTask, new RuntimeException("error"));
-        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), anyLong());
+        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), anyLong(), anyBoolean());
     }
 
     public void testHandleAsyncMLTaskComplete_AsyncTask() {
@@ -115,7 +117,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         MLTask task = mlTask.toBuilder().modelId(modelId).build();
         mlTaskRunner.handleAsyncMLTaskComplete(task);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), argumentCaptor.capture(), anyLong());
+        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), argumentCaptor.capture(), anyLong(), anyBoolean());
         assertEquals(modelId, argumentCaptor.getValue().get(MLTask.MODEL_ID_FIELD));
         assertEquals(MLTaskState.COMPLETED, argumentCaptor.getValue().get(MLTask.STATE_FIELD));
     }
@@ -123,7 +125,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     public void testHandleAsyncMLTaskComplete_SyncTask() {
         MLTask syncMlTask = mlTask.toBuilder().async(false).build();
         mlTaskRunner.handleAsyncMLTaskComplete(syncMlTask);
-        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), anyLong());
+        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), anyLong(), anyBoolean());
     }
 
     public void testRun_CircuitBreakerOpen() {
