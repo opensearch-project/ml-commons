@@ -85,3 +85,30 @@ jobs:
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  Build-ml-windows:
+    strategy:
+      matrix:
+        java: [11, 17]
+    name: Build and Test MLCommons Plugin on Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Setup Java ${{ matrix.java }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java }}
+
+      # ml-commons
+      - name: Checkout MLCommons
+        uses: actions/checkout@v2
+
+      - name: Build and Run Tests
+        run: |
+          ./gradlew.bat build
+      - name: Publish to Maven Local
+        run: |
+          ./gradlew publishToMavenLocal
+#      - name: Multi Nodes Integration Testing
+#        run: |
+#          ./gradlew integTest -PnumNodes=3
