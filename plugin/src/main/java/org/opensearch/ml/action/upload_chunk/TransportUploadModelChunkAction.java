@@ -11,55 +11,29 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
-import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
-import org.opensearch.ml.task.MLTaskDispatcher;
-import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
 public class TransportUploadModelChunkAction extends HandledTransportAction<ActionRequest, MLUploadModelChunkResponse> {
     TransportService transportService;
-    ModelHelper modelHelper;
-    MLIndicesHandler mlIndicesHandler;
-    MLTaskManager mlTaskManager;
-    ClusterService clusterService;
-    ThreadPool threadPool;
-    Client client;
-    MLTaskDispatcher mlTaskDispatcher;
+    ActionFilters actionFilters;
     MLModelChunkUploader mlModelUploader;
 
     @Inject
     public TransportUploadModelChunkAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        ModelHelper modelHelper,
-        MLIndicesHandler mlIndicesHandler,
-        MLTaskManager mlTaskManager,
-        ClusterService clusterService,
-        ThreadPool threadPool,
-        Client client,
-        MLTaskDispatcher mlTaskDispatcher,
         MLModelChunkUploader mlModelUploader
     ) {
         super(MLUploadModelChunkAction.NAME, transportService, actionFilters, MLUploadModelChunkRequest::new);
         this.transportService = transportService;
-        this.modelHelper = modelHelper;
-        this.mlIndicesHandler = mlIndicesHandler;
-        this.mlTaskManager = mlTaskManager;
-        this.clusterService = clusterService;
-        this.threadPool = threadPool;
-        this.client = client;
-        this.mlTaskDispatcher = mlTaskDispatcher;
+        this.actionFilters = actionFilters;
         this.mlModelUploader = mlModelUploader;
     }
 

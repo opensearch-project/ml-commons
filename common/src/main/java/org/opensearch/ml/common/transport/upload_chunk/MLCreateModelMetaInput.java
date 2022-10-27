@@ -18,25 +18,24 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
 
 import java.io.IOException;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
-public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
+public class MLCreateModelMetaInput implements ToXContentObject, Writeable{
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String MODEL_NAME_FIELD = "name"; //mandatory
-    public static final String MODEL_VERSION_FIELD = "version"; //m
+    public static final String MODEL_VERSION_FIELD = "version"; //mandatory
     public static final String DESCRIPTION_FIELD = "description";
-    public static final String MODEL_FORMAT_FIELD = "model_format"; //m
+    public static final String MODEL_FORMAT_FIELD = "model_format"; //mandatory
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash"; //m
-    public static final String MODEL_CONFIG_FIELD = "model_config"; //m
-    public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //m
+    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value"; //mandatory
+    public static final String MODEL_CONFIG_FIELD = "model_config"; //mandatory
+    public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //mandatory
 
     private FunctionName functionName;
     private String name;
@@ -48,17 +47,19 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
     private MLModelState modelState;
 
     private Long modelContentSizeInBytes;
-    private String modelContentHash;
+    private String modelContentHashValue;
     private MLModelConfig modelConfig;
     private Integer totalChunks;
 
     @Builder(toBuilder = true)
-    public MLUploadModelMetaInput(String name, FunctionName functionName, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Integer totalChunks) {
+    public MLCreateModelMetaInput(String name, FunctionName functionName, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
         if (functionName == null) {
-            this.functionName = FunctionName.TEXT_EMBEDDING;
+            this.functionName = functionName.TEXT_EMBEDDING;
+        } else {
+            this.functionName = functionName;
         }
         if (version == null) {
             throw new IllegalArgumentException("model version is null");
@@ -66,7 +67,7 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
         if (modelFormat == null) {
             throw new IllegalArgumentException("model format is null");
         }
-        if (modelContentHash == null) {
+        if (modelContentHashValue == null) {
             throw new IllegalArgumentException("model content hash value is null");
         }
         if (modelConfig == null) {
@@ -76,18 +77,17 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
             throw new IllegalArgumentException("total chunks field is null");
         }
         this.name = name;
-        this.functionName = functionName;
         this.version = version;
         this.description = description;
         this.modelFormat = modelFormat;
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
-        this.modelContentHash = modelContentHash;
+        this.modelContentHashValue = modelContentHashValue;
         this.modelConfig = modelConfig;
         this.totalChunks = totalChunks;
     }
 
-    public MLUploadModelMetaInput(StreamInput in) throws IOException{
+    public MLCreateModelMetaInput(StreamInput in) throws IOException{
         this.name = in.readString();
         this.functionName = in.readEnum(FunctionName.class);
         this.version = in.readString();
@@ -99,7 +99,7 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
             modelState = in.readEnum(MLModelState.class);
         }
         this.modelContentSizeInBytes = in.readOptionalLong();
-        this.modelContentHash = in.readString();
+        this.modelContentHashValue = in.readString();
         if (in.readBoolean()) {
             modelConfig = new TextEmbeddingModelConfig(in);
         }
@@ -124,8 +124,8 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
         } else {
             out.writeBoolean(false);
         }
-        out.writeLong(modelContentSizeInBytes);
-        out.writeString(modelContentHash);
+        out.writeOptionalLong(modelContentSizeInBytes);
+        out.writeString(modelContentHashValue);
         if (modelConfig != null) {
             out.writeBoolean(true);
             modelConfig.writeTo(out);
@@ -138,41 +138,27 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        if (name != null) {
-            builder.field(MODEL_NAME_FIELD, name);
-        }
-        if (functionName != null) {
-            builder.field(FUNCTION_NAME_FIELD, functionName);
-        }
-        if (version != null) {
-            builder.field(MODEL_VERSION_FIELD, version);
-        }
+        builder.field(MODEL_NAME_FIELD, name);
+        builder.field(FUNCTION_NAME_FIELD, functionName);
+        builder.field(MODEL_VERSION_FIELD, version);
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (modelFormat != null) {
-            builder.field(MODEL_FORMAT_FIELD, modelFormat);
-        }
+        builder.field(MODEL_FORMAT_FIELD, modelFormat);
         if (modelState != null) {
             builder.field(MODEL_STATE_FIELD, modelState);
         }
         if (modelContentSizeInBytes != null) {
             builder.field(MODEL_CONTENT_SIZE_IN_BYTES_FIELD, modelContentSizeInBytes);
         }
-        if (modelContentHash != null) {
-            builder.field(MODEL_CONTENT_HASH_VALUE_FIELD, modelContentHash);
-        }
-        if (modelConfig != null) {
-            builder.field(MODEL_CONFIG_FIELD, modelConfig);
-        }
-        if (totalChunks != null) {
-            builder.field(TOTAL_CHUNKS_FIELD, totalChunks);
-        }
+        builder.field(MODEL_CONTENT_HASH_VALUE_FIELD, modelContentHashValue);
+        builder.field(MODEL_CONFIG_FIELD, modelConfig);
+        builder.field(TOTAL_CHUNKS_FIELD, totalChunks);
         builder.endObject();
         return builder;
     }
 
-    public static MLUploadModelMetaInput parse(XContentParser parser) throws IOException {
+    public static MLCreateModelMetaInput parse(XContentParser parser) throws IOException {
         String name = null;
         FunctionName functionName = null;
         String version = null;
@@ -180,7 +166,7 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
-        String modelContentHash = null;
+        String modelContentHashValue = null;
         MLModelConfig modelConfig = null;
         Integer totalChunks = null;
 
@@ -211,7 +197,7 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
                     modelContentSizeInBytes = parser.longValue();
                     break;
                 case MODEL_CONTENT_HASH_VALUE_FIELD:
-                    modelContentHash = parser.text();
+                    modelContentHashValue = parser.text();
                     break;
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
@@ -224,7 +210,7 @@ public class MLUploadModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLUploadModelMetaInput(name, functionName, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHash, modelConfig, totalChunks);
+        return new MLCreateModelMetaInput(name, functionName, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks);
     }
 
 }

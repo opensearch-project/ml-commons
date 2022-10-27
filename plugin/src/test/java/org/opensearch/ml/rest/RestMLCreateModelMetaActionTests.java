@@ -24,9 +24,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaAction;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaInput;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaRequest;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -37,9 +37,9 @@ import org.opensearch.threadpool.ThreadPool;
 
 import com.google.gson.Gson;
 
-public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
+public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
 
-    private RestMLUploadModelMetaAction restMLUploadModelMetaAction;
+    private RestMLCreateModelMetaAction restMLCreateModelMetaAction;
     private NodeClient client;
     private ThreadPool threadPool;
 
@@ -48,13 +48,13 @@ public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        restMLUploadModelMetaAction = new RestMLUploadModelMetaAction();
+        restMLCreateModelMetaAction = new RestMLCreateModelMetaAction();
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
             ActionListener<MLModelGetResponse> actionListener = invocation.getArgument(2);
             return null;
-        }).when(client).execute(eq(MLUploadModelMetaAction.INSTANCE), any(), any());
+        }).when(client).execute(eq(MLCreateModelMetaAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -65,18 +65,18 @@ public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUploadModelMetaAction mlUploadModel = new RestMLUploadModelMetaAction();
+        RestMLCreateModelMetaAction mlUploadModel = new RestMLCreateModelMetaAction();
         assertNotNull(mlUploadModel);
     }
 
     public void testGetName() {
-        String actionName = restMLUploadModelMetaAction.getName();
+        String actionName = restMLCreateModelMetaAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_upload_model__meta_action", actionName);
+        assertEquals("ml_create_model_meta_action", actionName);
     }
 
     public void testRoutes() {
-        List<RestHandler.Route> routes = restMLUploadModelMetaAction.routes();
+        List<RestHandler.Route> routes = restMLCreateModelMetaAction.routes();
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
@@ -86,10 +86,10 @@ public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
 
     public void testUploadModelRequest() throws Exception {
         RestRequest request = getRestRequest();
-        restMLUploadModelMetaAction.handleRequest(request, channel, client);
-        ArgumentCaptor<MLUploadModelMetaRequest> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelMetaRequest.class);
-        verify(client, times(1)).execute(eq(MLUploadModelMetaAction.INSTANCE), argumentCaptor.capture(), any());
-        MLUploadModelMetaInput metaModelRequest = argumentCaptor.getValue().getMlUploadModelMetaInput();
+        restMLCreateModelMetaAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLCreateModelMetaRequest> argumentCaptor = ArgumentCaptor.forClass(MLCreateModelMetaRequest.class);
+        verify(client, times(1)).execute(eq(MLCreateModelMetaAction.INSTANCE), argumentCaptor.capture(), any());
+        MLCreateModelMetaInput metaModelRequest = argumentCaptor.getValue().getMlCreateModelMetaInput();
         assertEquals("all-MiniLM-L6-v3", metaModelRequest.getName());
         assertEquals("1", metaModelRequest.getVersion());
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
@@ -120,7 +120,7 @@ public class RestMLUploadModelMetaActionTests extends OpenSearchTestCase {
                 "TORCH_SCRIPT",
                 "model_task_type",
                 "TEXT_EMBEDDING",
-                "model_content_hash",
+                "model_content_hash_value",
                 "123456677555433",
                 "model_content_size_in_bytes",
                 12345,

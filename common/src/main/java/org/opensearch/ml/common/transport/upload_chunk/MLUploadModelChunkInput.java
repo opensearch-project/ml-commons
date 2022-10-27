@@ -69,7 +69,7 @@ public class MLUploadModelChunkInput implements ToXContentObject, Writeable {
     }
 
     public static MLUploadModelChunkInput parse(XContentParser parser, byte[] content) throws IOException {
-        Integer chunkNumber = -1;
+        Integer chunkNumber = null;
         String modelId = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {

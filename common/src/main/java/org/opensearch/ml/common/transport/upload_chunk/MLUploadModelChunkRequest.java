@@ -69,7 +69,7 @@ public class MLUploadModelChunkRequest extends ActionRequest {
                 return new MLUploadModelChunkRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLTrainingTaskRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLUploadModelChunkRequest", e);
         }
 
     }

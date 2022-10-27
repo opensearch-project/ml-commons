@@ -27,6 +27,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
+import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 
 @Log4j2
@@ -45,24 +46,25 @@ public class MLModelChunkUploader {
 
     public void uploadModel(MLUploadModelChunkInput mlUploadInput, ActionListener<MLUploadModelChunkResponse> listener) {
         final String modelId = mlUploadInput.getModelId();
-        // Check the size of the content not to exceed 10 mb
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.wrap(r -> {
-                log.info("Completed Get Model Request, id:{}", modelId);
-
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         // Use this model to update the chunk count
                         MLModel existingModel = MLModel.parse(parser);
                         existingModel.setModelId(r.getId());
-                        if (existingModel.getTotalChunks() <= mlUploadInput.getChunkNumber()) {
+                        if (existingModel.getTotalChunks() < mlUploadInput.getChunkNumber()) {
                             throw new Exception("Chunk number exceeds total chunks");
                         }
                         byte[] bytes = mlUploadInput.getContent();
-                        if (bytes == null || bytes.length == 0 || isChunkExceeding10MB(bytes.length)) {
-                            throw new Exception("Chunk size either 0 or exceeds 10MB");
+                        // Check the size of the content not to exceed 10 mb
+                        if (bytes == null || bytes.length == 0) {
+                            throw new Exception("Chunk size either 0 or null");
+                        }
+                        if (validateChunkSize(bytes.length)) {
+                            throw new Exception("Chunk size exceeds 10MB");
                         }
                         mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                             int chunkNum = mlUploadInput.getChunkNumber();
@@ -74,16 +76,15 @@ public class MLModelChunkUploader {
                                 .totalChunks(existingModel.getTotalChunks())
                                 .algorithm(existingModel.getAlgorithm())
                                 .chunkNumber(chunkNum)
-                                .content(Base64.getEncoder().encodeToString(bytes))// TODO: performance testing to evaluate what limits to
-                                                                                   // place on model size
+                                .content(Base64.getEncoder().encodeToString(bytes))
                                 .build();
                             IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                            indexRequest.id(customModelId(mlUploadInput.getModelId(), mlUploadInput.getChunkNumber()));
+                            indexRequest.id(mlUploadInput.getModelId() + "_" + mlUploadInput.getChunkNumber());
                             indexRequest
                                 .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                             client.index(indexRequest, ActionListener.wrap(response -> {
-                                log.info("Index model successfully {}, chunk number {}", mlUploadInput.getModelId(), chunkNum + 1);
+                                log.info("Index model successful for {} for chunk number {}", mlUploadInput.getModelId(), chunkNum + 1);
                                 if (existingModel.getTotalChunks() == mlUploadInput.getChunkNumber()) {
                                     Semaphore semaphore = new Semaphore(1);
                                     semaphore.acquire();
@@ -100,16 +101,16 @@ public class MLModelChunkUploader {
                                         .modelContentSizeInBytes(existingModel.getModelContentSizeInBytes())
                                         .createdTime(existingModel.getCreatedTime())
                                         .build();
-                                    IndexRequest indexRequest1 = new IndexRequest(ML_MODEL_INDEX);
-                                    indexRequest1.id(modelId);
-                                    indexRequest1
+                                    IndexRequest indexReq = new IndexRequest(ML_MODEL_INDEX);
+                                    indexReq.id(modelId);
+                                    indexReq
                                         .source(
                                             mlModelMeta
                                                 .toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS)
                                         );
-                                    indexRequest1.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                                    client.index(indexRequest1, ActionListener.wrap(re -> {
-                                        log.debug("Index model successfully {}", existingModel.getName());
+                                    indexReq.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                                    client.index(indexReq, ActionListener.wrap(re -> {
+                                        log.debug("Index model successful", existingModel.getName());
                                         semaphore.release();
                                     }, e -> {
                                         log.error("Failed to update model state", e);
@@ -147,15 +148,10 @@ public class MLModelChunkUploader {
         }
     }
 
-    public static String customModelId(String modelId, Integer chunkNumber) {
-        return modelId + "_" + chunkNumber;
-    }
-
-    private boolean isChunkExceeding10MB(final long length) {
+    public boolean validateChunkSize(final long length) {
         var isChunkExceedsSize = false;
-        double fileSizeInKB = length / 1024;
-        double fileSizeInMB = fileSizeInKB / 1024;
-        if (fileSizeInMB > 10.0d) {
+        double fileSizeByLimit = length / ModelHelper.CHUNK_SIZE;
+        if (fileSizeByLimit > 1.0d) {
             isChunkExceedsSize = true;
         }
         return isChunkExceedsSize;

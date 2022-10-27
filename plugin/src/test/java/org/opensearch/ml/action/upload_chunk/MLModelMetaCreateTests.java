@@ -24,12 +24,12 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
-public class MLModelMetaUploaderTests extends OpenSearchTestCase {
+public class MLModelMetaCreateTests extends OpenSearchTestCase {
 
     @Mock
     private MLIndicesHandler mlIndicesHandler;
@@ -86,27 +86,53 @@ public class MLModelMetaUploaderTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        MLModelMetaUploader mlModelChunkUploader = new MLModelMetaUploader(mlIndicesHandler, threadPool, client);
-        assertNotNull(mlModelChunkUploader);
+        MLModelMetaCreate mlModelChunkCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
+        assertNotNull(mlModelChunkCreate);
     }
 
     public void testUploadModel() {
-        MLModelMetaUploader modelMetaUploader = new MLModelMetaUploader(mlIndicesHandler, threadPool, client);
-        MLUploadModelMetaInput mlUploadInput = prepareRequest();
-        modelMetaUploader.uploadModelMeta(mlUploadInput, actionListener);
+        MLModelMetaCreate mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
+        MLCreateModelMetaInput mlUploadInput = prepareRequest();
+        mlModelMetaCreate.createModelMeta(mlUploadInput, actionListener);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    private MLUploadModelMetaInput prepareRequest() {
-        MLUploadModelMetaInput input = MLUploadModelMetaInput
+    public void testUploadModelFiledIndex() {
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("Init Index Failed"));
+            return null;
+        }).when(client).index(any(), any());
+        MLModelMetaCreate mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
+        MLCreateModelMetaInput mlUploadInput = prepareRequest();
+        mlModelMetaCreate.createModelMeta(mlUploadInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    public void testUploadModelFiledInitIndexIfPresent() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onFailure(new Exception("initModelIndexIfAbsent Failed"));
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+        MLModelMetaCreate mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
+        MLCreateModelMetaInput mlUploadInput = prepareRequest();
+        mlModelMetaCreate.createModelMeta(mlUploadInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    private MLCreateModelMetaInput prepareRequest() {
+        MLCreateModelMetaInput input = MLCreateModelMetaInput
             .builder()
             .name("Model Name")
             .version("1")
             .description("Custom Model Test")
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .functionName(FunctionName.BATCH_RCF)
-            .modelContentHash("14555")
+            .modelContentHashValue("14555")
             .modelContentSizeInBytes(1000L)
             .modelConfig(new TextEmbeddingModelConfig("CUSTOM", 123, FrameworkType.SENTENCE_TRANSFORMERS, "all config"))
             .totalChunks(2)

@@ -15,18 +15,11 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
-import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
-import org.opensearch.ml.task.MLTaskDispatcher;
-import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class TransportUploadModelChunkActionTests extends OpenSearchTestCase {
@@ -37,20 +30,6 @@ public class TransportUploadModelChunkActionTests extends OpenSearchTestCase {
     @Mock
     private ActionFilters actionFilters;
 
-    @Mock
-    private ModelHelper modelHelper;
-    @Mock
-    private MLIndicesHandler mlIndicesHandler;
-    @Mock
-    private MLTaskManager mlTaskManager;
-    @Mock
-    private ClusterService clusterService;
-    @Mock
-    private ThreadPool threadPool;
-    @Mock
-    private Client client;
-    @Mock
-    private MLTaskDispatcher mlTaskDispatcher;
     @Mock
     private MLModelChunkUploader mlModelUploader;
 
@@ -74,34 +53,12 @@ public class TransportUploadModelChunkActionTests extends OpenSearchTestCase {
     }
 
     public void testTransportUploadModelChunkActionConstructor() {
-        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(
-            transportService,
-            actionFilters,
-            modelHelper,
-            mlIndicesHandler,
-            mlTaskManager,
-            clusterService,
-            threadPool,
-            client,
-            mlTaskDispatcher,
-            mlModelUploader
-        );
+        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(transportService, actionFilters, mlModelUploader);
         assertNotNull(action);
     }
 
     public void testTransportUploadModelChunkActionDoExecute() {
-        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(
-            transportService,
-            actionFilters,
-            modelHelper,
-            mlIndicesHandler,
-            mlTaskManager,
-            clusterService,
-            threadPool,
-            client,
-            mlTaskDispatcher,
-            mlModelUploader
-        );
+        TransportUploadModelChunkAction action = new TransportUploadModelChunkAction(transportService, actionFilters, mlModelUploader);
         assertNotNull(action);
         MLUploadModelChunkRequest request = prepareRequest();
         action.doExecute(task, request, actionListener);

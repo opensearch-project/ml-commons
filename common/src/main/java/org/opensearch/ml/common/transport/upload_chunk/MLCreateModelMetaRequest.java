@@ -27,24 +27,24 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLUploadModelMetaRequest extends ActionRequest {
+public class MLCreateModelMetaRequest extends ActionRequest {
 
-    MLUploadModelMetaInput mlUploadModelMetaInput;
+    MLCreateModelMetaInput mlCreateModelMetaInput;
 
     @Builder
-    public MLUploadModelMetaRequest(MLUploadModelMetaInput mlUploadInput) {
-        this.mlUploadModelMetaInput = mlUploadInput;
+    public MLCreateModelMetaRequest(MLCreateModelMetaInput mlUploadInput) {
+        this.mlCreateModelMetaInput = mlUploadInput;
     }
 
-    public MLUploadModelMetaRequest(StreamInput in) throws IOException {
+    public MLCreateModelMetaRequest(StreamInput in) throws IOException {
         super(in);
-        this.mlUploadModelMetaInput = new MLUploadModelMetaInput(in);
+        this.mlCreateModelMetaInput = new MLCreateModelMetaInput(in);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (mlUploadModelMetaInput == null) {
+        if (mlCreateModelMetaInput == null) {
             exception = addValidationError("ML input can't be null", exception);
         }
 
@@ -54,22 +54,22 @@ public class MLUploadModelMetaRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        this.mlUploadModelMetaInput.writeTo(out);
+        this.mlCreateModelMetaInput.writeTo(out);
     }
 
-    public static MLUploadModelMetaRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLUploadModelMetaRequest) {
-            return (MLUploadModelMetaRequest) actionRequest;
+    public static MLCreateModelMetaRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLCreateModelMetaRequest) {
+            return (MLCreateModelMetaRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLUploadModelMetaRequest(input);
+                return new MLCreateModelMetaRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLTrainingTaskRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLCreateModelMetaRequest", e);
         }
 
     }

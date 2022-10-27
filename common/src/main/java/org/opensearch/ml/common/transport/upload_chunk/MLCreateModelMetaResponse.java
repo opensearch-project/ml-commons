@@ -13,7 +13,7 @@ import org.opensearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
-public class MLUploadModelMetaResponse extends ActionResponse implements ToXContentObject {
+public class MLCreateModelMetaResponse extends ActionResponse implements ToXContentObject {
 
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String STATUS_FIELD = "status";
@@ -21,13 +21,13 @@ public class MLUploadModelMetaResponse extends ActionResponse implements ToXCont
     private String modelId;
     private String status;
 
-    public MLUploadModelMetaResponse(StreamInput in) throws IOException {
+    public MLCreateModelMetaResponse(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
         this.status = in.readString();
     }
 
-    public MLUploadModelMetaResponse(String modelId, String status) {
+    public MLCreateModelMetaResponse(String modelId, String status) {
         this.modelId = modelId;
         this.status= status;
     }

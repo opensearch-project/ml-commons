@@ -14,9 +14,9 @@ import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaAction;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaInput;
-import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelMetaRequest;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -24,17 +24,17 @@ import org.opensearch.rest.action.RestToXContentListener;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLUploadModelMetaAction extends BaseRestHandler {
-    private static final String ML_UPLOAD_MODEL_META_ACTION = "ml_upload_model__meta_action";
+public class RestMLCreateModelMetaAction extends BaseRestHandler {
+    private static final String ML_CREATE_MODEL_META_ACTION = "ml_create_model_meta_action";
 
     /**
      * Constructor
      */
-    public RestMLUploadModelMetaAction() {}
+    public RestMLCreateModelMetaAction() {}
 
     @Override
     public String getName() {
-        return ML_UPLOAD_MODEL_META_ACTION;
+        return ML_CREATE_MODEL_META_ACTION;
     }
 
     @Override
@@ -44,8 +44,8 @@ public class RestMLUploadModelMetaAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLUploadModelMetaRequest mlUploadModelMetaRequest = getRequest(request);
-        return channel -> client.execute(MLUploadModelMetaAction.INSTANCE, mlUploadModelMetaRequest, new RestToXContentListener<>(channel));
+        MLCreateModelMetaRequest mlCreateModelMetaRequest = getRequest(request);
+        return channel -> client.execute(MLCreateModelMetaAction.INSTANCE, mlCreateModelMetaRequest, new RestToXContentListener<>(channel));
     }
 
     /**
@@ -55,14 +55,14 @@ public class RestMLUploadModelMetaAction extends BaseRestHandler {
      * @return MLUploadModelMetaRequest
      */
     @VisibleForTesting
-    MLUploadModelMetaRequest getRequest(RestRequest request) throws IOException {
+    MLCreateModelMetaRequest getRequest(RestRequest request) throws IOException {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLUploadModelMetaInput mlInput = MLUploadModelMetaInput.parse(parser);
+        MLCreateModelMetaInput mlInput = MLCreateModelMetaInput.parse(parser);
         if (mlInput.getTotalChunks() == null) {
             throw new IllegalArgumentException("total chunks is null");
         }
 
-        return new MLUploadModelMetaRequest(mlInput);
+        return new MLCreateModelMetaRequest(mlInput);
     }
 }

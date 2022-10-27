@@ -257,7 +257,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.1
+                minimum = 0.8
             }
         }
         rule {
@@ -266,7 +266,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.1
+                minimum = 0.7
             }
         }
     }
