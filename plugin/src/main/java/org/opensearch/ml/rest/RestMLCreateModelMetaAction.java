@@ -59,10 +59,6 @@ public class RestMLCreateModelMetaAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLCreateModelMetaInput mlInput = MLCreateModelMetaInput.parse(parser);
-        if (mlInput.getTotalChunks() == null) {
-            throw new IllegalArgumentException("total chunks is null");
-        }
-
         return new MLCreateModelMetaRequest(mlInput);
     }
 }

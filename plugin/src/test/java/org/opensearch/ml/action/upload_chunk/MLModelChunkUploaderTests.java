@@ -31,6 +31,7 @@ import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -206,5 +207,41 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         ArgumentCaptor<MLResourceNotFoundException> argumentCaptor = ArgumentCaptor.forClass(MLResourceNotFoundException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testUploadModelChunkModelIndexNotFound() throws IOException {
+        MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
+        MLUploadModelChunkInput mlUploadInput = prepareRequest();
+        mlUploadInput.setChunkNumber(5);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException("Index Not Found"));
+            return null;
+        }).when(client).get(any(), any());
+        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        ArgumentCaptor<MLResourceNotFoundException> argumentCaptor = ArgumentCaptor.forClass(MLResourceNotFoundException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testUploadModelChunkIndexNotFound() throws IOException {
+        MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
+        MLUploadModelChunkInput mlUploadInput = prepareRequest();
+        mlUploadInput.setChunkNumber(5);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new Exception("Index Not Found"));
+            return null;
+        }).when(client).get(any(), any());
+        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testExceeds10MB() {
+        MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
+        final boolean exceeds = mlModelChunkUploader.validateChunkSize(999999999);
+        assertTrue(exceeds);
     }
 }

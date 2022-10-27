@@ -98,6 +98,7 @@ import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLExecuteAction;
@@ -114,7 +115,6 @@ import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUnloadModelAction;
 import org.opensearch.ml.rest.RestMLUploadModelAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
-import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -402,7 +402,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLUploadModelAction,
                 restMLLoadModelAction,
                 restMLUnloadModelAction,
-                    restMLCreateModelMetaAction,
+                restMLCreateModelMetaAction,
                 restMLUploadModelChunkAction
             );
     }
