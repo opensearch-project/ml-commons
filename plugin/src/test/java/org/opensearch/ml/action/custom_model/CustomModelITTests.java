@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
@@ -38,6 +39,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         super.setUp();
     }
 
+    @Ignore
     public void testCustomModelWorkflow() throws InterruptedException {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
         String modelName = "all-MiniLM-L6-v2";
