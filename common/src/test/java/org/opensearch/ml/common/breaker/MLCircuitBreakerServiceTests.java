@@ -93,10 +93,10 @@ public class MLCircuitBreakerServiceTests {
         when(mem.getHeapUsedPercent()).thenReturn((short) 50);
 
         mlCircuitBreakerService.registerBreaker(BreakerName.MEMORY, new MemoryCircuitBreaker(jvmService));
-        Assert.assertEquals(false, mlCircuitBreakerService.isOpen());
+        Assert.assertEquals(null, mlCircuitBreakerService.checkOpenCB());
 
         when(mem.getHeapUsedPercent()).thenReturn((short) 90);
-        Assert.assertEquals(true, mlCircuitBreakerService.isOpen());
+        Assert.assertEquals("Memory Circuit Breaker", mlCircuitBreakerService.checkOpenCB());
     }
 
 }

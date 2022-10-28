@@ -17,6 +17,10 @@ import lombok.experimental.UtilityClass;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.*;
+import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.ml.stats.MLStats;
 
 @UtilityClass
 public class MLNodeUtils {
@@ -44,6 +48,14 @@ public class MLNodeUtils {
                     set.add(clazz.cast(value));
                 }
             }
+        }
+    }
+
+    public static void checkOpenCircuitBreaker(MLCircuitBreakerService mlCircuitBreakerService, MLStats mlStats) {
+        String openCircuitBreaker = mlCircuitBreakerService.checkOpenCB();
+        if (openCircuitBreaker != null) {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
+            throw new MLLimitExceededException(openCircuitBreaker + " is open, please check your resources!");
         }
     }
 }
