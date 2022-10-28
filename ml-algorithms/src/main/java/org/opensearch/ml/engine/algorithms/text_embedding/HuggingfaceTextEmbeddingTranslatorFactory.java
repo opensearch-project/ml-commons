@@ -50,8 +50,8 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
                             .optTokenizerPath(modelPath)
                             .optManager(model.getNDManager())
                             .build();
-            TextEmbeddingTranslator translator =
-                    TextEmbeddingTranslator.builder(tokenizer, arguments).build();
+            HuggingfaceTextEmbeddingTranslator translator =
+                    HuggingfaceTextEmbeddingTranslator.builder(tokenizer, arguments).build();
             if (input == String.class && output == float[].class) {
                 return (Translator<I, O>) translator;
             } else if (input == Input.class && output == Output.class) {

@@ -64,7 +64,6 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -326,6 +325,7 @@ public class MLModelManager {
                 MLModel.MODEL_CONTENT_SIZE_IN_BYTES_FIELD,
                 modelSizeInBytes
             );
+        log.info("Model uploaded successfully, model id: {}, task id: {}", modelId, taskId);
         updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
             mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
             if (uploadInput.isLoadModel()) {
@@ -382,7 +382,6 @@ public class MLModelManager {
             return;
         }
         modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName);
-        DiscoveryNode node = clusterService.localNode();
         try {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {
@@ -566,6 +565,9 @@ public class MLModelManager {
 
     /**
      * Get model chunk id
+     * @param modelId model id
+     * @param chunkNumber model chunk number
+     * @return model chunk id
      */
     public String getModelChunkId(String modelId, Integer chunkNumber) {
         return modelId + "_" + chunkNumber;
@@ -651,20 +653,10 @@ public class MLModelManager {
     }
 
     /**
-     * Add predictable instance to cache.
-     *
-     * @param modelId     model id
-     * @param predictable predictable instance
-     */
-    public void addPredictable(String modelId, Predictable predictable) {
-        modelCacheHelper.setPredictor(modelId, predictable);
-    }
-
-    /**
      * Get predictable instance with model id.
      *
-     * @param modelId
-     * @return
+     * @param modelId model id
+     * @return predictable instance
      */
     public Predictable getPredictor(String modelId) {
         return modelCacheHelper.getPredictor(modelId);
@@ -673,7 +665,7 @@ public class MLModelManager {
     /**
      * Get all model ids in cache, both local model id and remote model in routing table.
      *
-     * @return
+     * @return array of model ids
      */
     public String[] getAllModelIds() {
         return modelCacheHelper.getAllModels();
@@ -682,7 +674,7 @@ public class MLModelManager {
     /**
      * Get all local model ids.
      *
-     * @return
+     * @return array of local loaded models
      */
     public String[] getLocalLoadedModels() {
         return modelCacheHelper.getLoadedModels();
@@ -691,14 +683,14 @@ public class MLModelManager {
     /**
      * Sync model routing table.
      *
-     * @param modelWorkerNodes
+     * @param modelWorkerNodes model worker nodes
      */
     public synchronized void syncModelWorkerNodes(Map<String, Set<String>> modelWorkerNodes) {
         modelCacheHelper.syncWorkerNodes(modelWorkerNodes);
     }
 
     /**
-     *
+     * Clear all model worker nodes from cache.
      */
     public void clearRoutingTable() {
         modelCacheHelper.clearWorkerNodes();

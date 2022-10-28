@@ -119,7 +119,7 @@ public class TransportUnloadModelAction extends
                     MLSyncUpAction.INSTANCE,
                     syncUpRequest,
                     ActionListener
-                        .wrap(r -> { log.info("sync up removed nodes"); }, e -> { log.error("failed to sync up removed node", e); })
+                        .wrap(r -> log.debug("sync up removed nodes successfully"), e -> log.error("failed to sync up removed node", e))
                 );
         }
         return new UnloadModelNodesResponse(clusterService.getClusterName(), responses, failures);

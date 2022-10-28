@@ -391,7 +391,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             settings,
             GENERAL_THREAD_POOL,
             Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
+            100,
             ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL,
             false
         );
@@ -430,8 +430,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         FixedExecutorBuilder predictThreadPool = new FixedExecutorBuilder(
             settings,
             PREDICT_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
+            OpenSearchExecutors.allocatedProcessors(settings) * 2,
+            10000,
             ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
             false
         );
