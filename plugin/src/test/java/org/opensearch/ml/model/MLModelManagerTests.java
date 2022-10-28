@@ -264,7 +264,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_IndexModelMetaFailure() {
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
-        when(mlCircuitBreakerService.isOpen()).thenReturn(false);
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index_failure(client);
@@ -277,7 +277,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_DownloadModelFileFailure() throws URISyntaxException {
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
-        when(mlCircuitBreakerService.isOpen()).thenReturn(false);
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
@@ -291,7 +291,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_DownloadModelFile() throws IOException {
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
-        when(mlCircuitBreakerService.isOpen()).thenReturn(false);
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
