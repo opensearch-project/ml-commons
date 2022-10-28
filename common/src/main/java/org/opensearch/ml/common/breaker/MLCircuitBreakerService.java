@@ -69,13 +69,17 @@ public class MLCircuitBreakerService {
         return this;
     }
 
-    public Boolean isOpen() {
+    /**
+     *
+     * @return the name of any open circuit breaker; otherwise return null
+     */
+    public String checkOpenCB() {
         for (CircuitBreaker breaker : breakers.values()) {
             if (breaker.isOpen()) {
-                return true;
+                return breaker.getName();
             }
         }
 
-        return false;
+        return null;
     }
 }

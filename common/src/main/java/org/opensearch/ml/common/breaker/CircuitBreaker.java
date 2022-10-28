@@ -13,4 +13,6 @@ package org.opensearch.ml.common.breaker;
 public interface CircuitBreaker {
 
     boolean isOpen();
+
+    String getName();
 }
