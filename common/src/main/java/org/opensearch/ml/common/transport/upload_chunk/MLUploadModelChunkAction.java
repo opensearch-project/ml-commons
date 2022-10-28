@@ -10,7 +10,7 @@ import org.opensearch.action.ActionType;
 
 public class MLUploadModelChunkAction extends ActionType<MLUploadModelChunkResponse> {
     public static MLUploadModelChunkAction INSTANCE = new MLUploadModelChunkAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/upload_custom_model_chunk";
+    public static final String NAME = "cluster:admin/opensearch/ml/upload_model_chunk";
 
     private MLUploadModelChunkAction() {
         super(NAME, MLUploadModelChunkResponse::new);

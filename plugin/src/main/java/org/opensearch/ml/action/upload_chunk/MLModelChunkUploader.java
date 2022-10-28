@@ -143,15 +143,14 @@ public class MLModelChunkUploader {
                 }
             }));
         } catch (Exception e) {
-            log.error(e.getMessage());
+            log.error("Fail to upload chunk for model " + modelId, e);
             listener.onFailure(e);
         }
     }
 
     public boolean validateChunkSize(final long length) {
         var isChunkExceedsSize = false;
-        double fileSizeByLimit = length / ModelHelper.CHUNK_SIZE;
-        if (fileSizeByLimit > 1.0d) {
+        if (length > ModelHelper.CHUNK_SIZE) {
             isChunkExceedsSize = true;
         }
         return isChunkExceedsSize;

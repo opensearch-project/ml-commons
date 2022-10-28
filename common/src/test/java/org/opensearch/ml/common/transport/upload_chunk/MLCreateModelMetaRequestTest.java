@@ -56,7 +56,7 @@ public class MLCreateModelMetaRequestTest {
 	public void validate_Exception_NullModelId() {
 		MLCreateModelMetaRequest mlCreateModelMetaRequest = MLCreateModelMetaRequest.builder().build();
 		ActionRequestValidationException exception = mlCreateModelMetaRequest.validate();
-		assertEquals("Validation Failed: 1: ML input can't be null;", exception.getMessage());
+		assertEquals("Validation Failed: 1: Model meta input can't be null;", exception.getMessage());
 	}
 
 	@Test

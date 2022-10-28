@@ -45,7 +45,7 @@ public class MLCreateModelMetaRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (mlCreateModelMetaInput == null) {
-            exception = addValidationError("ML input can't be null", exception);
+            exception = addValidationError("Model meta input can't be null", exception);
         }
 
         return exception;
