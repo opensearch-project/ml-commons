@@ -15,7 +15,6 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 

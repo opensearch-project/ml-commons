@@ -32,7 +32,14 @@ public final class MLCommonsSettings {
         );
 
     public static final Setting<Long> ML_COMMONS_MONITORING_REQUEST_COUNT = Setting
-        .longSetting("plugins.ml_commons.monitoring_request_count", 100, 0, 100_000, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .longSetting(
+            "plugins.ml_commons.monitoring_request_count",
+            10000,
+            0,
+            10_000_000,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
     public static final Setting<Integer> ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE = Setting
         .intSetting("plugins.ml_commons.max_upload_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);

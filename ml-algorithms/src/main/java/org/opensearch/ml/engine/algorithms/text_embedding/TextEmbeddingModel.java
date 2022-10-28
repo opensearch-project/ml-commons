@@ -140,6 +140,8 @@ public class TextEmbeddingModel implements Predictable {
                     // DJL will read "/usr/java/packages/lib" if don't set "java.library.path". That will throw
                     // access denied exception
                     System.setProperty("java.library.path", DJL_CACHE_PATH.toAbsolutePath().toString());
+                    System.setProperty("ai.djl.pytorch.num_interop_threads", "1");
+                    System.setProperty("ai.djl.pytorch.num_threads", "1");
                     Thread.currentThread().setContextClassLoader(ai.djl.Model.class.getClassLoader());
                     Path modelPath = getModelCachePath(modelId, modelName, version);
                     File pathFile = new File(modelPath.toUri());

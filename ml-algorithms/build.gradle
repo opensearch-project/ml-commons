@@ -33,7 +33,7 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '4.4.0'
     implementation group: 'com.google.guava', name: 'guava', version: '31.0.1-jre'
-    implementation platform("ai.djl:bom:0.20.0-SNAPSHOT")
+    implementation platform("ai.djl:bom:0.19.0")
     implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
     implementation group: 'ai.djl', name: 'api'
     implementation group: 'ai.djl.onnxruntime', name: 'onnxruntime-engine'
