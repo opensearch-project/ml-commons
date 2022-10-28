@@ -56,6 +56,10 @@ public class RestMLCreateModelMetaAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLCreateModelMetaRequest getRequest(RestRequest request) throws IOException {
+        boolean hasContent = request.hasContent();
+        if (!hasContent) {
+            throw new IOException("Model meta request has empty body");
+        }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLCreateModelMetaInput mlInput = MLCreateModelMetaInput.parse(parser);
