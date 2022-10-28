@@ -102,12 +102,20 @@ public class TextEmbeddingModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
-
-        textEmbeddingModel.initModel(model, params);
+        TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
+        textEmbeddingModel.initModel(smallModel, params);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
+        for (int i=0;i<mlModelOutputs.size();i++) {
+            ModelTensors tensors = mlModelOutputs.get(i);
+            int position = findSentenceEmbeddingPosition(tensors);
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            assertEquals(modelConfig.getEmbeddingDimension().intValue(), mlModelTensors.get(position).getData().length);
+        }
         textEmbeddingModel.close();
     }
 
