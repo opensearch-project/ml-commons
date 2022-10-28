@@ -243,16 +243,16 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_CircuitBreakerOpen() throws IOException {
         expectedEx.expect(MLLimitExceededException.class);
-        expectedEx.expectMessage("Circuit breaker is open, please check your memory and disk usage!");
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
-        when(mlCircuitBreakerService.isOpen()).thenReturn(true);
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Disk Circuit Breaker");
         modelManager.uploadMLModel(uploadInput, mlTask);
         verify(mlTaskManager, never()).updateMLTaskDirectly(eq(mlTask.getTaskId()), any());
     }
 
     public void testUploadMLModel_InitModelIndexFailure() throws IOException {
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
-        when(mlCircuitBreakerService.isOpen()).thenReturn(false);
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex_failure(mlIndicesHandler);
 

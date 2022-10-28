@@ -32,6 +32,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
 import static org.opensearch.ml.stats.ActionName.UPLOAD;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
+import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.File;
@@ -201,7 +202,7 @@ public class MLModelManager {
                         modelHelper.downloadAndSplit(modelId, modelName, version, uploadInput.getUrl(), ActionListener.wrap(result -> {
                             Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
                             if (modelSizeInBytes / 1024 / 1024 / 1024 >= 4L) {
-                                throw new MLException("Failed to save oversize model");
+                                throw new MLException("Model file size exceeds the limit of 4GB");
                             }
                             List<String> chunkFiles = (List<String>) result.get(CHUNK_FILES);
                             String hashValue = (String) result.get(MODEL_FILE_HASH);
@@ -296,10 +297,7 @@ public class MLModelManager {
         if (error != null) {
             return error;
         }
-        if (mlCircuitBreakerService.isOpen()) {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-            return "Circuit breaker is open, please check your memory and disk usage!";
-        }
+        checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         return null;
     }
 
@@ -394,10 +392,7 @@ public class MLModelManager {
                         return;
                     }
                     // check circuit breaker before loading custom model chunks
-                    if (mlCircuitBreakerService.isOpen()) {
-                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-                        throw new MLLimitExceededException("Circuit breaker is open, please check your memory and disk usage!");
-                    }
+                    checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                     retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// load model trunks
                         String hash = calculateFileHash(modelZipFile);
                         if (modelContentHash != null && !modelContentHash.equals(hash)) {

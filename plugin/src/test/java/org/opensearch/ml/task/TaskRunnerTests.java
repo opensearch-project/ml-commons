@@ -129,7 +129,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     }
 
     public void testRun_CircuitBreakerOpen() {
-        when(mlCircuitBreakerService.isOpen()).thenReturn(true);
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Memory Circuit Breaker");
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
         expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(null, transportService, listener));

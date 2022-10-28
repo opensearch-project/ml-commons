@@ -16,7 +16,7 @@ import java.security.PrivilegedExceptionAction;
  * A circuit breaker for disk usage.
  */
 public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
-
+    private static final String ML_DISK_CB = "Disk Circuit Breaker";
     public static final long DEFAULT_DISK_SHORTAGE_THRESHOLD = 10L;
     private String diskDir;
 
@@ -28,6 +28,11 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
     public DiskCircuitBreaker(long threshold, String diskDir) {
         super(threshold);
         this.diskDir = diskDir;
+    }
+
+    @Override
+    public String getName() {
+        return  ML_DISK_CB;
     }
 
     @Override
