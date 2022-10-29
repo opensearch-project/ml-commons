@@ -237,8 +237,6 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.indices.MLIndicesHandler',
         'org.opensearch.ml.action.load.TransportLoadModelOnNodeAction',
         'org.opensearch.ml.action.load.TransportLoadModelAction',
-        'org.opensearch.ml.model.MLModelCache',
-        'org.opensearch.ml.model.MLModelManager',
         'org.opensearch.ml.action.unload.TransportUnloadModelAction',
         'org.opensearch.ml.action.forward.TransportForwardAction',
         'org.opensearch.ml.action.upload.TransportUploadModelAction',

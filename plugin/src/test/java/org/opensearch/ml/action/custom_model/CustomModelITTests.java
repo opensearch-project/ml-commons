@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.custom_model;
 
+import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 
 import java.util.Arrays;
@@ -25,6 +26,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -36,18 +39,27 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class CustomModelITTests extends MLCommonsIntegTestCase {
+    private String irisIndexName;
 
     @Before
     public void setUp() throws Exception {
         super.setUp();
+        irisIndexName = "iris_data_for_model_serving_test";
+        loadIrisData(irisIndexName);
     }
 
     @Ignore
     public void testCustomModelWorkflow() throws InterruptedException {
+        testTextEmbeddingModel();
+        testKMeans();
+    }
+
+    private void testTextEmbeddingModel() throws InterruptedException {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
         String modelName = "small-model";
         String version = "1.0.0";
@@ -124,24 +136,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             allProfileAfterLoading
         );
 
-        AtomicBoolean loaded = new AtomicBoolean(false);
-        waitUntil(() -> {
-            MLProfileResponse modelProfile = getModelProfile(taskId);
-            if (modelProfile != null) {
-                List<MLProfileNodeResponse> nodes = modelProfile.getNodes();
-                if (nodes != null) {
-                    nodes.forEach(node -> {
-                        node.getMlNodeModels().entrySet().forEach(e -> {
-                            if (e.getValue().getModelState() == MLModelState.LOADED) {
-                                loaded.set(true);
-                            }
-                        });
-                    });
-                }
-            }
-            return loaded.get();
-        }, 20, TimeUnit.SECONDS);
-        assertTrue(loaded.get());
+        waitUntilLoaded(loadTaskId);
 
         // profile model
         MLProfileResponse modelProfile = getModelProfile(modelId.get());
@@ -197,6 +192,49 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             assertNull(nodeResponse.getLoadedModelIds());
             assertNull(nodeResponse.getRunningLoadModelTaskIds());
         }
+    }
+
+    private void waitUntilLoaded(String loadTaskId) throws InterruptedException {
+        AtomicBoolean loaded = new AtomicBoolean(false);
+        waitUntil(() -> {
+            MLProfileResponse modelProfile = getModelProfile(loadTaskId);
+            if (modelProfile != null) {
+                List<MLProfileNodeResponse> nodes = modelProfile.getNodes();
+                if (nodes != null) {
+                    nodes.forEach(node -> {
+                        node.getMlNodeModels().entrySet().forEach(e -> {
+                            if (e.getValue().getModelState() == MLModelState.LOADED) {
+                                loaded.set(true);
+                            }
+                        });
+                    });
+                }
+            }
+            return loaded.get();
+        }, 20, TimeUnit.SECONDS);
+        assertTrue(loaded.get());
+    }
+
+    private void testKMeans() throws InterruptedException {
+        String modelId = trainKmeansWithIrisData(irisIndexName, false);
+        // load model
+        String loadTaskId = loadModel(modelId);
+        waitUntilLoaded(loadTaskId);
+
+        Thread.sleep(300);
+        // profile model
+        MLProfileResponse modelProfile = getModelProfile(modelId);
+        verifyNoRunningTask(modelProfile);
+        verifyLoadedModel(modelId, 0, modelProfile);
+
+        // predict
+        MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
+        predictAndVerify(modelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
+
+        // profile model
+        MLProfileResponse modelProfileAfterPredict = getModelProfile(modelId);
+        verifyNoRunningTask(modelProfileAfterPredict);
+        verifyLoadedModel(modelId, 1, modelProfileAfterPredict);
     }
 
     private void verifyRunningTask(

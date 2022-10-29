@@ -97,6 +97,7 @@ import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerI
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
@@ -246,6 +247,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper();
+        MLModelCacheHelper modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         mlModelManager = new MLModelManager(
             clusterService,
             client,
@@ -256,7 +258,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlStats,
             mlCircuitBreakerService,
             mlIndicesHandler,
-            mlTaskManager
+            mlTaskManager,
+            modelCacheHelper
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
