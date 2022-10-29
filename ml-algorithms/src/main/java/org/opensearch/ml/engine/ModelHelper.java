@@ -37,7 +37,7 @@ public class ModelHelper {
     public static final String CHUNK_FILES = "chunk_files";
     public static final String MODEL_SIZE_IN_BYTES = "model_size_in_bytes";
     public static final String MODEL_FILE_HASH = "model_file_hash";
-    private static final int CHUNK_SIZE = 10_000_000; // 10MB
+    public static final int CHUNK_SIZE = 10_000_000; // 10MB
     public static final String PYTORCH_FILE_EXTENSION = ".pt";
     public static final String ONNX_FILE_EXTENSION = ".onnx";
     public static final String TOKENIZER_FILE_NAME = "tokenizer.json";
