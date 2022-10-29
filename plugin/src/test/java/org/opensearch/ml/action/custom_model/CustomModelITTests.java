@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
@@ -30,6 +31,8 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
@@ -43,6 +46,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         super.setUp();
     }
 
+    @Ignore
     public void testCustomModelWorkflow() throws InterruptedException {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
         String modelName = "small-model";
@@ -157,6 +161,15 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
         assertEquals(dimension, output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData().length);
 
+        // sync up running tasks/models
+        MLSyncUpNodesResponse syncUpResponse = syncUp_RunningModelAndTask();
+        for (MLSyncUpNodeResponse nodeResponse : syncUpResponse.getNodes()) {
+            if (nodeResponse.getNode().isDataNode()) {
+                assertEquals(0, nodeResponse.getRunningLoadModelTaskIds().length);
+                assertArrayEquals(new String[] { modelId.get() }, nodeResponse.getLoadedModelIds());
+            }
+        }
+
         MLProfileResponse allProfile = getAllProfile();
         verifyLoadedModel(modelId.get(), 1, allProfile);
 
@@ -167,8 +180,23 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, unloadStatus.size());
         assertEquals("unloaded", unloadStatus.get(modelId.get()));
 
+        // sync up running tasks/models
+        MLSyncUpNodesResponse syncUpResponseAfterUnload = syncUp_RunningModelAndTask();
+        for (MLSyncUpNodeResponse nodeResponse : syncUpResponseAfterUnload.getNodes()) {
+            if (nodeResponse.getNode().isDataNode()) {
+                assertEquals(0, nodeResponse.getRunningLoadModelTaskIds().length);
+                assertEquals(0, nodeResponse.getLoadedModelIds().length);
+            }
+        }
+
         MLProfileResponse noRuningTaskProfile = getAllProfile();
         verifyNoRunningTask(noRuningTaskProfile);
+
+        MLSyncUpNodesResponse syncUpClearResponse = syncUp_Clear();
+        for (MLSyncUpNodeResponse nodeResponse : syncUpClearResponse.getNodes()) {
+            assertNull(nodeResponse.getLoadedModelIds());
+            assertNull(nodeResponse.getRunningLoadModelTaskIds());
+        }
     }
 
     private void verifyRunningTask(

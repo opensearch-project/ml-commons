@@ -60,6 +60,10 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
+import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
@@ -366,5 +370,22 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(CommonValue.ML_MODEL_INDEX);
         SearchResponse searchResponse = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet(5000);
         return searchResponse;
+    }
+
+    public MLSyncUpNodesResponse syncUp_RunningModelAndTask() {
+        String[] allNodes = getAllNodes(clusterService());
+        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
+        MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
+        // gather running model/tasks on nodes
+        MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, gatherInfoRequest).actionGet(5000);
+        return syncUpResponse;
+    }
+
+    public MLSyncUpNodesResponse syncUp_Clear() {
+        String[] allNodes = getAllNodes(clusterService());
+        MLSyncUpInput syncUpInput = MLSyncUpInput.builder().syncRunningLoadModelTasks(true).clearRoutingTable(true).build();
+        MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
+        MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, syncUpRequest).actionGet(5000);
+        return syncUpResponse;
     }
 }

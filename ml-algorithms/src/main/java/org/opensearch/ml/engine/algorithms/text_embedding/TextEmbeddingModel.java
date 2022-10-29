@@ -148,7 +148,9 @@ public class TextEmbeddingModel implements Predictable {
                     if (pathFile.exists()) {
                         FileUtils.deleteDirectory(pathFile);
                     }
-                    ZipUtils.unzip(new FileInputStream(modelZipFile), modelPath);
+                    try (FileInputStream fileInputStream = new FileInputStream(modelZipFile)) {
+                        ZipUtils.unzip(fileInputStream, modelPath);
+                    }
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();
