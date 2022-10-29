@@ -152,14 +152,13 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             null
         );
 
-        MLProfileResponse allProfile = getAllProfile();
-        verifyNoRunningTask(allProfile);
-        verifyLoadedModel(modelId.get(), 1, allProfile);
-
         ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
         assertEquals(1, output.getMlModelOutputs().size());
         assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
         assertEquals(dimension, output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData().length);
+
+        MLProfileResponse allProfile = getAllProfile();
+        verifyLoadedModel(modelId.get(), 1, allProfile);
 
         // unload model
         UnloadModelNodesResponse unloadModelResponse = unloadModel(modelId.get());
@@ -167,6 +166,9 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         Map<String, String> unloadStatus = unloadModelResponse.getNodes().get(0).getModelUnloadStatus();
         assertEquals(1, unloadStatus.size());
         assertEquals("unloaded", unloadStatus.get(modelId.get()));
+
+        MLProfileResponse noRuningTaskProfile = getAllProfile();
+        verifyNoRunningTask(noRuningTaskProfile);
     }
 
     private void verifyRunningTask(
