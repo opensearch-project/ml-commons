@@ -292,13 +292,22 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLProfileResponse getModelProfile(String modelId) {
-        String[] allNodes = getAllNodes(clusterService());
         MLProfileInput profileInput = MLProfileInput
             .builder()
             .modelIds(ImmutableSet.of(modelId))
             .returnAllModels(true)
             .returnAllTasks(true)
             .build();
+        return profile(profileInput);
+    }
+
+    public MLProfileResponse getAllProfile() {
+        MLProfileInput profileInput = MLProfileInput.builder().returnAllModels(true).returnAllTasks(true).build();
+        return profile(profileInput);
+    }
+
+    public MLProfileResponse profile(MLProfileInput profileInput) {
+        String[] allNodes = getAllNodes(clusterService());
         MLProfileRequest profileRequest = new MLProfileRequest(allNodes, profileInput);
         ActionFuture<MLProfileResponse> actionFuture = client().execute(MLProfileAction.INSTANCE, profileRequest);
         MLProfileResponse response = actionFuture.actionGet();

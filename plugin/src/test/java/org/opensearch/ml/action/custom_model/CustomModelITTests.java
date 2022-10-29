@@ -5,23 +5,25 @@
 
 package org.opensearch.ml.action.custom_model;
 
-import static org.opensearch.ml.utils.TestData.HUGGINGFACE_TRANSFORMER_MODEL_URL;
+import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
 import org.opensearch.ml.action.profile.MLProfileResponse;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -31,6 +33,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
+import com.google.common.collect.ImmutableSet;
+
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class CustomModelITTests extends MLCommonsIntegTestCase {
 
@@ -39,16 +43,17 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         super.setUp();
     }
 
-    @Ignore
     public void testCustomModelWorkflow() throws InterruptedException {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
-        String modelName = "all-MiniLM-L6-v2";
+        String modelName = "small-model";
         String version = "1.0.0";
         MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
         String modelType = "bert";
-        TextEmbeddingModelConfig.FrameworkType frameworkType = TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
-        int dimension = 384;
+        TextEmbeddingModelConfig.FrameworkType frameworkType = TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
+        int dimension = 768;
         String allConfig = null;
+
+        // upload model
         String taskId = uploadModel(
             functionName,
             modelName,
@@ -58,10 +63,14 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             frameworkType,
             dimension,
             allConfig,
-            HUGGINGFACE_TRANSFORMER_MODEL_URL,
+            SENTENCE_TRANSFORMER_MODEL_URL,
             false
         );
         assertNotNull(taskId);
+
+        // profile all
+        MLProfileResponse allProfileAfterUploading = getAllProfile();
+        verifyRunningTask(taskId, MLTaskType.UPLOAD_MODEL, ImmutableSet.of(MLTaskState.RUNNING), allProfileAfterUploading);
 
         AtomicReference<String> modelId = new AtomicReference<>();
         AtomicReference<MLModel> mlModel = new AtomicReference<>();
@@ -71,20 +80,20 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             MLModel model = null;
             try {
                 if (id != null) {
-                    model = getModel(id + "_" + 1);
+                    model = getModel(id + "_" + 0);
                     mlModel.set(model);
                 }
             } catch (Exception e) {
                 logger.error("Failed to get model " + id, e);
             }
-            return id != null && model != null;
+            return modelId.get() != null;
         }, 20, TimeUnit.SECONDS);
         assertNotNull(modelId.get());
         MLModel model = getModel(modelId.get());
         assertNotNull(model);
-        assertEquals(9, model.getTotalChunks().intValue());
+        assertEquals(1, model.getTotalChunks().intValue());
         assertNotNull(mlModel.get());
-        assertEquals(1, mlModel.get().getChunkNumber().intValue());
+        assertEquals(0, mlModel.get().getChunkNumber().intValue());
 
         waitUntil(() -> {
             SearchResponse response = searchModelChunks(modelId.get());
@@ -98,7 +107,18 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             return modelChunksReady.get();
         }, 20, TimeUnit.SECONDS);
 
-        loadModel(modelId.get());
+        // load model
+        String loadTaskId = loadModel(modelId.get());
+
+        // profile all
+        MLProfileResponse allProfileAfterLoading = getAllProfile();
+        // Thread.sleep(10);
+        verifyRunningTask(
+            loadTaskId,
+            MLTaskType.LOAD_MODEL,
+            ImmutableSet.of(MLTaskState.CREATED, MLTaskState.RUNNING),
+            allProfileAfterLoading
+        );
 
         AtomicBoolean loaded = new AtomicBoolean(false);
         waitUntil(() -> {
@@ -119,23 +139,69 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         }, 20, TimeUnit.SECONDS);
         assertTrue(loaded.get());
 
-        // Predict
+        // profile model
+        MLProfileResponse modelProfile = getModelProfile(modelId.get());
+        verifyNoRunningTask(modelProfile);
+        verifyLoadedModel(modelId.get(), 0, modelProfile);
+
+        // predict
         MLTaskResponse response = predict(
             modelId.get(),
             functionName,
             TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny")).build(),
             null
         );
+
+        MLProfileResponse allProfile = getAllProfile();
+        verifyNoRunningTask(allProfile);
+        verifyLoadedModel(modelId.get(), 1, allProfile);
+
         ModelTensorOutput output = (ModelTensorOutput) response.getOutput();
         assertEquals(1, output.getMlModelOutputs().size());
         assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
         assertEquals(dimension, output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData().length);
 
-        // Unload
+        // unload model
         UnloadModelNodesResponse unloadModelResponse = unloadModel(modelId.get());
         assertEquals(1, unloadModelResponse.getNodes().size());
         Map<String, String> unloadStatus = unloadModelResponse.getNodes().get(0).getModelUnloadStatus();
         assertEquals(1, unloadStatus.size());
         assertEquals("unloaded", unloadStatus.get(modelId.get()));
+    }
+
+    private void verifyRunningTask(
+        String taskId,
+        MLTaskType taskType,
+        Set<MLTaskState> states,
+        MLProfileResponse allProfileAfterUploading
+    ) {
+        for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
+            if (nodeResponse.getNode().isDataNode()) {
+                if (nodeResponse.getMlNodeTasks().containsKey(taskId)) {
+                    assertTrue(states.contains(nodeResponse.getMlNodeTasks().get(taskId).getState()));
+                    assertEquals(taskType, nodeResponse.getMlNodeTasks().get(taskId).getTaskType());
+                }
+            }
+        }
+    }
+
+    private void verifyNoRunningTask(MLProfileResponse allProfileAfterUploading) {
+        for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
+            if (nodeResponse.getNode().isDataNode()) {
+                assertEquals(0, nodeResponse.getMlNodeTasks().size());
+            }
+        }
+    }
+
+    private void verifyLoadedModel(String modelId, long predictCounts, MLProfileResponse allProfileAfterUploading) {
+        for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
+            if (nodeResponse.getNode().isDataNode()) {
+                assertTrue(nodeResponse.getMlNodeModels().containsKey(modelId));
+                assertEquals(MLModelState.LOADED, nodeResponse.getMlNodeModels().get(modelId).getModelState());
+                if (predictCounts == 0) {
+                    assertNull(nodeResponse.getMlNodeModels().get(modelId).getPredictStats());
+                }
+            }
+        }
     }
 }

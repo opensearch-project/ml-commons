@@ -21,6 +21,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +63,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -587,7 +589,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .builder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(384)
+            .embeddingDimension(768)
             .build();
         return MLUploadInput
             .builder()
@@ -641,6 +643,38 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             }
         }
         return profile;
+    }
+
+    public MLInput createPredictTextEmbeddingInput() {
+        TextDocsInputDataSet textDocsInputDataSet = TextDocsInputDataSet
+            .builder()
+            .docs(Arrays.asList("today is sunny", "this is a happy dog"))
+            .build();
+        return MLInput.builder().inputDataset(textDocsInputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
+    }
+
+    public Map predictTextEmbedding(String modelId) throws IOException {
+        MLInput input = createPredictTextEmbeddingInput();
+        Response response = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, TestHelper.toJsonString(input), null);
+        Map result = parseResponseToMap(response);
+        List<Object> embeddings = (List) result.get("inference_results");
+        assertEquals(2, embeddings.size());
+        for (Object embedding : embeddings) {
+            Map<String, Object> embeddingMap = (Map) embedding;
+            List<Object> tensors = (List) embeddingMap.get("output");
+            assertEquals(1, tensors.size());
+            Map<String, Object> tensorMap = (Map) tensors.get(0);
+            assertEquals(4, tensorMap.size());
+            assertEquals("sentence_embedding", tensorMap.get("name"));
+            assertEquals("FLOAT32", tensorMap.get("data_type"));
+            List shape = (List) tensorMap.get("shape");
+            assertEquals(1, shape.size());
+            assertEquals(768, ((Double) shape.get(0)).longValue());
+            List data = (List) tensorMap.get("data");
+            assertEquals(768, data.size());
+        }
+        return result;
     }
 
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelLoaded() {
