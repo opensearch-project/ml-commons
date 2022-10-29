@@ -634,7 +634,6 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         for (Map.Entry<String, Object> entry : nodeProfiles.entrySet()) {
             Map<String, Object> modelProfiles = (Map) entry.getValue();
             assertNotNull(modelProfiles);
-            assertEquals(1, modelProfiles.size());
             for (Map.Entry<String, Object> modelProfileEntry : modelProfiles.entrySet()) {
                 Map<String, Object> modelProfile = (Map) ((Map) modelProfileEntry.getValue()).get(modelId);
                 if (verifyFunction != null) {
@@ -679,11 +678,13 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelLoaded() {
         return (modelProfile) -> {
-            assertEquals(MLModelState.LOADED.name(), modelProfile.get("model_state"));
-            assertTrue(
-                ((String) modelProfile.get("predictor"))
-                    .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
-            );
+            if (modelProfile.containsKey("model_state")) {
+                assertEquals(MLModelState.LOADED.name(), modelProfile.get("model_state"));
+                assertTrue(
+                    ((String) modelProfile.get("predictor"))
+                        .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
+                );
+            }
             List<String> workNodes = (List) modelProfile.get("worker_nodes");
             assertTrue(workNodes.size() > 0);
         };
