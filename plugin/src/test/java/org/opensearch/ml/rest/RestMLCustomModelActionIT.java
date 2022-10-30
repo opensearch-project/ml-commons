@@ -48,6 +48,7 @@ public class RestMLCustomModelActionIT extends MLCommonsRestTestCase {
                     assertEquals(modelId, loadTaskResponse.get(MODEL_ID_FIELD));
                     assertEquals(MLTaskState.COMPLETED.name(), response.get(STATE_FIELD));
                 });
+                Thread.sleep(300);
                 // profile
                 getModelProfile(modelId, verifyTextEmbeddingModelLoaded());
                 // predict

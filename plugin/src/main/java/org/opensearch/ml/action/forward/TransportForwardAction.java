@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Set;
 
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -19,9 +21,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
@@ -36,59 +36,36 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.common.transport.upload.MLUploadInput;
-import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
-import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
-import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableMap;
 
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @Log4j2
 public class TransportForwardAction extends HandledTransportAction<ActionRequest, MLForwardResponse> {
-    TransportService transportService;
-    ModelHelper modelHelper;
     MLTaskManager mlTaskManager;
-    ClusterService clusterService;
-    ThreadPool threadPool;
     Client client;
-    NamedXContentRegistry xContentRegistry;
-    MLTaskDispatcher mlTaskDispatcher;
-    MLIndicesHandler mlIndicesHandler;
     MLModelManager mlModelManager;
-    private DiscoveryNodeHelper nodeFilter;
+    DiscoveryNodeHelper nodeHelper;
 
     @Inject
     public TransportForwardAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        ModelHelper modelHelper,
         MLTaskManager mlTaskManager,
-        ClusterService clusterService,
-        ThreadPool threadPool,
         Client client,
-        NamedXContentRegistry xContentRegistry,
-        MLTaskDispatcher mlTaskDispatcher,
-        MLIndicesHandler mlIndicesHandler,
         MLModelManager mlModelManager,
-        DiscoveryNodeHelper nodeFilter
+        DiscoveryNodeHelper nodeHel
     ) {
         super(MLForwardAction.NAME, transportService, actionFilters, MLForwardRequest::new);
-        this.transportService = transportService;
-        this.modelHelper = modelHelper;
         this.mlTaskManager = mlTaskManager;
-        this.clusterService = clusterService;
-        this.threadPool = threadPool;
         this.client = client;
-        this.xContentRegistry = xContentRegistry;
-        this.mlTaskDispatcher = mlTaskDispatcher;
-        this.mlIndicesHandler = mlIndicesHandler;
         this.mlModelManager = mlModelManager;
-        this.nodeFilter = nodeFilter;
+        this.nodeHelper = nodeHel;
     }
 
     @Override
@@ -168,7 +145,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
     }
 
     private void syncModelWorkerNodes(String modelId) {
-        DiscoveryNode[] allNodes = nodeFilter.getAllNodes();
+        DiscoveryNode[] allNodes = nodeHelper.getAllNodes();
         String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
         if (allNodes.length > 1 && workerNodes.length > 0) {
             log.debug("Sync to other nodes about worker nodes of model {}: {}", modelId, Arrays.toString(workerNodes));
