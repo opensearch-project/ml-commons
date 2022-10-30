@@ -72,6 +72,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final NamedXContentRegistry xContentRegistry;
     private final MLModelManager mlModelManager;
     private final DiscoveryNodeHelper nodeHelper;
+    private final MLEngine mlEngine;
 
     public MLPredictTaskRunner(
         ThreadPool threadPool,
@@ -84,7 +85,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLCircuitBreakerService mlCircuitBreakerService,
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLEngine mlEngine
     ) {
         super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -94,6 +96,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
+        this.mlEngine = mlEngine;
     }
 
     @Override
@@ -242,7 +245,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }
                         // run predict
                         mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
-                        MLOutput output = MLEngine.predict(mlInput, mlModel);
+                        MLOutput output = mlEngine.predict(mlInput, mlModel);
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }

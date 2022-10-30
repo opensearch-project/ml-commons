@@ -9,6 +9,7 @@ import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,8 +17,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
+import org.opensearch.action.admin.cluster.settings.ClusterUpdateSettingsRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
@@ -36,12 +38,15 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
+import org.opensearch.ml.common.transport.unload.UnloadModelNodeResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
+//TODO: DJL can't load models on multiple virtual nodes under OS integ test framework, so have to use "numDataNodes = 1"
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class CustomModelITTests extends MLCommonsIntegTestCase {
     private String irisIndexName;
@@ -51,9 +56,21 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         super.setUp();
         irisIndexName = "iris_data_for_model_serving_test";
         loadIrisData(irisIndexName);
+        ClusterUpdateSettingsRequest updateSettingRequest = new ClusterUpdateSettingsRequest();
+        updateSettingRequest.transientSettings(ImmutableMap.of("logger.org.opensearch.ml", "DEBUG"));
+        admin().cluster().updateSettings(updateSettingRequest).actionGet(5000);
     }
 
-    @Ignore
+    @After
+    public void tearDown() throws Exception {
+        super.tearDown();
+        ClusterUpdateSettingsRequest updateSettingRequest = new ClusterUpdateSettingsRequest();
+        Map<String, ?> setting = new HashMap<>();
+        setting.put("logger.org.opensearch.ml", null);
+        updateSettingRequest.transientSettings(setting);
+        admin().cluster().updateSettings(updateSettingRequest).actionGet(5000);
+    }
+
     public void testCustomModelWorkflow() throws InterruptedException {
         testTextEmbeddingModel();
         testKMeans();
@@ -170,10 +187,15 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
 
         // unload model
         UnloadModelNodesResponse unloadModelResponse = unloadModel(modelId.get());
-        assertEquals(1, unloadModelResponse.getNodes().size());
-        Map<String, String> unloadStatus = unloadModelResponse.getNodes().get(0).getModelUnloadStatus();
-        assertEquals(1, unloadStatus.size());
-        assertEquals("unloaded", unloadStatus.get(modelId.get()));
+        int nodeNumber = clusterService().state().getNodes().getSize();
+        assertEquals(nodeNumber, unloadModelResponse.getNodes().size());
+        for (UnloadModelNodeResponse node : unloadModelResponse.getNodes()) {
+            if (!node.getModelUnloadStatus().isEmpty()) {
+                Map<String, String> unloadStatus = node.getModelUnloadStatus();
+                assertEquals(1, unloadStatus.size());
+                assertEquals("unloaded", unloadStatus.get(modelId.get()));
+            }
+        }
 
         // sync up running tasks/models
         MLSyncUpNodesResponse syncUpResponseAfterUnload = syncUp_RunningModelAndTask();

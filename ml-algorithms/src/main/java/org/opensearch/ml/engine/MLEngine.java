@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine;
 
+import lombok.Getter;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -23,57 +24,59 @@ import java.util.Map;
  */
 public class MLEngine {
 
-    public static Path DJL_CACHE_PATH;
-    public static Path DJL_MODELS_CACHE_PATH;
-    public static void setDjlCachePath(Path opensearchDataFolder) {
-        DJL_CACHE_PATH = opensearchDataFolder.resolve("djl");
-        DJL_MODELS_CACHE_PATH = DJL_CACHE_PATH.resolve("models_cache");
+    @Getter
+    private final Path djlCachePath;
+    private final Path djlModelsCachePath;
+
+    public MLEngine(Path opensearchDataFolder) {
+        djlCachePath = opensearchDataFolder.resolve("djl");
+        djlModelsCachePath = djlCachePath.resolve("models_cache");
     }
 
-    public static Path getUploadModelPath(String modelId, String modelName, String version) {
+    public Path getUploadModelPath(String modelId, String modelName, String version) {
         return getUploadModelPath(modelId).resolve(version).resolve(modelName);
     }
 
-    public static Path getUploadModelPath(String modelId) {
+    public Path getUploadModelPath(String modelId) {
         return getUploadModelRootPath().resolve(modelId);
     }
 
-    public static Path getUploadModelRootPath() {
-        return DJL_MODELS_CACHE_PATH.resolve("upload");
+    public Path getUploadModelRootPath() {
+        return djlModelsCachePath.resolve("upload");
     }
 
-    public static Path getLoadModelPath(String modelId) {
+    public Path getLoadModelPath(String modelId) {
         return getLoadModelRootPath().resolve(modelId);
     }
 
-    public static String getLoadModelZipPath(String modelId, String modelName) {
-        return DJL_MODELS_CACHE_PATH.resolve("load").resolve(modelId).resolve(modelName) + ".zip";
+    public String getLoadModelZipPath(String modelId, String modelName) {
+        return djlModelsCachePath.resolve("load").resolve(modelId).resolve(modelName) + ".zip";
     }
 
-    public static Path getLoadModelRootPath() {
-        return DJL_MODELS_CACHE_PATH.resolve("load");
+    public Path getLoadModelRootPath() {
+        return djlModelsCachePath.resolve("load");
     }
 
-    public static Path getLoadModelChunkPath(String modelId, Integer chunkNumber) {
-        return DJL_MODELS_CACHE_PATH.resolve("load")
+    public Path getLoadModelChunkPath(String modelId, Integer chunkNumber) {
+        return djlModelsCachePath.resolve("load")
                 .resolve(modelId)
                 .resolve("chunks")
                 .resolve(chunkNumber + "");
     }
 
-    public static Path getModelCachePath(String modelId, String modelName, String version) {
+    public Path getModelCachePath(String modelId, String modelName, String version) {
         return getModelCachePath(modelId).resolve(version).resolve(modelName);
     }
 
-    public static Path getModelCachePath(String modelId) {
+    public Path getModelCachePath(String modelId) {
         return getModelCacheRootPath().resolve(modelId);
     }
 
-    public static Path getModelCacheRootPath() {
-        return DJL_MODELS_CACHE_PATH.resolve("models");
+    public Path getModelCacheRootPath() {
+        return djlModelsCachePath.resolve("models");
     }
 
-    public static MLModel train(Input input) {
+    public MLModel train(Input input) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
         Trainable trainable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
@@ -83,13 +86,13 @@ public class MLEngine {
         return trainable.train(mlInput);
     }
 
-    public static Predictable load(MLModel mlModel, Map<String, Object> params) {
+    public Predictable load(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
         predictable.initModel(mlModel, params);
         return predictable;
     }
 
-    public static MLOutput predict(Input input, MLModel model) {
+    public MLOutput predict(Input input, MLModel model) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
         Predictable predictable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
@@ -99,7 +102,7 @@ public class MLEngine {
         return predictable.predict(mlInput, model);
     }
 
-    public static MLOutput trainAndPredict(Input input) {
+    public MLOutput trainAndPredict(Input input) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
         TrainAndPredictable trainAndPredictable = MLEngineClassLoader.initInstance(mlInput.getAlgorithm(), mlInput.getParameters(), MLAlgoParams.class);
@@ -109,7 +112,7 @@ public class MLEngine {
         return trainAndPredictable.trainAndPredict(mlInput);
     }
 
-    public static Output execute(Input input) {
+    public Output execute(Input input) {
         validateInput(input);
         Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
         if (executable == null) {
@@ -118,7 +121,7 @@ public class MLEngine {
         return executable.execute(input);
     }
 
-    private static void validateMLInput(Input input) {
+    private void validateMLInput(Input input) {
         validateInput(input);
         if (!(input instanceof MLInput)) {
             throw new IllegalArgumentException("Input should be MLInput");
@@ -136,7 +139,7 @@ public class MLEngine {
         }
     }
 
-    private static void validateInput(Input input) {
+    private void validateInput(Input input) {
         if (input == null) {
             throw new IllegalArgumentException("Input should not be null");
         }

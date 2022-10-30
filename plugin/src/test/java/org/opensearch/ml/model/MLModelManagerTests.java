@@ -140,10 +140,12 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private Long modelContentSize;
     @Mock
     private MLModelCacheHelper modelCacheHelper;
+    private MLEngine mlEngine;
 
     @Before
     public void setup() throws URISyntaxException {
         MockitoAnnotations.openMocks(this);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
@@ -158,7 +160,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
         modelName = "model_name1";
         modelId = randomAlphaOfLength(10);
-        modelContentHashValue = "7ccb218b2e75b86b7b6a35fa6a0c8b2c0e16cae049abb315cb488c5378873e57";
+        modelContentHashValue = "c446f747520bcc6af053813cb1e8d34944a7c4686bbb405aeaa23883b5a806c8";
         version = "1.0.0";
         url = "http://testurl";
         MLModelConfig modelConfig = TextEmbeddingModelConfig
@@ -218,13 +220,13 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 mlCircuitBreakerService,
                 mlIndicesHandler,
                 mlTaskManager,
-                modelCacheHelper
+                modelCacheHelper,
+                mlEngine
             )
         );
 
         chunk0 = getClass().getResource("chunk/0").toURI().getPath();
         chunk1 = getClass().getResource("chunk/1").toURI().getPath();
-        MLEngine.setDjlCachePath(Path.of("/tmp/test" + modelId));
 
         modelContentSize = 1000L;
         model = MLModel
@@ -461,9 +463,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_threadpool(threadPool, taskExecutorService);
-        setUpMock_GetModel(model);
-        setUpMock_GetModel(modelChunk0);
-        setUpMock_GetModel(modelChunk1);
+        setUpMock_GetModelChunks(model);
+        // setUpMock_GetModel(modelChunk0);
+        // setUpMock_GetModel(modelChunk1);
         modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
@@ -604,6 +606,22 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(1);
             listener.onResponse(model);
+            return null;
+        }).when(modelManager).getModel(any(), any());
+    }
+
+    private void setUpMock_GetModelChunks(MLModel model) {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(model);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(modelChunk0);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(modelChunk1);
             return null;
         }).when(modelManager).getModel(any(), any());
     }

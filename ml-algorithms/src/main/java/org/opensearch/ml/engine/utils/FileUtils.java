@@ -99,6 +99,7 @@ public class FileUtils {
      * @param mergedFile merged file
      */
     public static void mergeFiles(Queue<File> files, File mergedFile) {
+        log.debug("merge {} files into {}", files.size(), mergedFile);
         boolean failed = false;
         while (!files.isEmpty()) {
             File f = files.poll();
@@ -143,7 +144,10 @@ public class FileUtils {
      * @param path file path
      */
     public static void deleteFileQuietly(Path path) {
-        File file = new File(path.toUri());
+        deleteFileQuietly(new File(path.toUri()));
+    }
+
+    public static void deleteFileQuietly(File file) {
         if (file.exists()) {
             org.apache.commons.io.FileUtils.deleteQuietly(file);
         }

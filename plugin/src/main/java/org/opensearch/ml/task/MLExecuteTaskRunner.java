@@ -40,6 +40,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     private final Client client;
     private final MLInputDatasetHandler mlInputDatasetHandler;
     protected final DiscoveryNodeHelper nodeHelper;
+    private final MLEngine mlEngine;
 
     public MLExecuteTaskRunner(
         ThreadPool threadPool,
@@ -50,7 +51,8 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLEngine mlEngine
     ) {
         super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -58,6 +60,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.nodeHelper = nodeHelper;
+        this.mlEngine = mlEngine;
     }
 
     @Override
@@ -89,7 +92,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
 
                 Input input = request.getInput();
                 FunctionName functionName = request.getFunctionName();
-                Output output = MLEngine.execute(input);
+                Output output = mlEngine.execute(input);
                 MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
                 listener.onResponse(response);
             } catch (Exception e) {

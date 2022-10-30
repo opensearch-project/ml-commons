@@ -16,12 +16,10 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.engine.MLEngine.getLoadModelChunkPath;
-import static org.opensearch.ml.engine.MLEngine.getLoadModelZipPath;
-import static org.opensearch.ml.engine.MLEngine.getUploadModelPath;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
@@ -123,6 +121,7 @@ public class MLModelManager {
     private final MLCircuitBreakerService mlCircuitBreakerService;
     private final MLIndicesHandler mlIndicesHandler;
     private final MLTaskManager mlTaskManager;
+    private final MLEngine mlEngine;
 
     private volatile Integer maxModelPerNode;
     private volatile Integer maxUploadTasksPerNode;
@@ -138,7 +137,8 @@ public class MLModelManager {
         MLCircuitBreakerService mlCircuitBreakerService,
         MLIndicesHandler mlIndicesHandler,
         MLTaskManager mlTaskManager,
-        MLModelCacheHelper modelCacheHelper
+        MLModelCacheHelper modelCacheHelper,
+        MLEngine mlEngine
     ) {
         this.client = client;
         this.threadPool = threadPool;
@@ -150,6 +150,7 @@ public class MLModelManager {
         this.mlCircuitBreakerService = mlCircuitBreakerService;
         this.mlIndicesHandler = mlIndicesHandler;
         this.mlTaskManager = mlTaskManager;
+        this.mlEngine = mlEngine;
 
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
@@ -241,23 +242,23 @@ public class MLModelManager {
                                 if (uploaded.get() == chunkFiles.size()) {
                                     updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
                                 } else {
-                                    file.delete();
+                                    deleteFileQuietly(file);
                                 }
                                 semaphore.release();
                             }, e -> {
                                 log.error("Failed to index model chunk " + chunkId, e);
                                 failedToUploadChunk.set(true);
                                 handleException(functionName, taskId, e);
-                                file.delete();
+                                deleteFileQuietly(file);
                                 // remove model doc as failed to upload model
                                 deleteModel(modelId);
                                 semaphore.release();
-                                deleteFileQuietly(getUploadModelPath(modelId));
+                                deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
                             }));
                         }
                     }, e -> {
                         log.error("Failed to index chunk file", e);
-                        deleteFileQuietly(getUploadModelPath(modelId));
+                        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
                         deleteModel(modelId);
                         handleException(functionName, taskId, e);
                     }));
@@ -307,7 +308,7 @@ public class MLModelManager {
         String hashValue
     ) {
         FunctionName functionName = uploadInput.getFunctionName();
-        deleteFileQuietly(getUploadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
         Map<String, Object> updatedFields = ImmutableMap
             .of(
                 MLModel.MODEL_STATE_FIELD,
@@ -382,7 +383,7 @@ public class MLModelManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 if (mlModel.getAlgorithm() != FunctionName.TEXT_EMBEDDING) {// load model trained by built-in algorithm like kmeans
-                    Predictable predictable = MLEngine.load(mlModel, null);
+                    Predictable predictable = mlEngine.load(mlModel, null);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                     modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
@@ -400,8 +401,9 @@ public class MLModelManager {
                         return;
                     }
                     log.debug("Model content matches original hash value, continue loading");
-                    Predictable predictable = MLEngine
-                        .load(mlModel, ImmutableMap.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper));
+                    Map<String, Object> params = ImmutableMap
+                        .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
+                    Predictable predictable = mlEngine.load(mlModel, params);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                     modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
@@ -473,7 +475,7 @@ public class MLModelManager {
         getRequest.id();
         Semaphore semaphore = new Semaphore(1);
         AtomicBoolean stopNow = new AtomicBoolean(false);
-        String modelZip = getLoadModelZipPath(modelId, modelName);
+        String modelZip = mlEngine.getLoadModelZipPath(modelId, modelName);
         ConcurrentLinkedDeque<File> chunkFiles = new ConcurrentLinkedDeque();
         AtomicInteger retrievedChunks = new AtomicInteger(0);
         for (int i = 0; i < totalChunks; i++) {
@@ -484,7 +486,7 @@ public class MLModelManager {
             String modelChunkId = this.getModelChunkId(modelId, i);
             int currentChunk = i;
             this.getModel(modelChunkId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(model -> {
-                Path chunkPath = getLoadModelChunkPath(modelId, currentChunk);
+                Path chunkPath = mlEngine.getLoadModelChunkPath(modelId, currentChunk);
                 FileUtils.write(Base64.getDecoder().decode(model.getContent()), chunkPath.toString());
                 chunkFiles.add(new File(chunkPath.toUri()));
                 retrievedChunks.getAndIncrement();
@@ -604,10 +606,12 @@ public class MLModelManager {
                 if (modelCacheHelper.isModelLoaded(modelId)) {
                     modelUnloadStatus.put(modelId, UNLOADED);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
+                    mlStats
+                        .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNLOAD, ML_ACTION_REQUEST_COUNT)
+                        .increment();
                 } else {
                     modelUnloadStatus.put(modelId, NOT_FOUND);
                 }
-                mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNLOAD, ML_ACTION_REQUEST_COUNT).increment();
                 removeModel(modelId);
             }
         } else {

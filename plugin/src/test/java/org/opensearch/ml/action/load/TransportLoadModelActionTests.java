@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -38,6 +39,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.load.LoadModelNodesResponse;
 import org.opensearch.ml.common.transport.load.LoadModelResponse;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -93,13 +95,16 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
     private final String modelId = "mock_model_id";
     private final MLModel mlModel = mock(MLModel.class);
     private final String localNodeId = "mockNodeId";
+    private MLEngine mlEngine;
+    private ModelHelper modelHelper;
 
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
+        modelHelper = new ModelHelper(mlEngine);
         when(mlLoadModelRequest.getModelId()).thenReturn("mockModelId");
         when(mlLoadModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });
         DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
@@ -149,7 +154,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
             new TransportLoadModelAction(
                 transportService,
                 actionFilters,
-                new ModelHelper(),
+                modelHelper,
                 mlTaskManager,
                 clusterService,
                 threadPool,

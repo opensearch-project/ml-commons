@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.action.syncup;
 
-import static org.opensearch.ml.engine.MLEngine.getLoadModelPath;
-import static org.opensearch.ml.engine.MLEngine.getModelCachePath;
-import static org.opensearch.ml.engine.MLEngine.getUploadModelPath;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 import java.io.IOException;
@@ -52,6 +49,7 @@ public class TransportSyncUpOnNodeAction extends
     ThreadPool threadPool;
     Client client;
     NamedXContentRegistry xContentRegistry;
+    MLEngine mlEngine;
 
     @Inject
     public TransportSyncUpOnNodeAction(
@@ -63,7 +61,8 @@ public class TransportSyncUpOnNodeAction extends
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        MLEngine mlEngine
     ) {
         super(
             MLSyncUpAction.NAME,
@@ -84,6 +83,7 @@ public class TransportSyncUpOnNodeAction extends
         this.threadPool = threadPool;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        this.mlEngine = mlEngine;
     }
 
     @Override
@@ -154,9 +154,9 @@ public class TransportSyncUpOnNodeAction extends
     }
 
     private void cleanUpLocalCacheFiles() {
-        Path uploadModelRootPath = MLEngine.getUploadModelRootPath();
-        Path loadModelRootPath = MLEngine.getLoadModelRootPath();
-        Path modelCacheRootPath = MLEngine.getModelCacheRootPath();
+        Path uploadModelRootPath = mlEngine.getUploadModelRootPath();
+        Path loadModelRootPath = mlEngine.getLoadModelRootPath();
+        Path modelCacheRootPath = mlEngine.getModelCacheRootPath();
         Set<String> modelsInCacheFolder = FileUtils.getFileNames(uploadModelRootPath, loadModelRootPath, modelCacheRootPath);
         if (modelsInCacheFolder.size() > 0) {
             log
@@ -177,8 +177,8 @@ public class TransportSyncUpOnNodeAction extends
     }
 
     private void deleteFileCache(String modelId) {
-        deleteFileQuietly(getModelCachePath(modelId));
-        deleteFileQuietly(getLoadModelPath(modelId));
-        deleteFileQuietly(getUploadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getModelCachePath(modelId));
+        deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
     }
 }

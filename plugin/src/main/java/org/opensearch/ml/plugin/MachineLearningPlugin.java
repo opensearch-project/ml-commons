@@ -169,6 +169,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     private MLModelMetaCreate mlModelMetaCreate;
     private MLModelChunkUploader mlModelChunkUploader;
+    private MLEngine mlEngine;
 
     private Client client;
     private ClusterService clusterService;
@@ -225,7 +226,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         Settings settings = environment.settings();
-        MLEngine.setDjlCachePath(environment.dataFiles()[0]);
+        mlEngine = new MLEngine(environment.dataFiles()[0]);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
 
         JvmService jvmService = new JvmService(environment.settings());
@@ -246,7 +247,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
-        modelHelper = new ModelHelper();
+        modelHelper = new ModelHelper(mlEngine);
         MLModelCacheHelper modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         mlModelManager = new MLModelManager(
             clusterService,
@@ -259,7 +260,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlCircuitBreakerService,
             mlIndicesHandler,
             mlTaskManager,
-            modelCacheHelper
+            modelCacheHelper,
+            mlEngine
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
@@ -277,7 +279,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler,
             mlTaskDispatcher,
             mlCircuitBreakerService,
-            nodeHelper
+            nodeHelper,
+            mlEngine
         );
         mlPredictTaskRunner = new MLPredictTaskRunner(
             threadPool,
@@ -290,7 +293,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlCircuitBreakerService,
             xContentRegistry,
             mlModelManager,
-            nodeHelper
+            nodeHelper,
+            mlEngine
         );
         mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
             threadPool,
@@ -301,7 +305,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler,
             mlTaskDispatcher,
             mlCircuitBreakerService,
-            nodeHelper
+            nodeHelper,
+            mlEngine
         );
         mlExecuteTaskRunner = new MLExecuteTaskRunner(
             threadPool,
@@ -312,7 +317,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlInputDatasetHandler,
             mlTaskDispatcher,
             mlCircuitBreakerService,
-            nodeHelper
+            nodeHelper,
+            mlEngine
         );
 
         // Register thread-safe ML objects here.
@@ -339,6 +345,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         return ImmutableList
             .of(
+                mlEngine,
                 nodeHelper,
                 mlStats,
                 mlTaskManager,

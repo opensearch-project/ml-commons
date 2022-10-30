@@ -11,6 +11,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.spy;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +52,7 @@ import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -117,10 +119,12 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     String errorMessage = "test error";
     GetResponse getResponse;
     MLInput mlInputWithDataFrame;
+    MLEngine mlEngine;
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         remoteNode = new DiscoveryNode("remoteNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         when(clusterService.localNode()).thenReturn(localNode);
@@ -151,7 +155,8 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 mlCircuitBreakerService,
                 xContentRegistry(),
                 mlModelManager,
-                nodeHelper
+                nodeHelper,
+                mlEngine
             )
         );
 
