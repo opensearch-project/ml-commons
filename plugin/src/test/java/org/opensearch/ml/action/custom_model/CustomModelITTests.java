@@ -21,6 +21,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.action.admin.cluster.settings.ClusterUpdateSettingsRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
 import org.opensearch.ml.action.profile.MLProfileResponse;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodeResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
+import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
@@ -72,11 +74,11 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
     }
 
     public void testCustomModelWorkflow() throws InterruptedException {
-        testTextEmbeddingModel();
-        testKMeans();
+        testTextEmbeddingModel(ImmutableSet.of());
+        testKMeans(ImmutableSet.of());
     }
 
-    private void testTextEmbeddingModel() throws InterruptedException {
+    protected void testTextEmbeddingModel(Set<String> modelWorkerNodes) throws InterruptedException {
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
         String modelName = "small-model";
         String version = "1.0.0";
@@ -103,7 +105,13 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
 
         // profile all
         MLProfileResponse allProfileAfterUploading = getAllProfile();
-        verifyRunningTask(taskId, MLTaskType.UPLOAD_MODEL, ImmutableSet.of(MLTaskState.RUNNING), allProfileAfterUploading);
+        verifyRunningTask(
+            taskId,
+            MLTaskType.UPLOAD_MODEL,
+            ImmutableSet.of(MLTaskState.RUNNING),
+            allProfileAfterUploading,
+            modelWorkerNodes
+        );
 
         AtomicReference<String> modelId = new AtomicReference<>();
         AtomicReference<MLModel> mlModel = new AtomicReference<>();
@@ -141,7 +149,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         }, 20, TimeUnit.SECONDS);
 
         // load model
-        String loadTaskId = loadModel(modelId.get());
+        String loadTaskId = loadModel(modelId.get(), modelWorkerNodes.toArray(new String[0]));
 
         // profile all
         MLProfileResponse allProfileAfterLoading = getAllProfile();
@@ -150,15 +158,17 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             loadTaskId,
             MLTaskType.LOAD_MODEL,
             ImmutableSet.of(MLTaskState.CREATED, MLTaskState.RUNNING),
-            allProfileAfterLoading
+            allProfileAfterLoading,
+            modelWorkerNodes
         );
 
         waitUntilLoaded(loadTaskId);
 
+        Thread.sleep(300);
         // profile model
         MLProfileResponse modelProfile = getModelProfile(modelId.get());
         verifyNoRunningTask(modelProfile);
-        verifyLoadedModel(modelId.get(), 0, modelProfile);
+        verifyLoadedModel(modelId.get(), 0, modelProfile, modelWorkerNodes);
 
         // predict
         MLTaskResponse response = predict(
@@ -175,15 +185,10 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
 
         // sync up running tasks/models
         MLSyncUpNodesResponse syncUpResponse = syncUp_RunningModelAndTask();
-        for (MLSyncUpNodeResponse nodeResponse : syncUpResponse.getNodes()) {
-            if (nodeResponse.getNode().isDataNode()) {
-                assertEquals(0, nodeResponse.getRunningLoadModelTaskIds().length);
-                assertArrayEquals(new String[] { modelId.get() }, nodeResponse.getLoadedModelIds());
-            }
-        }
+        verifyLoadedModelOfSyncupResponse(modelWorkerNodes, modelId.get(), syncUpResponse);
 
         MLProfileResponse allProfile = getAllProfile();
-        verifyLoadedModel(modelId.get(), 1, allProfile);
+        verifyLoadedModel(modelId.get(), 1, allProfile, modelWorkerNodes);
 
         // unload model
         UnloadModelNodesResponse unloadModelResponse = unloadModel(modelId.get());
@@ -216,6 +221,22 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         }
     }
 
+    private void verifyLoadedModelOfSyncupResponse(Set<String> modelWorkerNodes, String modelId, MLSyncUpNodesResponse syncUpResponse) {
+        boolean hasLoadedModel = false;
+        for (MLSyncUpNodeResponse nodeResponse : syncUpResponse.getNodes()) {
+            DiscoveryNode node = nodeResponse.getNode();
+            if (modelWorkerNodes.size() > 0 && !modelWorkerNodes.contains(node.getId())) {
+                continue;
+            }
+            if (node.isDataNode()) {
+                assertEquals(0, nodeResponse.getRunningLoadModelTaskIds().length);
+                assertArrayEquals(new String[] { modelId }, nodeResponse.getLoadedModelIds());
+                hasLoadedModel = true;
+            }
+        }
+        assertTrue(hasLoadedModel);
+    }
+
     private void waitUntilLoaded(String loadTaskId) throws InterruptedException {
         AtomicBoolean loaded = new AtomicBoolean(false);
         waitUntil(() -> {
@@ -237,36 +258,42 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         assertTrue(loaded.get());
     }
 
-    private void testKMeans() throws InterruptedException {
+    protected void testKMeans(Set<String> modelWorkerNodes) throws InterruptedException {
         String modelId = trainKmeansWithIrisData(irisIndexName, false);
         // load model
-        String loadTaskId = loadModel(modelId);
+        String loadTaskId = loadModel(modelId, modelWorkerNodes.toArray(new String[0]));
         waitUntilLoaded(loadTaskId);
 
         Thread.sleep(300);
         // profile model
         MLProfileResponse modelProfile = getModelProfile(modelId);
         verifyNoRunningTask(modelProfile);
-        verifyLoadedModel(modelId, 0, modelProfile);
+        verifyLoadedModel(modelId, 0, modelProfile, modelWorkerNodes);
 
         // predict
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
         predictAndVerify(modelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
 
+        Thread.sleep(300);
         // profile model
         MLProfileResponse modelProfileAfterPredict = getModelProfile(modelId);
         verifyNoRunningTask(modelProfileAfterPredict);
-        verifyLoadedModel(modelId, 1, modelProfileAfterPredict);
+        verifyLoadedModel(modelId, 1, modelProfileAfterPredict, modelWorkerNodes);
     }
 
     private void verifyRunningTask(
         String taskId,
         MLTaskType taskType,
         Set<MLTaskState> states,
-        MLProfileResponse allProfileAfterUploading
+        MLProfileResponse allProfileAfterUploading,
+        Set<String> modelWorkerNodes
     ) {
         for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
-            if (nodeResponse.getNode().isDataNode()) {
+            DiscoveryNode node = nodeResponse.getNode();
+            if (modelWorkerNodes.size() > 0 && !modelWorkerNodes.contains(node.getId())) {
+                continue;
+            }
+            if (node.isDataNode()) {
                 if (nodeResponse.getMlNodeTasks().containsKey(taskId)) {
                     assertTrue(states.contains(nodeResponse.getMlNodeTasks().get(taskId).getState()));
                     assertEquals(taskType, nodeResponse.getMlNodeTasks().get(taskId).getTaskType());
@@ -283,15 +310,38 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         }
     }
 
-    private void verifyLoadedModel(String modelId, long predictCounts, MLProfileResponse allProfileAfterUploading) {
+    private void verifyLoadedModel(
+        String modelId,
+        long predictCounts,
+        MLProfileResponse allProfileAfterUploading,
+        Set<String> modelWorkerNodes
+    ) {
+        boolean hasLoadedModel = false;
         for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
-            if (nodeResponse.getNode().isDataNode()) {
+            MLModelProfile mlModelProfile = nodeResponse.getMlNodeModels().get(modelId);
+            DiscoveryNode node = nodeResponse.getNode();
+            String[] workerNodes = mlModelProfile.getWorkerNodes();
+            Set<String> targetDataNodes = modelWorkerNodes.size() == 0 ? getAllDataNodeIds() : modelWorkerNodes;
+            if (targetDataNodes.size() > 0) {
+                assertEquals(targetDataNodes.size(), workerNodes.length);
+                for (String nodeId : workerNodes) {
+                    assertTrue(targetDataNodes.contains(nodeId));
+                }
+            }
+            if (modelWorkerNodes.size() > 0 && !modelWorkerNodes.contains(node.getId())) {
+                continue;
+            }
+            if (node.isDataNode() && mlModelProfile != null && mlModelProfile.getModelState() != null) {
                 assertTrue(nodeResponse.getMlNodeModels().containsKey(modelId));
-                assertEquals(MLModelState.LOADED, nodeResponse.getMlNodeModels().get(modelId).getModelState());
+                assertEquals(MLModelState.LOADED, mlModelProfile.getModelState());
+                hasLoadedModel = true;
                 if (predictCounts == 0) {
-                    assertNull(nodeResponse.getMlNodeModels().get(modelId).getPredictStats());
+                    assertNull(mlModelProfile.getPredictStats());
+                } else {
+                    assertEquals(predictCounts, mlModelProfile.getPredictStats().getCount().longValue());
                 }
             }
         }
+        assertTrue(hasLoadedModel);
     }
 }

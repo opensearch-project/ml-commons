@@ -12,7 +12,9 @@ import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.bulk.BulkRequest;
@@ -20,6 +22,8 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
@@ -98,6 +102,17 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
         return Collections.singletonList(MachineLearningPlugin.class);
+    }
+
+    public Set<String> getAllDataNodeIds() {
+        DiscoveryNodes nodes = clusterService().state().getNodes();
+        Set<String> nodeIds = new HashSet<>();
+        for (DiscoveryNode node : nodes) {
+            if (node.isDataNode()) {
+                nodeIds.add(node.getId());
+            }
+        }
+        return nodeIds;
     }
 
     public void loadIrisData(String indexName) {
@@ -285,8 +300,14 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return taskId;
     }
 
-    public String loadModel(String modelId) {
-        MLLoadModelRequest loadRequest = MLLoadModelRequest.builder().modelId(modelId).async(true).dispatchTask(true).build();
+    public String loadModel(String modelId, String[] modelNodeIds) {
+        MLLoadModelRequest loadRequest = MLLoadModelRequest
+            .builder()
+            .modelId(modelId)
+            .modelNodeIds(modelNodeIds)
+            .async(true)
+            .dispatchTask(true)
+            .build();
         ActionFuture<LoadModelResponse> actionFuture = client().execute(MLLoadModelAction.INSTANCE, loadRequest);
         LoadModelResponse loadModelResponse = actionFuture.actionGet();
         String taskId = loadModelResponse.getTaskId();

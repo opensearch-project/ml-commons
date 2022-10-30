@@ -103,7 +103,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLForwardRequestType requestType = forwardInput.getRequestType();
 
         String error = forwardInput.getError();
-        log.debug("receive forward request: " + forwardInput.getRequestType());
+        log.debug("receive forward request: {}", forwardInput.getRequestType());
         try {
             switch (requestType) {
                 case LOAD_MODEL_DONE:
