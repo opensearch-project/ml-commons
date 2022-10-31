@@ -20,6 +20,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -32,6 +33,7 @@ public class ModelHelperTest {
 
     private ModelHelper modelHelper;
     private String modelId;
+    private MLEngine mlEngine;
 
     @Mock
     ActionListener<Map<String, Object>> actionListener;
@@ -39,9 +41,9 @@ public class ModelHelperTest {
     @Before
     public void setup() throws URISyntaxException {
         MockitoAnnotations.openMocks(this);
-        modelHelper = new ModelHelper();
         modelId = "model_id";
-        MLEngine.setDjlCachePath(Path.of("/tmp/test" + modelId));
+        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId));
+        modelHelper = new ModelHelper(mlEngine);
     }
 
     @Test
