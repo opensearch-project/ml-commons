@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.action.admin.cluster.settings.ClusterUpdateSettingsRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -73,6 +74,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         admin().cluster().updateSettings(updateSettingRequest).actionGet(5000);
     }
 
+    @Ignore
     public void testCustomModelWorkflow() throws InterruptedException {
         testTextEmbeddingModel(ImmutableSet.of());
         testKMeans(ImmutableSet.of());

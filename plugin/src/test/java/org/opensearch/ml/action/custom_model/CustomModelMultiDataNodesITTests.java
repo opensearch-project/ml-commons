@@ -8,6 +8,7 @@ package org.opensearch.ml.action.custom_model;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.junit.Ignore;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.test.OpenSearchIntegTestCase;
@@ -17,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
 public class CustomModelMultiDataNodesITTests extends CustomModelITTests {
 
+    @Ignore
     public void testCustomModelWorkflow() throws InterruptedException {
         DiscoveryNodes nodes = clusterService().state().getNodes();
         String id = clusterService().localNode().getId();
