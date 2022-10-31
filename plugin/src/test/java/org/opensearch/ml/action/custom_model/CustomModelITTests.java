@@ -336,9 +336,9 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
                 assertEquals(MLModelState.LOADED, mlModelProfile.getModelState());
                 hasLoadedModel = true;
                 if (predictCounts == 0) {
-                    assertNull(mlModelProfile.getPredictStats());
+                    assertNull(mlModelProfile.getModelInferenceStats());
                 } else {
-                    assertEquals(predictCounts, mlModelProfile.getPredictStats().getCount().longValue());
+                    assertEquals(predictCounts, mlModelProfile.getModelInferenceStats().getCount().longValue());
                 }
             }
         }

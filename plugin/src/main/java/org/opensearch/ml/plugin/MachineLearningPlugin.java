@@ -155,6 +155,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     private MLStats mlStats;
+    private MLModelCacheHelper modelCacheHelper;
     private MLTaskManager mlTaskManager;
     private MLModelManager mlModelManager;
     private MLIndicesHandler mlIndicesHandler;
@@ -228,6 +229,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         Settings settings = environment.settings();
         mlEngine = new MLEngine(environment.dataFiles()[0]);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
+        modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 
         JvmService jvmService = new JvmService(environment.settings());
         MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init(environment.dataFiles()[0]);
@@ -248,7 +250,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
-        MLModelCacheHelper modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         mlModelManager = new MLModelManager(
             clusterService,
             client,
@@ -347,6 +348,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             .of(
                 mlEngine,
                 nodeHelper,
+                modelCacheHelper,
                 mlStats,
                 mlTaskManager,
                 mlModelManager,

@@ -694,7 +694,7 @@ public class MLModelManager {
         T t = supplier.get();
         long end = System.nanoTime();
         double durationInMs = (end - start) / 1e6;
-        modelCacheHelper.addInferenceDuration(modelId, durationInMs);
+        modelCacheHelper.addModelInferenceDuration(modelId, durationInMs);
         return t;
     }
 
