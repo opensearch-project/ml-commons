@@ -21,7 +21,6 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.dataframe.Row;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
-import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
