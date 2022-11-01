@@ -49,6 +49,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
     private final Client client;
     private final MLInputDatasetHandler mlInputDatasetHandler;
     protected final DiscoveryNodeHelper nodeFilter;
+    private final MLEngine mlEngine;
 
     public MLTrainAndPredictTaskRunner(
         ThreadPool threadPool,
@@ -59,7 +60,8 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService,
-        DiscoveryNodeHelper nodeFilter
+        DiscoveryNodeHelper nodeFilter,
+        MLEngine mlEngine
     ) {
         super(mlTaskManager, mlStats, nodeFilter, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -67,6 +69,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         this.client = client;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.nodeFilter = nodeFilter;
+        this.mlEngine = mlEngine;
     }
 
     @Override
@@ -134,7 +137,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
         // run train and predict
         try {
             mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
-            MLOutput output = MLEngine.trainAndPredict(mlInput);
+            MLOutput output = mlEngine.trainAndPredict(mlInput);
             handleAsyncMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {
                 ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());

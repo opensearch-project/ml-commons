@@ -251,12 +251,12 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertTrue(modelProfile.getPredictor().contains("TextEmbeddingModel"));
         assertEquals(MLModelState.LOADED, modelProfile.getModelState());
         assertArrayEquals(new String[] { nodeId }, modelProfile.getWorkerNodes());
-        assertNull(modelProfile.getPredictStats());
+        assertNull(modelProfile.getModelInferenceStats());
 
         for (int i = 1; i <= maxMonitoringRequests * 2; i++) {
-            cacheHelper.addInferenceDuration(modelId, i);
+            cacheHelper.addModelInferenceDuration(modelId, i);
         }
-        MLPredictRequestStats predictStats = cacheHelper.getModelProfile(modelId).getPredictStats();
+        MLPredictRequestStats predictStats = cacheHelper.getModelProfile(modelId).getModelInferenceStats();
         assertNotNull(predictStats);
         assertEquals(maxMonitoringRequests + 1, predictStats.getMin(), 1e-5);
         assertEquals(maxMonitoringRequests * 2, predictStats.getMax(), 1e-5);
@@ -271,6 +271,6 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertEquals(MLModelState.LOADING, modelProfile.getModelState());
         assertNull(modelProfile.getPredictor());
         assertNull(modelProfile.getWorkerNodes());
-        assertNull(modelProfile.getPredictStats());
+        assertNull(modelProfile.getModelInferenceStats());
     }
 }
