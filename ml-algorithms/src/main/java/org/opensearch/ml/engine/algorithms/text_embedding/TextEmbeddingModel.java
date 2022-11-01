@@ -27,6 +27,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
@@ -43,9 +44,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
-import static org.opensearch.ml.engine.MLEngine.DJL_CACHE_PATH;
-import static org.opensearch.ml.engine.MLEngine.getLoadModelPath;
-import static org.opensearch.ml.engine.MLEngine.getModelCachePath;
 import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
 import static org.opensearch.ml.engine.ModelHelper.ONNX_ENGINE;
 import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
@@ -59,8 +57,10 @@ public class TextEmbeddingModel implements Predictable {
     public static final String SENTENCE_EMBEDDING = "sentence_embedding";
     public static final String MODEL_ZIP_FILE = "model_zip_file";
     public static final String MODEL_HELPER = "model_helper";
+    public static final String ML_ENGINE = "ml_engine";
 
     private ModelHelper modelHelper;
+    private MLEngine mlEngine;
     private String modelId;
 
     private Predictor<Input, Output> predictor;
@@ -84,11 +84,15 @@ public class TextEmbeddingModel implements Predictable {
         String engine = model.getModelFormat() == MLModelFormat.TORCH_SCRIPT ? PYTORCH_ENGINE : ONNX_ENGINE;
         File modelZipFile = (File)params.get(MODEL_ZIP_FILE);
         modelHelper = (ModelHelper)params.get(MODEL_HELPER);
+        mlEngine = (MLEngine)params.get(ML_ENGINE);
         if (modelZipFile == null) {
             throw new IllegalArgumentException("model file is null");
         }
         if (modelHelper == null) {
             throw new IllegalArgumentException("model helper is null");
+        }
+        if (mlEngine == null) {
+            throw new IllegalArgumentException("ML engine is null");
         }
         modelId = model.getModelId();
         if (modelId == null) {
@@ -136,19 +140,21 @@ public class TextEmbeddingModel implements Predictable {
                 ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
                 try {
                     System.setProperty("PYTORCH_PRECXX11", "true");
-                    System.setProperty("DJL_CACHE_DIR", DJL_CACHE_PATH.toAbsolutePath().toString());
+                    System.setProperty("DJL_CACHE_DIR", mlEngine.getDjlCachePath().toAbsolutePath().toString());
                     // DJL will read "/usr/java/packages/lib" if don't set "java.library.path". That will throw
                     // access denied exception
-                    System.setProperty("java.library.path", DJL_CACHE_PATH.toAbsolutePath().toString());
+                    System.setProperty("java.library.path", mlEngine.getDjlCachePath().toAbsolutePath().toString());
                     System.setProperty("ai.djl.pytorch.num_interop_threads", "1");
                     System.setProperty("ai.djl.pytorch.num_threads", "1");
                     Thread.currentThread().setContextClassLoader(ai.djl.Model.class.getClassLoader());
-                    Path modelPath = getModelCachePath(modelId, modelName, version);
+                    Path modelPath = mlEngine.getModelCachePath(modelId, modelName, version);
                     File pathFile = new File(modelPath.toUri());
                     if (pathFile.exists()) {
                         FileUtils.deleteDirectory(pathFile);
                     }
-                    ZipUtils.unzip(new FileInputStream(modelZipFile), modelPath);
+                    try (FileInputStream fileInputStream = new FileInputStream(modelZipFile)) {
+                        ZipUtils.unzip(fileInputStream, modelPath);
+                    }
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();
@@ -199,7 +205,7 @@ public class TextEmbeddingModel implements Predictable {
                     close();
                     throw new MLException(errorMessage, e);
                 } finally {
-                    deleteFileQuietly(getLoadModelPath(modelId));
+                    deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
                     Thread.currentThread().setContextClassLoader(contextClassLoader);
                 }
             });

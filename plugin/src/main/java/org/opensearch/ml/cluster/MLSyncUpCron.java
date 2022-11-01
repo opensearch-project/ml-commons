@@ -25,17 +25,17 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 public class MLSyncUpCron implements Runnable {
 
     private Client client;
-    private DiscoveryNodeHelper nodeFilter;
+    private DiscoveryNodeHelper nodeHelper;
 
-    public MLSyncUpCron(Client client, DiscoveryNodeHelper nodeFilter) {
+    public MLSyncUpCron(Client client, DiscoveryNodeHelper nodeHelper) {
         this.client = client;
-        this.nodeFilter = nodeFilter;
+        this.nodeHelper = nodeHelper;
     }
 
     @Override
     public void run() {
         log.debug("ML sync job starts");
-        DiscoveryNode[] allNodes = nodeFilter.getAllNodes();
+        DiscoveryNode[] allNodes = nodeHelper.getAllNodes();
         MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
         MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
         // gather running model/tasks on nodes

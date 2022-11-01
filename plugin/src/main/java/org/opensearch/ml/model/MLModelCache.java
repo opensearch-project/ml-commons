@@ -30,11 +30,13 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
     private final Set<String> workerNodes;
-    private final Queue<Double> inferenceDurationQueue;
+    private final Queue<Double> modelInferenceDurationQueue;
+    private final Queue<Double> predictRequestDurationQueue;
 
     public MLModelCache() {
         workerNodes = ConcurrentHashMap.newKeySet();
-        inferenceDurationQueue = new ConcurrentLinkedQueue<>();
+        modelInferenceDurationQueue = new ConcurrentLinkedQueue<>();
+        predictRequestDurationQueue = new ConcurrentLinkedQueue<>();
     }
 
     public void removeWorkerNode(String nodeId) {
@@ -66,23 +68,32 @@ public class MLModelCache {
         modelState = null;
         functionName = null;
         workerNodes.clear();
-        inferenceDurationQueue.clear();
+        modelInferenceDurationQueue.clear();
+        predictRequestDurationQueue.clear();
         if (predictor != null) {
             predictor.close();
         }
     }
 
-    public void addInferenceDuration(double duration, long maxRequestCount) {
-        while (inferenceDurationQueue.size() >= maxRequestCount) {
-            inferenceDurationQueue.poll();
+    public void addModelInferenceDuration(double duration, long maxRequestCount) {
+        while (modelInferenceDurationQueue.size() >= maxRequestCount) {
+            modelInferenceDurationQueue.poll();
         }
-        this.inferenceDurationQueue.add(duration);
+        this.modelInferenceDurationQueue.add(duration);
     }
 
-    public MLPredictRequestStats getInferenceStats() {
-        if (inferenceDurationQueue.size() > 0) {
+    public void addPredictRequestDuration(double duration, long maxRequestCount) {
+        while (predictRequestDurationQueue.size() >= maxRequestCount) {
+            predictRequestDurationQueue.poll();
+        }
+        this.predictRequestDurationQueue.add(duration);
+    }
+
+    public MLPredictRequestStats getInferenceStats(boolean modelInference) {
+        Queue<Double> queue = modelInference ? modelInferenceDurationQueue : predictRequestDurationQueue;
+        if (queue.size() > 0) {
             MLPredictRequestStats.MLPredictRequestStatsBuilder statsBuilder = MLPredictRequestStats.builder();
-            DoubleStream doubleStream = inferenceDurationQueue.stream().mapToDouble(v -> v);
+            DoubleStream doubleStream = queue.stream().mapToDouble(v -> v);
             DoubleSummaryStatistics doubleSummaryStatistics = doubleStream.summaryStatistics();
             statsBuilder.count(doubleSummaryStatistics.getCount());
             statsBuilder.max(doubleSummaryStatistics.getMax());
@@ -90,9 +101,9 @@ public class MLModelCache {
             statsBuilder.average(doubleSummaryStatistics.getAverage());
 
             Quantiles.Scale percentiles = Quantiles.percentiles();
-            statsBuilder.p50(percentiles.index(50).compute(inferenceDurationQueue));
-            statsBuilder.p90(percentiles.index(90).compute(inferenceDurationQueue));
-            statsBuilder.p99(percentiles.index(99).compute(inferenceDurationQueue));
+            statsBuilder.p50(percentiles.index(50).compute(queue));
+            statsBuilder.p90(percentiles.index(90).compute(queue));
+            statsBuilder.p99(percentiles.index(99).compute(queue));
 
             return statsBuilder.build();
         }

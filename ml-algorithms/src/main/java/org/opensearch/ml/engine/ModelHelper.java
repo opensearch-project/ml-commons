@@ -7,9 +7,7 @@ package org.opensearch.ml.engine;
 
 import ai.djl.training.util.DownloadUtils;
 import ai.djl.training.util.ProgressBar;
-import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.apache.commons.io.FileUtils;
 import org.opensearch.action.ActionListener;
 
 import java.io.File;
@@ -24,14 +22,10 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import static org.opensearch.ml.engine.MLEngine.getModelCachePath;
-import static org.opensearch.ml.engine.MLEngine.getLoadModelPath;
-import static org.opensearch.ml.engine.MLEngine.getUploadModelPath;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.engine.utils.FileUtils.splitFileIntoChunks;
 
-@NoArgsConstructor
 @Log4j2
 public class ModelHelper {
     public static final String CHUNK_FILES = "chunk_files";
@@ -43,7 +37,11 @@ public class ModelHelper {
     public static final String TOKENIZER_FILE_NAME = "tokenizer.json";
     public static final String PYTORCH_ENGINE = "PyTorch";
     public static final String ONNX_ENGINE = "OnnxRuntime";
+    private final MLEngine mlEngine;
 
+    public ModelHelper(MLEngine mlEngine) {
+        this.mlEngine = mlEngine;
+    }
     /**
      * Download model from URL and split it into smaller chunks.
      * @param modelId model id
@@ -55,10 +53,11 @@ public class ModelHelper {
     public void downloadAndSplit(String modelId, String modelName, String version, String url, ActionListener<Map<String, Object>> listener) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                Path modelUploadPath = getUploadModelPath(modelId, modelName, version);
+                Path modelUploadPath = mlEngine.getUploadModelPath(modelId, modelName, version);
                 String modelPath = modelUploadPath +".zip";
                 Path modelPartsPath = modelUploadPath.resolve("chunks");
                 File modelZipFile = new File(modelPath);
+                log.debug("download model to file {}", modelZipFile.getAbsolutePath());
                 DownloadUtils.download(url, modelPath, new ProgressBar());
                 verifyModelZipFile(modelPath);
 
@@ -68,7 +67,7 @@ public class ModelHelper {
                 result.put(MODEL_SIZE_IN_BYTES, modelZipFile.length());
 
                 result.put(MODEL_FILE_HASH, calculateFileHash(modelZipFile));
-                FileUtils.delete(modelZipFile);
+                deleteFileQuietly(modelZipFile);
                 listener.onResponse(result);
                 return null;
             });
@@ -104,9 +103,9 @@ public class ModelHelper {
     }
 
     public void deleteFileCache(String modelId) {
-        deleteFileQuietly(getModelCachePath(modelId));
-        deleteFileQuietly(getLoadModelPath(modelId));
-        deleteFileQuietly(getUploadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getModelCachePath(modelId));
+        deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
     }
 
 }
