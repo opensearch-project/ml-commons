@@ -62,7 +62,7 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
             .predictor("test_predictor")
             .workerNodes(new String[] { "node1", "node2" })
             .modelState(MLModelState.LOADED)
-            .predictStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
+            .modelInferenceStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
             .build();
     }
 
@@ -104,7 +104,7 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
                 + "\"create_time\":123,\"last_update_time\":123,\"error\":\"error\",\"user\":{\"name\":\"\","
                 + "\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
                 + "\"is_async\":false}},\"models\":{\"model1\":{\"model_state\":\"LOADED\",\"predictor\":\"test_predictor\","
-                + "\"worker_nodes\":[\"node1\",\"node2\"],\"predict_request_stats\":{\"count\":10,\"max\":20.0,"
+                + "\"worker_nodes\":[\"node1\",\"node2\"],\"model_inference_stats\":{\"count\":10,\"max\":20.0,"
                 + "\"min\":5.0,\"average\":11.0}}}}}}",
             taskContent
         );

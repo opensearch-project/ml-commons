@@ -86,8 +86,10 @@ public class FileUtils {
      */
     public static void write(byte[] data, File destinationFile, boolean append) throws IOException {
         org.apache.commons.io.FileUtils.createParentDirectories(destinationFile);
-        try (OutputStream output = new BufferedOutputStream(new FileOutputStream(destinationFile, append))){
+        try (FileOutputStream fileOutputStream = new FileOutputStream(destinationFile, append);
+             OutputStream output = new BufferedOutputStream(fileOutputStream)){
             output.write(data);
+            output.flush();
         }
     }
 
@@ -97,6 +99,7 @@ public class FileUtils {
      * @param mergedFile merged file
      */
     public static void mergeFiles(Queue<File> files, File mergedFile) {
+        log.debug("merge {} files into {}", files.size(), mergedFile);
         boolean failed = false;
         while (!files.isEmpty()) {
             File f = files.poll();
@@ -108,13 +111,14 @@ public class FileUtils {
 
                     write(fileContent, mergedFile, true);
                 }
+            } catch (IOException e) {
+                log.error("Failed to merge file " + f.getAbsolutePath() + " to " + mergedFile.getAbsolutePath(), e);
+                failed = true;
+            } finally {
                 org.apache.commons.io.FileUtils.deleteQuietly(f);
                 if (files.isEmpty()) {
                     org.apache.commons.io.FileUtils.deleteQuietly(f.getParentFile());
                 }
-            } catch (IOException e) {
-                log.error("Failed to merge file " + f.getAbsolutePath() + " to " + mergedFile.getAbsolutePath(), e);
-                failed = true;
             }
         }
         if (failed) {
@@ -140,7 +144,10 @@ public class FileUtils {
      * @param path file path
      */
     public static void deleteFileQuietly(Path path) {
-        File file = new File(path.toUri());
+        deleteFileQuietly(new File(path.toUri()));
+    }
+
+    public static void deleteFileQuietly(File file) {
         if (file.exists()) {
             org.apache.commons.io.FileUtils.deleteQuietly(file);
         }

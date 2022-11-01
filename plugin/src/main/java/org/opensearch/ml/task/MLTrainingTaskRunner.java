@@ -59,6 +59,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
     private final MLIndicesHandler mlIndicesHandler;
     private final MLInputDatasetHandler mlInputDatasetHandler;
     protected final DiscoveryNodeHelper nodeHelper;
+    private final MLEngine mlEngine;
 
     public MLTrainingTaskRunner(
         ThreadPool threadPool,
@@ -70,7 +71,8 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         MLInputDatasetHandler mlInputDatasetHandler,
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLEngine mlEngine
     ) {
         super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -79,6 +81,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         this.mlIndicesHandler = mlIndicesHandler;
         this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.nodeHelper = nodeHelper;
+        this.mlEngine = mlEngine;
     }
 
     @Override
@@ -180,7 +183,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         try {
             // run training
             mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
-            MLModel mlModel = MLEngine.train(mlInput);
+            MLModel mlModel = mlEngine.train(mlInput);
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {
                     listener.onFailure(new RuntimeException("No response to create ML task index"));
