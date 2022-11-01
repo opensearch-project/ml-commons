@@ -334,7 +334,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(
             clusterService,
             mlModelManager,
-            mlTaskManager
+            mlTaskManager,
+            modelCacheHelper
         );
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
             clusterService,

@@ -41,7 +41,7 @@ public class MLModelCacheHelper {
      * @param functionName function name
      */
     public synchronized void initModelState(String modelId, MLModelState state, FunctionName functionName) {
-        if (modelCaches.containsKey(modelId)) {
+        if (isModelRunningOnNode(modelId)) {
             throw new IllegalArgumentException("Duplicate model task");
         }
         log.debug("init model state for model {}, state: {}", modelId, state);
@@ -275,6 +275,12 @@ public class MLModelCacheHelper {
     public void addPredictRequestDuration(String modelId, double duration) {
         MLModelCache modelCache = getOrCreateModelCache(modelId);
         modelCache.addPredictRequestDuration(duration, maxRequestCount);
+    }
+
+    public void resizeMonitoringQueue(long monitoringReqCount) {
+        for (Map.Entry<String, MLModelCache> entry : modelCaches.entrySet()) {
+            entry.getValue().resizeMonitoringQueue(monitoringReqCount);
+        }
     }
 
     /**
