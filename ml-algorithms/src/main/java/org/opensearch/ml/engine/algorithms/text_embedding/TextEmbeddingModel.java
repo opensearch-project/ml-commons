@@ -177,10 +177,7 @@ public class TextEmbeddingModel implements Predictable {
                             }
                         }
                     }
-                    devices = Engine.getInstance().getDevices();
-                    if (devices == null || devices.length == 0) {
-                        throw new MLResourceNotFoundException("Can't find devices to load model");
-                    }
+                    devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
                         log.debug("load model {} on device {}: {}", modelId, i, devices[i]);
                         Map<String, Object> arguments = new HashMap<>();
