@@ -263,10 +263,10 @@ public class TextEmbeddingModel implements Predictable {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {
                 Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-                int currentNode = nextDevice.getAndIncrement();
-                if (currentNode > devices.length - 1) {
-                    currentNode = 0;
-                    nextDevice.set(currentNode + 1);
+                int currentDevice = nextDevice.getAndIncrement();
+                if (currentDevice > devices.length - 1) {
+                    currentDevice = currentDevice % devices.length;
+                    nextDevice.set(currentDevice + 1);
                 }
                 if (predictors == null) {
                     throw new MLException("model not loaded.");
@@ -278,8 +278,8 @@ public class TextEmbeddingModel implements Predictable {
                 for (String doc : textDocsInput.getDocs()) {
                     Input input = new Input();
                     input.add(doc);
-                    log.debug("run text embedding predict for model {} on device {}", modelId, devices[currentNode]);
-                    output = predictors[currentNode].predict(input);
+                    log.debug("run text embedding predict for model {} on device {}", modelId, devices[currentDevice]);
+                    output = predictors[currentDevice].predict(input);
                     tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
                 }
                 return new ModelTensorOutput(tensorOutputs);
