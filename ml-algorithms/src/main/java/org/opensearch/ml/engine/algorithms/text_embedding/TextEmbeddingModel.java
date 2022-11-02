@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import ai.djl.Application;
+import ai.djl.Device;
+import ai.djl.engine.Engine;
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
@@ -19,6 +21,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -42,6 +45,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
@@ -63,8 +67,10 @@ public class TextEmbeddingModel implements Predictable {
     private MLEngine mlEngine;
     private String modelId;
 
-    private Predictor<Input, Output> predictor;
-    private ZooModel model;
+    private Predictor<Input, Output>[] predictors;
+    private ZooModel[] models;
+    private Device[] devices;
+    private AtomicInteger nextDevice = new AtomicInteger(0);
 
     @Override
     public MLOutput predict(MLInput mlInput, MLModel model) {
@@ -113,15 +119,13 @@ public class TextEmbeddingModel implements Predictable {
     public void close() {
         if (modelHelper != null && modelId != null) {
             modelHelper.deleteFileCache(modelId);
-            if (predictor != null) {
-                log.debug("close predictor for model {}", modelId);
-                predictor.close();
-                predictor = null;
+            if (predictors != null) {
+                closePredictors(predictors);
+                predictors = null;
             }
-            if (model != null) {
-                log.debug("close model for model {}", modelId);
-                model.close();
-                model = null;
+            if (models != null) {
+                closeModels(models);
+                models = null;
             }
         }
     }
@@ -129,6 +133,7 @@ public class TextEmbeddingModel implements Predictable {
     protected void loadTextEmbeddingModel(File modelZipFile, String modelId, String modelName, FunctionName functionName, String version,
                                        MLModelConfig modelConfig,
                                        String engine) {
+
         try {
             if (FunctionName.TEXT_EMBEDDING != functionName) {
                 throw new IllegalArgumentException("wrong function name");
@@ -136,6 +141,8 @@ public class TextEmbeddingModel implements Predictable {
             if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
                 throw new IllegalArgumentException("unsupported engine");
             }
+            List<Predictor<Input, Output>> predictorList = new ArrayList<>();
+            List<ZooModel<Input, Output>> modelList = new ArrayList<>();
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
                 try {
@@ -170,39 +177,61 @@ public class TextEmbeddingModel implements Predictable {
                             }
                         }
                     }
-                    Map<String, Object> arguments = new HashMap<>();
-                    Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
-                            .setTypes(Input.class, Output.class)
-                            .optApplication(Application.UNDEFINED)
-                            .optArguments(arguments)
-                            .optEngine(engine)
-                            .optModelPath(modelPath);
-                    TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-                    TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
-                    if (ONNX_ENGINE.equals(engine)) { //ONNX
-                        criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator());
-                    } else { // pytorch
-                        if (transformersType == SENTENCE_TRANSFORMERS) {
-                            criteriaBuilder.optTranslator(new SentenceTransformerTextEmbeddingTranslator());
-                        } else {
-                            criteriaBuilder.optTranslatorFactory(new HuggingfaceTextEmbeddingTranslatorFactory());
+                    devices = Engine.getEngine(engine).getDevices();
+                    for (int i = 0; i < devices.length; i++) {
+                        log.debug("load model {} on device {}: {}", modelId, i, devices[i]);
+                        Map<String, Object> arguments = new HashMap<>();
+                        Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
+                                .setTypes(Input.class, Output.class)
+                                .optApplication(Application.UNDEFINED)
+                                .optArguments(arguments)
+                                .optEngine(engine)
+                                .optDevice(devices[i])
+                                .optModelPath(modelPath);
+                        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
+                        TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
+                        if (ONNX_ENGINE.equals(engine)) { //ONNX
+                            criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator());
+                        } else { // pytorch
+                            if (transformersType == SENTENCE_TRANSFORMERS) {
+                                criteriaBuilder.optTranslator(new SentenceTransformerTextEmbeddingTranslator());
+                            } else {
+                                criteriaBuilder.optTranslatorFactory(new HuggingfaceTextEmbeddingTranslatorFactory());
+                            }
                         }
-                    }
-                    Criteria<Input, Output> criteria = criteriaBuilder.build();
-                    ZooModel<Input, Output> model = criteria.loadModel();
-                    Predictor<Input, Output> predictor = model.newPredictor();
-                    this.predictor = predictor;
-                    this.model = model;
+                        Criteria<Input, Output> criteria = criteriaBuilder.build();
+                        ZooModel<Input, Output> model = criteria.loadModel();
+                        Predictor<Input, Output> predictor = model.newPredictor();
+                        predictorList.add(predictor);
+                        modelList.add(model);
 
-                    Input input = new Input();
-                    input.add("warm up sentence");
-                    // First request takes longer time. Predict once to warm up model.
-                    this.predictor.predict(input);
+                        Input input = new Input();
+                        input.add("warm up sentence");
+                        // First request takes longer time. Predict once to warm up model.
+                        predictor.predict(input);
+                    }
+                    if (predictorList.size() > 0) {
+                        this.predictors = predictorList.toArray(new Predictor[0]);
+                        predictorList.clear();
+                    }
+                    if (modelList.size() > 0) {
+                        this.models = modelList.toArray(new ZooModel[0]);
+                        modelList.clear();
+                    }
+                    log.info("Load model {} successfully on {} devices", modelId, devices.length);
                     return null;
                 } catch (Exception e) {
                     String errorMessage = "Failed to load model " + modelId;
                     log.error(errorMessage, e);
                     close();
+                    if (predictorList.size() > 0) {
+                        closePredictors(predictorList.toArray(new Predictor[0]));
+                        predictorList.clear();
+                    }
+                    if (modelList.size() > 0) {
+                        closeModels(modelList.toArray(new ZooModel[0]));
+                        modelList.clear();
+                    }
                     throw new MLException(errorMessage, e);
                 } finally {
                     deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
@@ -216,12 +245,30 @@ public class TextEmbeddingModel implements Predictable {
         }
     }
 
+    private void closePredictors(Predictor[] predictors) {
+        log.debug("will close {} predictor for model {}", predictors.length, modelId);
+        for (Predictor<Input, Output> predictor : predictors) {
+            predictor.close();
+        }
+    }
+
+    private void closeModels(ZooModel[] models) {
+        log.debug("will close {} zoo model for model {}", models.length, modelId);
+        for (ZooModel model : models) {
+            model.close();
+        }
+    }
+
     protected ModelTensorOutput predictTextEmbedding(String modelId, MLInputDataset inputDataSet) {
-        log.debug("start to predict text embedding model {}", modelId);
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {
                 Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-                if (predictor == null) {
+                int currentDevice = nextDevice.getAndIncrement();
+                if (currentDevice > devices.length - 1) {
+                    currentDevice = currentDevice % devices.length;
+                    nextDevice.set(currentDevice + 1);
+                }
+                if (predictors == null) {
                     throw new MLException("model not loaded.");
                 }
                 List<ModelTensors> tensorOutputs = new ArrayList<>();
@@ -231,7 +278,8 @@ public class TextEmbeddingModel implements Predictable {
                 for (String doc : textDocsInput.getDocs()) {
                     Input input = new Input();
                     input.add(doc);
-                    output = predictor.predict(input);
+                    log.debug("run text embedding predict for model {} on device {}", modelId, devices[currentDevice]);
+                    output = predictors[currentDevice].predict(input);
                     tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
                 }
                 return new ModelTensorOutput(tensorOutputs);
