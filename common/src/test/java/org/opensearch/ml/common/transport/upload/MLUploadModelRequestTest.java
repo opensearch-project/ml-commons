@@ -104,11 +104,7 @@ public class MLUploadModelRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success_WithNonMLUploadModelRequest_ConfigInput() {
-        fromActionRequest_Success_WithNonMLUploadModelRequest(mlUploadInput);
-    }
-
-    private void fromActionRequest_Success_WithNonMLUploadModelRequest(MLUploadInput mlUploadInput) {
+    public void fromActionRequest_Success_WithNonMLUploadModelRequest() {
         MLUploadModelRequest request = MLUploadModelRequest.builder()
                 .mlUploadInput(mlUploadInput)
                 .build();

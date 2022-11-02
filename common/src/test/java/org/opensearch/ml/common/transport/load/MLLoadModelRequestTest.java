@@ -7,21 +7,26 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.*;
+import org.opensearch.ml.common.TestHelper;
+import org.opensearch.search.SearchModule;
 import org.opensearch.tasks.Task;
 import org.opensearch.tasks.TaskId;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
+import java.util.Collections;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.junit.Assert.*;
 
 public class MLLoadModelRequestTest {
 
-    @Mock
     private MLLoadModelRequest mlLoadModelRequest;
 
     @Before
@@ -32,10 +37,11 @@ public class MLLoadModelRequestTest {
                 async(true).
                 dispatchTask(true).
                 build();
+
     }
 
     @Test
-    public void testValidate() {
+    public void testValidateWithBuilder() {
          MLLoadModelRequest request = MLLoadModelRequest.builder().
                  modelId("modelId").
                  build();
@@ -43,15 +49,13 @@ public class MLLoadModelRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success_WithMLUploadModelRequest() {
-        MLLoadModelRequest request = MLLoadModelRequest.builder().
-                modelId("modelId").
-                build();
-        assertSame(MLLoadModelRequest.fromActionRequest(request), request);
+    public void testValidateWithoutBuilder() {
+        MLLoadModelRequest request = new MLLoadModelRequest("modelId", true);
+        assertNull(request.validate());
     }
 
     @Test
-    public void validate_Exception_NullModelId() {
+    public void validate_Exception_WithNullModelId() {
         MLLoadModelRequest request = MLLoadModelRequest.builder().
                 modelId(null).
                 modelNodeIds(new String[]{"modelNodeIds"}).
@@ -93,7 +97,15 @@ public class MLLoadModelRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success_WithNonMLUploadModelRequest_ConfigInput() {
+    public void fromActionRequest_Success_WithMLLoadModelRequest() {
+        MLLoadModelRequest request = MLLoadModelRequest.builder().
+                modelId("modelId").
+                build();
+        assertSame(MLLoadModelRequest.fromActionRequest(request), request);
+    }
+
+    @Test
+    public void fromActionRequest_Success_WithNonMLLoadModelRequest() {
         MLLoadModelRequest request = mlLoadModelRequest;
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -112,11 +124,35 @@ public class MLLoadModelRequestTest {
         assertEquals(request.isDispatchTask(), result.isDispatchTask());
     }
 
-
-/*
-    // No toXcontent Method?
     @Test
     public void testParse() throws Exception {
+        String modelId = "modelId";
+        String expectedInputStr = "{\"node_ids\":[\"modelNodeIds\"]}";
+        parseFromJsonString(modelId, expectedInputStr, parsedInput -> {
+            assertEquals("modelId", parsedInput.getModelId());
+            assertArrayEquals(new String [] {"modelNodeIds"}, parsedInput.getModelNodeIds());
+            assertFalse(parsedInput.isAsync());
+            assertTrue(parsedInput.isDispatchTask());}
+        );
     }
- */
+
+    @Test
+    public void testParseWithInvalidField() throws Exception {
+        String modelId = "modelId";
+        String withInvalidFieldInputStr = "{\"void\":\"void\", \"dispatchTask\":\"false\", \"async\":\"true\", \"node_ids\":[\"modelNodeIds\"]}";
+        parseFromJsonString(modelId, withInvalidFieldInputStr, parsedInput -> {
+            assertEquals("modelId", parsedInput.getModelId());
+            assertArrayEquals(new String [] {"modelNodeIds"}, parsedInput.getModelNodeIds());
+            assertFalse(parsedInput.isAsync());
+            assertTrue(parsedInput.isDispatchTask());}
+        );
+    }
+
+    private void parseFromJsonString(String modelId, String expectedInputStr, Consumer<MLLoadModelRequest> verify) throws Exception {
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
+        parser.nextToken();
+        MLLoadModelRequest parsedInput = MLLoadModelRequest.parse(parser, modelId);
+        verify.accept(parsedInput);
+    }
 }

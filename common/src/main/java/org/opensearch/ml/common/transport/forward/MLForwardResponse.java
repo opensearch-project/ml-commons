@@ -45,7 +45,7 @@ public class MLForwardResponse extends ActionResponse implements ToXContentObjec
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException{
+    public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(status);
         if (mlOutput != null) {
             out.writeBoolean(true);
