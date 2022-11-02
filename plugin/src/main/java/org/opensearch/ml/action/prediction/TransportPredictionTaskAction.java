@@ -17,6 +17,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.tasks.Task;
@@ -27,21 +28,33 @@ import org.opensearch.transport.TransportService;
 public class TransportPredictionTaskAction extends HandledTransportAction<ActionRequest, MLTaskResponse> {
     MLTaskRunner<MLPredictionTaskRequest, MLTaskResponse> mlPredictTaskRunner;
     TransportService transportService;
+    MLModelCacheHelper modelCacheHelper;
 
     @Inject
     public TransportPredictionTaskAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLPredictTaskRunner mlPredictTaskRunner
+        MLPredictTaskRunner mlPredictTaskRunner,
+        MLModelCacheHelper modelCacheHelper
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
         this.transportService = transportService;
+        this.modelCacheHelper = modelCacheHelper;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
-        mlPredictTaskRunner.run(mlPredictionTaskRequest, transportService, listener);
+        String modelId = mlPredictionTaskRequest.getModelId();
+        String requestId = mlPredictionTaskRequest.getRequestID();
+        log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
+        long startTime = System.nanoTime();
+        mlPredictTaskRunner.run(mlPredictionTaskRequest, transportService, ActionListener.runAfter(listener, () -> {
+            long endTime = System.nanoTime();
+            double durationInMs = (endTime - startTime) / 1e6;
+            modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+            log.debug("completed predict request " + requestId + " for model " + modelId);
+        }));
     }
 }

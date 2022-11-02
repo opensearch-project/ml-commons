@@ -29,7 +29,7 @@ public class TestData {
     public static final String HUGGINGFACE_TRANSFORMER_MODEL_URL =
         "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_huggingface.zip?raw=true";
     public static final String SENTENCE_TRANSFORMER_MODEL_URL =
-        "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true";
+        "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/traced_small_model.zip?raw=true";
     public static final String TIME_FIELD = "timestamp";
     public static final String TARGET_FIELD = "price";
 
