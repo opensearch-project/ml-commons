@@ -26,13 +26,17 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.model.MLModelGetAction;
+import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
@@ -97,11 +101,37 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verifyParsedKMeansMLInput(mlInput);
     }
 
-    @Ignore
     public void testPrepareRequest() throws Exception {
         RestRequest request = getRestRequest_PredictModel();
         restMLPredictionAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        MLInput mlInput = argumentCaptor.getValue().getMlInput();
+        verifyParsedKMeansMLInput(mlInput);
+    }
 
+    @Ignore
+    public void testPrepareRequest_EmptyAlgorithm() throws Exception {
+        MLModel model = MLModel.builder().algorithm(FunctionName.BATCH_RCF).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelGetResponse> actionListener = invocation.getArgument(2);
+            MLModelGetResponse response = new MLModelGetResponse(model);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLModelGetAction.INSTANCE), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<RestToXContentListener> actionListener = invocation.getArgument(2);
+            RestToXContentListener<MLModelGetResponse> listener = new RestToXContentListener<>(channel);
+            actionListener.onResponse(listener);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        RestRequest request = getKMeansRestRequest();
+        request.params().clear();
+        request.params().put(PARAMETER_MODEL_ID, "model_id");
+        restMLPredictionAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
