@@ -249,7 +249,7 @@ public class LogisticRegressionParams implements MLAlgoParams {
             builder.field(BETA1_FIELD, beta1);
         }
         if (beta2 != null) {
-            builder.field(BETA1_FIELD, beta2);
+            builder.field(BETA2_FIELD, beta2);
         }
         if (decayRate != null) {
             builder.field(DECAY_RATE_FIELD, decayRate);

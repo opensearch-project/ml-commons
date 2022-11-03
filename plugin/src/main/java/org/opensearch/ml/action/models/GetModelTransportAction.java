@@ -61,7 +61,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.get(getRequest, ActionListener.wrap(r -> {
+            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 log.info("Completed Get Model Request, id:{}", modelId);
 
                 if (r != null && r.isExists()) {
@@ -83,7 +83,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                     log.error("Failed to get ML model " + modelId, e);
                     actionListener.onFailure(e);
                 }
-            }));
+            }), () -> context.restore()));
         } catch (Exception e) {
             log.error("Failed to get ML model " + modelId, e);
             actionListener.onFailure(e);

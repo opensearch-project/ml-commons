@@ -241,7 +241,6 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.model.MLModelManager',
         'org.opensearch.ml.action.unload.TransportUnloadModelAction',
         'org.opensearch.ml.action.forward.TransportForwardAction',
-        'org.opensearch.ml.cluster.MLSyncUpCron',
         'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction'
 ]
 

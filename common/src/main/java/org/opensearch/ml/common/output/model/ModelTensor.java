@@ -27,7 +27,7 @@ public class ModelTensor implements Writeable, ToXContentObject {
 
     @Builder
     public ModelTensor(String name, Number[] data, long[] shape, MLResultDataType dataType, ByteBuffer byteBuffer) {
-        if (this.data != null && (dataType == null || dataType == MLResultDataType.UNKNOWN)) {
+        if (data != null && (dataType == null || dataType == MLResultDataType.UNKNOWN)) {
             throw new IllegalArgumentException("data type is null");
         }
         this.name = name;

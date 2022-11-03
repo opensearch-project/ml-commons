@@ -27,6 +27,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
@@ -114,13 +115,15 @@ public class TransportUnloadModelAction extends
             MLSyncUpInput syncUpInput = MLSyncUpInput.builder().removedWorkerNodes(removedNodes).build();
 
             MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
-            client
-                .execute(
-                    MLSyncUpAction.INSTANCE,
-                    syncUpRequest,
-                    ActionListener
-                        .wrap(r -> log.debug("sync up removed nodes successfully"), e -> log.error("failed to sync up removed node", e))
-                );
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client
+                    .execute(
+                        MLSyncUpAction.INSTANCE,
+                        syncUpRequest,
+                        ActionListener
+                            .wrap(r -> log.debug("sync up removed nodes successfully"), e -> log.error("failed to sync up removed node", e))
+                    );
+            }
         }
         return new UnloadModelNodesResponse(clusterService.getClusterName(), responses, failures);
     }
