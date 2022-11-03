@@ -3,7 +3,6 @@ package org.opensearch.ml.common.transport.forward;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
@@ -35,19 +34,14 @@ import static org.junit.Assert.*;
 @RunWith(MockitoJUnitRunner.class)
 public class MLForwardInputTest {
 
-    @Mock
-    private MLModelConfig config;
     private MLForwardInput forwardInput;
-    private MLTask mlTask;
-    private MLInput modelInput;
-    private MLUploadInput uploadInput;
     private final FunctionName functionName = FunctionName.KMEANS;
 
 
     @Before
     public void setUp() throws Exception {
         Instant time = Instant.now();
-        mlTask = MLTask.builder()
+        MLTask mlTask = MLTask.builder()
                 .taskId("mlTaskTaskId")
                 .modelId("mlTaskModelId")
                 .taskType(MLTaskType.PREDICTION)
@@ -65,18 +59,18 @@ public class MLForwardInputTest {
         DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
             put("key1", 2.0D);
         }}));
-        modelInput = MLInput.builder()
+        MLInput modelInput = MLInput.builder()
                 .algorithm(FunctionName.KMEANS)
                 .parameters(KMeansParams.builder().centroids(1).build())
                 .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
                 .build();
-        config = TextEmbeddingModelConfig.builder()
+        MLModelConfig config = TextEmbeddingModelConfig.builder()
                 .modelType("uploadInputModelType")
                 .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
                 .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
                 .embeddingDimension(100)
                 .build();
-        uploadInput = MLUploadInput.builder()
+        MLUploadInput uploadInput = MLUploadInput.builder()
                 .functionName(functionName)
                 .modelName("uploadInputModelName")
                 .version("uploadInputVersion")
@@ -84,7 +78,7 @@ public class MLForwardInputTest {
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
                 .loadModel(true)
-                .modelNodeIds(new String[]{"modelNodeIds" })
+                .modelNodeIds(new String[]{"modelNodeIds"})
                 .build();
 
         forwardInput = MLForwardInput.builder()

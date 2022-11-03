@@ -3,7 +3,6 @@ package org.opensearch.ml.common.transport.forward;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -36,8 +35,6 @@ import static org.junit.Assert.*;
 @RunWith(MockitoJUnitRunner.class)
 public class MLForwardRequestTest {
 
-    @Mock
-    private MLModelConfig config;
     private MLForwardInput forwardInput;
     private MLTask mlTask;
     private MLInput modelInput;
@@ -71,7 +68,7 @@ public class MLForwardRequestTest {
                 .parameters(KMeansParams.builder().centroids(1).build())
                 .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
                 .build();
-        config = TextEmbeddingModelConfig.builder()
+        MLModelConfig config = TextEmbeddingModelConfig.builder()
                 .modelType("uploadInputModelType")
                 .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
                 .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

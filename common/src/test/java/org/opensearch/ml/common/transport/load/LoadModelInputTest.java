@@ -31,7 +31,6 @@ import static org.mockito.Mockito.verify;
 @RunWith(MockitoJUnitRunner.class)
 public class LoadModelInputTest {
 
-    @Mock
     private MLTask mlTask;
     private LoadModelInput loadModelInput;
 

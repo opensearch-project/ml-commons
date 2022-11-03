@@ -14,24 +14,28 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.dataframe.DataFrame;
+import org.opensearch.ml.common.dataframe.DataFrameBuilder;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Collections;
+import java.util.HashMap;
 
 import static org.junit.Assert.*;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLForwardResponseTest {
 
-    @Mock
-    MLPredictionOutput predictionOutput;
-    DataFrame dataFrame;
-    String status;
+    private MLPredictionOutput predictionOutput;
+    private String status;
 
     @Before
     public void setUp() throws Exception {
         status = "test";
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
+            put("key1", 2.0D);
+        }}));
         predictionOutput = MLPredictionOutput.builder()
                 .status("Success")
                 .predictionResult(dataFrame)
@@ -49,7 +53,7 @@ public class MLForwardResponseTest {
         MLForwardResponse parsedResponse = new MLForwardResponse(bytesStreamOutput.bytes().streamInput());
         // Verify the results
         assertEquals(response.getStatus(), parsedResponse.getStatus());
-        assertEquals(response.getMlOutput(), parsedResponse.getMlOutput());
+        assertEquals(response.getMlOutput().toString(), parsedResponse.getMlOutput().toString());
     }
 
     @Test
@@ -62,7 +66,7 @@ public class MLForwardResponseTest {
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
         // Verify the results
-        assertEquals("{\"result\":{\"task_id\":\"taskId\",\"status\":\"Success\"}}", jsonStr);
+        assertEquals("{\"result\":{\"task_id\":\"taskId\",\"status\":\"Success\",\"prediction_result\":{\"column_metas\":[{\"name\":\"key1\",\"column_type\":\"DOUBLE\"}],\"rows\":[{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":2.0}]}]}}}", jsonStr);
     }
 
     @Test
@@ -98,7 +102,7 @@ public class MLForwardResponseTest {
         MLForwardResponse result = MLForwardResponse.fromActionResponse(actionResponse);
         assertNotSame(result, response);
         assertEquals(response.getStatus(), result.getStatus());
-        assertEquals(response.getMlOutput(), result.getMlOutput());
+        assertEquals(response.getMlOutput().toString(), result.getMlOutput().toString());
     }
 
     @Test(expected = UncheckedIOException.class)
