@@ -5,7 +5,10 @@
 
 package org.opensearch.ml.action.upload;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+
 import java.time.Instant;
+import java.util.regex.Pattern;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -17,6 +20,8 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -54,6 +59,7 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
     MLStats mlStats;
+    String trustedUrlRegex;
 
     @Inject
     public TransportUploadModelAction(
@@ -64,6 +70,7 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
         MLModelManager mlModelManager,
         MLTaskManager mlTaskManager,
         ClusterService clusterService,
+        Settings settings,
         ThreadPool threadPool,
         Client client,
         DiscoveryNodeHelper nodeFilter,
@@ -82,12 +89,20 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
         this.nodeFilter = nodeFilter;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlStats = mlStats;
+
+        trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<UploadModelResponse> listener) {
         MLUploadModelRequest uploadModelRequest = MLUploadModelRequest.fromActionRequest(request);
         MLUploadInput mlUploadInput = uploadModelRequest.getMlUploadInput();
+        Pattern pattern = Pattern.compile(trustedUrlRegex);
+        boolean validUrl = pattern.matcher(mlUploadInput.getUrl()).find();
+        if (!validUrl) {
+            throw new IllegalArgumentException("URL can't match trusted url regex");
+        }
         // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
         // //TODO: track executing task; track upload failures
@@ -128,13 +143,16 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
                             res -> { log.debug("Response from model node: " + res); },
                             ex -> { log.error("Failure from model node", ex); }
                         );
-                    transportService
-                        .sendRequest(
-                            node,
-                            MLForwardAction.NAME,
-                            forwardRequest,
-                            new ActionListenerResponseHandler<>(myListener, MLForwardResponse::new)
-                        );
+                    try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                        transportService
+                            .sendRequest(
+                                node,
+                                MLForwardAction.NAME,
+                                forwardRequest,
+                                new ActionListenerResponseHandler<>(myListener, MLForwardResponse::new)
+                            );
+                    }
+
                 }
             }, exception -> {
                 log.error("Failed to create upload model task", exception);
