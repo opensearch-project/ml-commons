@@ -59,13 +59,13 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLTaskManager mlTaskManager,
         Client client,
         MLModelManager mlModelManager,
-        DiscoveryNodeHelper nodeHel
+        DiscoveryNodeHelper nodeHelper
     ) {
         super(MLForwardAction.NAME, transportService, actionFilters, MLForwardRequest::new);
         this.mlTaskManager = mlTaskManager;
         this.client = client;
         this.mlModelManager = mlModelManager;
-        this.nodeHelper = nodeHel;
+        this.nodeHelper = nodeHelper;
     }
 
     @Override
