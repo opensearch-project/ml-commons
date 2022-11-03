@@ -9,8 +9,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -22,6 +26,8 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -44,6 +50,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class TransportUploadModelActionTests extends OpenSearchTestCase {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Mock
     private TransportService transportService;
@@ -62,6 +70,8 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private ClusterService clusterService;
+
+    private Settings settings;
 
     @Mock
     private ThreadPool threadPool;
@@ -98,10 +108,14 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
 
     private TransportUploadModelAction transportUploadModelAction;
 
+    private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-
+        settings = Settings.builder().put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         transportUploadModelAction = new TransportUploadModelAction(
             transportService,
             actionFilters,
@@ -110,6 +124,7 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
             mlModelManager,
             mlTaskManager,
             clusterService,
+            settings,
             threadPool,
             client,
             nodeFilter,
@@ -144,6 +159,14 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
         when(node2.getId()).thenReturn("NodeId1");
 
         transportUploadModelAction.doExecute(task, prepareRequest(), actionListener);
+        ArgumentCaptor<UploadModelResponse> argumentCaptor = ArgumentCaptor.forClass(UploadModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void testDoExecute_invalidURL() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("URL can't match trusted url regex");
+        transportUploadModelAction.doExecute(task, prepareRequest("test url"), actionListener);
         ArgumentCaptor<UploadModelResponse> argumentCaptor = ArgumentCaptor.forClass(UploadModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -187,6 +210,10 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
     }
 
     private MLUploadModelRequest prepareRequest() {
+        return prepareRequest("http://test_url");
+    }
+
+    private MLUploadModelRequest prepareRequest(String url) {
         MLUploadInput uploadInput = MLUploadInput
             .builder()
             .functionName(FunctionName.BATCH_RCF)
@@ -197,7 +224,7 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
                 new TextEmbeddingModelConfig("CUSTOM", 123, TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS, "all config")
             )
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .url("Test URL")
+            .url(url)
             .build();
         return new MLUploadModelRequest(uploadInput);
     }

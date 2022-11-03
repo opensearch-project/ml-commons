@@ -245,7 +245,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.forward.TransportForwardAction',
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.rest.RestMLUploadModelAction',
-        'org.opensearch.ml.rest.RestMLLoadModelAction'
+        'org.opensearch.ml.rest.RestMLLoadModelAction',
+        'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction'
 ]
 
 jacocoTestCoverageVerification {
