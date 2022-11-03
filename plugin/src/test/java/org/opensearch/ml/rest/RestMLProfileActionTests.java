@@ -193,6 +193,16 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         assertTrue(taskIds.contains("test_id"));
     }
 
+    public void test_PrepareRequest_TaskRequestWithNoTaskIds() throws Exception {
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withPath("/_plugins/_ml/profile/tasks").build();
+        profileAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
+        verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+        Boolean returnAllTasks = argumentCaptor.getValue().getMlProfileInput().isReturnAllTasks();
+        assertTrue(returnAllTasks);
+    }
+
     public void test_PrepareRequest_ModelRequest() throws Exception {
         RestRequest request = getModelRestRequest();
         profileAction.handleRequest(request, channel, client);
@@ -202,6 +212,16 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         Set<String> modelIds = argumentCaptor.getValue().getMlProfileInput().getModelIds();
         assertEquals(modelIds.size(), 1);
         assertTrue(modelIds.contains("test_id"));
+    }
+
+    public void test_PrepareRequest_TaskRequestWithNoModelIds() throws Exception {
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withPath("/_plugins/_ml/profile/models").build();
+        profileAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
+        verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+        Boolean returnAllModels = argumentCaptor.getValue().getMlProfileInput().isReturnAllModels();
+        assertTrue(returnAllModels);
     }
 
     public void test_PrepareRequest_EmptyNodeProfile() throws Exception {

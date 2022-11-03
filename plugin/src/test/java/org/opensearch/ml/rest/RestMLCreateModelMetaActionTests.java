@@ -9,11 +9,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.action.ActionListener;
@@ -45,6 +48,9 @@ public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
 
     @Mock
     RestChannel channel;
+
+    @Rule
+    public ExpectedException expectedEx = ExpectedException.none();
 
     @Before
     public void setup() {
@@ -84,7 +90,7 @@ public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/models/meta", route.getPath());
     }
 
-    public void testUploadModelRequest() throws Exception {
+    public void testCreateModelMetaRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLCreateModelMetaAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLCreateModelMetaRequest> argumentCaptor = ArgumentCaptor.forClass(MLCreateModelMetaRequest.class);
@@ -93,6 +99,15 @@ public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
         assertEquals("all-MiniLM-L6-v3", metaModelRequest.getName());
         assertEquals("1", metaModelRequest.getVersion());
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
+    }
+
+    public void testCreateModelMeta_NoContent() throws Exception {
+        RestRequest.Method method = RestRequest.Method.POST;
+        Map<String, String> params = new HashMap<>();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withMethod(method).withParams(params).build();
+        expectedEx.expect(IOException.class);
+        expectedEx.expectMessage("Model meta request has empty body");
+        restMLCreateModelMetaAction.handleRequest(request, channel, client);
     }
 
     private RestRequest getRestRequest() {
