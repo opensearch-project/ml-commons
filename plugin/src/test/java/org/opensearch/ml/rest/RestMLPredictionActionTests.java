@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.util.List;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -97,11 +96,9 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verifyParsedKMeansMLInput(mlInput);
     }
 
-    @Ignore
     public void testPrepareRequest() throws Exception {
         RestRequest request = getRestRequest_PredictModel();
         restMLPredictionAction.handleRequest(request, channel, client);
-
         ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
