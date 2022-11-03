@@ -11,15 +11,12 @@ import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.*;
@@ -32,15 +29,32 @@ public class UnloadModelNodesResponseTest {
 
     @Mock
     private ClusterName clusterName;
+    private DiscoveryNode node1;
+    private DiscoveryNode node2;
 
     @Before
     public void setUp() throws Exception {
         clusterName = new ClusterName("clusterName");
+        node1 = new DiscoveryNode(
+                "foo1",
+                "foo1",
+                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+                Collections.emptyMap(),
+                Collections.singleton(CLUSTER_MANAGER_ROLE),
+                Version.CURRENT
+        );
+        node2 = new DiscoveryNode(
+                "foo2",
+                "foo2",
+                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+                Collections.emptyMap(),
+                Collections.singleton(CLUSTER_MANAGER_ROLE),
+                Version.CURRENT
+        );
     }
 
-
     @Test
-    public void testSerializationDeserialization() throws IOException {
+    public void testSerializationDeserialization1() throws IOException {
         List<UnloadModelNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
         UnloadModelNodesResponse response = new UnloadModelNodesResponse(clusterName, responseList, failuresList);
@@ -53,26 +67,11 @@ public class UnloadModelNodesResponseTest {
     @Test
     public void testToXContent() throws IOException {
         List<UnloadModelNodeResponse> nodes = new ArrayList<>();
-        DiscoveryNode node1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
+
         Map<String, String> modelToUnloadStatus1 = new HashMap<>();
         modelToUnloadStatus1.put("modelName:version1", "response");
         nodes.add(new UnloadModelNodeResponse(node1, modelToUnloadStatus1));
 
-        DiscoveryNode node2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
         Map<String, String> modelToUnloadStatus2 = new HashMap<>();
         modelToUnloadStatus2.put("modelName:version2", "response");
         nodes.add(new UnloadModelNodeResponse(node2, modelToUnloadStatus2));
