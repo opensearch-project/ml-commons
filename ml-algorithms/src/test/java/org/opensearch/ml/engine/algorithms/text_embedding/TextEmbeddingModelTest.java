@@ -39,7 +39,7 @@ import java.util.UUID;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
-import static org.opensearch.ml.engine.MLEngine.getModelCachePath;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
@@ -63,10 +63,12 @@ public class TextEmbeddingModelTest {
     private Path djlCachePath;
     private TextDocsInputDataSet inputDataSet;
     private int dimension = 384;
-
+    private MLEngine mlEngine;
 
     @Before
     public void setUp() throws URISyntaxException {
+        djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
+        mlEngine = new MLEngine(djlCachePath);
         modelId = "test_model_id";
         modelName = "test_model_name";
         functionName = FunctionName.TEXT_EMBEDDING;
@@ -85,14 +87,13 @@ public class TextEmbeddingModelTest {
                 .modelConfig(modelConfig)
                 .modelState(MLModelState.TRAINED)
                 .build();
-        modelHelper = new ModelHelper();
+        modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("all-MiniLM-L6-v2_torchscript_sentence-transformer.zip").toURI());
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
+        params.put(ML_ENGINE, mlEngine);
         textEmbeddingModel = new TextEmbeddingModel();
-        djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        MLEngine.setDjlCachePath(djlCachePath);
 
         inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is a happy dog")).build();
     }
@@ -102,6 +103,7 @@ public class TextEmbeddingModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
         MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
         textEmbeddingModel.initModel(smallModel, params);
@@ -160,7 +162,8 @@ public class TextEmbeddingModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_torchscript_huggingface.zip").toURI()));
-        Path modelCachePath = getModelCachePath(model.getModelId(), model.getName(), model.getVersion());
+        params.put(ML_ENGINE, mlEngine);
+        Path modelCachePath = mlEngine.getModelCachePath(model.getModelId(), model.getName(), model.getVersion());
         File file = new File(modelCachePath.toUri());
         file.mkdirs();
         TextEmbeddingModelConfig hugginfaceModelConfig = modelConfig.toBuilder()
@@ -185,6 +188,7 @@ public class TextEmbeddingModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig onnxModelConfig = modelConfig.toBuilder()
                 .frameworkType(HUGGINGFACE_TRANSFORMERS).build();
         MLModel mlModel = model.toBuilder().modelFormat(MLModelFormat.ONNX).modelConfig(onnxModelConfig).build();
@@ -222,6 +226,16 @@ public class TextEmbeddingModelTest {
     }
 
     @Test
+    public void initModel_NullMLEngine() throws URISyntaxException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("ML engine is null");
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
+        params.put(MODEL_HELPER, modelHelper);
+        textEmbeddingModel.initModel(model, params);
+    }
+
+    @Test
     public void initModel_NullModelId() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model id is null");
@@ -235,13 +249,13 @@ public class TextEmbeddingModelTest {
             Map<String, Object> params = new HashMap<>();
             params.put(MODEL_HELPER, modelHelper);
             params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
+            params.put(ML_ENGINE, mlEngine);
             textEmbeddingModel.initModel(model, params);
         } catch (Exception e) {
             assertEquals(MLException.class, e.getClass());
             assertEquals(IllegalArgumentException.class, e.getCause().getClass());
             assertEquals("found multiple models", e.getCause().getMessage());
         }
-
     }
 
     @Test

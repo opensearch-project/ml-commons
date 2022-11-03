@@ -12,7 +12,9 @@ import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.bulk.BulkRequest;
@@ -20,6 +22,8 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
@@ -60,6 +64,10 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
+import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
@@ -94,6 +102,17 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     protected Collection<Class<? extends Plugin>> transportClientPlugins() {
         return Collections.singletonList(MachineLearningPlugin.class);
+    }
+
+    public Set<String> getAllDataNodeIds() {
+        DiscoveryNodes nodes = clusterService().state().getNodes();
+        Set<String> nodeIds = new HashSet<>();
+        for (DiscoveryNode node : nodes) {
+            if (node.isDataNode()) {
+                nodeIds.add(node.getId());
+            }
+        }
+        return nodeIds;
     }
 
     public void loadIrisData(String indexName) {
@@ -281,8 +300,14 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return taskId;
     }
 
-    public String loadModel(String modelId) {
-        MLLoadModelRequest loadRequest = MLLoadModelRequest.builder().modelId(modelId).async(true).dispatchTask(true).build();
+    public String loadModel(String modelId, String[] modelNodeIds) {
+        MLLoadModelRequest loadRequest = MLLoadModelRequest
+            .builder()
+            .modelId(modelId)
+            .modelNodeIds(modelNodeIds)
+            .async(true)
+            .dispatchTask(true)
+            .build();
         ActionFuture<LoadModelResponse> actionFuture = client().execute(MLLoadModelAction.INSTANCE, loadRequest);
         LoadModelResponse loadModelResponse = actionFuture.actionGet();
         String taskId = loadModelResponse.getTaskId();
@@ -292,13 +317,22 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public MLProfileResponse getModelProfile(String modelId) {
-        String[] allNodes = getAllNodes(clusterService());
         MLProfileInput profileInput = MLProfileInput
             .builder()
             .modelIds(ImmutableSet.of(modelId))
             .returnAllModels(true)
             .returnAllTasks(true)
             .build();
+        return profile(profileInput);
+    }
+
+    public MLProfileResponse getAllProfile() {
+        MLProfileInput profileInput = MLProfileInput.builder().returnAllModels(true).returnAllTasks(true).build();
+        return profile(profileInput);
+    }
+
+    public MLProfileResponse profile(MLProfileInput profileInput) {
+        String[] allNodes = getAllNodes(clusterService());
         MLProfileRequest profileRequest = new MLProfileRequest(allNodes, profileInput);
         ActionFuture<MLProfileResponse> actionFuture = client().execute(MLProfileAction.INSTANCE, profileRequest);
         MLProfileResponse response = actionFuture.actionGet();
@@ -357,5 +391,22 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(CommonValue.ML_MODEL_INDEX);
         SearchResponse searchResponse = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet(5000);
         return searchResponse;
+    }
+
+    public MLSyncUpNodesResponse syncUp_RunningModelAndTask() {
+        String[] allNodes = getAllNodes(clusterService());
+        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
+        MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
+        // gather running model/tasks on nodes
+        MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, gatherInfoRequest).actionGet(5000);
+        return syncUpResponse;
+    }
+
+    public MLSyncUpNodesResponse syncUp_Clear() {
+        String[] allNodes = getAllNodes(clusterService());
+        MLSyncUpInput syncUpInput = MLSyncUpInput.builder().syncRunningLoadModelTasks(true).clearRoutingTable(true).build();
+        MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
+        MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, syncUpRequest).actionGet(5000);
+        return syncUpResponse;
     }
 }

@@ -16,6 +16,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -45,6 +46,7 @@ import org.opensearch.ml.common.input.parameter.rcf.BatchRCFParams;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -92,9 +94,11 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     String indexName = "testIndex";
     String errorMessage = "test error";
     Settings settings;
+    MLEngine mlEngine;
 
     @Before
     public void setup() {
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         settings = Settings.builder().build();
         MockitoAnnotations.openMocks(this);
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
@@ -126,7 +130,8 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
                 mlInputDatasetHandler,
                 mlTaskDispatcher,
                 mlCircuitBreakerService,
-                nodeHelper
+                nodeHelper,
+                mlEngine
             )
         );
         dataFrame = TestData.constructTestDataFrame(100);

@@ -89,7 +89,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             .predictor("test_predictor")
             .workerNodes(new String[] { "node1", "node2" })
             .modelState(MLModelState.LOADED)
-            .predictStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
+            .modelInferenceStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
             .build();
         testModelId = "test_model_id";
         mlModelManager = mock(MLModelManager.class);
