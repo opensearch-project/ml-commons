@@ -77,7 +77,7 @@ public class MLIndicesHandler {
                 listener.onFailure(e);
             }
         } else {
-            log.info("index:{} is already created", indexName);
+            log.debug("index:{} is already created", indexName);
             if (indexMappingUpdated.containsKey(indexName) && !indexMappingUpdated.get(indexName).get()) {
                 shouldUpdateIndex(indexName, index.getVersion(), ActionListener.wrap(r -> {
                     if (r) {
