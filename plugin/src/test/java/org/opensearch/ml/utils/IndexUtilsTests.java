@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.utils;
 
+import org.junit.Ignore;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.master.AcknowledgedResponse;
 import org.opensearch.test.OpenSearchIntegTestCase;
@@ -45,6 +46,7 @@ public class IndexUtilsTests extends OpenSearchIntegTestCase {
         indexUtils.getNumberOfDocumentsInIndex("index", ActionListener.wrap(r -> { assertEquals((Long) 0L, r); }, e -> { assertNull(e); }));
     }
 
+    @Ignore
     public void testGetNumberOfDocumentsInIndex_RegularIndex() {
         String indexName = "test-2";
         createIndex(indexName);
