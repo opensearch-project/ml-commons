@@ -10,6 +10,9 @@ import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTT
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_PASSWORD;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_PEMCERT_FILEPATH;
+import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
+import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT;
 import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT;
@@ -603,9 +606,36 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .build();
     }
 
+    public void uploadModel(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/models/_upload", null, input, null);
+        verifyResponse(function, response);
+    }
+
     public String uploadModel(String input) throws IOException {
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/_upload", null, input, null);
         return parseTaskIdFromResponse(response);
+    }
+
+    public void loadModel(RestClient client, MLUploadInput uploadInput, Consumer<Map<String, Object>> function) throws IOException {
+        String taskId = uploadModel(TestHelper.toJsonString(uploadInput));
+        getTask(client(), taskId, response -> {
+            String algorithm = (String) response.get(FUNCTION_NAME_FIELD);
+            assertEquals(uploadInput.getFunctionName().name(), algorithm);
+            assertNotNull(response.get(MODEL_ID_FIELD));
+            assertEquals(MLTaskState.COMPLETED.name(), response.get(STATE_FIELD));
+            String modelId = (String) response.get(MODEL_ID_FIELD);
+            try {
+                // load model
+                loadModel(client, modelId, function);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    public void loadModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/models/" + modelId + "/_load", null, (String) null, null);
+        verifyResponse(function, response);
     }
 
     public String loadModel(String modelId) throws IOException {
