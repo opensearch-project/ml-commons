@@ -62,7 +62,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
-                log.info("Completed Get Model Request, id:{}", modelId);
+                log.debug("Completed Get Model Request, id:{}", modelId);
 
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
