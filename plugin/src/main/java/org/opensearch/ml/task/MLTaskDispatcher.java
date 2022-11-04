@@ -55,6 +55,7 @@ public class MLTaskDispatcher {
         this.nextNode = new AtomicInteger(0);
         this.dispatchPolicy = ML_COMMONS_TASK_DISPATCH_POLICY.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TASK_DISPATCH_POLICY, it -> dispatchPolicy = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_ML_TASK_PER_NODE, it -> maxMLBatchTaskPerNode = it);
     }
 
     /**

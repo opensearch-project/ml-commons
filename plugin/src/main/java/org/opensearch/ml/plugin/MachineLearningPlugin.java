@@ -503,6 +503,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT,
                 MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
+                MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX
             );
         return settings;
