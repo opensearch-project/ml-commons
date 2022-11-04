@@ -56,8 +56,6 @@ import com.google.common.collect.ImmutableMap;
 public class MLTaskManager {
     public static int TASK_SEMAPHORE_TIMEOUT = 5000; // 5 seconds
     private final Map<String, MLTaskCache> taskCaches;
-    // TODO: make this value configurable as cluster setting
-    public final static int MAX_ML_TASK_PER_NODE = 10;
     private final Client client;
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
