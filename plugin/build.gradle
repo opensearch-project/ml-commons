@@ -235,13 +235,31 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.constant.CommonValue',
         'org.opensearch.ml.plugin.MachineLearningPlugin*',
         'org.opensearch.ml.indices.MLIndicesHandler',
-        'org.opensearch.ml.action.load.TransportLoadModelOnNodeAction',
+        'org.opensearch.ml.rest.RestMLPredictionAction',
+        'org.opensearch.ml.profile.MLModelProfile',
+        'org.opensearch.ml.profile.MLPredictRequestStats',
         'org.opensearch.ml.action.load.TransportLoadModelAction',
-        'org.opensearch.ml.model.MLModelCache',
+        'org.opensearch.ml.action.load.TransportLoadModelOnNodeAction',
         'org.opensearch.ml.model.MLModelManager',
         'org.opensearch.ml.action.unload.TransportUnloadModelAction',
         'org.opensearch.ml.action.forward.TransportForwardAction',
-        'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction'
+        'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction',
+        'org.opensearch.ml.stats.MLClusterLevelStat',
+        'org.opensearch.ml.stats.MLStatLevel',
+        'org.opensearch.ml.utils.IndexUtils',
+        'org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener',
+        'org.opensearch.ml.cluster.DiscoveryNodeHelper.HotDataNodePredicate',
+        'org.opensearch.ml.cluster.MLCommonsClusterEventListener',
+        'org.opensearch.ml.task.MLTaskManager',
+        'org.opensearch.ml.task.MLTrainingTaskRunner',
+        'org.opensearch.ml.task.MLPredictTaskRunner',
+        'org.opensearch.ml.task.MLTaskDispatcher',
+        'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
+        'org.opensearch.ml.task.MLExecuteTaskRunner',
+        'org.opensearch.ml.action.profile.MLProfileTransportAction',
+        'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction',
+        'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
+        'org.opensearch.ml.rest.RestMLPredictionAction'
 ]
 
 jacocoTestCoverageVerification {
@@ -251,7 +269,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.1
+                minimum = 0.7
             }
         }
         rule {
@@ -260,7 +278,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.1
+                minimum = 0.7
             }
         }
     }
