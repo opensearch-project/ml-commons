@@ -254,6 +254,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLPredictTaskRunner',
         'org.opensearch.ml.task.MLTaskDispatcher',
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
+        'org.opensearch.ml.task.MLExecuteTaskRunner',
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
         'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
