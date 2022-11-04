@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.task;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
 
 import java.util.List;
@@ -50,10 +51,11 @@ public class MLTaskDispatcher {
         this.clusterService = clusterService;
         this.client = client;
         this.nodeHelper = nodeHelper;
-        this.maxMLBatchTaskPerNode = MLTaskManager.MAX_ML_TASK_PER_NODE;
+        this.maxMLBatchTaskPerNode = ML_COMMONS_MAX_ML_TASK_PER_NODE.get(settings);
         this.nextNode = new AtomicInteger(0);
         this.dispatchPolicy = ML_COMMONS_TASK_DISPATCH_POLICY.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TASK_DISPATCH_POLICY, it -> dispatchPolicy = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_ML_TASK_PER_NODE, it -> maxMLBatchTaskPerNode = it);
     }
 
     /**
