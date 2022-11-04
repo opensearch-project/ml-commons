@@ -53,6 +53,7 @@ public class MLModelMetaCreate {
                         .name(modelName)
                         .algorithm(functionName)
                         .version(version)
+                        .description(mlCreateModelMetaInput.getDescription())
                         .modelFormat(mlCreateModelMetaInput.getModelFormat())
                         .modelState(MLModelState.UPLOADING)
                         .modelConfig(mlCreateModelMetaInput.getModelConfig())

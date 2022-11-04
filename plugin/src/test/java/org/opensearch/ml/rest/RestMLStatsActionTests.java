@@ -254,7 +254,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.INTERNAL_SERVER_ERROR, restResponse.status());
         content = restResponse.content();
         // Return exception directly in normal case
-        assertEquals("{\"error\":\"No OpenSearchException found\",\"status\":500}", content.utf8ToString());
+        assertEquals("{\"error\":\"Internal failure\",\"status\":500}", content.utf8ToString());
     }
 
     public void testPrepareRequest_ClusterAndNodeLevelStates_NoRequestContent() throws Exception {
