@@ -188,6 +188,7 @@ public class MLModelManager {
                     .name(modelName)
                     .algorithm(functionName)
                     .version(version)
+                    .description(uploadInput.getDescription())
                     .modelFormat(uploadInput.getModelFormat())
                     .modelState(MLModelState.UPLOADING)
                     .modelConfig(uploadInput.getModelConfig())
@@ -339,7 +340,8 @@ public class MLModelManager {
         String[] modelNodeIds = uploadInput.getModelNodeIds();
         log.debug("start loading model after uploading {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
         MLLoadModelRequest request = new MLLoadModelRequest(modelId, modelNodeIds, false, true);
-        ActionListener<LoadModelResponse> listener = ActionListener.wrap(r -> log.info(r), e -> log.error("Failed to load model", e));
+        ActionListener<LoadModelResponse> listener = ActionListener
+            .wrap(r -> log.debug("model loaded, response {}", r), e -> log.error("Failed to load model", e));
         client.execute(MLLoadModelAction.INSTANCE, request, listener);
     }
 

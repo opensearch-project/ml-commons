@@ -192,7 +192,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 // TODO: put the user into model for backend role based access control.
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
-                        log.info("Model data indexing done, result:{}, model id: {}", r.getResult(), r.getId());
+                        log.info("Model saved into index, result:{}, model id: {}", r.getResult(), r.getId());
                         String returnedTaskId = mlTask.isAsync() ? mlTask.getTaskId() : null;
                         MLTrainingOutput output = new MLTrainingOutput(r.getId(), returnedTaskId, MLTaskState.COMPLETED.name());
                         listener.onResponse(MLTaskResponse.builder().output(output).build());

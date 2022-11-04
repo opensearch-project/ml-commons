@@ -144,7 +144,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
             }
 
             MLTaskResponse response = MLTaskResponse.builder().output(output).build();
-            log.info("Train and predict task done for algorithm: {}, task id: {}", mlTask.getFunctionName(), mlTask.getTaskId());
+            log.debug("Train and predict task done for algorithm: {}, task id: {}", mlTask.getFunctionName(), mlTask.getTaskId());
             internalListener.onResponse(response);
         } catch (Exception e) {
             // todo need to specify what exception
