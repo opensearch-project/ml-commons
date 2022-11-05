@@ -6,6 +6,10 @@ Compatible with OpenSearch 2.4.0
 ### Features
 
 * add profile APIs for model and task ([#446](https://github.com/opensearch-project/ml-commons/pull/446))
+* Support the generic ml ppl command. ([#484](https://github.com/opensearch-project/ml-commons/pull/484))
+
+### Experimental Features
+
 * tune ML model to support custom model ([#471](https://github.com/opensearch-project/ml-commons/pull/471))
 * add input/output for custom model ([#473](https://github.com/opensearch-project/ml-commons/pull/473))
 * refactor ML algorithm package for supporting custom model ([#474](https://github.com/opensearch-project/ml-commons/pull/474))
@@ -13,7 +17,6 @@ Compatible with OpenSearch 2.4.0
 * add custom model transport action, request/response to common package ([#479](https://github.com/opensearch-project/ml-commons/pull/479))
 * add custom model public APIs: upload/load/unload ([#488](https://github.com/opensearch-project/ml-commons/pull/488))
 * tune interface to support predicting loaded built-in algorithms; remove stale task in cache ([#491](https://github.com/opensearch-project/ml-commons/pull/491))
-* Support the generic ml ppl command. ([#484](https://github.com/opensearch-project/ml-commons/pull/484))
 * refactor model cache and thread pool ([#496](https://github.com/opensearch-project/ml-commons/pull/496))
 * add custom model size limit ([#503](https://github.com/opensearch-project/ml-commons/pull/503))
 * tune thread pool size; add more unit test ([#506](https://github.com/opensearch-project/ml-commons/pull/503))
