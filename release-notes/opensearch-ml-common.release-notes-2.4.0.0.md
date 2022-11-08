@@ -37,6 +37,8 @@ Compatible with OpenSearch 2.4.0
 
 * Bug fix: filter _source field in search model api ([#445](https://github.com/opensearch-project/ml-commons/pull/445))
 * fix profile bug ([#463](https://github.com/opensearch-project/ml-commons/pull/463))
+* fix running tasks when circuit breaker is open ([#542](https://github.com/opensearch-project/ml-commons/pull/542))
+* fix no permission bug when update index mapping ([#545](https://github.com/opensearch-project/ml-commons/pull/545))
 
 ### Infrastructure
 
