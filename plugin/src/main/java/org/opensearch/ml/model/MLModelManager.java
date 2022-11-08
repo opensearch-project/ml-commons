@@ -501,7 +501,7 @@ public class MLModelManager {
             }, e -> {
                 stopNow.set(true);
                 semaphore.release();
-                log.error("Failed to model and chunks", e);
+                log.error("Failed to retrieve model chunk " + modelChunkId, e);
                 if (retrievedChunks.get() == totalChunks - 1) {
                     listener.onFailure(new MLResourceNotFoundException("Fail to find model chunk " + modelChunkId));
                 }
