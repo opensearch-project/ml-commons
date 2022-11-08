@@ -168,16 +168,16 @@ public class MLModelManager {
      * @param mlTask      ML task
      */
     public void uploadMLModel(MLUploadInput uploadInput, MLTask mlTask) {
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-        String errorMsg = checkAndAddRunningTask(mlTask, maxUploadTasksPerNode);
-        if (errorMsg != null) {
-            mlTaskManager.updateMLTaskDirectly(mlTask.getTaskId(), ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, errorMsg));
-            throw new MLLimitExceededException(errorMsg);
-        }
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
-
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+            String errorMsg = checkAndAddRunningTask(mlTask, maxUploadTasksPerNode);
+            if (errorMsg != null) {
+                mlTaskManager.updateMLTaskDirectly(mlTask.getTaskId(), ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, errorMsg));
+                throw new MLLimitExceededException(errorMsg);
+            }
+
             mlStats.createCounterStatIfAbsent(functionName, UPLOAD, ML_ACTION_REQUEST_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
             String modelName = uploadInput.getModelName();
@@ -501,7 +501,7 @@ public class MLModelManager {
             }, e -> {
                 stopNow.set(true);
                 semaphore.release();
-                log.error("Failed to model and chunks", e);
+                log.error("Failed to retrieve model chunk " + modelChunkId, e);
                 if (retrievedChunks.get() == totalChunks - 1) {
                     listener.onFailure(new MLResourceNotFoundException("Fail to find model chunk " + modelChunkId));
                 }
