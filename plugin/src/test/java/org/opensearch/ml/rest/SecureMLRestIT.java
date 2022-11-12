@@ -150,12 +150,6 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         uploadModel(mlReadOnlyClient, TestHelper.toJsonString(mlUploadInput), null);
     }
 
-    public void testUploadModelWithFullMLAccessNoIndexAccess() throws IOException {
-        exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/upload_model]");
-        uploadModel(mlFullAccessNoIndexAccessClient, TestHelper.toJsonString(mlUploadInput), null);
-    }
-
     public void testUploadModelWithFullAccess() throws IOException {
         uploadModel(mlFullAccessClient, TestHelper.toJsonString(mlUploadInput), uploadModelResult -> {
             assertFalse(uploadModelResult.containsKey("model_id"));
@@ -174,25 +168,19 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         });
     }
 
-    public void testLoadModelWithNoAccess() throws IOException {
+    public void testLoadModelWithNoAccess() throws IOException, InterruptedException {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/load_model]");
         loadModel(mlNoAccessClient, mlUploadInput, null);
     }
 
-    public void testLoadModelWithReadOnlyMLAccess() throws IOException {
-        exceptionRule.expect(ResponseException.class);
+    public void testLoadModelWithReadOnlyMLAccess() throws IOException, InterruptedException {
+        exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/load_model]");
         loadModel(mlReadOnlyClient, mlUploadInput, null);
     }
 
-    public void testLoadModelWithFullMLAccessNoIndexAccess() throws IOException {
-        exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/load_model]");
-        loadModel(mlFullAccessNoIndexAccessClient, mlUploadInput, null);
-    }
-
-    public void testLoadModelWithFullAccess() throws IOException {
+    public void testLoadModelWithFullAccess() throws IOException, InterruptedException {
         loadModel(mlFullAccessClient, mlUploadInput, loadModelResult -> {
             assertFalse(loadModelResult.containsKey("model_id"));
             String taskId = (String) loadModelResult.get("task_id");
