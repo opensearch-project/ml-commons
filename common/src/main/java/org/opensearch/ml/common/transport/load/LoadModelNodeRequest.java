@@ -6,13 +6,13 @@
 package org.opensearch.ml.common.transport.load;
 
 import lombok.Getter;
-import org.opensearch.action.support.nodes.BaseNodeRequest;
+import org.opensearch.transport.TransportRequest;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
 
-public class LoadModelNodeRequest extends BaseNodeRequest {
+public class LoadModelNodeRequest extends TransportRequest {
     @Getter
     private LoadModelNodesRequest loadModelNodesRequest;
 

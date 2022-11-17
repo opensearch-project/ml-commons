@@ -6,13 +6,13 @@
 package org.opensearch.ml.common.transport.unload;
 
 import lombok.Getter;
-import org.opensearch.action.support.nodes.BaseNodeRequest;
+import org.opensearch.transport.TransportRequest;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
 
-public class UnloadModelNodeRequest extends BaseNodeRequest {
+public class UnloadModelNodeRequest extends TransportRequest {
     @Getter
     private UnloadModelNodesRequest unloadModelNodesRequest;
 
