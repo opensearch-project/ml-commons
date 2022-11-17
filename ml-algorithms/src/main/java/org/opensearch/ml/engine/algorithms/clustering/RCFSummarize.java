@@ -35,6 +35,7 @@ import java.util.function.BiFunction;
 
 @Function(FunctionName.RCF_SUMMARIZE)
 public class RCFSummarize implements TrainAndPredictable {
+    public static final String VERSION = "1.0.0";
     private static final RCFSummarizeParams.DistanceType DEFAULT_DISTANCE_TYPE = RCFSummarizeParams.DistanceType.L2;
     private static int DEFAULT_MAX_K = 10;
     private static boolean DEFAULT_PHASE1_REASSIGN = true;
@@ -125,7 +126,7 @@ public class RCFSummarize implements TrainAndPredictable {
         MLModel model = MLModel.builder()
                 .name(FunctionName.RCF_SUMMARIZE.name())
                 .algorithm(FunctionName.RCF_SUMMARIZE)
-                .version(1)
+                .version(VERSION)
                 .content(ModelSerDeSer.serializeToBase64(new SerializableSummary(summary)))
                 .build();
         return model;

@@ -144,7 +144,7 @@ public class LogisticRegressionTest {
         LogisticRegression classification = new LogisticRegression(params);
         MLModel model = classification.train(trainDataFrameInputDataSet);
         Assert.assertEquals(FunctionName.LOGISTIC_REGRESSION.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion().intValue());
+        Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 }

@@ -23,10 +23,14 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class MLProfileNodeResponseTests extends OpenSearchTestCase {
     MLTask mlTask;
+    MLModelProfile mlModelProfile;
     DiscoveryNode localNode;
 
     @Before
@@ -48,14 +52,23 @@ public class MLProfileNodeResponseTests extends OpenSearchTestCase {
             .user(new User())
             .async(false)
             .build();
+        mlModelProfile = MLModelProfile
+            .builder()
+            .predictor("test_predictor")
+            .workerNodes(new String[] { "node1", "node2" })
+            .modelState(MLModelState.LOADED)
+            .predictStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
+            .build();
 
         localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
     }
 
     public void testSerializationDeserialization() throws IOException {
         Map<String, MLTask> idToTasks = new HashMap<>();
+        Map<String, MLModelProfile> idToModels = new HashMap<>();
         idToTasks.put("test_id", mlTask);
-        MLProfileNodeResponse response = new MLProfileNodeResponse(localNode, idToTasks);
+        idToModels.put("test_id", mlModelProfile);
+        MLProfileNodeResponse response = new MLProfileNodeResponse(localNode, idToTasks, idToModels);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLProfileNodeResponse newResponse = new MLProfileNodeResponse(output.bytes().streamInput());
@@ -63,7 +76,7 @@ public class MLProfileNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testSerializationDeserialization_NullNodeTasks() throws IOException {
-        MLProfileNodeResponse response = new MLProfileNodeResponse(localNode, null);
+        MLProfileNodeResponse response = new MLProfileNodeResponse(localNode, null, null);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLProfileNodeResponse newResponse = new MLProfileNodeResponse(output.bytes().streamInput());
@@ -73,7 +86,7 @@ public class MLProfileNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testReadProfile() throws IOException {
-        MLProfileNodeResponse response = new MLProfileNodeResponse(localNode, new HashMap<>());
+        MLProfileNodeResponse response = new MLProfileNodeResponse(localNode, new HashMap<>(), new HashMap<>());
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLProfileNodeResponse newResponse = readProfile(output.bytes().streamInput());

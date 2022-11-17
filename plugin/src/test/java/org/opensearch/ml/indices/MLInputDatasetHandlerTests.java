@@ -70,28 +70,6 @@ public class MLInputDatasetHandlerTests extends OpenSearchTestCase {
 
     }
 
-    public void testDataFrameInputDataset() {
-        DataFrame testDataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
-            {
-                put("key1", 2.0D);
-            }
-        }));
-        DataFrameInputDataset dataFrameInputDataset = DataFrameInputDataset.builder().dataFrame(testDataFrame).build();
-        DataFrame result = mlInputDatasetHandler.parseDataFrameInput(dataFrameInputDataset);
-        Assert.assertEquals(testDataFrame, result);
-    }
-
-    public void testDataFrameInputDatasetWrongType() {
-        expectedEx.expect(IllegalArgumentException.class);
-        expectedEx.expectMessage("Input dataset is not DATA_FRAME type.");
-        SearchQueryInputDataset searchQueryInputDataset = SearchQueryInputDataset
-            .builder()
-            .indices(Collections.singletonList("index1"))
-            .searchSourceBuilder(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()))
-            .build();
-        mlInputDatasetHandler.parseDataFrameInput(searchQueryInputDataset);
-    }
-
     @SuppressWarnings("unchecked")
     public void testSearchQueryInputDatasetWithHits() {
         searchResponse = mock(SearchResponse.class);

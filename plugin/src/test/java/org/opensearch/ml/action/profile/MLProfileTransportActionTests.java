@@ -31,6 +31,10 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
@@ -41,7 +45,11 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
     private MLProfileTransportAction action;
     private Environment environment;
     private MLTaskManager mlTaskManager;
+    private MLModelManager mlModelManager;
     private MLTask mlTask;
+    private MLModelProfile mlModelProfile;
+    private String testTaskId;
+    private String testModelId;
 
     @Override
     @Before
@@ -72,8 +80,21 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
         Map<String, MLTaskCache> taskCacheMap = new HashMap<>();
         taskCacheMap.put("test_id", new MLTaskCache(mlTask));
         mlTaskManager = mock(MLTaskManager.class);
-        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { "test_id" });
-        when(mlTaskManager.get("test_id")).thenReturn(mlTask);
+        testTaskId = "test_task_id";
+        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { testTaskId });
+        when(mlTaskManager.getMLTask(testTaskId)).thenReturn(mlTask);
+
+        mlModelProfile = MLModelProfile
+            .builder()
+            .predictor("test_predictor")
+            .workerNodes(new String[] { "node1", "node2" })
+            .modelState(MLModelState.LOADED)
+            .predictStats(MLPredictRequestStats.builder().count(10L).average(11.0).max(20.0).min(5.0).build())
+            .build();
+        testModelId = "test_model_id";
+        mlModelManager = mock(MLModelManager.class);
+        when(mlModelManager.getAllModelIds()).thenReturn(new String[] { testModelId });
+        when(mlModelManager.getModelProfile(testModelId)).thenReturn(mlModelProfile);
 
         action = new MLProfileTransportAction(
             client().threadPool(),
@@ -81,7 +102,8 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             mock(TransportService.class),
             mock(ActionFilters.class),
             mlTaskManager,
-            environment
+            environment,
+            mlModelManager
         );
     }
 
@@ -107,9 +129,10 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
     }
 
     public void testNewNodeResponse() throws IOException {
-        Map<String, MLTask> profileValues = new HashMap<>();
+        Map<String, MLTask> taskProfileValues = new HashMap<>();
         DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
-        MLProfileNodeResponse mlProfileNodeResponse = new MLProfileNodeResponse(localNode, profileValues);
+        Map<String, MLModelProfile> modelProfile = new HashMap<>();
+        MLProfileNodeResponse mlProfileNodeResponse = new MLProfileNodeResponse(localNode, taskProfileValues, modelProfile);
         BytesStreamOutput out = new BytesStreamOutput();
         mlProfileNodeResponse.writeTo(out);
         StreamInput in = out.bytes().streamInput();
@@ -121,14 +144,16 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
         String nodeId = clusterService().localNode().getId();
         MLProfileInput mlProfileInput1 = new MLProfileInput(
             new HashSet<>(),
-            new HashSet<>(Arrays.asList("test_id")),
+            new HashSet<>(Arrays.asList(testTaskId)),
             new HashSet<>(),
+            false,
             false
         );
         MLProfileInput mlProfileInput2 = new MLProfileInput(
-            new HashSet<>(Arrays.asList("model_id")),
+            new HashSet<>(Arrays.asList(testModelId)),
             new HashSet<>(),
             new HashSet<>(),
+            false,
             false
         );
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
@@ -138,18 +163,18 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
         MLProfileNodeResponse response2 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest2));
 
         Assert.assertEquals(1, response1.getNodeTasksSize());
-        assertNotNull(response1.getMlNodeTasks().get("test_id"));
-        Assert.assertEquals(1, response2.getNodeTasksSize());
+        assertNotNull(response1.getMlNodeTasks().get(testTaskId));
+        Assert.assertEquals(1, response2.getNodeModelsSize());
     }
 
     public void testNodeOperation_emptyInputs() {
         String nodeId = clusterService().localNode().getId();
-        MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), new HashSet<>(), new HashSet<>(), false);
+        MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), new HashSet<>(), new HashSet<>(), false, false);
         MLProfileRequest mlTaskProfileRequest = new MLProfileRequest(new String[] { nodeId }, mlProfileInput);
 
         MLProfileNodeResponse response = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest));
         Assert.assertEquals(0, response.getNodeTasksSize());
-        assertNull(response.getMlNodeTasks().get("test_id"));
+        assertNull(response.getMlNodeTasks().get(testTaskId));
     }
 
     public void testNodeOperation_emptyResponses() {
@@ -158,12 +183,14 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             new HashSet<>(),
             new HashSet<>(Arrays.asList("newtest_id")),
             new HashSet<>(),
+            false,
             false
         );
         MLProfileInput mlProfileInput2 = new MLProfileInput(
             new HashSet<>(Arrays.asList("newmodel_id")),
             new HashSet<>(),
             new HashSet<>(),
+            false,
             false
         );
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
@@ -173,7 +200,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
         MLProfileNodeResponse response2 = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest2));
 
         Assert.assertEquals(0, response1.getNodeTasksSize());
-        assertNull(response1.getMlNodeTasks().get("test_id"));
+        assertNull(response1.getMlNodeTasks().get(testTaskId));
         Assert.assertEquals(0, response2.getNodeTasksSize());
     }
 

@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Function(FunctionName.SAMPLE_ALGO)
 public class SampleAlgo implements Trainable, Predictable {
+    public static final String VERSION = "1.0.0";
     private static final int DEFAULT_SAMPLE_PARAM = -1;
     private int sampleParam;
 
@@ -68,7 +69,7 @@ public class SampleAlgo implements Trainable, Predictable {
         MLModel model = MLModel.builder()
                 .name(FunctionName.SAMPLE_ALGO.name())
                 .algorithm(FunctionName.SAMPLE_ALGO)
-                .version(1)
+                .version(VERSION)
                 .content(ModelSerDeSer.serializeToBase64("This is a sample testing model with parameter: " + sampleParam))
                 .build();
         return model;

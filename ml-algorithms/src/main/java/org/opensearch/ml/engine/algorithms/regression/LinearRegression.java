@@ -48,7 +48,7 @@ import static org.opensearch.ml.engine.utils.ModelSerDeSer.serializeToBase64;
 
 @Function(FunctionName.LINEAR_REGRESSION)
 public class LinearRegression implements Trainable, Predictable {
-
+    public static final String VERSION = "1.0.0";
     private static final LinearRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LinearRegressionParams.ObjectiveType.SQUARED_LOSS;
     private static final LinearRegressionParams.OptimizerType DEFAULT_OPTIMIZER_TYPE = LinearRegressionParams.OptimizerType.SIMPLE_SGD;
     private static final double DEFAULT_LEARNING_RATE = 0.01;
@@ -243,7 +243,7 @@ public class LinearRegression implements Trainable, Predictable {
         MLModel model = MLModel.builder()
                 .name(FunctionName.LINEAR_REGRESSION.name())
                 .algorithm(FunctionName.LINEAR_REGRESSION)
-                .version(1)
+                .version(VERSION)
                 .content(serializeToBase64(regressionModel))
                 .build();
 

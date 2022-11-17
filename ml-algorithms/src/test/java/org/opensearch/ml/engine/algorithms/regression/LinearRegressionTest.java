@@ -113,7 +113,7 @@ public class LinearRegressionTest {
         LinearRegression regression = new LinearRegression(params);
         MLModel model = regression.train(trainDataFrameInputDataSet);
         Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
-        Assert.assertEquals(1, model.getVersion().intValue());
+        Assert.assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 

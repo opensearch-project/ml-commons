@@ -31,7 +31,7 @@ public class MLModelGetResponseTest {
         mlModel = MLModel.builder()
                 .name("model")
                 .algorithm(FunctionName.KMEANS)
-                .version(1)
+                .version("1.0.0")
                 .content("content")
                 .user(new User())
                 .build();
@@ -60,7 +60,7 @@ public class MLModelGetResponseTest {
         String jsonStr = Strings.toString(builder);
         assertEquals("{\"name\":\"model\"," +
                 "\"algorithm\":\"KMEANS\"," +
-                "\"version\":1," +
+                "\"model_version\":\"1.0.0\"," +
                 "\"model_content\":\"content\"," +
                 "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}}", jsonStr);
     }
