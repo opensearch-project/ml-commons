@@ -35,7 +35,7 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
      * Constructor
      *
      * @param in StreamInput
-     * @throws IOException throws an IO exception if the StreamInput cannot be reML from
+     * @throws IOException throws an IO exception if the StreamInput cannot be read from
      */
     public MLStatsNodeResponse(StreamInput in) throws IOException {
         super(in);
@@ -63,11 +63,11 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
     }
 
     /**
-     * Creates a new MLStatsNodeResponse object and reMLs in the stats from an input stream
+     * Creates a new MLStatsNodeResponse object and read the stats from an input stream
      *
-     * @param in StreamInput to reML from
+     * @param in StreamInput to read from
      * @return MLStatsNodeResponse object corresponding to the input stream
-     * @throws IOException throws an IO exception if the StreamInput cannot be reML from
+     * @throws IOException throws an IO exception if the StreamInput cannot be read from
      */
     public static MLStatsNodeResponse readStats(StreamInput in) throws IOException {
         return new MLStatsNodeResponse(in);
