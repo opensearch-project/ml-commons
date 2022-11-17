@@ -17,7 +17,7 @@ import java.util.Map;
 public interface Predictable {
 
     /**
-     * Predict with given input data and model (optional).
+     * Predict with given input data and model.
      * Will reload model into memory with model content.
      * @param inputDataset input data set
      * @param model the java serialized model
