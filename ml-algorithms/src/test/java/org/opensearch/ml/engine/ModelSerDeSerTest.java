@@ -8,7 +8,9 @@ package org.opensearch.ml.engine;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.engine.algorithms.clustering.KMeans;
@@ -28,7 +30,7 @@ public class ModelSerDeSerTest {
     public void testModelSerDeSerKMeans() {
         KMeansParams params = KMeansParams.builder().build();
         KMeans kMeans = new KMeans(params);
-        MLModel model = kMeans.train(concstructDataFrameInputDataSet(100));
+        MLModel model = kMeans.train(MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(concstructDataFrameInputDataSet(100)).build());
 
         KMeansModel deserializedModel = (KMeansModel) ModelSerDeSer.deserialize(model);
         assertNotNull(deserializedModel);
@@ -38,7 +40,7 @@ public class ModelSerDeSerTest {
     public void testModelSerDeSerLinearRegression() {
         LinearRegressionParams params = LinearRegressionParams.builder().target("f2").build();
         LinearRegression linearRegression = new LinearRegression(params);
-        MLModel model = linearRegression.train(concstructDataFrameInputDataSet(100));
+        MLModel model = linearRegression.train(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(concstructDataFrameInputDataSet(100)).build());
 
         LinearSGDModel deserializedModel = (LinearSGDModel) ModelSerDeSer.deserialize(model);
         assertNotNull(deserializedModel);
