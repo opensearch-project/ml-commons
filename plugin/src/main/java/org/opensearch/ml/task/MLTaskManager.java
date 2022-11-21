@@ -270,11 +270,7 @@ public class MLTaskManager {
                 log.error("Failed to update ML task {}, status: {}", taskId, response.status());
             }
         }, e -> log.error("Failed to update ML task: " + taskId, e));
-        updateMLTask(taskId, updatedFields, ActionListener.runAfter(internalListener, () -> {
-            if (removeFromCache) {
-                remove(taskId);
-            }
-        }), timeoutInMillis);
+        updateMLTask(taskId, updatedFields, internalListener, timeoutInMillis, removeFromCache);
     }
 
     /**
@@ -283,14 +279,19 @@ public class MLTaskManager {
      * @param updatedFields updated field and values
      * @param listener action listener
      * @param timeoutInMillis time out waiting for updating task semaphore, zero or negative means don't wait at all
+     * @param removeFromCache remove ML task from cache
      */
     public void updateMLTask(
         String taskId,
         Map<String, Object> updatedFields,
         ActionListener<UpdateResponse> listener,
-        long timeoutInMillis
+        long timeoutInMillis,
+        boolean removeFromCache
     ) {
         MLTaskCache taskCache = taskCaches.get(taskId);
+        if (removeFromCache) {
+            taskCaches.remove(taskId);
+        }
         if (taskCache == null) {
             listener.onFailure(new MLResourceNotFoundException("Can't find task"));
             return;
