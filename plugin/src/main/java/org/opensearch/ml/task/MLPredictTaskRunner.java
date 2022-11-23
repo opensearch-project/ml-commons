@@ -241,7 +241,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             return;
                         }
                         // run predict
-                        mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
+                        mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
                         MLOutput output = MLEngine.predict(mlInput, mlModel);
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());

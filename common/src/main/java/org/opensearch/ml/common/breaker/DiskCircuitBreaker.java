@@ -5,7 +5,12 @@
 
 package org.opensearch.ml.common.breaker;
 
+import org.opensearch.ml.common.exception.MLException;
+
 import java.io.File;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 
 /**
  * A circuit breaker for disk usage.
@@ -13,13 +18,7 @@ import java.io.File;
 public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
 
     public static final long DEFAULT_DISK_SHORTAGE_THRESHOLD = 10L;
-    public static final String DEFAULT_DISK_DIR = "/";
     private String diskDir;
-
-    public DiskCircuitBreaker() {
-        super(DEFAULT_DISK_SHORTAGE_THRESHOLD);
-        this.diskDir = DEFAULT_DISK_DIR;
-    }
 
     public DiskCircuitBreaker(String diskDir) {
         super(DEFAULT_DISK_SHORTAGE_THRESHOLD);
@@ -33,6 +32,12 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
 
     @Override
     public boolean isOpen() {
-        return (new File(diskDir).getFreeSpace()/1024/1024/1024) < getThreshold();  // in GB
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
+                return (new File(diskDir).getFreeSpace()/1024/1024/1024) < getThreshold();  // in GB
+            });
+        } catch (PrivilegedActionException e) {
+            throw new MLException("Failed to run disk circuit breaker");
+        }
     }
 }

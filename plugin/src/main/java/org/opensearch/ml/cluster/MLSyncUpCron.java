@@ -36,9 +36,10 @@ public class MLSyncUpCron implements Runnable {
     public void run() {
         log.debug("ML sync job starts");
         DiscoveryNode[] allNodes = nodeFilter.getAllNodes();
-        MLSyncUpInput syncUpInput = MLSyncUpInput.builder().getLoadedModels(true).build();
-        MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
-        client.execute(MLSyncUpAction.INSTANCE, syncUpRequest, ActionListener.wrap(r -> {
+        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
+        MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
+        // gather running model/tasks on nodes
+        client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
             List<MLSyncUpNodeResponse> responses = r.getNodes();
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
@@ -77,12 +78,13 @@ public class MLSyncUpCron implements Runnable {
             } else {
                 inputBuilder.modelRoutingTable(modelWorkerNodes);
             }
-            MLSyncUpInput syncUpInput2 = inputBuilder.build();
-            MLSyncUpNodesRequest syncUpRequest2 = new MLSyncUpNodesRequest(allNodes, syncUpInput2);
+            MLSyncUpInput syncUpInput = inputBuilder.build();
+            MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
+            // sync up running model/tasks on nodes
             client
                 .execute(
                     MLSyncUpAction.INSTANCE,
-                    syncUpRequest2,
+                    syncUpRequest,
                     ActionListener
                         .wrap(
                             re -> { log.debug("sync model routing job finished"); },

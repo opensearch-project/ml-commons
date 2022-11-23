@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.load;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -182,20 +183,17 @@ public class TransportLoadModelOnNodeAction extends
                         ImmutableMap.of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, e.getMessage())
                     );
             } else {
+                boolean removeTaskCache = !coordinatingNodeId.equals(localNodeId);// remove task cache on worker node
                 mlTaskManager
                     .updateMLTask(
                         taskId,
                         ImmutableMap.of(MLTask.ERROR_FIELD, ExceptionUtils.getStackTrace(e), MLTask.STATE_FIELD, MLTaskState.FAILED),
-                        5000
+                        TASK_SEMAPHORE_TIMEOUT,
+                        removeTaskCache
                     );
             }
             MLModelState state = mlTask.getFunctionName() == FunctionName.TEXT_EMBEDDING ? MLModelState.UPLOADED : MLModelState.TRAINED;
             mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, state));
-
-            if (!coordinatingNodeId.equals(localNodeId)) {
-                // remove task cache on worker node
-                mlTaskManager.remove(taskId);
-            }
             MLForwardInput mlForwardInput = MLForwardInput
                 .builder()
                 .requestType(MLForwardRequestType.LOAD_MODEL_DONE)

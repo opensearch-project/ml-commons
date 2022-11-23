@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.action.load;
 
+import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
+import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -175,7 +179,13 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                             );
                     } catch (Exception ex) {
                         log.error("Failed to load model", ex);
-                        mlTaskManager.remove(taskId);
+                        mlTaskManager
+                            .updateMLTask(
+                                taskId,
+                                ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, ExceptionUtils.getStackTrace(ex)),
+                                TASK_SEMAPHORE_TIMEOUT,
+                                true
+                            );
                         listener.onFailure(ex);
                     }
                 }, exception -> {
@@ -214,19 +224,19 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         LoadModelNodesRequest loadModelRequest = new LoadModelNodesRequest(eligibleNodes.toArray(new DiscoveryNode[0]), loadModelInput);
         ActionListener<LoadModelNodesResponse> actionListener = ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {
-                mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MLTask.STATE_FIELD, MLTaskState.RUNNING), 5000);
+                mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
         }, e -> {
             log.error("Failed to load model " + modelId, e);
             mlTaskManager
                 .updateMLTask(
                     taskId,
-                    ImmutableMap.of(MLTask.ERROR_FIELD, ExceptionUtils.getStackTrace(e), MLTask.STATE_FIELD, MLTaskState.FAILED),
-                    5000
+                    ImmutableMap.of(MLTask.ERROR_FIELD, ExceptionUtils.getStackTrace(e), STATE_FIELD, FAILED),
+                    TASK_SEMAPHORE_TIMEOUT,
+                    true
                 );
             MLModelState state = algorithm == FunctionName.TEXT_EMBEDDING ? MLModelState.UPLOADED : MLModelState.TRAINED;
             mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, state));
-            mlTaskManager.remove(taskId);
         });
 
         mlModelManager

@@ -133,7 +133,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
 
         // run train and predict
         try {
-            mlTaskManager.updateTaskState(mlTask.getTaskId(), MLTaskState.RUNNING, mlTask.isAsync());
+            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
             MLOutput output = MLEngine.trainAndPredict(mlInput);
             handleAsyncMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {
