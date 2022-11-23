@@ -17,6 +17,7 @@ import java.util.Optional;
 import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.Strings;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
@@ -41,7 +42,7 @@ public class RestActionUtils {
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
-        if (Strings.isNullOrEmpty(algorithm)) {
+        if (isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("Request should contain algorithm!");
         }
         return algorithm.toUpperCase(Locale.ROOT);
@@ -64,7 +65,7 @@ public class RestActionUtils {
      */
     public static String getParameterId(RestRequest request, String idName) {
         String id = request.param(idName);
-        if (Strings.isNullOrEmpty(id)) {
+        if (isNullOrEmpty(id)) {
             throw new IllegalArgumentException("Request should contain " + idName);
         }
         return id;
@@ -79,7 +80,7 @@ public class RestActionUtils {
      * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
      */
     public static FetchSourceContext getSourceContext(RestRequest request, SearchSourceBuilder searchSourceBuilder) {
-        String userAgent = Strings.coalesceToEmpty(request.header("User-Agent"));
+        String userAgent = coalesceToEmpty(request.header("User-Agent"));
         if (searchSourceBuilder.fetchSource() != null) {
             final String[] includes = searchSourceBuilder.fetchSource().includes();
             final String[] excludes = searchSourceBuilder.fetchSource().excludes();
@@ -156,5 +157,13 @@ public class RestActionUtils {
     @VisibleForTesting
     public static Optional<String[]> splitCommaSeparatedParam(RestRequest request, String paramName) {
         return Optional.ofNullable(request.param(paramName)).map(s -> s.split(","));
+    }
+
+    private static String coalesceToEmpty(@Nullable String s) {
+        return s == null ? "" : s;
+    }
+
+    private static boolean isNullOrEmpty(@Nullable String s) {
+        return s == null || s.isEmpty();
     }
 }
