@@ -88,7 +88,7 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLUploadModelChunkAction.INSTANCE), argumentCaptor.capture(), any());
         MLUploadModelChunkInput chunkRequest = argumentCaptor.getValue().getMlUploadInput();
         assertNotNull(chunkRequest.getContent());
-        assertEquals(Integer.valueOf(1), chunkRequest.getChunkNumber());
+        assertEquals(Integer.valueOf(0), chunkRequest.getChunkNumber());
     }
 
     private RestRequest getRestRequest() {
@@ -96,7 +96,7 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
         BytesArray content = new BytesArray("12345678");
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "r50D4oMBAiM5tNuwVM4C");
-        params.put("chunk_number", "1");
+        params.put("chunk_number", "0");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withParams(params)
