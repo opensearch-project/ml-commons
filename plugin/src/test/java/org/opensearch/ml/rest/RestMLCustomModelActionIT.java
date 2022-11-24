@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLTaskState;
@@ -30,7 +31,8 @@ public class RestMLCustomModelActionIT extends MLCommonsRestTestCase {
         uploadInput = createUploadModelInput();
     }
 
-    public void testUnloadModelAPI_Success() throws IOException, InterruptedException {
+    @Ignore
+    public void testCustomModelWorkflow() throws IOException, InterruptedException {
         // upload model
         String taskId = uploadModel(TestHelper.toJsonString(uploadInput));
         waitForTask(taskId, MLTaskState.COMPLETED);
@@ -49,6 +51,7 @@ public class RestMLCustomModelActionIT extends MLCommonsRestTestCase {
                     assertEquals(MLTaskState.COMPLETED.name(), response.get(STATE_FIELD));
                 });
                 getModelProfile(modelId, verifyTextEmbeddingModelLoaded());
+                // unload model
                 Map<String, Object> result = unloadModel(modelId);
                 for (Map.Entry<String, Object> entry : result.entrySet()) {
                     Map stats = (Map) ((Map) entry.getValue()).get("stats");
