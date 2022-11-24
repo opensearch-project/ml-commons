@@ -55,7 +55,7 @@ public class MLModelChunkUploader {
                         // Use this model to update the chunk count
                         MLModel existingModel = MLModel.parse(parser);
                         existingModel.setModelId(r.getId());
-                        if (existingModel.getTotalChunks() < mlUploadInput.getChunkNumber()) {
+                        if (existingModel.getTotalChunks() <= mlUploadInput.getChunkNumber()) {
                             throw new Exception("Chunk number exceeds total chunks");
                         }
                         byte[] bytes = mlUploadInput.getContent();
@@ -85,7 +85,7 @@ public class MLModelChunkUploader {
                             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                             client.index(indexRequest, ActionListener.wrap(response -> {
                                 log.info("Index model successful for {} for chunk number {}", mlUploadInput.getModelId(), chunkNum + 1);
-                                if (existingModel.getTotalChunks() == mlUploadInput.getChunkNumber()) {
+                                if (existingModel.getTotalChunks() == (mlUploadInput.getChunkNumber() + 1)) {
                                     Semaphore semaphore = new Semaphore(1);
                                     semaphore.acquire();
                                     MLModel mlModelMeta = MLModel

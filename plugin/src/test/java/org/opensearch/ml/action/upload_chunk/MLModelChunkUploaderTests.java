@@ -144,14 +144,14 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     private MLUploadModelChunkInput prepareRequest() {
         final byte[] content = new byte[] { 1, 2, 3, 4 };
-        MLUploadModelChunkInput input = MLUploadModelChunkInput.builder().chunkNumber(1).modelId("someModelId").content(content).build();
+        MLUploadModelChunkInput input = MLUploadModelChunkInput.builder().chunkNumber(0).modelId("someModelId").content(content).build();
         return input;
     }
 
     public void testUploadModelChunkNumberEqualsChunkCount() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
         MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlUploadInput.setChunkNumber(2);
+        mlUploadInput.setChunkNumber(1);
         mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
         ArgumentCaptor<MLUploadModelChunkResponse> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelChunkResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -162,7 +162,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         final byte[] content = new byte[] {};
         MLUploadModelChunkInput mlUploadInput = MLUploadModelChunkInput
             .builder()
-            .chunkNumber(1)
+            .chunkNumber(0)
             .modelId("someModelId")
             .content(content)
             .build();
@@ -187,7 +187,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         byte[] content = new byte[] { 1, 2, 3, 4 };
         MLModelChunkUploader spy = Mockito.spy(mlModelChunkUploader);
         when(spy.validateChunkSize(content.length)).thenReturn(true);
-        MLUploadModelChunkInput input = MLUploadModelChunkInput.builder().chunkNumber(1).modelId("someModelId").content(content).build();
+        MLUploadModelChunkInput input = MLUploadModelChunkInput.builder().chunkNumber(0).modelId("someModelId").content(content).build();
         spy.uploadModel(input, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
