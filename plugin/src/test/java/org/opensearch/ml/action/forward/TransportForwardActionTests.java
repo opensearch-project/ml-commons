@@ -19,6 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.LOAD_MODEL_DONE;
+import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.UPLOAD_MODEL;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.util.Arrays;
@@ -40,11 +41,14 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
 import org.opensearch.ml.common.transport.forward.MLForwardResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.common.transport.upload.MLUploadInput;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
@@ -125,6 +129,29 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
+    public void testDoExecute_LoadModelDone_NoError() {
+        Set<String> workerNodes = new HashSet<>();
+        workerNodes.add(nodeId1);
+        workerNodes.add(nodeId2);
+        when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
+        when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1, nodeId2 });
+
+        MLForwardInput forwardInput = MLForwardInput
+            .builder()
+            .requestType(LOAD_MODEL_DONE)
+            .taskId(taskId)
+            .modelId(modelId)
+            .workerNodeId(nodeId1)
+            .build();
+        MLForwardRequest forwardRequest = MLForwardRequest.builder().forwardInput(forwardInput).build();
+        forwardAction.doExecute(task, forwardRequest, listener);
+        ArgumentCaptor<MLForwardResponse> response = ArgumentCaptor.forClass(MLForwardResponse.class);
+        verify(listener).onResponse(response.capture());
+        assertEquals("ok", response.getValue().getStatus());
+        assertNull(response.getValue().getMlOutput());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+    }
+
     public void testDoExecute_LoadModelDone_Error_NullTaskWorkerNodes() {
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(null);
         MLTaskCache mlTaskCache = MLTaskCache.builder().mlTask(createMlTask(MLTaskType.UPLOAD_MODEL)).build();
@@ -198,6 +225,23 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals(error, exception.getValue().getMessage());
     }
 
+    public void testDoExecute_UploadModel() {
+        MLForwardInput forwardInput = MLForwardInput
+            .builder()
+            .requestType(UPLOAD_MODEL)
+            .mlTask(createMlTask(MLTaskType.UPLOAD_MODEL))
+            .taskId(taskId)
+            .uploadInput(prepareInput())
+            .build();
+        MLForwardRequest forwardRequest = MLForwardRequest.builder().forwardInput(forwardInput).build();
+        forwardAction.doExecute(task, forwardRequest, listener);
+        ArgumentCaptor<MLForwardResponse> response = ArgumentCaptor.forClass(MLForwardResponse.class);
+        verify(listener).onResponse(response.capture());
+        assertEquals("ok", response.getValue().getStatus());
+        assertNull(response.getValue().getMlOutput());
+        verify(mlModelManager).uploadMLModel(any(), any());
+    }
+
     private MLTask createMlTask(MLTaskType mlTaskType) {
         return MLTask
             .builder()
@@ -207,5 +251,21 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .state(MLTaskState.RUNNING)
             .taskType(mlTaskType)
             .build();
+    }
+
+    private MLUploadInput prepareInput() {
+        MLUploadInput uploadInput = MLUploadInput
+            .builder()
+            .functionName(FunctionName.BATCH_RCF)
+            .loadModel(true)
+            .version("1.0")
+            .modelName("Test Model")
+            .modelConfig(
+                new TextEmbeddingModelConfig("CUSTOM", 123, TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS, "all config")
+            )
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .url("http://test_url")
+            .build();
+        return uploadInput;
     }
 }
