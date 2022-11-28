@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -28,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.io.entity.StringEntity;
@@ -383,4 +385,17 @@ public class TestHelper {
         ClusterSettings clusterSettings = new ClusterSettings(settings, settingsSet);
         return clusterSettings;
     }
+
+    public static XContentBuilder builder() throws IOException {
+        return XContentBuilder.builder(XContentType.JSON.xContent());
+    }
+
+    public static void copyFile(String sourceFile, String destFile) throws IOException {
+        File destF = new File(destFile);
+        if (!destF.getParentFile().exists()) {
+            destF.getParentFile().mkdirs();
+        }
+        FileUtils.copyFile(new File(sourceFile), new File(destFile));
+    }
+
 }

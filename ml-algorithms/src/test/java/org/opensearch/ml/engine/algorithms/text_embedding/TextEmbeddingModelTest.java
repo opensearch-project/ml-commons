@@ -98,6 +98,20 @@ public class TextEmbeddingModelTest {
     }
 
     @Test
+    public void initModel_predict_TorchScript_SentenceTransformer_SmallModel() throws URISyntaxException {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
+
+        textEmbeddingModel.initModel(model, params);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+        textEmbeddingModel.close();
+    }
+
+    @Test
     public void initModel_predict_TorchScript_SentenceTransformer() {
         textEmbeddingModel.initModel(model, params);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
@@ -135,6 +149,8 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void initModel_predict_TorchScript_Huggingface() throws URISyntaxException {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_torchscript_huggingface.zip").toURI()));
         Path modelCachePath = getModelCachePath(model.getModelId(), model.getName(), model.getVersion());
         File file = new File(modelCachePath.toUri());
@@ -158,6 +174,8 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void initModel_predict_ONNX() throws URISyntaxException {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
         TextEmbeddingModelConfig onnxModelConfig = modelConfig.toBuilder()
                 .frameworkType(HUGGINGFACE_TRANSFORMERS).build();
@@ -181,15 +199,17 @@ public class TextEmbeddingModelTest {
     public void initModel_NullModelZipFile() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model file is null");
-        params.remove(MODEL_ZIP_FILE);
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
         textEmbeddingModel.initModel(model, params);
     }
 
     @Test
-    public void initModel_NullModelHelper() {
+    public void initModel_NullModelHelper() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
-        params.remove(MODEL_HELPER);
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
         textEmbeddingModel.initModel(model, params);
     }
 
@@ -204,6 +224,8 @@ public class TextEmbeddingModelTest {
     @Test
     public void initModel_WrongModelFile() throws URISyntaxException {
         try {
+            Map<String, Object> params = new HashMap<>();
+            params.put(MODEL_HELPER, modelHelper);
             params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
             textEmbeddingModel.initModel(model, params);
         } catch (Exception e) {
