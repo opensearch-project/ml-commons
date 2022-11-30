@@ -63,7 +63,7 @@ jobs:
       - name: Run MLCommons Test
         if: env.imagePresent == 'true'
         run: |
-          security=`curl -XGET https://localhost:9200/_cat/plugins?v -u admin:admin --insecure |grep opensearch-security|wc -l`
+          security=`curl -XGET https://localhost:9200/_cat/plugins -u admin:admin --insecure |grep opensearch-security|wc -l`
           if [ $security -gt 0 ]
           then
             echo "Security plugin is available"
