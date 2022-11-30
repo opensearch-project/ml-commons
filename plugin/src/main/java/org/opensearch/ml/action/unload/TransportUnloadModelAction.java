@@ -5,8 +5,10 @@
 
 package org.opensearch.ml.action.unload;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNLOADED;
+import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -21,14 +23,18 @@ import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
@@ -42,6 +48,8 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.collect.ImmutableMap;
 
 @Log4j2
 public class TransportUnloadModelAction extends
@@ -116,16 +124,41 @@ public class TransportUnloadModelAction extends
 
             MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client
-                    .execute(
-                        MLSyncUpAction.INSTANCE,
-                        syncUpRequest,
-                        ActionListener
-                            .wrap(r -> log.debug("sync up removed nodes successfully"), e -> log.error("failed to sync up removed node", e))
-                    );
+                if (removedNodeMap.size() > 0) {
+                    BulkRequest bulkRequest = new BulkRequest();
+                    for (String modelId : removedNodeMap.keySet()) {
+                        UpdateRequest updateRequest = new UpdateRequest();
+                        updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(ImmutableMap.of(MODEL_STATE_FIELD, MLModelState.UNLOADED));
+                        bulkRequest.add(updateRequest);
+                    }
+                    ActionListener<BulkResponse> actionListenr = ActionListener
+                        .wrap(
+                            r -> {
+                                log
+                                    .debug(
+                                        "updated model state as unloaded for : {}",
+                                        Arrays.toString(removedNodeMap.keySet().toArray(new String[0]))
+                                    );
+                            },
+                            e -> { log.error("Failed to update model state as unloaded", e); }
+                        );
+                    client.bulk(bulkRequest, ActionListener.runAfter(actionListenr, () -> { syncUpUnloadedModels(syncUpRequest); }));
+                } else {
+                    syncUpUnloadedModels(syncUpRequest);
+                }
             }
         }
         return new UnloadModelNodesResponse(clusterService.getClusterName(), responses, failures);
+    }
+
+    private void syncUpUnloadedModels(MLSyncUpNodesRequest syncUpRequest) {
+        client
+            .execute(
+                MLSyncUpAction.INSTANCE,
+                syncUpRequest,
+                ActionListener
+                    .wrap(r -> log.debug("sync up removed nodes successfully"), e -> log.error("failed to sync up removed node", e))
+            );
     }
 
     @Override
