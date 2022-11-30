@@ -239,11 +239,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.profile.MLModelProfile',
         'org.opensearch.ml.profile.MLPredictRequestStats',
         'org.opensearch.ml.action.load.TransportLoadModelAction',
-        'org.opensearch.ml.action.load.TransportLoadModelOnNodeAction',
         'org.opensearch.ml.model.MLModelManager',
-        'org.opensearch.ml.action.unload.TransportUnloadModelAction',
-        'org.opensearch.ml.action.forward.TransportForwardAction',
-        'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction',
         'org.opensearch.ml.stats.MLClusterLevelStat',
         'org.opensearch.ml.stats.MLStatLevel',
         'org.opensearch.ml.utils.IndexUtils',
@@ -257,7 +253,6 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
         'org.opensearch.ml.task.MLExecuteTaskRunner',
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
-        'org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
         'org.opensearch.ml.rest.RestMLPredictionAction'
 ]
