@@ -8,7 +8,7 @@ buildscript {
 
     ext {
         opensearch_group = "org.opensearch"
-        opensearch_version = System.getProperty("opensearch.version", "1.3.4-SNAPSHOT")
+        opensearch_version = System.getProperty("opensearch.version", "1.4.0-SNAPSHOT")
         // 1.3.0 -> 1.3.0.0, and 1.3.0-SNAPSHOT -> 1.3.0.0-SNAPSHOT
         opensearch_build = opensearch_version.replaceAll(/(\.\d)([^\d]*)$/, '$1.0$2')
         common_utils_version = System.getProperty("common_utils.version", opensearch_build)
