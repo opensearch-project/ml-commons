@@ -40,6 +40,10 @@ dependencies {
     implementation group: 'ai.djl.huggingface', name: 'tokenizers'
 }
 
+configurations.all {
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+}
+
 jacocoTestReport {
     reports {
         xml.enabled false
