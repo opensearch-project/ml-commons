@@ -33,6 +33,10 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
 }
 
+configurations.all {
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+}
+
 jacocoTestReport {
     reports {
         xml.enabled false
