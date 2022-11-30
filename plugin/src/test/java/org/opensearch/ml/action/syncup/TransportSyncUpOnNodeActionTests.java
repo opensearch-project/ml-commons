@@ -7,6 +7,7 @@ package org.opensearch.ml.action.syncup;
 
 import static java.util.Collections.emptyMap;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
@@ -128,7 +129,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
     }
 
     public void testNewRequest() {
-        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest(true)));
+        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest()));
         assertNotNull(request);
     }
 
@@ -149,7 +150,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         assertNotNull(response1);
     }
 
-    public void testNodeOperation() throws IOException {
+    public void testNodeOperation_AddedWorkerNodes() throws IOException {
         testFolder.create();
         File file1 = testFolder.newFolder();
         File file2 = testFolder.newFolder();
@@ -174,7 +175,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         when(mlEngine.getUploadModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
         when(mlEngine.getLoadModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
         when(mlEngine.getModelCacheRootPath()).thenReturn(Paths.get(file3.getCanonicalPath()));
-        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest(true)));
+        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest()));
         final MLSyncUpNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
         file1.deleteOnExit();
@@ -183,7 +184,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         testFolder.delete();
     }
 
-    public void testNodeOperation_ClearRoutingTableSetToFalse() throws IOException {
+    public void testNodeOperation_RemovedWorkerNodes() throws IOException {
         testFolder.create();
         File file1 = testFolder.newFolder();
         File file2 = testFolder.newFolder();
@@ -208,7 +209,10 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         when(mlEngine.getUploadModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
         when(mlEngine.getLoadModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
         when(mlEngine.getModelCacheRootPath()).thenReturn(Paths.get(file3.getCanonicalPath()));
-        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest(false)));
+        when(mlTaskManager.contains(any())).thenReturn(true);
+        when(mlTaskManager.containsModel(any())).thenReturn(true);
+        when(mlModelManager.isModelRunningOnNode(anyString())).thenReturn(true);
+        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest2()));
         final MLSyncUpNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
         file1.deleteOnExit();
@@ -217,9 +221,27 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         testFolder.delete();
     }
 
-    private MLSyncUpInput prepareRequest(boolean clearRoutingTable) {
+    private MLSyncUpInput prepareRequest() {
         Map<String, String[]> addedWorkerNodes = new HashMap<>();
         addedWorkerNodes.put("modelId1", new String[] { "nodeId1", "nodeId2", "nodeId3" });
+        Map<String, Set<String>> modelRoutingTable = new HashMap<>();
+        Map<String, Set<String>> runningLoadModelTasks = new HashMap<>();
+        final HashSet<String> set = new HashSet<>();
+        set.addAll(Arrays.asList(new String[] { "nodeId3", "nodeId4", "nodeId5" }));
+        modelRoutingTable.put("modelId2", set);
+        MLSyncUpInput syncUpInput = MLSyncUpInput
+            .builder()
+            .getLoadedModels(true)
+            .addedWorkerNodes(addedWorkerNodes)
+            .modelRoutingTable(modelRoutingTable)
+            .runningLoadModelTasks(runningLoadModelTasks)
+            .clearRoutingTable(true)
+            .syncRunningLoadModelTasks(true)
+            .build();
+        return syncUpInput;
+    }
+
+    private MLSyncUpInput prepareRequest2() {
         Map<String, String[]> removedWorkerNodes = new HashMap<>();
         removedWorkerNodes.put("modelId2", new String[] { "nodeId3", "nodeId4", "nodeId5" });
         Map<String, Set<String>> modelRoutingTable = new HashMap<>();
@@ -230,11 +252,10 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         MLSyncUpInput syncUpInput = MLSyncUpInput
             .builder()
             .getLoadedModels(true)
-            .addedWorkerNodes(addedWorkerNodes)
             .removedWorkerNodes(removedWorkerNodes)
             .modelRoutingTable(modelRoutingTable)
             .runningLoadModelTasks(runningLoadModelTasks)
-            .clearRoutingTable(clearRoutingTable)
+            .clearRoutingTable(false)
             .syncRunningLoadModelTasks(true)
             .build();
         return syncUpInput;
