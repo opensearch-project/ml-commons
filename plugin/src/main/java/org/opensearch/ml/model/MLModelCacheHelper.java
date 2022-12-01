@@ -21,7 +21,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLModelProfile;
-import org.opensearch.ml.profile.MLPredictRequestStats;
 
 @Log4j2
 public class MLModelCacheHelper {
@@ -258,8 +257,8 @@ public class MLModelCacheHelper {
         if (workerNodes.length > 0) {
             builder.workerNodes(workerNodes);
         }
-        MLPredictRequestStats stats = modelCache.getInferenceStats();
-        builder.predictStats(stats);
+        builder.modelInferenceStats(modelCache.getInferenceStats(true));
+        builder.predictRequestStats(modelCache.getInferenceStats(false));
         return builder.build();
     }
 
@@ -268,9 +267,14 @@ public class MLModelCacheHelper {
      * @param modelId model id
      * @param duration time in milliseconds used to run inference.
      */
-    public void addInferenceDuration(String modelId, double duration) {
+    public void addModelInferenceDuration(String modelId, double duration) {
         MLModelCache modelCache = getOrCreateModelCache(modelId);
-        modelCache.addInferenceDuration(duration, maxRequestCount);
+        modelCache.addModelInferenceDuration(duration, maxRequestCount);
+    }
+
+    public void addPredictRequestDuration(String modelId, double duration) {
+        MLModelCache modelCache = getOrCreateModelCache(modelId);
+        modelCache.addPredictRequestDuration(duration, maxRequestCount);
     }
 
     /**

@@ -25,14 +25,22 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
     private final MLModelState modelState;
     private final String predictor;
     private final String[] workerNodes;
-    private final MLPredictRequestStats predictStats;
+    private final MLPredictRequestStats modelInferenceStats;
+    private final MLPredictRequestStats predictRequestStats;
 
     @Builder
-    public MLModelProfile(MLModelState modelState, String predictor, String[] workerNodes, MLPredictRequestStats predictStats) {
+    public MLModelProfile(
+        MLModelState modelState,
+        String predictor,
+        String[] workerNodes,
+        MLPredictRequestStats modelInferenceStats,
+        MLPredictRequestStats predictRequestStats
+    ) {
         this.modelState = modelState;
         this.predictor = predictor;
         this.workerNodes = workerNodes;
-        this.predictStats = predictStats;
+        this.modelInferenceStats = modelInferenceStats;
+        this.predictRequestStats = predictRequestStats;
     }
 
     @Override
@@ -47,8 +55,11 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         if (workerNodes != null) {
             builder.field("worker_nodes", workerNodes);
         }
-        if (predictStats != null) {
-            builder.field("predict_request_stats", predictStats);
+        if (modelInferenceStats != null) {
+            builder.field("model_inference_stats", modelInferenceStats);
+        }
+        if (predictRequestStats != null) {
+            builder.field("predict_request_stats", predictRequestStats);
         }
         builder.endObject();
         return builder;
@@ -63,9 +74,14 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         this.predictor = in.readOptionalString();
         this.workerNodes = in.readOptionalStringArray();
         if (in.readBoolean()) {
-            this.predictStats = new MLPredictRequestStats(in);
+            this.modelInferenceStats = new MLPredictRequestStats(in);
         } else {
-            this.predictStats = null;
+            this.modelInferenceStats = null;
+        }
+        if (in.readBoolean()) {
+            this.predictRequestStats = new MLPredictRequestStats(in);
+        } else {
+            this.predictRequestStats = null;
         }
     }
 
@@ -79,9 +95,15 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         out.writeOptionalString(predictor);
         out.writeOptionalStringArray(workerNodes);
-        if (predictStats != null) {
+        if (modelInferenceStats != null) {
             out.writeBoolean(true);
-            predictStats.writeTo(out);
+            modelInferenceStats.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (predictRequestStats != null) {
+            out.writeBoolean(true);
+            predictRequestStats.writeTo(out);
         } else {
             out.writeBoolean(false);
         }

@@ -181,6 +181,7 @@ public class MLTaskManager {
     }
 
     public void addNodeError(String taskId, String workerNodeId, String error) {
+        log.debug("add task error: taskId: {}, workerNodeId: {}, error: {}", taskId, workerNodeId, error);
         if (taskCaches.containsKey(taskId)) {
             taskCaches.get(taskId).addError(workerNodeId, error);
         }

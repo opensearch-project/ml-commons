@@ -13,6 +13,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +33,7 @@ import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -79,11 +81,12 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     MLExecuteTaskRunner taskRunner;
     MLStats mlStats;
     MLExecuteTaskRequest mlExecuteTaskRequest;
+    MLEngine mlEngine;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-
+        mlEngine = new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)));
         when(threadPool.executor(anyString())).thenReturn(executorService);
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);
@@ -109,7 +112,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
                 mlInputDatasetHandler,
                 mlTaskDispatcher,
                 mlCircuitBreakerService,
-                nodeHelper
+                nodeHelper,
+                mlEngine
             )
         );
 
