@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLForwardAction extends ActionType<MLForwardResponse> {
     public static MLForwardAction INSTANCE = new MLForwardAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/forward";
+    public static final String NAME = "cluster:admin/opensearch/mlinternal/forward";
 
     private MLForwardAction() {
         super(NAME, MLForwardResponse::new);

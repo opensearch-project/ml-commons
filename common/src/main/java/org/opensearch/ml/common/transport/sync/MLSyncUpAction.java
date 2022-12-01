@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLSyncUpAction extends ActionType<MLSyncUpNodesResponse> {
     public static MLSyncUpAction INSTANCE = new MLSyncUpAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/syncup";
+    public static final String NAME = "cluster:admin/opensearch/mlinternal/syncup";
 
     private MLSyncUpAction() {
         super(NAME, MLSyncUpNodesResponse::new);

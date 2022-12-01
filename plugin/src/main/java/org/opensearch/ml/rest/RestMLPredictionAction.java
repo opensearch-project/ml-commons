@@ -65,13 +65,11 @@ public class RestMLPredictionAction extends BaseRestHandler {
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         String algorithm = request.param(PARAMETER_ALGORITHM);
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
-        if (modelId == null) {
-            throw new IllegalArgumentException("model id is null");
-        }
 
         if (algorithm != null) {
+            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, algorithm, request);
             return channel -> client
-                .execute(MLPredictionTaskAction.INSTANCE, getRequest(modelId, algorithm, request), new RestToXContentListener<>(channel));
+                .execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
         }
 
         return channel -> {
