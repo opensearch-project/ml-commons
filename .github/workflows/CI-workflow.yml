@@ -39,8 +39,8 @@ jobs:
         run: |
           plugin=`ls plugin/build/distributions/*.zip`
           echo MLCommons plugin $plugin
-          version=1.3.4
-          plugin_version=1.3.4.0-SNAPSHOT
+          version=1.4.0
+          plugin_version=1.4.0.0-SNAPSHOT
           echo Using OpenSearch $version with MLCommons $plugin_version
           cd ..
           if docker pull opensearchstaging/opensearch:$version
