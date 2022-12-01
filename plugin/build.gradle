@@ -251,7 +251,6 @@ jacocoTestCoverageVerification {
 check.dependsOn jacocoTestCoverageVerification
 
 configurations.all {
-    resolutionStrategy.force 'junit:junit:4.12'
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
