@@ -76,17 +76,34 @@ public class MLModelCache {
     }
 
     public void addModelInferenceDuration(double duration, long maxRequestCount) {
-        while (modelInferenceDurationQueue.size() >= maxRequestCount) {
-            modelInferenceDurationQueue.poll();
-        }
-        this.modelInferenceDurationQueue.add(duration);
+        addInferenceDuration(duration, maxRequestCount, modelInferenceDurationQueue);
     }
 
     public void addPredictRequestDuration(double duration, long maxRequestCount) {
-        while (predictRequestDurationQueue.size() >= maxRequestCount) {
-            predictRequestDurationQueue.poll();
+        addInferenceDuration(duration, maxRequestCount, predictRequestDurationQueue);
+    }
+
+    private void addInferenceDuration(double duration, long maxRequestCount, Queue<Double> queue) {
+        resizeInferenceQueue(maxRequestCount, queue);
+        if (maxRequestCount > 0) {
+            queue.add(duration);
         }
-        this.predictRequestDurationQueue.add(duration);
+    }
+
+    public void resizeMonitoringQueue(long maxRequestCount) {
+        log.debug("resize inference duration monitoring queue with size {}", maxRequestCount);
+        resizeInferenceQueue(maxRequestCount, predictRequestDurationQueue);
+        resizeInferenceQueue(maxRequestCount, modelInferenceDurationQueue);
+    }
+
+    private void resizeInferenceQueue(long maxRequestCount, Queue<Double> queue) {
+        if (maxRequestCount <= 0) {
+            queue.clear();
+        } else {
+            while (queue.size() >= maxRequestCount) {
+                queue.poll();
+            }
+        }
     }
 
     public MLPredictRequestStats getInferenceStats(boolean modelInference) {
