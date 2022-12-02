@@ -88,7 +88,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
             if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
                 && (r.getSearchFailures() == null || r.getSearchFailures().size() == 0)) {
-                log.info("All model chunks are deleted for model {}", modelId);
+                log.debug("All model chunks are deleted for model {}", modelId);
                 if (deleteResponse != null) {
                     // If model metaData not found and deleteResponse is null, do not return here.
                     // ResourceNotFound is returned to notify that this model was deleted.
@@ -99,7 +99,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 returnFailure(r, modelId, actionListener);
             }
         }, e -> {
-            log.info("Failed to delete ML model for " + modelId, e);
+            log.error("Failed to delete ML model for " + modelId, e);
             actionListener.onFailure(e);
         }));
     }

@@ -45,7 +45,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
                 @Override
                 public void onResponse(DeleteResponse deleteResponse) {
-                    log.info("Completed Delete Task Request, task id:{} deleted", taskId);
+                    log.debug("Completed Delete Task Request, task id:{} deleted", taskId);
                     actionListener.onResponse(deleteResponse);
                 }
 

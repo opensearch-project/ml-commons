@@ -33,6 +33,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String NAME_FIELD = "name";
+    public static final String DESCRIPTION_FIELD = "description";
     public static final String VERSION_FIELD = "version";
     public static final String URL_FIELD = "url";
     public static final String MODEL_FORMAT_FIELD = "model_format";
@@ -43,6 +44,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
     private FunctionName functionName;
     private String modelName;
     private String version;
+    private String description;
     private String url;
     private MLModelFormat modelFormat;
     private MLModelConfig modelConfig;
@@ -51,7 +53,15 @@ public class MLUploadInput implements ToXContentObject, Writeable {
     private String[] modelNodeIds;
 
     @Builder(toBuilder = true)
-    public MLUploadInput(FunctionName functionName, String modelName, String version, String url, MLModelFormat modelFormat, MLModelConfig modelConfig, boolean loadModel, String[] modelNodeIds) {
+    public MLUploadInput(FunctionName functionName,
+                         String modelName,
+                         String version,
+                         String description,
+                         String url,
+                         MLModelFormat modelFormat,
+                         MLModelConfig modelConfig,
+                         boolean loadModel,
+                         String[] modelNodeIds) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
         } else {
@@ -74,6 +84,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
         }
         this.modelName = modelName;
         this.version = version;
+        this.description = description;
         this.url = url;
         this.modelFormat = modelFormat;
         this.modelConfig = modelConfig;
@@ -86,6 +97,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
         this.functionName = in.readEnum(FunctionName.class);
         this.modelName = in.readString();
         this.version = in.readString();
+        this.description = in.readOptionalString();
         this.url = in.readOptionalString();
         if (in.readBoolean()) {
             this.modelFormat = in.readEnum(MLModelFormat.class);
@@ -102,6 +114,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
         out.writeEnum(functionName);
         out.writeString(modelName);
         out.writeString(version);
+        out.writeOptionalString(description);
         out.writeOptionalString(url);
         if (modelFormat != null) {
             out.writeBoolean(true);
@@ -125,6 +138,9 @@ public class MLUploadInput implements ToXContentObject, Writeable {
         builder.field(FUNCTION_NAME_FIELD, functionName);
         builder.field(NAME_FIELD, modelName);
         builder.field(VERSION_FIELD, version);
+        if (description != null) {
+            builder.field(DESCRIPTION_FIELD, description);
+        }
         if (url != null) {
             builder.field(URL_FIELD, url);
         }
@@ -145,6 +161,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
     public static MLUploadInput parse(XContentParser parser, String modelName, String version, boolean loadModel) throws IOException {
         FunctionName functionName = null;
         String url = null;
+        String description = null;
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
         List<String> modelNodeIds = new ArrayList<>();
@@ -159,6 +176,9 @@ public class MLUploadInput implements ToXContentObject, Writeable {
                     break;
                 case URL_FIELD:
                     url = parser.text();
+                    break;
+                case DESCRIPTION_FIELD:
+                    description = parser.text();
                     break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
@@ -177,7 +197,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLUploadInput(functionName, modelName, version, url, modelFormat, modelConfig, loadModel, modelNodeIds.toArray(new String[0]));
+        return new MLUploadInput(functionName, modelName, version, description, url, modelFormat, modelConfig, loadModel, modelNodeIds.toArray(new String[0]));
     }
 
     public static MLUploadInput parse(XContentParser parser, boolean loadModel) throws IOException {
@@ -185,6 +205,7 @@ public class MLUploadInput implements ToXContentObject, Writeable {
         String name = null;
         String version = null;
         String url = null;
+        String description = null;
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
         List<String> modelNodeIds = new ArrayList<>();
@@ -204,6 +225,9 @@ public class MLUploadInput implements ToXContentObject, Writeable {
                 case VERSION_FIELD:
                     version = parser.text();
                     break;
+                case DESCRIPTION_FIELD:
+                    description = parser.text();
+                    break;
                 case URL_FIELD:
                     url = parser.text();
                     break;
@@ -224,6 +248,6 @@ public class MLUploadInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLUploadInput(functionName, name, version, url, modelFormat, modelConfig, loadModel, modelNodeIds.toArray(new String[0]));
+        return new MLUploadInput(functionName, name, version, description, url, modelFormat, modelConfig, loadModel, modelNodeIds.toArray(new String[0]));
     }
 }

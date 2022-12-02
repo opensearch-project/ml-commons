@@ -56,7 +56,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.wrap(r -> {
-                log.info("Completed Get Task Request, id:{}", taskId);
+                log.debug("Completed Get Task Request, id:{}", taskId);
 
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
