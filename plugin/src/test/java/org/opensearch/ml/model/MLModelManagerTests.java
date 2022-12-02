@@ -75,7 +75,6 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -248,20 +247,16 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_ExceedMaxRunningTask() {
         String error = "exceed max running task limit";
-        expectedEx.expect(MLLimitExceededException.class);
-        expectedEx.expectMessage(error);
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(error);
         modelManager.uploadMLModel(uploadInput, mlTask);
-        verify(mlTaskManager, never()).updateMLTaskDirectly(eq(mlTask.getTaskId()), any());
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUploadMLModel_CircuitBreakerOpen() {
-        expectedEx.expect(MLLimitExceededException.class);
-        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Disk Circuit Breaker");
         modelManager.uploadMLModel(uploadInput, mlTask);
-        verify(mlTaskManager, never()).updateMLTaskDirectly(eq(mlTask.getTaskId()), any());
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUploadMLModel_InitModelIndexFailure() {
