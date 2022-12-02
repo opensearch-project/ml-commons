@@ -47,10 +47,34 @@ public class MLTrainingTaskRequestTest {
 
     @Test
     public void validate_Success() {
+        MLTrainingTaskRequest request = new MLTrainingTaskRequest(mlInput, true);
+        assertNull(request.validate());
+    }
+
+    @Test
+    public void validate_SuccessWithBuilder() {
         MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
                 .mlInput(mlInput)
                 .build();
         assertNull(request.validate());
+    }
+
+    @Test
+    public void validate_Exception_NullMLInput() {
+        MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
+                .build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: ML input can't be null;", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_NullInputDataInMLInput() {
+        mlInput.setInputDataset(null);
+        MLTrainingTaskRequest request = MLTrainingTaskRequest.builder()
+                .mlInput(mlInput)
+                .build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: input data can't be null;", exception.getMessage());
     }
 
     @Test
