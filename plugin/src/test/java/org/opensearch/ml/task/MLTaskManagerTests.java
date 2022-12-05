@@ -95,11 +95,11 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void testUpdateMLTaskWithNullOrEmptyMap() {
         mlTaskManager.add(mlTask);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(1)).onFailure(any());
 
-        mlTaskManager.updateMLTask(mlTask.getTaskId(), new HashMap<>(), listener, 0);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), new HashMap<>(), listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(2)).onFailure(any());
     }
@@ -107,7 +107,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void testUpdateMLTask_NonExistingTask() {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals("Can't find task", argumentCaptor.getValue().getMessage());
@@ -128,11 +128,11 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), ActionListener.wrap(r -> {
             ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-            mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, listener, 0);
+            mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, listener, 0, false);
             verify(client, times(1)).update(any(), any());
             verify(listener, times(1)).onFailure(argumentCaptor.capture());
             assertEquals("Other updating request not finished yet", argumentCaptor.getValue().getMessage());
-        }, e -> { assertNull(e); }), 0);
+        }, e -> { assertNull(e); }), 0, false);
     }
 
     public void testUpdateMLTask_FailedToUpdate() {
@@ -148,7 +148,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0);
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, false);
         verify(client, times(1)).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
@@ -163,7 +163,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0);
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, true);
         verify(client, times(1)).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
