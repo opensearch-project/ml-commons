@@ -627,8 +627,10 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return parseTaskIdFromResponse(response);
     }
 
-    public void loadModel(RestClient client, MLUploadInput uploadInput, Consumer<Map<String, Object>> function) throws IOException {
+    public void loadModel(RestClient client, MLUploadInput uploadInput, Consumer<Map<String, Object>> function) throws IOException,
+        InterruptedException {
         String taskId = uploadModel(TestHelper.toJsonString(uploadInput));
+        waitForTask(taskId, MLTaskState.COMPLETED);
         getTask(client(), taskId, response -> {
             String algorithm = (String) response.get(FUNCTION_NAME_FIELD);
             assertEquals(uploadInput.getFunctionName().name(), algorithm);
