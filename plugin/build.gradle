@@ -294,6 +294,7 @@ configurations.all {
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
     resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
 }
 
 apply plugin: 'nebula.ospackage'
