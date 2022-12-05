@@ -78,12 +78,12 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         Response getModelResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/" + modelId, null, "", null);
         assertNotNull(getModelResponse);
 
-        Response chunk1Response = uploadModelChunk(modelId, 1);
+        Response chunk1Response = uploadModelChunk(modelId, 0);
         entity = chunk1Response.getEntity();
         entityString = TestHelper.httpEntityToString(entity);
         assertEquals("Uploaded", gson.fromJson(entityString, Map.class).get("status"));
 
-        Response chunk2Response = uploadModelChunk(modelId, 2);
+        Response chunk2Response = uploadModelChunk(modelId, 1);
         entity = chunk2Response.getEntity();
         entityString = TestHelper.httpEntityToString(entity);
         assertEquals("Uploaded", gson.fromJson(entityString, Map.class).get("status"));
@@ -97,7 +97,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
 
         exceptionRule.expect(Exception.class);
         exceptionRule.expectMessage("Chunk number exceeds total chunks");
-        Response chunk3Response = uploadModelChunk(modelId, 3);
+        Response chunk3Response = uploadModelChunk(modelId, 2);
         assertNotNull(chunk3Response);
     }
 
