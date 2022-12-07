@@ -16,5 +16,6 @@ Compatible with OpenSearch 2.4.1
 * Increment version to 2.4.1-SNAPSHOT ([#560](https://github.com/opensearch-project/ml-commons/pull/560))
 * force protobuf-java version as 3.21.9 ([#588](https://github.com/opensearch-project/ml-commons/pull/588))
 * fix junit version ([#597](https://github.com/opensearch-project/ml-commons/pull/597))
+* Update dependency junit:junit to v4.13.1 ([#629](https://github.com/opensearch-project/ml-commons/pull/629))
 
 
