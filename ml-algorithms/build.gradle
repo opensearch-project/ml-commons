@@ -27,7 +27,7 @@ dependencies {
     compile group: 'io.protostuff', name: 'protostuff-runtime', version: '1.8.0'
     compile group: 'io.protostuff', name: 'protostuff-api', version: '1.8.0'
     compile group: 'io.protostuff', name: 'protostuff-collectionschema', version: '1.8.0'
-    testCompile group: 'junit', name: 'junit', version: '4.12'
+    testImplementation group: 'junit', name: 'junit', version: '4.13.1'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.9.0'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '3.9.0'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
