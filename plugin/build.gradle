@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import java.util.concurrent.Callable
+
 import org.opensearch.gradle.test.RestIntegTestTask
-import org.opensearch.gradle.testclusters.StandaloneRestIntegTestTask
 
 plugins {
     id 'java'
@@ -52,6 +51,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
+    implementation "com.github.rholder:guava-retrying:2.0.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
