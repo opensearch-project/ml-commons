@@ -8,13 +8,16 @@ package org.opensearch.ml.plugin;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
+import com.google.common.collect.ImmutableList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
-
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -142,373 +145,399 @@ import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
-import com.google.common.collect.ImmutableList;
-
+@Log4j2
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
-    public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
-    public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
-    public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
-    public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
-    public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
-    public static final String UPLOAD_THREAD_POOL = "opensearch_ml_upload";
-    public static final String LOAD_THREAD_POOL = "opensearch_ml_load";
-    public static final String ML_BASE_URI = "/_plugins/_ml";
+	public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
+	public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
+	public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
+	public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
+	public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+	public static final String UPLOAD_THREAD_POOL = "opensearch_ml_upload";
+	public static final String LOAD_THREAD_POOL = "opensearch_ml_load";
+	public static final String ML_BASE_URI = "/_plugins/_ml";
 
-    private MLStats mlStats;
-    private MLModelCacheHelper modelCacheHelper;
-    private MLTaskManager mlTaskManager;
-    private MLModelManager mlModelManager;
-    private MLIndicesHandler mlIndicesHandler;
-    private MLInputDatasetHandler mlInputDatasetHandler;
-    private MLTrainingTaskRunner mlTrainingTaskRunner;
-    private MLPredictTaskRunner mlPredictTaskRunner;
-    private MLTrainAndPredictTaskRunner mlTrainAndPredictTaskRunner;
-    private MLExecuteTaskRunner mlExecuteTaskRunner;
-    private IndexUtils indexUtils;
-    private ModelHelper modelHelper;
-    private DiscoveryNodeHelper nodeHelper;
+	private MLStats mlStats;
+	private MLModelCacheHelper modelCacheHelper;
+	private MLTaskManager mlTaskManager;
+	private MLModelManager mlModelManager;
+	private MLIndicesHandler mlIndicesHandler;
+	private MLInputDatasetHandler mlInputDatasetHandler;
+	private MLTrainingTaskRunner mlTrainingTaskRunner;
+	private MLPredictTaskRunner mlPredictTaskRunner;
+	private MLTrainAndPredictTaskRunner mlTrainAndPredictTaskRunner;
+	private MLExecuteTaskRunner mlExecuteTaskRunner;
+	private IndexUtils indexUtils;
+	private ModelHelper modelHelper;
+	private DiscoveryNodeHelper nodeHelper;
 
-    private MLModelMetaCreate mlModelMetaCreate;
-    private MLModelChunkUploader mlModelChunkUploader;
-    private MLEngine mlEngine;
+	private MLModelMetaCreate mlModelMetaCreate;
+	private MLModelChunkUploader mlModelChunkUploader;
+	private MLEngine mlEngine;
 
-    private Client client;
-    private ClusterService clusterService;
-    private ThreadPool threadPool;
-    private Set<String> indicesToListen;
+	private Client client;
+	private ClusterService clusterService;
+	private ThreadPool threadPool;
+	private Set<String> indicesToListen;
 
-    public static final String ML_ROLE_NAME = "ml";
-    private NamedXContentRegistry xContentRegistry;
+	public static final String ML_ROLE_NAME = "ml";
+	private NamedXContentRegistry xContentRegistry;
 
-    @Override
-    public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
-        return ImmutableList
-            .of(
-                new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
-                new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
-                new ActionHandler<>(MLPredictionTaskAction.INSTANCE, TransportPredictionTaskAction.class),
-                new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
-                new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE, TransportTrainAndPredictionTaskAction.class),
-                new ActionHandler<>(MLModelGetAction.INSTANCE, GetModelTransportAction.class),
-                new ActionHandler<>(MLModelDeleteAction.INSTANCE, DeleteModelTransportAction.class),
-                new ActionHandler<>(MLModelSearchAction.INSTANCE, SearchModelTransportAction.class),
-                new ActionHandler<>(MLTaskGetAction.INSTANCE, GetTaskTransportAction.class),
-                new ActionHandler<>(MLTaskDeleteAction.INSTANCE, DeleteTaskTransportAction.class),
-                new ActionHandler<>(MLTaskSearchAction.INSTANCE, SearchTaskTransportAction.class),
-                new ActionHandler<>(MLProfileAction.INSTANCE, MLProfileTransportAction.class),
-                new ActionHandler<>(MLUploadModelAction.INSTANCE, TransportUploadModelAction.class),
-                new ActionHandler<>(MLLoadModelAction.INSTANCE, TransportLoadModelAction.class),
-                new ActionHandler<>(MLLoadModelOnNodeAction.INSTANCE, TransportLoadModelOnNodeAction.class),
-                new ActionHandler<>(MLUnloadModelAction.INSTANCE, TransportUnloadModelAction.class),
-                new ActionHandler<>(MLCreateModelMetaAction.INSTANCE, TransportCreateModelMetaAction.class),
-                new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
-                new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
-                new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class)
-            );
-    }
+	@Override
+	public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
+		return ImmutableList
+				.of(
+						new ActionHandler<>(MLStatsNodesAction.INSTANCE, MLStatsNodesTransportAction.class),
+						new ActionHandler<>(MLExecuteTaskAction.INSTANCE, TransportExecuteTaskAction.class),
+						new ActionHandler<>(MLPredictionTaskAction.INSTANCE,
+								TransportPredictionTaskAction.class),
+						new ActionHandler<>(MLTrainingTaskAction.INSTANCE, TransportTrainingTaskAction.class),
+						new ActionHandler<>(MLTrainAndPredictionTaskAction.INSTANCE,
+								TransportTrainAndPredictionTaskAction.class),
+						new ActionHandler<>(MLModelGetAction.INSTANCE, GetModelTransportAction.class),
+						new ActionHandler<>(MLModelDeleteAction.INSTANCE, DeleteModelTransportAction.class),
+						new ActionHandler<>(MLModelSearchAction.INSTANCE, SearchModelTransportAction.class),
+						new ActionHandler<>(MLTaskGetAction.INSTANCE, GetTaskTransportAction.class),
+						new ActionHandler<>(MLTaskDeleteAction.INSTANCE, DeleteTaskTransportAction.class),
+						new ActionHandler<>(MLTaskSearchAction.INSTANCE, SearchTaskTransportAction.class),
+						new ActionHandler<>(MLProfileAction.INSTANCE, MLProfileTransportAction.class),
+						new ActionHandler<>(MLUploadModelAction.INSTANCE, TransportUploadModelAction.class),
+						new ActionHandler<>(MLLoadModelAction.INSTANCE, TransportLoadModelAction.class),
+						new ActionHandler<>(MLLoadModelOnNodeAction.INSTANCE,
+								TransportLoadModelOnNodeAction.class),
+						new ActionHandler<>(MLUnloadModelAction.INSTANCE, TransportUnloadModelAction.class),
+						new ActionHandler<>(MLCreateModelMetaAction.INSTANCE,
+								TransportCreateModelMetaAction.class),
+						new ActionHandler<>(MLUploadModelChunkAction.INSTANCE,
+								TransportUploadModelChunkAction.class),
+						new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
+						new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class)
+				);
+	}
 
-    @Override
-    public Collection<Object> createComponents(
-        Client client,
-        ClusterService clusterService,
-        ThreadPool threadPool,
-        ResourceWatcherService resourceWatcherService,
-        ScriptService scriptService,
-        NamedXContentRegistry xContentRegistry,
-        Environment environment,
-        NodeEnvironment nodeEnvironment,
-        NamedWriteableRegistry namedWriteableRegistry,
-        IndexNameExpressionResolver indexNameExpressionResolver,
-        Supplier<RepositoriesService> repositoriesServiceSupplier
-    ) {
-        this.indexUtils = new IndexUtils(client, clusterService);
-        this.client = client;
-        this.threadPool = threadPool;
-        this.clusterService = clusterService;
-        this.xContentRegistry = xContentRegistry;
-        Settings settings = environment.settings();
-        mlEngine = new MLEngine(environment.dataFiles()[0]);
-        nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
-        modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
+	@Override
+	public Collection<Object> createComponents(
+			Client client,
+			ClusterService clusterService,
+			ThreadPool threadPool,
+			ResourceWatcherService resourceWatcherService,
+			ScriptService scriptService,
+			NamedXContentRegistry xContentRegistry,
+			Environment environment,
+			NodeEnvironment nodeEnvironment,
+			NamedWriteableRegistry namedWriteableRegistry,
+			IndexNameExpressionResolver indexNameExpressionResolver,
+			Supplier<RepositoriesService> repositoriesServiceSupplier
+	) {
+		this.indexUtils = new IndexUtils(client, clusterService);
+		this.client = client;
+		this.threadPool = threadPool;
+		this.clusterService = clusterService;
+		this.xContentRegistry = xContentRegistry;
+		Settings settings = environment.settings();
+		mlEngine = new MLEngine(environment.dataFiles()[0]);
+		nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
+		modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 
-        JvmService jvmService = new JvmService(environment.settings());
-        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init(environment.dataFiles()[0]);
+		JvmService jvmService = new JvmService(environment.settings());
+		MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init(
+				environment.dataFiles()[0]);
 
-        Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
-        // cluster level stats
-        stats.put(MLClusterLevelStat.ML_MODEL_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_MODEL_INDEX)));
-        stats.put(MLClusterLevelStat.ML_TASK_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_TASK_INDEX)));
-        stats.put(MLClusterLevelStat.ML_MODEL_COUNT, new MLStat<>(true, new CounterSupplier()));
-        // node level stats
-        stats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
-        this.mlStats = new MLStats(stats);
+		Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
+		// cluster level stats
+		stats.put(MLClusterLevelStat.ML_MODEL_INDEX_STATUS,
+				new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_MODEL_INDEX)));
+		stats.put(MLClusterLevelStat.ML_TASK_INDEX_STATUS,
+				new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_TASK_INDEX)));
+		stats.put(MLClusterLevelStat.ML_MODEL_COUNT, new MLStat<>(true, new CounterSupplier()));
+		// node level stats
+		stats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT,
+				new MLStat<>(false, new CounterSupplier()));
+		stats.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT,
+				new MLStat<>(false, new CounterSupplier()));
+		stats.put(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT,
+				new MLStat<>(false, new CounterSupplier()));
+		stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT,
+				new MLStat<>(false, new CounterSupplier()));
+		stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT,
+				new MLStat<>(false, new CounterSupplier()));
+		this.mlStats = new MLStats(stats);
 
-        mlIndicesHandler = new MLIndicesHandler(clusterService, client);
-        mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
-        modelHelper = new ModelHelper(mlEngine);
-        mlModelManager = new MLModelManager(
-            clusterService,
-            client,
-            threadPool,
-            xContentRegistry,
-            modelHelper,
-            settings,
-            mlStats,
-            mlCircuitBreakerService,
-            mlIndicesHandler,
-            mlTaskManager,
-            modelCacheHelper,
-            mlEngine
-        );
-        mlInputDatasetHandler = new MLInputDatasetHandler(client);
+		mlIndicesHandler = new MLIndicesHandler(clusterService, client);
+		mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
+		modelHelper = new ModelHelper(mlEngine);
+		mlModelManager = new MLModelManager(
+				clusterService,
+				client,
+				threadPool,
+				xContentRegistry,
+				modelHelper,
+				settings,
+				mlStats,
+				mlCircuitBreakerService,
+				mlIndicesHandler,
+				mlTaskManager,
+				modelCacheHelper,
+				mlEngine
+		);
+		mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
-        mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
-        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
+		mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
+		mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
 
-        MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
-        mlTrainingTaskRunner = new MLTrainingTaskRunner(
-            threadPool,
-            clusterService,
-            client,
-            mlTaskManager,
-            mlStats,
-            mlIndicesHandler,
-            mlInputDatasetHandler,
-            mlTaskDispatcher,
-            mlCircuitBreakerService,
-            nodeHelper,
-            mlEngine
-        );
-        mlPredictTaskRunner = new MLPredictTaskRunner(
-            threadPool,
-            clusterService,
-            client,
-            mlTaskManager,
-            mlStats,
-            mlInputDatasetHandler,
-            mlTaskDispatcher,
-            mlCircuitBreakerService,
-            xContentRegistry,
-            mlModelManager,
-            nodeHelper,
-            mlEngine
-        );
-        mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
-            threadPool,
-            clusterService,
-            client,
-            mlTaskManager,
-            mlStats,
-            mlInputDatasetHandler,
-            mlTaskDispatcher,
-            mlCircuitBreakerService,
-            nodeHelper,
-            mlEngine
-        );
-        mlExecuteTaskRunner = new MLExecuteTaskRunner(
-            threadPool,
-            clusterService,
-            client,
-            mlTaskManager,
-            mlStats,
-            mlInputDatasetHandler,
-            mlTaskDispatcher,
-            mlCircuitBreakerService,
-            nodeHelper,
-            mlEngine
-        );
+		MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings,
+				nodeHelper);
+		mlTrainingTaskRunner = new MLTrainingTaskRunner(
+				threadPool,
+				clusterService,
+				client,
+				mlTaskManager,
+				mlStats,
+				mlIndicesHandler,
+				mlInputDatasetHandler,
+				mlTaskDispatcher,
+				mlCircuitBreakerService,
+				nodeHelper,
+				mlEngine
+		);
+		mlPredictTaskRunner = new MLPredictTaskRunner(
+				threadPool,
+				clusterService,
+				client,
+				mlTaskManager,
+				mlStats,
+				mlInputDatasetHandler,
+				mlTaskDispatcher,
+				mlCircuitBreakerService,
+				xContentRegistry,
+				mlModelManager,
+				nodeHelper,
+				mlEngine
+		);
+		mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
+				threadPool,
+				clusterService,
+				client,
+				mlTaskManager,
+				mlStats,
+				mlInputDatasetHandler,
+				mlTaskDispatcher,
+				mlCircuitBreakerService,
+				nodeHelper,
+				mlEngine
+		);
+		mlExecuteTaskRunner = new MLExecuteTaskRunner(
+				threadPool,
+				clusterService,
+				client,
+				mlTaskManager,
+				mlStats,
+				mlInputDatasetHandler,
+				mlTaskDispatcher,
+				mlCircuitBreakerService,
+				nodeHelper,
+				mlEngine
+		);
 
-        // Register thread-safe ML objects here.
-        LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
-        MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
+		// Register thread-safe ML objects here.
+		LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
+		MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
 
-        AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
-        MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
+		AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings,
+				clusterService, indexNameExpressionResolver);
+		MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
+		MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
 
-        MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(
-            clusterService,
-            mlModelManager,
-            mlTaskManager,
-            modelCacheHelper
-        );
-        MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
-            clusterService,
-            client,
-            settings,
-            threadPool,
-            nodeHelper
-        );
+		MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(
+				clusterService,
+				mlModelManager,
+				mlTaskManager,
+				modelCacheHelper
+		);
+		MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
+				clusterService,
+				client,
+				settings,
+				threadPool,
+				nodeHelper
+		);
 
-        return ImmutableList
-            .of(
-                mlEngine,
-                nodeHelper,
-                modelCacheHelper,
-                mlStats,
-                mlTaskManager,
-                mlModelManager,
-                mlIndicesHandler,
-                mlInputDatasetHandler,
-                mlTrainingTaskRunner,
-                mlPredictTaskRunner,
-                mlTrainAndPredictTaskRunner,
-                mlExecuteTaskRunner,
-                mlSearchHandler,
-                mlTaskDispatcher,
-                mlModelMetaCreate,
-                mlModelChunkUploader,
-                modelHelper,
-                mlCommonsClusterEventListener,
-                clusterManagerEventListener,
-                mlCircuitBreakerService
-            );
-    }
+		try {
+			CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(
+					() -> mlModelManager.autoReLoadModel());
+			completableFuture.get();
+		} catch (InterruptedException | ExecutionException e) {
+			throw new RuntimeException("Can't auto reload model, the reason is:", e);
+		}
 
-    @Override
-    public List<RestHandler> getRestHandlers(
-        Settings settings,
-        RestController restController,
-        ClusterSettings clusterSettings,
-        IndexScopedSettings indexScopedSettings,
-        SettingsFilter settingsFilter,
-        IndexNameExpressionResolver indexNameExpressionResolver,
-        Supplier<DiscoveryNodes> nodesInCluster
-    ) {
-        RestMLStatsAction restMLStatsAction = new RestMLStatsAction(mlStats, clusterService, indexUtils);
-        RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
-        RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
-        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
-        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
-        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
-        RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
-        RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
-        RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
-        RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
-        RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
-        RestMLUploadModelAction restMLUploadModelAction = new RestMLUploadModelAction();
-        RestMLLoadModelAction restMLLoadModelAction = new RestMLLoadModelAction();
-        RestMLUnloadModelAction restMLUnloadModelAction = new RestMLUnloadModelAction(clusterService);
-        RestMLCreateModelMetaAction restMLCreateModelMetaAction = new RestMLCreateModelMetaAction();
-        RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction();
+		return ImmutableList
+				.of(
+						mlEngine,
+						nodeHelper,
+						modelCacheHelper,
+						mlStats,
+						mlTaskManager,
+						mlModelManager,
+						mlIndicesHandler,
+						mlInputDatasetHandler,
+						mlTrainingTaskRunner,
+						mlPredictTaskRunner,
+						mlTrainAndPredictTaskRunner,
+						mlExecuteTaskRunner,
+						mlSearchHandler,
+						mlTaskDispatcher,
+						mlModelMetaCreate,
+						mlModelChunkUploader,
+						modelHelper,
+						mlCommonsClusterEventListener,
+						clusterManagerEventListener,
+						mlCircuitBreakerService
+				);
+	}
 
-        return ImmutableList
-            .of(
-                restMLStatsAction,
-                restMLTrainingAction,
-                restMLPredictionAction,
-                restMLExecuteAction,
-                restMLTrainAndPredictAction,
-                restMLGetModelAction,
-                restMLDeleteModelAction,
-                restMLSearchModelAction,
-                restMLGetTaskAction,
-                restMLDeleteTaskAction,
-                restMLSearchTaskAction,
-                restMLProfileAction,
-                restMLUploadModelAction,
-                restMLLoadModelAction,
-                restMLUnloadModelAction,
-                restMLCreateModelMetaAction,
-                restMLUploadModelChunkAction
-            );
-    }
+	@Override
+	public List<RestHandler> getRestHandlers(
+			Settings settings,
+			RestController restController,
+			ClusterSettings clusterSettings,
+			IndexScopedSettings indexScopedSettings,
+			SettingsFilter settingsFilter,
+			IndexNameExpressionResolver indexNameExpressionResolver,
+			Supplier<DiscoveryNodes> nodesInCluster
+	) {
+		RestMLStatsAction restMLStatsAction = new RestMLStatsAction(mlStats, clusterService,
+				indexUtils);
+		RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
+		RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
+		RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
+		RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+		RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
+		RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
+		RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
+		RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
+		RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
+		RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
+		RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
+		RestMLUploadModelAction restMLUploadModelAction = new RestMLUploadModelAction();
+		RestMLLoadModelAction restMLLoadModelAction = new RestMLLoadModelAction();
+		RestMLUnloadModelAction restMLUnloadModelAction = new RestMLUnloadModelAction(clusterService);
+		RestMLCreateModelMetaAction restMLCreateModelMetaAction = new RestMLCreateModelMetaAction();
+		RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction();
 
-    @Override
-    public List<ExecutorBuilder<?>> getExecutorBuilders(Settings settings) {
-        FixedExecutorBuilder generalThreadPool = new FixedExecutorBuilder(
-            settings,
-            GENERAL_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            100,
-            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL,
-            false
-        );
-        FixedExecutorBuilder uploadThreadPool = new FixedExecutorBuilder(
-            settings,
-            UPLOAD_THREAD_POOL,
-            Math.max(4, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
-            ML_THREAD_POOL_PREFIX + UPLOAD_THREAD_POOL,
-            false
-        );
-        FixedExecutorBuilder loadThreadPool = new FixedExecutorBuilder(
-            settings,
-            LOAD_THREAD_POOL,
-            Math.max(4, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
-            ML_THREAD_POOL_PREFIX + LOAD_THREAD_POOL,
-            false
-        );
-        FixedExecutorBuilder executeThreadPool = new FixedExecutorBuilder(
-            settings,
-            EXECUTE_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
-            ML_THREAD_POOL_PREFIX + EXECUTE_THREAD_POOL,
-            false
-        );
-        FixedExecutorBuilder trainThreadPool = new FixedExecutorBuilder(
-            settings,
-            TRAIN_THREAD_POOL,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
-            10,
-            ML_THREAD_POOL_PREFIX + TRAIN_THREAD_POOL,
-            false
-        );
-        FixedExecutorBuilder predictThreadPool = new FixedExecutorBuilder(
-            settings,
-            PREDICT_THREAD_POOL,
-            OpenSearchExecutors.allocatedProcessors(settings) * 2,
-            10000,
-            ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
-            false
-        );
+		return ImmutableList
+				.of(
+						restMLStatsAction,
+						restMLTrainingAction,
+						restMLPredictionAction,
+						restMLExecuteAction,
+						restMLTrainAndPredictAction,
+						restMLGetModelAction,
+						restMLDeleteModelAction,
+						restMLSearchModelAction,
+						restMLGetTaskAction,
+						restMLDeleteTaskAction,
+						restMLSearchTaskAction,
+						restMLProfileAction,
+						restMLUploadModelAction,
+						restMLLoadModelAction,
+						restMLUnloadModelAction,
+						restMLCreateModelMetaAction,
+						restMLUploadModelChunkAction
+				);
+	}
 
-        return ImmutableList.of(generalThreadPool, uploadThreadPool, loadThreadPool, executeThreadPool, trainThreadPool, predictThreadPool);
-    }
+	@Override
+	public List<ExecutorBuilder<?>> getExecutorBuilders(Settings settings) {
+		FixedExecutorBuilder generalThreadPool = new FixedExecutorBuilder(
+				settings,
+				GENERAL_THREAD_POOL,
+				Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+				100,
+				ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL,
+				false
+		);
+		FixedExecutorBuilder uploadThreadPool = new FixedExecutorBuilder(
+				settings,
+				UPLOAD_THREAD_POOL,
+				Math.max(4, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+				10,
+				ML_THREAD_POOL_PREFIX + UPLOAD_THREAD_POOL,
+				false
+		);
+		FixedExecutorBuilder loadThreadPool = new FixedExecutorBuilder(
+				settings,
+				LOAD_THREAD_POOL,
+				Math.max(4, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+				10,
+				ML_THREAD_POOL_PREFIX + LOAD_THREAD_POOL,
+				false
+		);
+		FixedExecutorBuilder executeThreadPool = new FixedExecutorBuilder(
+				settings,
+				EXECUTE_THREAD_POOL,
+				Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+				10,
+				ML_THREAD_POOL_PREFIX + EXECUTE_THREAD_POOL,
+				false
+		);
+		FixedExecutorBuilder trainThreadPool = new FixedExecutorBuilder(
+				settings,
+				TRAIN_THREAD_POOL,
+				Math.max(1, OpenSearchExecutors.allocatedProcessors(settings) - 1),
+				10,
+				ML_THREAD_POOL_PREFIX + TRAIN_THREAD_POOL,
+				false
+		);
+		FixedExecutorBuilder predictThreadPool = new FixedExecutorBuilder(
+				settings,
+				PREDICT_THREAD_POOL,
+				OpenSearchExecutors.allocatedProcessors(settings) * 2,
+				10000,
+				ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
+				false
+		);
 
-    @Override
-    public List<NamedXContentRegistry.Entry> getNamedXContent() {
-        return ImmutableList
-            .of(
-                KMeansParams.XCONTENT_REGISTRY,
-                LinearRegressionParams.XCONTENT_REGISTRY,
-                AnomalyDetectionLibSVMParams.XCONTENT_REGISTRY,
-                SampleAlgoParams.XCONTENT_REGISTRY,
-                FitRCFParams.XCONTENT_REGISTRY,
-                BatchRCFParams.XCONTENT_REGISTRY,
-                LocalSampleCalculatorInput.XCONTENT_REGISTRY,
-                AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
-                RCFSummarizeParams.XCONTENT_REGISTRY,
-                LogisticRegressionParams.XCONTENT_REGISTRY,
-                TextEmbeddingModelConfig.XCONTENT_REGISTRY
-            );
-    }
+		return ImmutableList.of(generalThreadPool, uploadThreadPool, loadThreadPool, executeThreadPool,
+				trainThreadPool, predictThreadPool);
+	}
 
-    @Override
-    public List<Setting<?>> getSettings() {
-        List<Setting<?>> settings = ImmutableList
-            .of(
-                MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY,
-                MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE,
-                MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE,
-                MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS,
-                MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT,
-                MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
-                MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
-                MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
-                MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
-                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE,
-                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_MAX_RETRY
-            );
-        return settings;
-    }
+	@Override
+	public List<NamedXContentRegistry.Entry> getNamedXContent() {
+		return ImmutableList
+				.of(
+						KMeansParams.XCONTENT_REGISTRY,
+						LinearRegressionParams.XCONTENT_REGISTRY,
+						AnomalyDetectionLibSVMParams.XCONTENT_REGISTRY,
+						SampleAlgoParams.XCONTENT_REGISTRY,
+						FitRCFParams.XCONTENT_REGISTRY,
+						BatchRCFParams.XCONTENT_REGISTRY,
+						LocalSampleCalculatorInput.XCONTENT_REGISTRY,
+						AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
+						RCFSummarizeParams.XCONTENT_REGISTRY,
+						LogisticRegressionParams.XCONTENT_REGISTRY,
+						TextEmbeddingModelConfig.XCONTENT_REGISTRY
+				);
+	}
+
+	@Override
+	public List<Setting<?>> getSettings() {
+		List<Setting<?>> settings = ImmutableList
+				.of(
+						MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY,
+						MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE,
+						MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE,
+						MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS,
+						MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT,
+						MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
+						MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
+						MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
+						MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
+						MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE,
+						MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_MAX_RETRY
+				);
+		return settings;
+	}
+
+
 }
