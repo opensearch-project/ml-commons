@@ -768,6 +768,7 @@ public class MLModelManager {
 		return modelCacheHelper.isModelRunningOnNode(modelId);
 	}
 
+
 	public void autoReLoadModel() {
 		log.debug("enableAutoReLoadModel {} maxRetryTimeAutoReLoadModel {}", enableAutoReLoadModel,
 				maxRetryTimeAutoReLoadModel);
@@ -795,17 +796,14 @@ public class MLModelManager {
 		} catch (RetryException | ExecutionException e) { // 重试次数超过阈值或被强制中断
 			throw new RuntimeException("retry max time, always failure", e);
 		}
-
-		int time = 0;
-
-		//TODO
-//			autoReLoadModel();
-
 	}
 
 	private void doAutoReLoadModel() {
-
 		log.debug(Thread.currentThread().getName() + " -->model auto reload is not finished yet...");
+
+//		 查询http://35.72.115.65:9200/.plugins-ml-task/_search
+//		 获取"task_type": "LOAD_MODEL"且"state": "COMPLETED"的"model_id"和 "worker_node"值
+//		GetTaskTransportAction，如何获取？
 	}
 
 }
