@@ -9,12 +9,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -32,18 +27,11 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.github.rholder.retry.RetryException;
-import com.github.rholder.retry.Retryer;
-import com.github.rholder.retry.RetryerBuilder;
-import com.github.rholder.retry.StopStrategies;
-import com.github.rholder.retry.WaitStrategies;
-
 /**
  * Manager class for ML models&nodes. It contains ML model auto reload operations etc.
  */
 @Log4j2
 public class MLModelAndNodeManager {
-
     public static final int TIMEOUT_IN_MILLIS = 5000;
 
     private final Client client;
@@ -113,25 +101,27 @@ public class MLModelAndNodeManager {
             return;
         }
 
-        Callable<Void> callable = () -> {
-            doAutoReLoadModel();
-            return null;
-        };
-
-        // 定义重试器
-        Retryer<Void> retryer = RetryerBuilder
-            .<Void>newBuilder()
-            .retryIfException() // 抛出runtime异常、checked异常时都会重试，但是抛出error不会重试。
-            .retryIfExceptionOfType(Error.class)// 只在抛出error重试
-            .withWaitStrategy(WaitStrategies.incrementingWait(0, TimeUnit.SECONDS, 0, TimeUnit.SECONDS))
-            .withStopStrategy(StopStrategies.stopAfterAttempt(maxRetryTimeAutoReLoadModel))
-            .build();
-
-        try {
-            retryer.call(callable);
-        } catch (RetryException | ExecutionException e) { // 重试次数超过阈值或被强制中断
-            throw new RuntimeException("retry max time, always failure", e);
-        }
+        doAutoReLoadModel();
+//        还没确定是否要做重试retry
+//        Callable<Void> callable = () -> {
+//            doAutoReLoadModel();
+//            return null;
+//        };
+//
+//        // 定义重试器
+//        Retryer<Void> retryer = RetryerBuilder
+//            .<Void>newBuilder()
+//            .retryIfException() // 抛出runtime异常、checked异常时都会重试，但是抛出error不会重试。
+//            .retryIfExceptionOfType(Error.class)// 只在抛出error重试
+//            .withWaitStrategy(WaitStrategies.incrementingWait(0, TimeUnit.SECONDS, 0, TimeUnit.SECONDS))
+//            .withStopStrategy(StopStrategies.stopAfterAttempt(maxRetryTimeAutoReLoadModel))
+//            .build();
+//
+//        try {
+//            retryer.call(callable);
+//        } catch (RetryException | ExecutionException e) { // 重试次数超过阈值或被强制中断
+//            throw new RuntimeException("retry max time, always failure", e);
+//        }
     }
 
     private void doAutoReLoadModel() {
