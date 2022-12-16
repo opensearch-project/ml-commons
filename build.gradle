@@ -72,7 +72,7 @@ ext {
 }
 
 dependencies {
-    implementation 'junit:junit:${versions.junit}'
+    implementation 'junit:junit:4.13.1'
 }
 
 // updateVersion: Task to auto increment to the next development iteration
