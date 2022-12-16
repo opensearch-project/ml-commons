@@ -5,15 +5,14 @@
 package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import java.util.Arrays;
-import java.util.List;
-
+import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -24,7 +23,10 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.MLReloadModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -32,6 +34,7 @@ import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.transport.load.LoadModelResponse;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
+import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -40,14 +43,14 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.threadpool.ThreadPool;
 
 /**
- * Manager class for ML models&nodes. It contains ML model auto reload operations etc.
+ * Manager class for ML models and nodes. It contains ML model auto reload operations etc.
  */
 @Log4j2
 public class MLModelAndNodeManager {
-
     private final Client client;
     private final ClusterService clusterService;
     private final ThreadPool threadPool;
@@ -63,8 +66,6 @@ public class MLModelAndNodeManager {
     private final MLEngine mlEngine;
 
     private volatile Boolean enableAutoReLoadModel;
-
-    // private volatile Integer maxRetryTimeAutoReLoadModel;
 
     public MLModelAndNodeManager(
         ClusterService clusterService,
@@ -100,79 +101,38 @@ public class MLModelAndNodeManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE, it -> enableAutoReLoadModel = it);
-
-        // maxRetryTimeAutoReLoadModel = ML_COMMONS_MODEL_AUTO_RELOAD_MAX_RETRY.get(settings);
-        // clusterService
-        // .getClusterSettings()
-        // .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_MAX_RETRY,
-        // it -> maxRetryTimeAutoReLoadModel = it);
     }
 
     public void autoReLoadModel() {
-        // log.debug("enableAutoReLoadModel {} maxRetryTimeAutoReLoadModel {}", enableAutoReLoadModel,
-        // maxRetryTimeAutoReLoadModel);
-
         log.debug("enableAutoReLoadModel {} ", enableAutoReLoadModel);
 
-        // 如果不需要自动reload，什么都不做直接返回
+        // if we don't need to reload automatically, just return without doing anything
         if (!enableAutoReLoadModel) {
             return;
         }
 
-        // 先获取所有的node id，包括已经挂的节点
-        String[] allNodeIds = nodeHelper.getAllNodeIds();
-        log.debug("all node ids are: {}", Arrays.toString(allNodeIds));
-
-        // 再获取所有合法节点，即没有挂掉的节点
-        String[] eligibleNodeIds = nodeHelper.getEligibleNodeIds();
-        log.debug("eligibleNode ids are: {}", Arrays.toString(eligibleNodeIds));
-
-        // 上面两个数组比较获取属于集群但不合法节点， 然后获取这些节点的model deployment plan，依次把这些model一个个重新load
-        String[] needReLoadModelNodeIds = null;
-        if (allNodeIds.length != eligibleNodeIds.length) {  // 说明有挂掉的节点
-            needReLoadModelNodeIds = Arrays.stream(allNodeIds).filter(m -> !List.of(eligibleNodeIds).contains(m)).toArray(String[]::new);
-        }
-
-        // 如果没有，说明集群中所有节点都没有挂掉，都在正常运行，则什么都不需做
-        if (CollectionUtils.isEmpty(needReLoadModelNodeIds)) {
-            log.debug("all nodes run successfully");
+        // At opensearch startup, get local node id,  if not ml node,we ignored, just return without doing anything
+        String localNodeId = clusterService.localNode().getId();
+        DiscoveryNode node = nodeHelper.getNode(localNodeId);
+        if (!MLNodeUtils.isMLNode(node)) {
             return;
         }
 
-        for (String needReLoadModelNodeId : needReLoadModelNodeIds) {
-            DiscoveryNode node = nodeHelper.getNode(needReLoadModelNodeId);
-            if (MLNodeUtils.isMLNode(node)) {
-                try {
-                    autoReLoadModelByNodeId(node.getId());
-                } catch (Exception e) {
-                    log.error("Failed to auto reload model by node id {}, the reason is: {}", needReLoadModelNodeId, e);
-                    throw new RuntimeException(e);
-                }
-            }
+        //According to the node id to query the number of retries, if more than 2 (the maximum number of retries), we do not need to retry, that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
+        Integer reTryTimes =0;
+        if(isExistedIndex(ML_MODEL_RELOAD_INDEX)){
+            reTryTimes = getReTryTimes(localNodeId);
         }
-        // 还没确定是否要做重试retry
-        // Callable<Void> callable = () -> {
-        // doAutoReLoadModel();
-        // return null;
-        // };
-        //
-        // // 定义重试器
-        // Retryer<Void> retryer = RetryerBuilder
-        // .<Void>newBuilder()
-        // .retryIfException() // 抛出runtime异常、checked异常时都会重试，但是抛出error不会重试。
-        // .retryIfExceptionOfType(Error.class)// 只在抛出error重试
-        // .withWaitStrategy(WaitStrategies.incrementingWait(0, TimeUnit.SECONDS, 0, TimeUnit.SECONDS))
-        // .withStopStrategy(StopStrategies.stopAfterAttempt(maxRetryTimeAutoReLoadModel))
-        // .build();
-        //
-        // try {
-        // retryer.call(callable);
-        // } catch (RetryException | ExecutionException e) { // 重试次数超过阈值或被强制中断
-        // throw new RuntimeException("retry max time, always failure", e);
-        // }
+        if(reTryTimes>ML_MODEL_RELOAD_MAX_RETRY_TIMES){
+             throw new RuntimeException("have exceeded max retry times, always failure");
+        }
+
+        //auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
+        autoReLoadModelByNodeId(localNodeId);
     }
 
-    private void autoReLoadModelByNodeId(String nodeId) {
+    @VisibleForTesting
+    void autoReLoadModelByNodeId(String nodeId) {
         SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
         SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet();
 
@@ -188,6 +148,7 @@ public class MLModelAndNodeManager {
             return;
         }
 
+        Integer reTryTimes=0;
         for (SearchHit hit : hits) {
             try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -201,18 +162,85 @@ public class MLModelAndNodeManager {
                     autoReLoadModelByNodeAndModelId(nodeId, mlTask.getModelId());
                 }
             } catch (Exception e) {
+                reTryTimes++;
+                //Store the latest value of the reTryTimes and node id under the index ".plugins-ml-model-reload"
+                saveLatestReTryTimes(nodeId,reTryTimes);
                 log.error("ML Task id {} failed to parse, the reason is: {}", hit.getId(), e);
                 throw new RuntimeException(e);
             }
         }
+
+        //Store the latest value of the reTryTimes and node id under the index ".plugins-ml-model-reload"
+        saveLatestReTryTimes(nodeId,reTryTimes);
     }
 
-    private void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) {
+    /**
+     *
+     * @param nodeId
+     * @param modelId
+     */
+    @VisibleForTesting
+    void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) {
         MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, new String[] { nodeId }, false, false);
         LoadModelResponse loadModelResponse = client.execute(MLLoadModelAction.INSTANCE, mlLoadModelRequest).actionGet();
 
         if (loadModelResponse == null) {
             throw new RuntimeException("Can't auto reload model " + modelId + " by node " + nodeId);
+        }
+    }
+
+
+    @VisibleForTesting
+    Integer getReTryTimes(String nodeId) {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.fetchSource(null, new String[] { MLReloadModel.MODEL_LOAD_RETRY_TIMES_FIELD });
+        QueryBuilder queryBuilder = new TermQueryBuilder(MLReloadModel.NODE_ID_FIELD, nodeId);
+        searchSourceBuilder.query(queryBuilder);
+        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(
+            ML_MODEL_RELOAD_INDEX);
+        SearchResponse response= client.execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet(5000);
+
+        if (response == null) {
+            throw new RuntimeException("can't get retry times by "+nodeId);
+        }
+        SearchHits searchHits = response.getHits();
+        if (searchHits == null) {
+            throw new RuntimeException("can't get retry times by "+nodeId);
+        }
+        SearchHit[] hits = searchHits.getHits();
+        if (CollectionUtils.isEmpty(hits)) {
+            throw new RuntimeException("can't get retry times by "+nodeId);
+        }
+
+        for (SearchHit hit : hits) {
+            try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
+                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                MLReloadModel mlReloadModel = MLReloadModel.parse(parser);
+
+                return  mlReloadModel.getRetryTimes();
+            } catch (Exception e) {
+                log.error("node id:{} failed to parse, the reason is: {}", nodeId, e);
+                throw new RuntimeException(e);
+            }
+        }
+
+        throw new RuntimeException("can't get retry times by "+nodeId);
+    }
+
+    @VisibleForTesting
+    boolean isExistedIndex(String indexName) {
+//        CreateIndex indexRequest =new IndexRequest(indexName);
+//        IndexResponse response= client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+
+        return false;
+    }
+
+    @VisibleForTesting
+    void saveLatestReTryTimes(String nodeId,Integer reTryTimes){
+        if(isExistedIndex(ML_MODEL_RELOAD_INDEX)){
+            //update data under the index
+        }else{
+            //create index and store data
         }
     }
 }

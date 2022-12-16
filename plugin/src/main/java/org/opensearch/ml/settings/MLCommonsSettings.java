@@ -55,8 +55,4 @@ public final class MLCommonsSettings {
 
     public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE = Setting
         .boolSetting("plugins.ml_commons.model.autoreload.enable", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
-    public static final Setting<Integer> ML_COMMONS_MODEL_AUTO_RELOAD_MAX_RETRY = Setting
-        .intSetting("plugins.ml_commons.model.autoreload.max.retry", 3, 0, 3, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
 }
