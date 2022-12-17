@@ -6,16 +6,35 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX_MAPPING;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.MLReloadModel.MODEL_LOAD_RETRY_TIMES_FIELD;
+import static org.opensearch.ml.common.MLReloadModel.NODE_ID_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import lombok.extern.log4j.Log4j2;
 
+import org.opensearch.action.admin.indices.create.CreateIndexAction;
+import org.opensearch.action.admin.indices.create.CreateIndexRequest;
+import org.opensearch.action.admin.indices.create.CreateIndexResponse;
+import org.opensearch.action.admin.indices.exists.indices.IndicesExistsAction;
+import org.opensearch.action.admin.indices.exists.indices.IndicesExistsRequest;
+import org.opensearch.action.admin.indices.exists.indices.IndicesExistsResponse;
+import org.opensearch.action.index.IndexAction;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.WriteRequest;
+import org.opensearch.action.update.UpdateAction;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -41,6 +60,7 @@ import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLNodeUtils;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -195,8 +215,8 @@ public class MLModelAndNodeManager {
     @VisibleForTesting
     Integer getReTryTimes(String nodeId) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.fetchSource(null, new String[] { MLReloadModel.MODEL_LOAD_RETRY_TIMES_FIELD });
-        QueryBuilder queryBuilder = new TermQueryBuilder(MLReloadModel.NODE_ID_FIELD, nodeId);
+        searchSourceBuilder.fetchSource(null, new String[] { MODEL_LOAD_RETRY_TIMES_FIELD });
+        QueryBuilder queryBuilder = new TermQueryBuilder(NODE_ID_FIELD, nodeId);
         searchSourceBuilder.query(queryBuilder);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
         SearchResponse response = client.execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet(5000);
@@ -230,18 +250,57 @@ public class MLModelAndNodeManager {
 
     @VisibleForTesting
     boolean isExistedIndex(String indexName) {
-        // CreateIndex indexRequest =new IndexRequest(indexName);
-        // IndexResponse response= client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+        IndicesExistsRequest existsRequest = new IndicesExistsRequest(indexName);
+        IndicesExistsResponse exists = client.execute(IndicesExistsAction.INSTANCE, existsRequest).actionGet(5000);
 
-        return false;
+        return exists.isExists();
     }
 
     @VisibleForTesting
     void saveLatestReTryTimes(String nodeId, Integer reTryTimes) {
+        Map<String, Object> content = new HashMap<>();
+        content.put(NODE_ID_FIELD, nodeId);
+        content.put(MODEL_LOAD_RETRY_TIMES_FIELD, reTryTimes);
+
         if (isExistedIndex(ML_MODEL_RELOAD_INDEX)) {
             // update data under the index
+            UpdateRequest updateRequest = new UpdateRequest();
+            updateRequest.index(ML_MODEL_RELOAD_INDEX);
+            updateRequest.id(nodeId);
+            updateRequest.doc(content);
+            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            UpdateResponse updateResponse = client.execute(UpdateAction.INSTANCE, updateRequest).actionGet(5000);
+
+            if (updateResponse.status() == RestStatus.CREATED) {
+                log.debug("node id:{} update retry times successfully", nodeId);
+            } else {
+                throw new RuntimeException("can't update retry times by " + nodeId);
+            }
         } else {
             // create index and store data
+            CreateIndexRequest createIndexRequest = new CreateIndexRequest(ML_MODEL_RELOAD_INDEX);
+            createIndexRequest.mapping(ML_MODEL_RELOAD_INDEX_MAPPING);
+            CreateIndexResponse createIndexResponse = client.execute(CreateIndexAction.INSTANCE, createIndexRequest).actionGet(5000);
+
+            if (createIndexResponse.isAcknowledged()) {
+                log.debug("create index:{} with its mapping successfully", ML_MODEL_RELOAD_INDEX);
+            } else {
+                throw new RuntimeException("can't create index:" + ML_MODEL_RELOAD_INDEX + " with its mapping");
+            }
+
+            IndexRequest indexRequest = new IndexRequest(ML_MODEL_RELOAD_INDEX);
+            indexRequest.id(nodeId);
+            indexRequest.source(content);
+            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            IndexResponse indexResponse = client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+
+            if (indexResponse.status() == RestStatus.CREATED) {
+                log.debug("node id:{} insert retry times successfully", nodeId);
+            } else {
+                throw new RuntimeException("can't insert retry times by " + nodeId);
+            }
         }
     }
 }

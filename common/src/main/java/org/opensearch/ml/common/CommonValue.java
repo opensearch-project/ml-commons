@@ -49,9 +49,6 @@ public class CommonValue {
         + "},\n"
         + "    \"properties\": {\n"
         + "      \""
-        + MLReloadModel.MODEL_ID_FIELD
-        + "\" : {\"type\": \"keyword\"},\n"
-        + "      \""
         + MLReloadModel.NODE_ID_FIELD
         + "\" : {\"type\": \"keyword\"},\n"
         + "      \""
