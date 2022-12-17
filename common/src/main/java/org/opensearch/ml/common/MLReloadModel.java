@@ -19,12 +19,8 @@ import org.opensearch.common.xcontent.XContentParser;
  */
 @Getter
 public class MLReloadModel implements ToXContentObject {
-	public static final String MODEL_ID_FIELD = "model_id";
 	public static final String NODE_ID_FIELD = "node_id";
 	public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
-
-	@Setter
-	private String modelId;
 
 	@Setter
 	private String nodeId;
@@ -33,23 +29,19 @@ public class MLReloadModel implements ToXContentObject {
 	private Integer retryTimes;
 
 	@Builder(toBuilder = true)
-	public MLReloadModel(String modelId,
-			String nodeId, Integer retryTimes) {
-		this.modelId = modelId;
+	public MLReloadModel(String nodeId, Integer retryTimes) {
 		this.nodeId = nodeId;
 		this.retryTimes = retryTimes;
 	}
 
 	public MLReloadModel(StreamInput input) throws IOException {
 		if (input.available() > 0) {
-			modelId = input.readOptionalString();
 			nodeId = input.readOptionalString();
 			retryTimes = input.readOptionalInt();
 		}
 	}
 
 	public void writeTo(StreamOutput out) throws IOException {
-		out.writeOptionalString(modelId);
 		out.writeOptionalString(nodeId);
 		out.writeOptionalInt(retryTimes);
 	}
@@ -58,9 +50,6 @@ public class MLReloadModel implements ToXContentObject {
 	public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
 		builder.startObject();
 
-		if (modelId != null) {
-			builder.field(MODEL_ID_FIELD, modelId);
-		}
 		if (nodeId != null) {
 			builder.field(NODE_ID_FIELD, nodeId);
 		}
@@ -73,7 +62,6 @@ public class MLReloadModel implements ToXContentObject {
 	}
 
 	public static MLReloadModel parse(XContentParser parser) throws IOException {
-		String modelId = null;
 		String nodeId = null;
 		Integer retryTimes = null;
 
@@ -83,9 +71,6 @@ public class MLReloadModel implements ToXContentObject {
 			parser.nextToken();
 
 			switch (fieldName) {
-				case MODEL_ID_FIELD:
-					modelId = parser.text();
-					break;
 				case NODE_ID_FIELD:
 					nodeId = parser.text();
 					break;
@@ -99,7 +84,6 @@ public class MLReloadModel implements ToXContentObject {
 		}
 
 		return MLReloadModel.builder()
-				.modelId(modelId)
 				.nodeId(nodeId)
 				.retryTimes(retryTimes)
 				.build();
