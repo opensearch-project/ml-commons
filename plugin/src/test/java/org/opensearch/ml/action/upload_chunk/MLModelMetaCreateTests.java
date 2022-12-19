@@ -134,7 +134,17 @@ public class MLModelMetaCreateTests extends OpenSearchTestCase {
             .functionName(FunctionName.BATCH_RCF)
             .modelContentHashValue("14555")
             .modelContentSizeInBytes(1000L)
-            .modelConfig(new TextEmbeddingModelConfig("CUSTOM", 123, FrameworkType.SENTENCE_TRANSFORMERS, "all config"))
+            .modelConfig(
+                new TextEmbeddingModelConfig(
+                    "CUSTOM",
+                    123,
+                    FrameworkType.SENTENCE_TRANSFORMERS,
+                    "all config",
+                    TextEmbeddingModelConfig.PoolingMethod.MEAN,
+                    true,
+                    512
+                )
+            )
             .totalChunks(2)
             .build();
         return input;

@@ -21,7 +21,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -42,7 +41,6 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -180,23 +178,32 @@ public class TextEmbeddingModel implements Predictable {
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
                         log.debug("load model {} on device {}: {}", modelId, i, devices[i]);
-                        Map<String, Object> arguments = new HashMap<>();
                         Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
                                 .setTypes(Input.class, Output.class)
                                 .optApplication(Application.UNDEFINED)
-                                .optArguments(arguments)
                                 .optEngine(engine)
                                 .optDevice(devices[i])
                                 .optModelPath(modelPath);
                         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
                         TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
+                        String modelType = textEmbeddingModelConfig.getModelType();
+                        TextEmbeddingModelConfig.PoolingMethod poolingMethod = textEmbeddingModelConfig.getPoolingMethod();
+                        boolean normalizeResult = textEmbeddingModelConfig.isNormalizeResult();
+                        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
+                        if (modelMaxLength != null) {
+                            criteriaBuilder.optArgument("modelMaxLength", modelMaxLength);
+                        }
                         if (ONNX_ENGINE.equals(engine)) { //ONNX
-                            criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator());
+                            criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator(poolingMethod, normalizeResult, modelType));
                         } else { // pytorch
                             if (transformersType == SENTENCE_TRANSFORMERS) {
                                 criteriaBuilder.optTranslator(new SentenceTransformerTextEmbeddingTranslator());
                             } else {
-                                criteriaBuilder.optTranslatorFactory(new HuggingfaceTextEmbeddingTranslatorFactory());
+                                boolean neuron = false;
+                                if (transformersType.name().endsWith("_NEURON")) {
+                                    neuron = true;
+                                }
+                                criteriaBuilder.optTranslatorFactory(new HuggingfaceTextEmbeddingTranslatorFactory(poolingMethod, normalizeResult, modelType, neuron));
                             }
                         }
                         Criteria<Input, Output> criteria = criteriaBuilder.build();
@@ -206,7 +213,15 @@ public class TextEmbeddingModel implements Predictable {
                         modelList.add(model);
 
                         Input input = new Input();
-                        input.add("warm up sentence");
+                        if (modelMaxLength != null) {
+                            StringBuilder builder = new StringBuilder();
+                            for (int j=0;j<modelMaxLength;j++) {
+                                builder.append("sentence ");
+                            }
+                            input.add(builder.toString());
+                        } else {
+                            input.add("warm up sentence");
+                        }
                         // First request takes longer time. Predict once to warm up model.
                         predictor.predict(input);
                     }

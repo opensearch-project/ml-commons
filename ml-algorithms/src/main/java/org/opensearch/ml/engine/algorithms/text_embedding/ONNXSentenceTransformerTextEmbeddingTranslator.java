@@ -15,6 +15,7 @@ import ai.djl.ndarray.NDManager;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.ServingTranslator;
 import ai.djl.translate.TranslatorContext;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -30,6 +31,15 @@ import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingMo
 public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTranslator {
     private static final int[] AXIS = {0};
     private HuggingFaceTokenizer tokenizer;
+    private TextEmbeddingModelConfig.PoolingMethod poolingMethod;
+    private boolean normalizeResult;
+    private String modelType;
+
+    public ONNXSentenceTransformerTextEmbeddingTranslator(TextEmbeddingModelConfig.PoolingMethod poolingMethod, boolean normalizeResult, String modelType) {
+        this.poolingMethod = poolingMethod;
+        this.normalizeResult = normalizeResult;
+        this.modelType = modelType;
+    }
 
     @Override
     public Batchifier getBatchifier() {
@@ -52,23 +62,53 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         ctx.setAttachment("encoding", encode);
         long[] indices = encode.getIds();
         long[] attentionMask = encode.getAttentionMask();
-        long[] tokenTypeIds = encode.getTypeIds();
 
-        NDArray indicesArray = manager.create(indices);
+        NDArray indicesArray = manager.create(indices).expandDims(0);
         indicesArray.setName("input_ids");
-        NDArray attentionMaskArray = manager.create(attentionMask);
+        NDArray attentionMaskArray = manager.create(attentionMask).expandDims(0);
         attentionMaskArray.setName("attention_mask");
-        NDArray tokenTypeIdsArray = manager.create(tokenTypeIds);
-        tokenTypeIdsArray.setName("token_type_ids");
-        ndList.add(indicesArray.expandDims(0));
-        ndList.add(tokenTypeIdsArray.expandDims(0));
-        ndList.add(attentionMaskArray.expandDims(0));
+        ndList.add(indicesArray);
+        ndList.add(attentionMaskArray);
+        if ("bert".equalsIgnoreCase(modelType) || "albert".equalsIgnoreCase(modelType)) {
+            long[] tokenTypeIds = encode.getTypeIds();
+            NDArray tokenTypeIdsArray = manager.create(tokenTypeIds).expandDims(0);
+            tokenTypeIdsArray.setName("token_type_ids");
+            ndList.add(tokenTypeIdsArray);
+        }
         return ndList;
     }
 
     /** {@inheritDoc} */
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
+        NDArray embeddings = null;
+        switch (this.poolingMethod) {
+            case MEAN:
+                embeddings = meanPooling(ctx, list);
+                break;
+            case CLS:
+                embeddings = list.get(0).get(0).get(0);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported pooling method");
+        }
+
+        if (normalizeResult) {
+            embeddings = embeddings.normalize(2, 0);
+        }
+
+        Number[] data = embeddings.toArray();
+        List<ModelTensor> outputs = new ArrayList<>();
+        long[] shape = embeddings.getShape().getShape();
+        outputs.add(new ModelTensor(SENTENCE_EMBEDDING, data, shape, MLResultDataType.FLOAT32, null));
+
+        Output output = new Output();
+        ModelTensors modelTensorOutput = new ModelTensors(outputs);
+        output.add(modelTensorOutput.toBytes());
+        return output;
+    }
+
+    private static NDArray meanPooling(TranslatorContext ctx, NDList list) {
         NDArray embeddings = list.get(0);
         int shapeLength = embeddings.getShape().getShape().length;
         if (shapeLength == 3) {
@@ -84,18 +124,9 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         NDArray clamp = inputAttentionMaskSum.clip(1e-9, 1e12);
         NDArray prod = embeddings.mul(inputAttentionMask);
         NDArray sum = prod.sum(AXIS);
-        embeddings = sum.div(clamp).normalize(2, 0);
-
-        List<ModelTensor> outputs = new ArrayList<>();
-        Number[] data = embeddings.toArray();
-        outputs.add(new ModelTensor(SENTENCE_EMBEDDING, data, shape, MLResultDataType.FLOAT32, null));
-
-        Output output = new Output();
-        ModelTensors modelTensorOutput = new ModelTensors(outputs);
-        output.add(modelTensorOutput.toBytes());
-        return output;
+        embeddings = sum.div(clamp);
+        return embeddings;
     }
-
 
     @Override
     public void setArguments(Map<String, ?> arguments) {
