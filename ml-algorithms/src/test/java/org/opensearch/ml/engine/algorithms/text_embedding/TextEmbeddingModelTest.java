@@ -159,43 +159,57 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void initModel_predict_TorchScript_Huggingface() throws URISyntaxException {
-        Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_torchscript_huggingface.zip").toURI()));
-        params.put(ML_ENGINE, mlEngine);
-        Path modelCachePath = mlEngine.getModelCachePath(model.getModelId(), model.getName(), model.getVersion());
-        File file = new File(modelCachePath.toUri());
-        file.mkdirs();
-        TextEmbeddingModelConfig hugginfaceModelConfig = modelConfig.toBuilder()
-                .frameworkType(HUGGINGFACE_TRANSFORMERS).build();
-        MLModel mlModel = model.toBuilder().modelFormat(MLModelFormat.TORCH_SCRIPT).modelConfig(hugginfaceModelConfig).build();
-        textEmbeddingModel.initModel(mlModel, params);
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
-        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
-        assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
-            ModelTensors tensors = mlModelOutputs.get(i);
-            int position = findSentenceEmbeddingPosition(tensors);
-            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
-            assertEquals(1, mlModelTensors.size());
-            assertEquals(dimension, mlModelTensors.get(position).getData().length);
-        }
-        textEmbeddingModel.close();
+        String modelFile = "all-MiniLM-L6-v2_torchscript_huggingface.zip";
+        String modelType = "bert";
+        TextEmbeddingModelConfig.PoolingMethod poolingMethod = TextEmbeddingModelConfig.PoolingMethod.MEAN;
+        boolean normalize = true;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMethod, normalize, modelMaxLength, modelFormat, dimension);
     }
 
     @Test
-    public void initModel_predict_ONNX() throws URISyntaxException {
+    public void initModel_predict_ONNX_bert() throws URISyntaxException {
+        String modelFile = "all-MiniLM-L6-v2_onnx.zip";
+        String modelType = "bert";
+        TextEmbeddingModelConfig.PoolingMethod poolingMethod = TextEmbeddingModelConfig.PoolingMethod.MEAN;
+        boolean normalize = true;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.ONNX;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMethod, normalize, modelMaxLength, modelFormat, dimension);
+    }
+
+    @Test
+    public void initModel_predict_ONNX_albert() throws URISyntaxException {
+        String modelFile = "paraphrase-albert-small-v2_onnx.zip";
+        String modelType = "albert";
+        TextEmbeddingModelConfig.PoolingMethod poolingMethod = TextEmbeddingModelConfig.PoolingMethod.MEAN;
+        boolean normalize = false;
+        int modelMaxLength = 512;
+        MLModelFormat modelFormat = MLModelFormat.ONNX;
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMethod, normalize, modelMaxLength, modelFormat, 768);
+    }
+
+    private void initModel_predict_HuggingfaceModel(String modelFile, String modelType, TextEmbeddingModelConfig.PoolingMethod poolingMethod,
+                                        boolean normalizeResult, Integer modelMaxLength,
+                                   MLModelFormat modelFormat, int dimension) throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource(modelFile).toURI()));
         params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig onnxModelConfig = modelConfig.toBuilder()
-                .frameworkType(HUGGINGFACE_TRANSFORMERS).build();
-        MLModel mlModel = model.toBuilder().modelFormat(MLModelFormat.ONNX).modelConfig(onnxModelConfig).build();
+                .frameworkType(HUGGINGFACE_TRANSFORMERS)
+                .modelType(modelType)
+                .poolingMethod(poolingMethod)
+                .normalizeResult(normalizeResult)
+                .modelMaxLength(modelMaxLength)
+                .build();
+        MLModel mlModel = model.toBuilder().modelFormat(modelFormat).modelConfig(onnxModelConfig).build();
         textEmbeddingModel.initModel(mlModel, params);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        System.out.println(Arrays.toString(mlModelOutputs.get(0).getMlModelTensors().get(0).getData()));
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
@@ -205,6 +219,7 @@ public class TextEmbeddingModelTest {
             assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
         textEmbeddingModel.close();
+
     }
 
     @Test
@@ -314,6 +329,11 @@ public class TextEmbeddingModelTest {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("model not loaded");
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
+    }
+
+    @Test
+    public void testA() {
+        System.out.println("a1 ".repeat(10));
     }
 
 
