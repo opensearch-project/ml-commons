@@ -37,11 +37,11 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
     public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
     public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
 
-    private Integer embeddingDimension;
-    private FrameworkType frameworkType;
+    private final Integer embeddingDimension;
+    private final FrameworkType frameworkType;
     private final PoolingMethod poolingMethod;
-    private boolean normalizeResult;
-    private Integer modelMaxLength;
+    private final boolean normalizeResult;
+    private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
     public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig,
@@ -69,7 +69,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
-        PoolingMethod poolingMethod = null;
+        PoolingMethod poolingMethod = PoolingMethod.MEAN;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
 
@@ -92,7 +92,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
                     allConfig = parser.text();
                     break;
                 case POOLING_METHOD_FIELD:
-                    poolingMethod = PoolingMethod.from(parser.text().toUpperCase());
+                    poolingMethod = PoolingMethod.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case NORMALIZE_RESULT_FIELD:
                     normalizeResult = parser.booleanValue();
@@ -164,7 +164,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
             try {
                 return PoolingMethod.valueOf(value);
             } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong framework type");
+                throw new IllegalArgumentException("Wrong pooling method");
             }
         }
     }

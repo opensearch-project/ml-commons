@@ -193,6 +193,7 @@ public class TextEmbeddingModel implements Predictable {
                         if (modelMaxLength != null) {
                             criteriaBuilder.optArgument("modelMaxLength", modelMaxLength);
                         }
+                        //TODO: refactor this when we support more engine type
                         if (ONNX_ENGINE.equals(engine)) { //ONNX
                             criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator(poolingMethod, normalizeResult, modelType));
                         } else { // pytorch
@@ -214,11 +215,7 @@ public class TextEmbeddingModel implements Predictable {
 
                         Input input = new Input();
                         if (modelMaxLength != null) {
-                            StringBuilder builder = new StringBuilder();
-                            for (int j=0;j<modelMaxLength;j++) {
-                                builder.append("sentence ");
-                            }
-                            input.add(builder.toString());
+                            input.add("sentence ".repeat(modelMaxLength));
                         } else {
                             input.add("warm up sentence");
                         }

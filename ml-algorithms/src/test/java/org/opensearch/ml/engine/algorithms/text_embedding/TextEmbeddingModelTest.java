@@ -331,6 +331,11 @@ public class TextEmbeddingModelTest {
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
     }
 
+    @Test
+    public void testA() {
+        System.out.println("a1 ".repeat(10));
+    }
+
 
     @After
     public void tearDown() {
