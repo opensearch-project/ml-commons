@@ -5,3 +5,4 @@ client/build/
 common/build/
 ml-algorithms/build/
 plugin/build/
+.DS_Store

@@ -261,7 +261,15 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .version("1.0")
             .modelName("Test Model")
             .modelConfig(
-                new TextEmbeddingModelConfig("CUSTOM", 123, TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS, "all config")
+                new TextEmbeddingModelConfig(
+                    "CUSTOM",
+                    123,
+                    TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+                    "all config",
+                    TextEmbeddingModelConfig.PoolingMethod.MEAN,
+                    true,
+                    512
+                )
             )
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .url("http://test_url")
