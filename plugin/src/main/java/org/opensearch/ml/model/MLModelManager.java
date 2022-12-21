@@ -103,8 +103,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.io.Files;
 
 /**
- * Manager class for ML models. It contains ML model related operations like upload, load model
- * etc.
+ * Manager class for ML models. It contains ML model related operations like upload, load model etc.
  */
 @Log4j2
 public class MLModelManager {
@@ -112,9 +111,10 @@ public class MLModelManager {
     public static final int TIMEOUT_IN_MILLIS = 5000;
 
     private final Client client;
-    private final ThreadPool threadPool;
-    private final NamedXContentRegistry xContentRegistry;
-    private final ModelHelper modelHelper;
+    private final ClusterService clusterService;
+    private ThreadPool threadPool;
+    private NamedXContentRegistry xContentRegistry;
+    private ModelHelper modelHelper;
 
     private final MLModelCacheHelper modelCacheHelper;
     private final MLStats mlStats;
@@ -144,6 +144,7 @@ public class MLModelManager {
         this.threadPool = threadPool;
         this.xContentRegistry = xContentRegistry;
         this.modelHelper = modelHelper;
+        this.clusterService = clusterService;
         this.modelCacheHelper = modelCacheHelper;
         this.mlStats = mlStats;
         this.mlCircuitBreakerService = mlCircuitBreakerService;
@@ -286,8 +287,7 @@ public class MLModelManager {
 
     /**
      * Check if exceed running task limit and if circuit breaker is open.
-     *
-     * @param mlTask           ML task
+     * @param mlTask ML task
      * @param runningTaskLimit limit
      * @return error message if limit exceeds; otherwise return null
      */
@@ -363,8 +363,8 @@ public class MLModelManager {
     }
 
     /**
-     * Read model chunks from model index. Concat chunks into a whole model file, then load into
-     * memory.
+     * Read model chunks from model index. Concat chunks into a whole model file, then load
+     * into memory.
      *
      * @param modelId          model id
      * @param modelContentHash model content hash value
@@ -440,7 +440,7 @@ public class MLModelManager {
     }
 
     /**
-     * Get model from model index with includes/excludes filter.
+     * Get model from model index with includes/exludes filter.
      *
      * @param modelId  model id
      * @param includes fields included
@@ -449,8 +449,8 @@ public class MLModelManager {
      */
     public void getModel(String modelId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
         GetRequest getRequest = new GetRequest();
-        FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
-        getRequest.index(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchContext);
+        FetchSourceContext featchContext = new FetchSourceContext(true, includes, excludes);
+        getRequest.index(ML_MODEL_INDEX).id(modelId).fetchSourceContext(featchContext);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
@@ -465,7 +465,7 @@ public class MLModelManager {
             } else {
                 listener.onFailure(new MLResourceNotFoundException("Fail to find model"));
             }
-        }, listener::onFailure));
+        }, e -> { listener.onFailure(e); }));
     }
 
     private void retrieveModelChunks(MLModel mlModelMeta, ActionListener<File> listener) throws InterruptedException {
@@ -478,7 +478,7 @@ public class MLModelManager {
         Semaphore semaphore = new Semaphore(1);
         AtomicBoolean stopNow = new AtomicBoolean(false);
         String modelZip = mlEngine.getLoadModelZipPath(modelId, modelName);
-        ConcurrentLinkedDeque<File> chunkFiles = new ConcurrentLinkedDeque<>();
+        ConcurrentLinkedDeque<File> chunkFiles = new ConcurrentLinkedDeque();
         AtomicInteger retrievedChunks = new AtomicInteger(0);
         for (int i = 0; i < totalChunks; i++) {
             semaphore.tryAcquire(10, TimeUnit.SECONDS);
@@ -522,7 +522,7 @@ public class MLModelManager {
             } else {
                 log.error("Failed to update ML model {}, status: {}", modelId, response.status());
             }
-        }, e -> log.error("Failed to update ML model: " + modelId, e)));
+        }, e -> { log.error("Failed to update ML model: " + modelId, e); }));
     }
 
     /**
@@ -541,7 +541,7 @@ public class MLModelManager {
         updateRequest.doc(updatedFields);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
+            client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
         } catch (Exception e) {
             listener.onFailure(e);
         }
@@ -549,8 +549,7 @@ public class MLModelManager {
 
     /**
      * Get model chunk id
-     *
-     * @param modelId     model id
+     * @param modelId model id
      * @param chunkNumber model chunk number
      * @return model chunk id
      */
@@ -638,7 +637,7 @@ public class MLModelManager {
      * Get worker nodes of specif model.
      *
      * @param modelId model id
-     * @return array of worker node ids
+     * @return list of worker node ids
      */
     public String[] getWorkerNodes(String modelId) {
         return modelCacheHelper.getWorkerNodes(modelId);
