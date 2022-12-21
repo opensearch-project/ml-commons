@@ -284,7 +284,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlCircuitBreakerService,
             mlIndicesHandler,
             mlTaskManager,
-            mlModelManager,
             modelCacheHelper,
             mlEngine
         );

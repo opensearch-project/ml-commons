@@ -43,18 +43,17 @@ public class CommonValue {
         + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
         + "        }\n"
         + "      }\n";
+    public static final String NODE_ID_FIELD = "node_id";
+    public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
+
     public static final String ML_MODEL_RELOAD_INDEX_MAPPING = "{\n"
-        + "    \"_meta\": {\"schema_version\": "
-        + ML_MODEL_RELOAD_INDEX_SCHEMA_VERSION
-        + "},\n"
         + "    \"properties\": {\n"
         + "      \""
-        + MLReloadModel.NODE_ID_FIELD
+        + NODE_ID_FIELD
         + "\" : {\"type\": \"keyword\"},\n"
         + "      \""
-        + MLReloadModel.MODEL_LOAD_RETRY_TIMES_FIELD
-        + "\" : {\"type\": \"keyword\"},\n"
-        + "      \""
+        + MODEL_LOAD_RETRY_TIMES_FIELD
+        + "\" : {\"type\": \"long\"}\n"
         + "    }\n"
         + "}";
     public static final String ML_MODEL_INDEX_MAPPING = "{\n"

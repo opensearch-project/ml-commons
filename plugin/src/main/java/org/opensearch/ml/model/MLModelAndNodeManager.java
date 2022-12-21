@@ -9,8 +9,8 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX_MAPPING;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.MLReloadModel.MODEL_LOAD_RETRY_TIMES_FIELD;
-import static org.opensearch.ml.common.MLReloadModel.NODE_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
+import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -45,7 +45,6 @@ import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.MLReloadModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -84,9 +83,7 @@ public class MLModelAndNodeManager {
     private final MLCircuitBreakerService mlCircuitBreakerService;
     private final MLIndicesHandler mlIndicesHandler;
     private final MLTaskManager mlTaskManager;
-    private final MLModelManager mlModelManager;
     private final MLEngine mlEngine;
-
     private volatile Boolean enableAutoReLoadModel;
 
     public MLModelAndNodeManager(
@@ -101,7 +98,6 @@ public class MLModelAndNodeManager {
         MLCircuitBreakerService mlCircuitBreakerService,
         MLIndicesHandler mlIndicesHandler,
         MLTaskManager mlTaskManager,
-        MLModelManager mlModelManager,
         MLModelCacheHelper modelCacheHelper,
         MLEngine mlEngine
     ) {
@@ -116,7 +112,6 @@ public class MLModelAndNodeManager {
         this.mlCircuitBreakerService = mlCircuitBreakerService;
         this.mlIndicesHandler = mlIndicesHandler;
         this.mlTaskManager = mlTaskManager;
-        this.mlModelManager = mlModelManager;
         this.mlEngine = mlEngine;
 
         enableAutoReLoadModel = ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.get(settings);
@@ -215,7 +210,7 @@ public class MLModelAndNodeManager {
     @VisibleForTesting
     Integer getReTryTimes(String nodeId) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.fetchSource(null, new String[] { MODEL_LOAD_RETRY_TIMES_FIELD });
+        searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
         QueryBuilder queryBuilder = new TermQueryBuilder(NODE_ID_FIELD, nodeId);
         searchSourceBuilder.query(queryBuilder);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
@@ -234,15 +229,8 @@ public class MLModelAndNodeManager {
         }
 
         for (SearchHit hit : hits) {
-            try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
-                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                MLReloadModel mlReloadModel = MLReloadModel.parse(parser);
-
-                return mlReloadModel.getRetryTimes();
-            } catch (Exception e) {
-                log.error("node id:{} failed to parse, the reason is: {}", nodeId, e);
-                throw new RuntimeException(e);
-            }
+            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+            return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
         }
 
         throw new RuntimeException("can't get retry times by " + nodeId);
@@ -272,7 +260,7 @@ public class MLModelAndNodeManager {
 
             UpdateResponse updateResponse = client.execute(UpdateAction.INSTANCE, updateRequest).actionGet(5000);
 
-            if (updateResponse.status() == RestStatus.CREATED) {
+            if (updateResponse.status() == RestStatus.OK) {
                 log.debug("node id:{} update retry times successfully", nodeId);
             } else {
                 throw new RuntimeException("can't update retry times by " + nodeId);
