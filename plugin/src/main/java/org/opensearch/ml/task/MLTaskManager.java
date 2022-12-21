@@ -81,18 +81,18 @@ public class MLTaskManager {
             runningTaskCount.set(0);
         }
         log.debug("Task id: {}, current running task {}: {}", mlTask.getTaskId(), mlTask.getTaskType(), runningTaskCount.get());
-        if (runningTaskCount.get() >= limit) {
-            String error = "exceed max running task limit";
-            log.info(error + " for task " + mlTask.getTaskId());
-            return error;
-        }
         if (contains(mlTask.getTaskId())) {
             getMLTask(mlTask.getTaskId()).setState(MLTaskState.RUNNING);
         } else {
+            if (runningTaskCount.get() >= limit) {
+                String error = "exceed max running task limit";
+                log.info(error + " for task " + mlTask.getTaskId());
+                return error;
+            }
             mlTask.setState(MLTaskState.RUNNING);
             add(mlTask);
+            runningTaskCount.incrementAndGet();
         }
-        runningTaskCount.incrementAndGet();
         return null;
     }
 
@@ -290,7 +290,7 @@ public class MLTaskManager {
     ) {
         MLTaskCache taskCache = taskCaches.get(taskId);
         if (removeFromCache) {
-            taskCaches.remove(taskId);
+            remove(taskId);
         }
         if (taskCache == null) {
             listener.onFailure(new MLResourceNotFoundException("Can't find task"));
@@ -409,7 +409,7 @@ public class MLTaskManager {
         if (staleTasks.size() > 0) {
             log.debug("remove stale load tasks : {}", Arrays.toString(staleTasks.toArray(new String[0])));
             for (String taskId : staleTasks) {
-                taskCaches.remove(taskId);
+                remove(taskId);
             }
         }
     }
