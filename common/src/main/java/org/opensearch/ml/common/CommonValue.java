@@ -53,7 +53,7 @@ public class CommonValue {
         + "\" : {\"type\": \"keyword\"},\n"
         + "      \""
         + MODEL_LOAD_RETRY_TIMES_FIELD
-        + "\" : {\"type\": \"long\"}\n"
+        + "\" : {\"type\": \"integer\"}\n"
         + "    }\n"
         + "}";
     public static final String ML_MODEL_INDEX_MAPPING = "{\n"

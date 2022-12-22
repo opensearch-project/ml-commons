@@ -12,9 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
 import lombok.extern.log4j.Log4j2;
@@ -101,7 +99,7 @@ import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerI
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
-import org.opensearch.ml.model.MLModelAndNodeManager;
+import org.opensearch.ml.model.MLModelAutoReLoader;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
@@ -157,6 +155,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
+    public static final String RELOAD_MODEL_THREAD_POOL = "opensearch_ml_reload_model";
     public static final String UPLOAD_THREAD_POOL = "opensearch_ml_upload";
     public static final String LOAD_THREAD_POOL = "opensearch_ml_load";
     public static final String ML_BASE_URI = "/_plugins/_ml";
@@ -165,7 +164,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLModelCacheHelper modelCacheHelper;
     private MLTaskManager mlTaskManager;
     private MLModelManager mlModelManager;
-    private MLModelAndNodeManager mlModelAndNodeManager;
+    private MLModelAutoReLoader mlModelAutoReLoader;
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
     private MLTrainingTaskRunner mlTrainingTaskRunner;
@@ -272,21 +271,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             modelCacheHelper,
             mlEngine
         );
-        mlModelAndNodeManager = new MLModelAndNodeManager(
-            clusterService,
-            client,
-            threadPool,
-            xContentRegistry,
-            modelHelper,
-            nodeHelper,
-            settings,
-            mlStats,
-            mlCircuitBreakerService,
-            mlIndicesHandler,
-            mlTaskManager,
-            modelCacheHelper,
-            mlEngine
-        );
+        mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, client, threadPool, xContentRegistry, nodeHelper, settings);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
         mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
@@ -367,13 +352,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             threadPool,
             nodeHelper
         );
-
-        try {
-            CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(() -> mlModelAndNodeManager.autoReLoadModel());
-            completableFuture.get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Can't auto reload model, the reason is:", e);
-        }
 
         return ImmutableList
             .of(
@@ -498,6 +476,14 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             OpenSearchExecutors.allocatedProcessors(settings) * 2,
             10000,
             ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
+            false
+        );
+        FixedExecutorBuilder reloadModelThreadPool = new FixedExecutorBuilder(
+            settings,
+            RELOAD_MODEL_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 2,
+            10000,
+            ML_THREAD_POOL_PREFIX + RELOAD_MODEL_THREAD_POOL,
             false
         );
 
