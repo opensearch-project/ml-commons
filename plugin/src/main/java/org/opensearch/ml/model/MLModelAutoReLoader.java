@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -40,14 +41,13 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
-import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.rest.RestStatus;
@@ -121,7 +121,7 @@ public class MLModelAutoReLoader {
                 return;
             }
 
-            // According to the node id to query the number of retries, if more than 2 (the maximum number of retries), we do not need to
+            // According to the node id to query the number of retries, if more than 2 (the maximum number of retries), we don't need to
             // retry,
             // that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
             Integer reTryTimes = 0;
@@ -151,6 +151,10 @@ public class MLModelAutoReLoader {
      */
     @VisibleForTesting
     void autoReLoadModelByNodeId(String nodeId) {
+        if (!isExistedIndex(ML_TASK_INDEX)) {
+            return;
+        }
+
         SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
         SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet();
 
@@ -179,7 +183,7 @@ public class MLModelAutoReLoader {
                 if (workerNode.contains(nodeId) && mlTaskType == MLTaskType.LOAD_MODEL && mlTaskState == MLTaskState.COMPLETED) {
                     autoReLoadModelByNodeAndModelId(nodeId, mlTask.getModelId());
                 }
-            } catch (Exception e) {
+            } catch (RuntimeException | IOException e) {
                 reTryTimes++;
                 // Store the latest value of the reTryTimes and node id under the index ".plugins-ml-model-reload"
                 saveLatestReTryTimes(nodeId, reTryTimes);
@@ -211,10 +215,10 @@ public class MLModelAutoReLoader {
     Integer getReTryTimes(String nodeId) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
-        QueryBuilder queryBuilder = new TermQueryBuilder(NODE_ID_FIELD, nodeId);
+        QueryBuilder queryBuilder = QueryBuilders.termQuery("_id", nodeId);
         searchSourceBuilder.query(queryBuilder);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
-        SearchResponse response = client.execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet(5000);
+        SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
 
         if (response == null) {
             throw new RuntimeException("can't get retry times by " + nodeId);
@@ -268,7 +272,7 @@ public class MLModelAutoReLoader {
         try {
             IndexResponse indexResponse = client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
 
-            if (indexResponse.status() == RestStatus.CREATED) {
+            if (indexResponse.status() == RestStatus.CREATED || indexResponse.status() == RestStatus.OK) {
                 log.debug("node id:{} insert retry times successfully", nodeId);
             } else {
                 throw new RuntimeException("can't insert retry times by " + nodeId);

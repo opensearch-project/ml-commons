@@ -46,16 +46,6 @@ public class CommonValue {
     public static final String NODE_ID_FIELD = "node_id";
     public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
 
-    public static final String ML_MODEL_RELOAD_INDEX_MAPPING = "{\n"
-        + "    \"properties\": {\n"
-        + "      \""
-        + NODE_ID_FIELD
-        + "\" : {\"type\": \"keyword\"},\n"
-        + "      \""
-        + MODEL_LOAD_RETRY_TIMES_FIELD
-        + "\" : {\"type\": \"integer\"}\n"
-        + "    }\n"
-        + "}";
     public static final String ML_MODEL_INDEX_MAPPING = "{\n"
         + "    \"_meta\": {\"schema_version\": "
         + ML_MODEL_INDEX_SCHEMA_VERSION
