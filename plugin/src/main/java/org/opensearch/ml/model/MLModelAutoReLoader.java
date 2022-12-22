@@ -69,6 +69,15 @@ public class MLModelAutoReLoader {
     private final DiscoveryNodeHelper nodeHelper;
     private volatile Boolean enableAutoReLoadModel;
 
+    /**
+     * constructor method， init all the params necessary for model auto reloading
+     * @param clusterService
+     * @param client
+     * @param threadPool
+     * @param xContentRegistry
+     * @param nodeHelper
+     * @param settings
+     */
     public MLModelAutoReLoader(
         ClusterService clusterService,
         Client client,
@@ -89,6 +98,9 @@ public class MLModelAutoReLoader {
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE, it -> enableAutoReLoadModel = it);
     }
 
+    /**
+     * the main method: model auto reloading
+     */
     public void autoReLoadModel() {
         log.debug("enableAutoReLoadModel {} ", enableAutoReLoadModel);
 
@@ -123,12 +135,16 @@ public class MLModelAutoReLoader {
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException("Can't auto reload model, the reason is:", e);
             }
-
         } catch (Exception e) {
             throw new RuntimeException("Can't auto reload model");
         }
     }
 
+    /**
+     * auto reload all the models under the node id
+     * the node must be a ml node
+     * @param nodeId node id
+     */
     @VisibleForTesting
     void autoReLoadModelByNodeId(String nodeId) {
         SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
@@ -172,9 +188,9 @@ public class MLModelAutoReLoader {
     }
 
     /**
-     *
-     * @param nodeId
-     * @param modelId
+     *  auto reload 1 model under the node id
+     * @param nodeId node id
+     * @param modelId model id
      */
     @VisibleForTesting
     void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) {
@@ -182,6 +198,11 @@ public class MLModelAutoReLoader {
         client.execute(MLLoadModelAction.INSTANCE, mlLoadModelRequest).actionGet();
     }
 
+    /**
+     * get retry times from the index ".plugins-ml-model-reload" by 1 ml node
+     * @param nodeId the filter condition to query
+     * @return retry times
+     */
     @VisibleForTesting
     Integer getReTryTimes(String nodeId) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -211,6 +232,11 @@ public class MLModelAutoReLoader {
         throw new RuntimeException("can't get retry times by " + nodeId);
     }
 
+    /**
+     * judge whether the index ".plugins-ml-model-reload" existed
+     * @param indexName index name
+     * @return true: existed. false: not existed
+     */
     @VisibleForTesting
     boolean isExistedIndex(String indexName) {
         IndicesExistsRequest existsRequest = new IndicesExistsRequest(indexName);
@@ -219,6 +245,11 @@ public class MLModelAutoReLoader {
         return exists.isExists();
     }
 
+    /**
+     * save retry times
+     * @param nodeId node id
+     * @param reTryTimes actual retry times
+     */
     @VisibleForTesting
     void saveLatestReTryTimes(String nodeId, Integer reTryTimes) {
         Map<String, Object> content = new HashMap<>();

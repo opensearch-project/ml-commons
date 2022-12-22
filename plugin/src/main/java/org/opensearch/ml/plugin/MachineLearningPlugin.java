@@ -487,7 +487,16 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             false
         );
 
-        return ImmutableList.of(generalThreadPool, uploadThreadPool, loadThreadPool, executeThreadPool, trainThreadPool, predictThreadPool);
+        return ImmutableList
+            .of(
+                generalThreadPool,
+                uploadThreadPool,
+                loadThreadPool,
+                executeThreadPool,
+                trainThreadPool,
+                predictThreadPool,
+                reloadModelThreadPool
+            );
     }
 
     @Override
