@@ -271,7 +271,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             modelCacheHelper,
             mlEngine
         );
-        mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, client, threadPool, xContentRegistry, nodeHelper, settings);
+        mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, client, threadPool, xContentRegistry, nodeHelper, settings, mlStats);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
         mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
@@ -353,6 +353,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             nodeHelper
         );
 
+        mlModelAutoReLoader.autoReLoadModel();
+
         return ImmutableList
             .of(
                 mlEngine,
@@ -361,6 +363,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlStats,
                 mlTaskManager,
                 mlModelManager,
+                mlModelAutoReLoader,
                 mlIndicesHandler,
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,

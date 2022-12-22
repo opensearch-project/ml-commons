@@ -48,6 +48,7 @@ import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchHit;
@@ -67,6 +68,7 @@ public class MLModelAutoReLoader {
     private final ThreadPool threadPool;
     private final NamedXContentRegistry xContentRegistry;
     private final DiscoveryNodeHelper nodeHelper;
+    private final MLStats mlStats;
     private volatile Boolean enableAutoReLoadModel;
 
     /**
@@ -84,13 +86,15 @@ public class MLModelAutoReLoader {
         ThreadPool threadPool,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeHelper,
-        Settings settings
+        Settings settings,
+        MLStats mlStats
     ) {
         this.clusterService = clusterService;
         this.client = client;
         this.threadPool = threadPool;
         this.xContentRegistry = xContentRegistry;
         this.nodeHelper = nodeHelper;
+        this.mlStats = mlStats;
 
         enableAutoReLoadModel = ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.get(settings);
         clusterService
