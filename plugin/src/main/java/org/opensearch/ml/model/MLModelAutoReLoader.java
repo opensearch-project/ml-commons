@@ -79,6 +79,7 @@ public class MLModelAutoReLoader {
      * @param xContentRegistry
      * @param nodeHelper
      * @param settings
+     * @param mlStats
      */
     public MLModelAutoReLoader(
         ClusterService clusterService,
