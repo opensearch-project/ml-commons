@@ -41,7 +41,7 @@ dependencies {
 }
 
 configurations.all {
-    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.7'
 }
 
 jacocoTestReport {

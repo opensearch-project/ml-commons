@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.model;
 
 import static org.hamcrest.Matchers.is;
@@ -8,10 +13,8 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_O
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
@@ -52,7 +55,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
-        this.mlStats = spy(new MLStats(stats));
+        mlStats = spy(new MLStats(stats));
 
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
 
@@ -89,13 +92,13 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertThat(retryTimes, is(1));
     }
 
-    @Ignore
-    public void testAutoReLoadModelByNodeAndModelId() {
-        String localNodeId = clusterService().localNode().getId();
-        String modelId = "modelId1";
-
-        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
-    }
+//    @Ignore
+//    public void testAutoReLoadModelByNodeAndModelId() {
+//        String localNodeId = clusterService().localNode().getId();
+//        String modelId = "modelId1";
+//
+//        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
+//    }
 
     public void testAutoReLoadModelByNodeId() {
         String localNodeId = clusterService().localNode().getId();
@@ -103,7 +106,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
     }
 
-    @Ignore
     public void testAutoReLoadModel() {
         mlModelAutoReLoader.autoReLoadModel();
     }
