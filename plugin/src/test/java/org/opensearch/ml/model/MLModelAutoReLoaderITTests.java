@@ -13,6 +13,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_O
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -92,13 +93,13 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertThat(retryTimes, is(1));
     }
 
-//    @Ignore
-//    public void testAutoReLoadModelByNodeAndModelId() {
-//        String localNodeId = clusterService().localNode().getId();
-//        String modelId = "modelId1";
-//
-//        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
-//    }
+    // @Ignore
+    // public void testAutoReLoadModelByNodeAndModelId() {
+    // String localNodeId = clusterService().localNode().getId();
+    // String modelId = "modelId1";
+    //
+    // mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
+    // }
 
     public void testAutoReLoadModelByNodeId() {
         String localNodeId = clusterService().localNode().getId();
