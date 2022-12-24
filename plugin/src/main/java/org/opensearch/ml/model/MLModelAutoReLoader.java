@@ -188,7 +188,7 @@ public class MLModelAutoReLoader {
                 reTryTimes++;
                 // Store the latest value of the reTryTimes and node id under the index ".plugins-ml-model-reload"
                 saveLatestReTryTimes(nodeId, reTryTimes);
-                log.error("ML Task id {} failed to parse, the reason is: {}", hit.getId(), e);
+                log.error("Can't auto reload model in node id {} ,has try {} times\nThe reason is:{}", nodeId, reTryTimes, e.getMessage());
             }
         }
 
@@ -219,25 +219,29 @@ public class MLModelAutoReLoader {
         QueryBuilder queryBuilder = QueryBuilders.termQuery("_id", nodeId);
         searchSourceBuilder.query(queryBuilder);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
-        SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
 
-        if (response == null) {
-            throw new RuntimeException("can't get retry times by " + nodeId);
-        }
-        SearchHits searchHits = response.getHits();
-        if (searchHits == null) {
-            throw new RuntimeException("can't get retry times by " + nodeId);
-        }
-        SearchHit[] hits = searchHits.getHits();
-        if (CollectionUtils.isEmpty(hits)) {
-            return 0;
-        }
+        try {
+            SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
 
-        for (SearchHit hit : hits) {
-            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-            return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
-        }
+            if (response == null) {
+                throw new RuntimeException("can't get retry times by " + nodeId);
+            }
+            SearchHits searchHits = response.getHits();
+            if (searchHits == null) {
+                throw new RuntimeException("can't get retry times by " + nodeId);
+            }
+            SearchHit[] hits = searchHits.getHits();
+            if (CollectionUtils.isEmpty(hits)) {
+                return 0;
+            }
 
+            for (SearchHit hit : hits) {
+                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+            }
+        } catch (IndexNotFoundException e) {
+            throw new IndexNotFoundException("index " + ML_MODEL_RELOAD_INDEX + " not found");
+        }
         throw new RuntimeException("can't get retry times by " + nodeId);
     }
 
@@ -270,18 +274,12 @@ public class MLModelAutoReLoader {
         indexRequest.source(content);
         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        try {
-            IndexResponse indexResponse = client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+        IndexResponse indexResponse = client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
 
-            if (indexResponse.status() == RestStatus.CREATED || indexResponse.status() == RestStatus.OK) {
-                log.debug("node id:{} insert retry times successfully", nodeId);
-            } else {
-                throw new RuntimeException("can't insert retry times by " + nodeId);
-            }
-        } catch (Exception e) {
-            if (e instanceof IndexNotFoundException) {
-                throw new RuntimeException("index: " + ML_MODEL_RELOAD_INDEX + " not found", e);
-            }
+        if (indexResponse.status() == RestStatus.CREATED || indexResponse.status() == RestStatus.OK) {
+            log.debug("node id:{} insert retry times successfully", nodeId);
+        } else {
+            throw new RuntimeException("can't insert retry times by " + nodeId);
         }
     }
 }
