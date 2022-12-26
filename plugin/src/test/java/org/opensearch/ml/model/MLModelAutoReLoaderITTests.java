@@ -6,6 +6,8 @@
 package org.opensearch.ml.model;
 
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
@@ -16,16 +18,19 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
+import org.opensearch.action.ActionListener;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.WriteRequest;
@@ -53,11 +58,10 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchIntegTestCase;
-import org.opensearch.test.OpenSearchIntegTestCase.Scope;
 
-@OpenSearchIntegTestCase.ClusterScope(scope = Scope.SUITE, numDataNodes = 3)
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
 public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
-    private Instant time = Instant.now();
+    private final Instant time = Instant.now();
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -77,9 +81,15 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private DiscoveryNodeHelper nodeFilter;
     @Mock
     private MLModelManager modelManager;
+    private MLModel modelChunk0;
+    private MLModel modelChunk1;
+    private String chunk0;
+    private String chunk1;
 
     @Before
     public void setup() throws Exception {
+        super.setUp();
+
         settings = Settings.builder().put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true).build();
         settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.getKey(), true).build();
 
@@ -91,15 +101,11 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         mlStats = spy(new MLStats(stats));
-
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
-
         mlModelAutoReLoader = spy(
             new MLModelAutoReLoader(clusterService(), client(), client().threadPool(), xContentRegistry(), nodeHelper, settings, mlStats)
         );
-
         modelId = "modelId1";
-
         localNodeId = clusterService().localNode().getId();
         modelManager = mock(MLModelManager.class);
     }
@@ -114,6 +120,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         mlModelAutoReLoader = null;
         modelId = null;
         localNodeId = null;
+        modelManager = null;
     }
 
     public void testIsExistedIndex() {
@@ -138,8 +145,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testGetReTryTimes_IndexNotFoundException() {
-        String localNodeId = clusterService().localNode().getId();
-
         exceptionRule.expect(IndexNotFoundException.class);
         mlModelAutoReLoader.getReTryTimes(localNodeId);
     }
@@ -153,7 +158,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertThat(retryTimes, is(0));
     }
 
-    public void testAutoReLoadModelByNodeAndModelId() throws IOException {
+    public void testAutoReLoadModelByNodeAndModelId() throws IOException, URISyntaxException {
         mlLoadModelRequest = mock(MLLoadModelRequest.class);
         when(mlLoadModelRequest.getModelId()).thenReturn(modelId);
         when(mlLoadModelRequest.getModelNodeIds()).thenReturn(new String[] { localNodeId });
@@ -172,15 +177,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeAndModelId_Exception() throws IOException {
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlModel(modelId, MLModelState.LOADED);
-
-        exceptionRule.expect(IllegalArgumentException.class);
-        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
-    }
-
-    public void testAutoReLoadModelByNodeId() throws IOException {
+    public void testAutoReLoadModelByNodeAndModelId_Exception() throws IOException, URISyntaxException {
         mlLoadModelRequest = mock(MLLoadModelRequest.class);
         when(mlLoadModelRequest.getModelId()).thenReturn(modelId);
         when(mlLoadModelRequest.getModelNodeIds()).thenReturn(new String[] { localNodeId });
@@ -190,6 +187,14 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         when(nodeFilter.getEligibleNodes()).thenReturn(discoveryNodes);
         when(discoveryNode.getId()).thenReturn(localNodeId);
 
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        initDataOfMlModel(modelId, MLModelState.LOADED);
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
+    }
+
+    public void testAutoReLoadModelByNodeId() throws IOException, URISyntaxException {
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         initDataOfMlModel(modelId, MLModelState.LOADED);
 
@@ -220,33 +225,35 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId_FailToAutoReloadModel() throws IOException {
+    public void testAutoReLoadModelByNodeId_FailToAutoReloadModel() throws IOException, URISyntaxException {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
 
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.RUNNING);
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.UPLOAD_MODEL, MLTaskState.COMPLETED);
+        initDataOfMlModel(modelId, MLModelState.UPLOADED);
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
 
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
+        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
 
         Integer retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
         assertThat(retryTimes, is(0));
 
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        initDataOfMlModel(modelId, MLModelState.LOADED);
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
 
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
+        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
 
         retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
         assertThat(retryTimes, is(1));
     }
 
-    public void testAutoReLoadModel() throws IOException {
+    public void testAutoReLoadModel() throws IOException, URISyntaxException {
         mlLoadModelRequest = mock(MLLoadModelRequest.class);
         when(mlLoadModelRequest.getModelId()).thenReturn(modelId);
         when(mlLoadModelRequest.getModelNodeIds()).thenReturn(new String[] { localNodeId });
@@ -272,7 +279,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             .taskId("taskId1")
             .modelId(modelId)
             .taskType(mlTaskType)
-            .functionName(FunctionName.TEXT_EMBEDDING)
             .state(mlTaskState)
             .workerNode(nodeId)
             .progress(0.0f)
@@ -287,10 +293,10 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         indexRequest.source(mlTask.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+        client().execute(IndexAction.INSTANCE, indexRequest).actionGet();
     }
 
-    private void initDataOfMlModel(String modelId, MLModelState modelState) throws IOException {
+    private void initDataOfMlModel(String modelId, MLModelState modelState) throws IOException, URISyntaxException {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
@@ -298,7 +304,10 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             .embeddingDimension(384)
             .build();
 
-        MLModel mlModelMeta = MLModel
+        chunk0 = getClass().getResource("chunk/0").toURI().getPath();
+        chunk1 = getClass().getResource("chunk/1").toURI().getPath();
+
+        MLModel mlModel = MLModel
             .builder()
             .name("model_name")
             .algorithm(FunctionName.TEXT_EMBEDDING)
@@ -311,12 +320,38 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             .modelContentSizeInBytes(1000L)
             .createdTime(time.minus(1, ChronoUnit.MINUTES))
             .build();
+        modelChunk0 = mlModel
+            .toBuilder()
+            .content(Base64.getEncoder().encodeToString("test chunk1".getBytes(StandardCharsets.UTF_8)))
+            .build();
+        modelChunk1 = mlModel
+            .toBuilder()
+            .content(Base64.getEncoder().encodeToString("test chunk2".getBytes(StandardCharsets.UTF_8)))
+            .build();
+
+        setUpMock_GetModelChunks(mlModel);
 
         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
         indexRequest.id(modelId);
-        indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+        indexRequest.source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+    }
+
+    private void setUpMock_GetModelChunks(MLModel model) {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(model);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(modelChunk0);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(modelChunk1);
+            return null;
+        }).when(modelManager).getModel(any(), any());
     }
 }
