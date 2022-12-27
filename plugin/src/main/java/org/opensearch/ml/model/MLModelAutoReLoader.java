@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -32,11 +31,9 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
@@ -48,13 +45,10 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
-import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchHit;
-import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -65,37 +59,29 @@ import com.google.common.annotations.VisibleForTesting;
 public class MLModelAutoReLoader {
     private final Client client;
     private final ClusterService clusterService;
-    private final ThreadPool threadPool;
     private final NamedXContentRegistry xContentRegistry;
     private final DiscoveryNodeHelper nodeHelper;
-    private final MLStats mlStats;
     private volatile Boolean enableAutoReLoadModel;
 
     /**
      * constructor method， init all the params necessary for model auto reloading
      * @param clusterService
      * @param client
-     * @param threadPool
      * @param xContentRegistry
      * @param nodeHelper
      * @param settings
-     * @param mlStats
      */
     public MLModelAutoReLoader(
         ClusterService clusterService,
         Client client,
-        ThreadPool threadPool,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeHelper,
-        Settings settings,
-        MLStats mlStats
+        Settings settings
     ) {
         this.clusterService = clusterService;
         this.client = client;
-        this.threadPool = threadPool;
         this.xContentRegistry = xContentRegistry;
         this.nodeHelper = nodeHelper;
-        this.mlStats = mlStats;
 
         enableAutoReLoadModel = ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.get(settings);
         clusterService
@@ -114,32 +100,24 @@ public class MLModelAutoReLoader {
             return;
         }
 
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            // At opensearch startup, get local node id, if not ml node,we ignored, just return without doing anything
-            String localNodeId = clusterService.localNode().getId();
-            DiscoveryNode node = nodeHelper.getNode(localNodeId);
-            if (!MLNodeUtils.isMLNode(node)) {
-                return;
-            }
+        // At opensearch startup, get local node id, if not ml node,we ignored, just return without doing anything
+        String localNodeId = clusterService.localNode().getId();
+        if (!MLNodeUtils.isMLNode(nodeHelper.getNode(localNodeId))) {
+            return;
+        }
 
-            // According to the node id to query the number of retries, if more than 2 (the maximum number of retries), we don't need to
-            // retry,
-            // that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
-            Integer reTryTimes = 0;
-            if (isExistedIndex(ML_MODEL_RELOAD_INDEX)) {
-                reTryTimes = getReTryTimes(localNodeId);
-            }
-            if (reTryTimes > ML_MODEL_RELOAD_MAX_RETRY_TIMES) {
-                log.debug("have exceeded max retry times, always failure");
-            }
+        // According to the node id to get retry times, if more than the maxi retry times, don't need to retry
+        // that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
+        Integer reTryTimes = getReTryTimes(localNodeId);
+        if (reTryTimes > ML_MODEL_RELOAD_MAX_RETRY_TIMES) {
+            log.debug("have exceeded max retry times, always failure");
+        }
 
-            // auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
-            try {
-                CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(() -> autoReLoadModelByNodeId(localNodeId));
-                completableFuture.get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException("Can't auto reload model, the reason is:", e);
-            }
+        // auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
+        CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(() -> autoReLoadModelByNodeId(localNodeId));
+
+        try {
+            completableFuture.get();
         } catch (Exception e) {
             throw new RuntimeException("Can't auto reload model");
         }
@@ -159,14 +137,7 @@ public class MLModelAutoReLoader {
         SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
         SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet();
 
-        if (response == null) {
-            return;
-        }
-        SearchHits searchHits = response.getHits();
-        if (searchHits == null) {
-            return;
-        }
-        SearchHit[] hits = searchHits.getHits();
+        SearchHit[] hits = response.getHits().getHits();
         if (CollectionUtils.isEmpty(hits)) {
             return;
         }
@@ -214,6 +185,10 @@ public class MLModelAutoReLoader {
      */
     @VisibleForTesting
     Integer getReTryTimes(String nodeId) {
+        if (!isExistedIndex(ML_MODEL_RELOAD_INDEX)) {
+            return 0;
+        }
+
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
         QueryBuilder queryBuilder = QueryBuilders.termQuery("_id", nodeId);
@@ -223,14 +198,7 @@ public class MLModelAutoReLoader {
         try {
             SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
 
-            if (response == null) {
-                throw new RuntimeException("can't get retry times by " + nodeId);
-            }
-            SearchHits searchHits = response.getHits();
-            if (searchHits == null) {
-                throw new RuntimeException("can't get retry times by " + nodeId);
-            }
-            SearchHit[] hits = searchHits.getHits();
+            SearchHit[] hits = response.getHits().getHits();
             if (CollectionUtils.isEmpty(hits)) {
                 return 0;
             }
