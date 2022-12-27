@@ -7,15 +7,13 @@ package org.opensearch.ml.rest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.opensearch.ml.utils.TestHelper.getProfileRestRequest;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +32,14 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.get.MultiGetItemResponse;
+import org.opensearch.action.get.MultiGetRequest;
+import org.opensearch.action.get.MultiGetRequestBuilder;
+import org.opensearch.action.get.MultiGetResponse;
+import org.opensearch.action.search.SearchRequestBuilder;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.client.Client;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
@@ -41,11 +47,18 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
 import org.opensearch.ml.action.profile.MLProfileRequest;
@@ -56,16 +69,24 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.factory.MultiGetRequestBuilderFactory;
+import org.opensearch.ml.profile.MLDeploymentProfile;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestResponse;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.search.sort.SortBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+
+import com.google.common.collect.ImmutableList;
 
 public class RestMLProfileActionTests extends OpenSearchTestCase {
     @Rule
@@ -87,10 +108,16 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     private ClusterName clusterName;
     ClusterState testState;
 
+    @Mock
+    private MultiGetRequestBuilderFactory multiGetRequestBuilderFactory;
+
+    @Mock
+    private MultiGetRequestBuilder multiGetRequestBuilder;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        profileAction = new RestMLProfileAction(clusterService);
+        profileAction = new RestMLProfileAction(clusterService, multiGetRequestBuilderFactory);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -145,6 +172,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
             actionListener.onResponse(profileResponse);
             return null;
         }).when(client).execute(eq(MLProfileAction.INSTANCE), any(), any());
+        when(multiGetRequestBuilderFactory.createMultiGetRequestBuilder(any(Client.class))).thenReturn(multiGetRequestBuilder);
     }
 
     @Override
@@ -155,7 +183,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLProfileAction action = new RestMLProfileAction(clusterService);
+        RestMLProfileAction action = new RestMLProfileAction(clusterService, multiGetRequestBuilderFactory);
         assertNotNull(action);
     }
 
@@ -282,6 +310,605 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         profileAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+    }
+
+    public void testPrepareRequest_whenPathParameterValueIsAll_returnBothNodesAndModels() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenPathParameterValueIsAllOrDeployment_success(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenPathParameterValueIsDeployment_returnDeploymentOnly() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenPathParameterValueIsAllOrDeployment_success(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenPathParameterValueIsAllOrDeployment_success(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetResponse multiGetResponse = mock(MultiGetResponse.class);
+        MultiGetItemResponse multiGetItemResponse = mock((MultiGetItemResponse.class));
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("name", "model_name_1");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+        when(getResponse.getId()).thenReturn("hWVxL4UB7My4S9Dk2wW8");
+        when(multiGetItemResponse.getResponse()).thenReturn(getResponse);
+
+        MultiGetItemResponse[] multiGetItemResponses = new MultiGetItemResponse[] { multiGetItemResponse };
+        when(multiGetResponse.getResponses()).thenReturn(multiGetItemResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onResponse(multiGetResponse);
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        SearchRequestBuilder searchRequestBuilder = mock(SearchRequestBuilder.class);
+        when(client.prepareSearch(anyString())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setQuery(any(QueryBuilder.class))).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setSize(anyInt())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.addSort(any(SortBuilder.class))).thenReturn(searchRequestBuilder);
+
+        SearchHits searchHits = null;
+        String responseBody = Files
+            .readString(
+                Path.of(this.getClass().getClassLoader().getResource("org/opensearch/ml/rest/MockMLTaskIndexQueryResult.json").toURI())
+            );
+        try (
+            XContentParser parser = XContentFactory
+                .xContent(XContentType.JSON)
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, responseBody)
+        ) {
+            searchHits = SearchHits.fromXContent(parser);
+        } catch (IOException e) {
+            fail(e.getMessage());
+        }
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlProfileResponse);
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), isA(ActionListener.class));
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenMLModelIndexQueryFailedForAll_stopProcessingDeploymentInfo() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLModelIndexQueryFailed_stopProcessingDeploymentInfo(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenMLModelIndexQueryFailedForDeployment_stopProcessingDeploymentInfo() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLModelIndexQueryFailed_stopProcessingDeploymentInfo(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenMLModelIndexQueryFailed_stopProcessingDeploymentInfo(MLProfileInput mlProfileInput)
+        throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetResponse multiGetResponse = mock(MultiGetResponse.class);
+        MultiGetItemResponse multiGetItemResponse = mock((MultiGetItemResponse.class));
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.getSourceAsMap()).thenReturn(null);
+        when(getResponse.getId()).thenReturn("hWVxL4UB7My4S9Dk2wW8");
+        when(multiGetItemResponse.getResponse()).thenReturn(getResponse);
+
+        MultiGetItemResponse[] multiGetItemResponses = new MultiGetItemResponse[] { multiGetItemResponse };
+        when(multiGetResponse.getResponses()).thenReturn(multiGetItemResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onResponse(multiGetResponse);
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlProfileResponse);
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), isA(ActionListener.class));
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenTaskIndexQueryFailedForAll_stopProcessingDeploymentInfo() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenTaskIndexQueryFailed_stopProcessingDeploymentInfo(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenTaskIndexQueryFailedForDeployment_stopProcessingDeploymentInfo() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenTaskIndexQueryFailed_stopProcessingDeploymentInfo(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenTaskIndexQueryFailed_stopProcessingDeploymentInfo(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetResponse multiGetResponse = mock(MultiGetResponse.class);
+        MultiGetItemResponse multiGetItemResponse = mock((MultiGetItemResponse.class));
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("name", "model_name_1");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+        when(getResponse.getId()).thenReturn("hWVxL4UB7My4S9Dk2wW8");
+        when(multiGetItemResponse.getResponse()).thenReturn(getResponse);
+
+        MultiGetItemResponse[] multiGetItemResponses = new MultiGetItemResponse[] { multiGetItemResponse };
+        when(multiGetResponse.getResponses()).thenReturn(multiGetItemResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onResponse(multiGetResponse);
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        SearchRequestBuilder searchRequestBuilder = mock(SearchRequestBuilder.class);
+        when(client.prepareSearch(anyString())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setQuery(any(QueryBuilder.class))).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setSize(anyInt())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.addSort(any(SortBuilder.class))).thenReturn(searchRequestBuilder);
+
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(null);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlProfileResponse);
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), isA(ActionListener.class));
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenMLModelIndexQueryExceptionForAll_returnDefaultProfileResponse() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLModelIndexQueryException_returnDefaultProfileResponse(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenMLModelIndexQueryExceptionForDeployment_returnEmpty() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLModelIndexQueryException_returnDefaultProfileResponse(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenMLModelIndexQueryException_returnDefaultProfileResponse(MLProfileInput mlProfileInput)
+        throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onFailure(new IndexNotFoundException("index not found"));
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenMLTaskIndexDataQueryFailForAll_returnProfileOnly() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLTaskIndexDataQueryFail_returnProfileOnly(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenMLTaskIndexDataQueryFailForDeployment_returnEmpty() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLTaskIndexDataQueryFail_returnProfileOnly(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenMLTaskIndexDataQueryFail_returnProfileOnly(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetResponse multiGetResponse = mock(MultiGetResponse.class);
+        MultiGetItemResponse multiGetItemResponse = mock((MultiGetItemResponse.class));
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("name", "model_name_1");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+        when(getResponse.getId()).thenReturn("hWVxL4UB7My4S9Dk2wW8");
+        when(multiGetItemResponse.getResponse()).thenReturn(getResponse);
+
+        MultiGetItemResponse[] multiGetItemResponses = new MultiGetItemResponse[] { multiGetItemResponse };
+        when(multiGetResponse.getResponses()).thenReturn(multiGetItemResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onResponse(multiGetResponse);
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        SearchRequestBuilder searchRequestBuilder = mock(SearchRequestBuilder.class);
+        when(client.prepareSearch(anyString())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setQuery(any(QueryBuilder.class))).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setSize(anyInt())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.addSort(any(SortBuilder.class))).thenReturn(searchRequestBuilder);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onFailure(new IndexNotFoundException("ml task index not found"));
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlProfileResponse);
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), isA(ActionListener.class));
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenExpectedDeployNodesMapEmptyForAll_returnProfileOnly() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenExpectedDeployNodesMapEmpty_returnProfileOnly(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenExpectedDeployNodesMapEmptyForDeployment_returnEmpty() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenExpectedDeployNodesMapEmpty_returnProfileOnly(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenExpectedDeployNodesMapEmpty_returnProfileOnly(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetResponse multiGetResponse = mock(MultiGetResponse.class);
+        MultiGetItemResponse multiGetItemResponse = mock((MultiGetItemResponse.class));
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("name", "model_name_1");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+        when(getResponse.getId()).thenReturn("hWVxL4UB7My4S9Dk2wW8");
+        when(multiGetItemResponse.getResponse()).thenReturn(getResponse);
+
+        MultiGetItemResponse[] multiGetItemResponses = new MultiGetItemResponse[] { multiGetItemResponse };
+        when(multiGetResponse.getResponses()).thenReturn(multiGetItemResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onResponse(multiGetResponse);
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        SearchRequestBuilder searchRequestBuilder = mock(SearchRequestBuilder.class);
+        when(client.prepareSearch(anyString())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setQuery(any(QueryBuilder.class))).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setSize(anyInt())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.addSort(any(SortBuilder.class))).thenReturn(searchRequestBuilder);
+
+        SearchHits searchHits = null;
+        String responseBody = Files
+            .readString(
+                Path.of(this.getClass().getClassLoader().getResource("org/opensearch/ml/rest/EmptyMLTaskIndexQueryResult.json").toURI())
+            );
+        try (
+            XContentParser parser = XContentFactory
+                .xContent(XContentType.JSON)
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, responseBody)
+        ) {
+            searchHits = SearchHits.fromXContent(parser);
+        } catch (IOException e) {
+            fail(e.getMessage());
+        }
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlProfileResponse);
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), isA(ActionListener.class));
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenMGetModelIdsCreationException_returnProfileData() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMGetModelIdsCreationException_returnProfileData(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenMGetModelIdsCreationException_returnProfileData(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenMGetModelIdsExecuteException_returnProfileData() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMGetModelIdsExecuteException_returnProfileData(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenMGetModelIdsExecuteException_returnProfileData(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doThrow(new RuntimeException()).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testPrepareRequest_whenMLTaskIndexDataQueryFailedForAll_thenReturnProfileOnly() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("all");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLTaskIndexDataQueryFailed_thenReturnProfileOnly(mlProfileInput);
+    }
+
+    public void testPrepareRequest_whenMLTaskIndexDataQueryFailedForDeployment_thenReturnProfileOnly() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        mlProfileInput.setProfileAndDeployment("deployment");
+        mlProfileInput.setReturnAllTasks(true);
+        mlProfileInput.setReturnAllModels(true);
+        testPrepareRequest_whenMLTaskIndexDataQueryFailed_thenReturnProfileOnly(mlProfileInput);
+    }
+
+    private void testPrepareRequest_whenMLTaskIndexDataQueryFailed_thenReturnProfileOnly(MLProfileInput mlProfileInput) throws Exception {
+        RestRequest restRequest = getProfileRestRequest(mlProfileInput);
+        MLProfileNodeResponse mlProfileNodeResponse = mock(MLProfileNodeResponse.class);
+        Map<String, MLModelProfile> mlNodeModels = new HashMap<>();
+        MLModelProfile mlModelProfile = mock(MLModelProfile.class);
+        when(mlModelProfile.getWorkerNodes()).thenReturn(new String[] { "l5c_UZGaQFiA2qrE64JbRA", "kbmgTYi_R7qbTmksRzziqA" });
+        mlNodeModels.put("hWVxL4UB7My4S9Dk2wW8", mlModelProfile);
+        when(mlProfileNodeResponse.getMlNodeModels()).thenReturn(mlNodeModels);
+        List<MLProfileNodeResponse> mlProfileNodeResponses = new ArrayList<>();
+        mlProfileNodeResponses.add(mlProfileNodeResponse);
+        MLProfileResponse mlProfileResponse = mock(MLProfileResponse.class);
+        when(mlProfileResponse.getNodes()).thenReturn(mlProfileNodeResponses);
+
+        MultiGetResponse multiGetResponse = mock(MultiGetResponse.class);
+        MultiGetItemResponse multiGetItemResponse = mock((MultiGetItemResponse.class));
+        GetResponse getResponse = mock(GetResponse.class);
+        Map<String, Object> source = new HashMap<>();
+        source.put("name", "model_name_1");
+        when(getResponse.getSourceAsMap()).thenReturn(source);
+        when(getResponse.getId()).thenReturn("hWVxL4UB7My4S9Dk2wW8");
+        when(multiGetItemResponse.getResponse()).thenReturn(getResponse);
+
+        MultiGetItemResponse[] multiGetItemResponses = new MultiGetItemResponse[] { multiGetItemResponse };
+        when(multiGetResponse.getResponses()).thenReturn(multiGetItemResponses);
+
+        MultiGetRequest multiGetRequest = mock(MultiGetRequest.class);
+        when(multiGetRequestBuilder.request()).thenReturn(multiGetRequest);
+        when(
+            multiGetRequest
+                .add(anyString(), any(String[].class), any(FetchSourceContext.class), anyString(), any(XContentParser.class), anyBoolean())
+        ).thenReturn(multiGetRequest);
+        doAnswer(invocation -> {
+            ActionListener<MultiGetResponse> listener = invocation.getArgument(0);
+            listener.onResponse(multiGetResponse);
+            return null;
+        }).when(multiGetRequestBuilder).execute(isA(ActionListener.class));
+
+        SearchRequestBuilder searchRequestBuilder = mock(SearchRequestBuilder.class);
+        when(client.prepareSearch(anyString())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setQuery(any(QueryBuilder.class))).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.setSize(anyInt())).thenReturn(searchRequestBuilder);
+        when(searchRequestBuilder.addSort(any(SortBuilder.class))).thenReturn(searchRequestBuilder);
+
+        doThrow(new RuntimeException()).when(searchRequestBuilder).execute(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLProfileResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlProfileResponse);
+            return null;
+        }).when(client).execute(eq(MLProfileAction.INSTANCE), any(MLProfileRequest.class), isA(ActionListener.class));
+        profileAction.handleRequest(restRequest, channel, client);
+        verify(channel, times(1)).sendResponse(any(RestResponse.class));
+    }
+
+    public void testMLDeploymentProfile_Constructor_withParameters() {
+        MLDeploymentProfile mlDeploymentProfile = new MLDeploymentProfile(
+            "mock_model_name",
+            "mock_model_id",
+            new ArrayList<>(),
+            new ArrayList<>()
+        );
+        assert mlDeploymentProfile.getModelName() != null;
+    }
+
+    public void testMLDeploymentProfile_Constructor_withStreamInput() throws IOException {
+        new MLDeploymentProfile(mock(StreamInput.class));
+    }
+
+    public void testMLDeploymentProfile_setters_getters() {
+        MLDeploymentProfile mlDeploymentProfile = new MLDeploymentProfile("mock_model_name", "mock_model_id");
+        mlDeploymentProfile.setNotDeployedNodeIds(ImmutableList.of("worker1"));
+        mlDeploymentProfile.setTargetNodeIds(ImmutableList.of("worker1"));
+        assert mlDeploymentProfile.getNotDeployedNodeIds() != null;
+        assert mlDeploymentProfile.getTargetNodeIds() != null;
+        assert mlDeploymentProfile.getModelName() != null;
+        assert mlDeploymentProfile.getModelId() != null;
+    }
+
+    public void testMLDeploymentProfile_writeTo() throws IOException {
+        MLDeploymentProfile mlDeploymentProfile = new MLDeploymentProfile(
+            "mock_model_name",
+            "mock_model_id",
+            ImmutableList.of("worker1"),
+            ImmutableList.of("worker2")
+        );
+        mlDeploymentProfile.writeTo(new BytesStreamOutput());
     }
 
     private RestRequest getRestRequest() {

@@ -166,4 +166,8 @@ public class RestActionUtils {
     private static boolean isNullOrEmpty(@Nullable String s) {
         return s == null || s.isEmpty();
     }
+
+    public static Optional<String> getStringParam(RestRequest request, String paramName) {
+        return Optional.ofNullable(request.param(paramName));
+    }
 }

@@ -147,14 +147,16 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             new HashSet<>(Arrays.asList(testTaskId)),
             new HashSet<>(),
             false,
-            false
+            false,
+            null
         );
         MLProfileInput mlProfileInput2 = new MLProfileInput(
             new HashSet<>(Arrays.asList(testModelId)),
             new HashSet<>(),
             new HashSet<>(),
             false,
-            false
+            false,
+            null
         );
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
         MLProfileRequest mlTaskProfileRequest2 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput2);
@@ -169,7 +171,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
 
     public void testNodeOperation_emptyInputs() {
         String nodeId = clusterService().localNode().getId();
-        MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), new HashSet<>(), new HashSet<>(), false, false);
+        MLProfileInput mlProfileInput = new MLProfileInput(new HashSet<>(), new HashSet<>(), new HashSet<>(), false, false, null);
         MLProfileRequest mlTaskProfileRequest = new MLProfileRequest(new String[] { nodeId }, mlProfileInput);
 
         MLProfileNodeResponse response = action.nodeOperation(new MLProfileNodeRequest(mlTaskProfileRequest));
@@ -184,14 +186,16 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             new HashSet<>(Arrays.asList("newtest_id")),
             new HashSet<>(),
             false,
-            false
+            false,
+            null
         );
         MLProfileInput mlProfileInput2 = new MLProfileInput(
             new HashSet<>(Arrays.asList("newmodel_id")),
             new HashSet<>(),
             new HashSet<>(),
             false,
-            false
+            false,
+            null
         );
         MLProfileRequest mlTaskProfileRequest1 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput1);
         MLProfileRequest mlTaskProfileRequest2 = new MLProfileRequest(new String[] { nodeId }, mlProfileInput2);
