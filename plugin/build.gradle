@@ -235,6 +235,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.indices.MLIndicesHandler',
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.profile.MLModelProfile',
+        'org.opensearch.ml.profile.MLDeploymentProfile',
         'org.opensearch.ml.profile.MLPredictRequestStats',
         'org.opensearch.ml.action.load.TransportLoadModelAction',
         'org.opensearch.ml.model.MLModelManager',

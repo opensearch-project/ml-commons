@@ -95,6 +95,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.factory.MultiGetRequestBuilderFactory;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
@@ -179,6 +180,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     public static final String ML_ROLE_NAME = "ml";
     private NamedXContentRegistry xContentRegistry;
+
+    private MultiGetRequestBuilderFactory multiGetRequestBuilderFactory;
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
@@ -268,7 +271,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-
+        multiGetRequestBuilderFactory = new MultiGetRequestBuilderFactory();
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
         mlTrainingTaskRunner = new MLTrainingTaskRunner(
             threadPool,
@@ -391,7 +394,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
         RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
-        RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
+        RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService, multiGetRequestBuilderFactory);
         RestMLUploadModelAction restMLUploadModelAction = new RestMLUploadModelAction();
         RestMLLoadModelAction restMLLoadModelAction = new RestMLLoadModelAction();
         RestMLUnloadModelAction restMLUnloadModelAction = new RestMLUnloadModelAction(clusterService);

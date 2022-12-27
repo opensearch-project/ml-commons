@@ -31,6 +31,8 @@ public class MLProfileInput implements ToXContentObject, Writeable {
     public static final String RETURN_ALL_TASKS = "return_all_tasks";
     public static final String RETURN_ALL_MODELS = "return_all_models";
 
+    public static final String PROFILE_AND_DEPLOYMENT = "profileAndDeployment";
+
     /**
      * Which models profiles will be retrieved
      */
@@ -52,18 +54,29 @@ public class MLProfileInput implements ToXContentObject, Writeable {
     @Setter
     private boolean returnAllModels;
 
+    @Setter
+    private String profileAndDeployment;
+
     /**
      * Constructor
      * @param modelIds
      * @param taskIds
      */
     @Builder
-    public MLProfileInput(Set<String> modelIds, Set<String> taskIds, Set<String> nodeIds, boolean returnAllTasks, boolean returnAllModels) {
+    public MLProfileInput(
+        Set<String> modelIds,
+        Set<String> taskIds,
+        Set<String> nodeIds,
+        boolean returnAllTasks,
+        boolean returnAllModels,
+        String profileAndDeployment
+    ) {
         this.modelIds = modelIds;
         this.taskIds = taskIds;
         this.nodeIds = nodeIds;
         this.returnAllTasks = returnAllTasks;
         this.returnAllModels = returnAllModels;
+        this.profileAndDeployment = profileAndDeployment;
     }
 
     public MLProfileInput() {
@@ -81,6 +94,7 @@ public class MLProfileInput implements ToXContentObject, Writeable {
         out.writeOptionalStringCollection(nodeIds);
         out.writeBoolean(returnAllTasks);
         out.writeBoolean(returnAllModels);
+        out.writeOptionalString(profileAndDeployment);
     }
 
     public MLProfileInput(StreamInput input) throws IOException {
@@ -89,6 +103,7 @@ public class MLProfileInput implements ToXContentObject, Writeable {
         nodeIds = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
         this.returnAllTasks = input.readBoolean();
         this.returnAllModels = input.readBoolean();
+        this.profileAndDeployment = input.readOptionalString();
     }
 
     public static MLProfileInput parse(XContentParser parser) throws IOException {
@@ -97,6 +112,7 @@ public class MLProfileInput implements ToXContentObject, Writeable {
         Set<String> nodeIds = new HashSet<>();
         boolean returnALlTasks = false;
         boolean returnAllModels = false;
+        String profileAndDeployment = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
 
@@ -120,6 +136,9 @@ public class MLProfileInput implements ToXContentObject, Writeable {
                 case RETURN_ALL_MODELS:
                     returnAllModels = parser.booleanValue();
                     break;
+                case PROFILE_AND_DEPLOYMENT:
+                    profileAndDeployment = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -133,6 +152,7 @@ public class MLProfileInput implements ToXContentObject, Writeable {
             .nodeIds(nodeIds)
             .returnAllTasks(returnALlTasks)
             .returnAllModels(returnAllModels)
+            .profileAndDeployment(profileAndDeployment)
             .build();
     }
 
@@ -150,6 +170,9 @@ public class MLProfileInput implements ToXContentObject, Writeable {
         }
         builder.field(RETURN_ALL_TASKS, returnAllTasks);
         builder.field(RETURN_ALL_MODELS, returnAllModels);
+        if (profileAndDeployment != null) {
+            builder.field(PROFILE_AND_DEPLOYMENT, profileAndDeployment);
+        }
         builder.endObject();
         return builder;
     }

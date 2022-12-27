@@ -1,0 +1,27 @@
+{
+  "total": {
+    "value": 53,
+    "relation": "eq"
+  },
+  "max_score": null,
+  "hits": [
+    {
+      "_index": ".plugins-ml-task",
+      "_id": "cBVbToUBRZsotVKv5g7u",
+      "_score": null,
+      "_source": {
+        "model_id": "hWVxL4UB7My4S9Dk2wW8",
+        "task_type": "LOAD_MODEL",
+        "function_name": "TEXT_EMBEDDING",
+        "state": "COMPLETED",
+        "worker_node": "l5c_UZGaQFiA2qrE64JbRA,kbmgTYi_R7qbTmksRzziqA,HoJuqiDBRJqTHjuf0mUBpw",
+        "create_time": 1672056923883,
+        "last_update_time": 1672056931497,
+        "is_async": true
+      },
+      "sort": [
+        1672056923883
+      ]
+    }
+  ]
+}
