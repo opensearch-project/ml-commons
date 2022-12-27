@@ -25,8 +25,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.After;
 import org.junit.Before;
@@ -52,10 +50,6 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.stats.MLNodeLevelStat;
-import org.opensearch.ml.stats.MLStat;
-import org.opensearch.ml.stats.MLStats;
-import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
@@ -68,8 +62,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private DiscoveryNodeHelper nodeHelper;
     private Settings settings;
     private MLModelAutoReLoader mlModelAutoReLoader;
-    @Mock
-    private MLStats mlStats;
     private String modelId;
     private String localNodeId;
     @Mock
@@ -87,14 +79,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.getKey(), true).build();
 
-        Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
-        // node level stats
-        stats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
-        mlStats = spy(new MLStats(stats));
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
 
         mlModelAutoReLoader = spy(new MLModelAutoReLoader(clusterService(), client(), xContentRegistry(), nodeHelper, settings));
@@ -108,7 +92,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         super.tearDown();
 
         settings = null;
-        mlStats = null;
         nodeHelper = null;
         mlModelAutoReLoader = null;
         modelId = null;
