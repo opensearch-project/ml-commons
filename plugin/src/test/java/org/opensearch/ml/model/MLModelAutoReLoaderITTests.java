@@ -163,14 +163,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertThat(retryTimes, is(0));
     }
 
-    public void testAutoReLoadModelByNodeAndModelId_Exception() throws IOException, URISyntaxException {
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlModel(modelId, MLModelState.LOADED);
-
-        exceptionRule.expect(IllegalArgumentException.class);
-        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
-    }
-
     public void testAutoReLoadModelByNodeAndModelId_IndexNotFoundException() throws IOException, URISyntaxException {
         exceptionRule.expect(IndexNotFoundException.class);
         mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
