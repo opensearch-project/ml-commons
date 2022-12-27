@@ -155,7 +155,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
-    public static final String RELOAD_MODEL_THREAD_POOL = "opensearch_ml_reload_model";
     public static final String UPLOAD_THREAD_POOL = "opensearch_ml_upload";
     public static final String LOAD_THREAD_POOL = "opensearch_ml_load";
     public static final String ML_BASE_URI = "/_plugins/_ml";
@@ -481,25 +480,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
             false
         );
-        FixedExecutorBuilder reloadModelThreadPool = new FixedExecutorBuilder(
-            settings,
-            RELOAD_MODEL_THREAD_POOL,
-            OpenSearchExecutors.allocatedProcessors(settings) * 2,
-            10000,
-            ML_THREAD_POOL_PREFIX + RELOAD_MODEL_THREAD_POOL,
-            false
-        );
 
-        return ImmutableList
-            .of(
-                generalThreadPool,
-                uploadThreadPool,
-                loadThreadPool,
-                executeThreadPool,
-                trainThreadPool,
-                predictThreadPool,
-                reloadModelThreadPool
-            );
+        return ImmutableList.of(generalThreadPool, uploadThreadPool, loadThreadPool, executeThreadPool, trainThreadPool, predictThreadPool);
     }
 
     @Override

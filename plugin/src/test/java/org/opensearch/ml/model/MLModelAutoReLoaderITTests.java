@@ -169,20 +169,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId_FailToAutoReloadModel() throws IOException, URISyntaxException {
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlModel(modelId, MLModelState.LOADED);
-
-        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
-
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
-
-        Integer retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        assertThat(retryTimes, is(1));
-    }
-
     public void testAutoReLoadModel() {
         mlModelAutoReLoader.autoReLoadModel();
 
