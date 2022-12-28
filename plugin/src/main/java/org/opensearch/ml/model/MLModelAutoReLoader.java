@@ -135,7 +135,7 @@ public class MLModelAutoReLoader {
         }
 
         SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
-        SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet();
+        SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
 
         SearchHit[] hits = response.getHits().getHits();
         if (CollectionUtils.isEmpty(hits)) {
@@ -175,7 +175,7 @@ public class MLModelAutoReLoader {
     @VisibleForTesting
     void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) {
         MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, new String[] { nodeId }, false, false);
-        client.execute(MLLoadModelAction.INSTANCE, mlLoadModelRequest).actionGet();
+        client.execute(MLLoadModelAction.INSTANCE, mlLoadModelRequest).actionGet(5000);
     }
 
     /**
@@ -191,7 +191,7 @@ public class MLModelAutoReLoader {
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
-        QueryBuilder queryBuilder = QueryBuilders.termQuery("_id", nodeId);
+        QueryBuilder queryBuilder = QueryBuilders.idsQuery().addIds(nodeId);
         searchSourceBuilder.query(queryBuilder);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
 
