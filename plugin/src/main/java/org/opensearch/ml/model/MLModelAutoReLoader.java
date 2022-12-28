@@ -321,9 +321,8 @@ public class MLModelAutoReLoader {
 
     /**
      * save retry times
-     *
      * @param localNodeId node id
-     * @param reTryTimes  actual retry times
+     * @param reTryTimes actual retry times
      */
     @VisibleForTesting
     void saveLatestReTryTimes(String localNodeId, int reTryTimes, ActionListener<IndexResponse> indexResponseActionListener) {

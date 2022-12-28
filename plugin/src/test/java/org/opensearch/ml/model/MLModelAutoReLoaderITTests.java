@@ -360,7 +360,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             .progress(0.0f)
             .outputIndex("test_index")
             .createTime(time.minus(1, ChronoUnit.MINUTES))
-            .autoReload(true)
             .async(true)
             .lastUpdateTime(time)
             .build();

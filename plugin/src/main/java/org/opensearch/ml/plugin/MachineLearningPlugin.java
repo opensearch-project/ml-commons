@@ -352,6 +352,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             nodeHelper
         );
 
+        mlModelAutoReLoader.autoReLoadModel();
+
         return ImmutableList
             .of(
                 mlEngine,
@@ -516,7 +518,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
                 MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE,
-                MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES
+                MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES,
+                MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE
             );
         return settings;
     }
