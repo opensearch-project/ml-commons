@@ -203,14 +203,15 @@ public class MLModelAutoReLoader {
                 return 0;
             }
 
-            for (SearchHit hit : hits) {
-                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-                return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+            if (hits.length != 1) {
+                throw new RuntimeException("can't get retry times by " + nodeId);
             }
+
+            Map<String, Object> sourceAsMap = hits[0].getSourceAsMap();
+            return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
         } catch (IndexNotFoundException e) {
             throw new IndexNotFoundException("index " + ML_MODEL_RELOAD_INDEX + " not found");
         }
-        throw new RuntimeException("can't get retry times by " + nodeId);
     }
 
     /**
