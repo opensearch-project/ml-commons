@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import java.util.concurrent.Callable
+
 import org.opensearch.gradle.test.RestIntegTestTask
-import org.opensearch.gradle.testclusters.StandaloneRestIntegTestTask
 
 plugins {
     id 'java'

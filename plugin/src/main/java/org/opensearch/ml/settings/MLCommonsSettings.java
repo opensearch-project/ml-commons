@@ -52,4 +52,7 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE = Setting
+        .boolSetting("plugins.ml_commons.model.autoreload.enable", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

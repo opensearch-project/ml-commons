@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -97,6 +99,7 @@ import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerI
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.model.MLModelAutoReLoader;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
@@ -144,7 +147,9 @@ import org.opensearch.watcher.ResourceWatcherService;
 
 import com.google.common.collect.ImmutableList;
 
+@Log4j2
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
+
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -158,6 +163,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLModelCacheHelper modelCacheHelper;
     private MLTaskManager mlTaskManager;
     private MLModelManager mlModelManager;
+    private MLModelAutoReLoader mlModelAutoReLoader;
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
     private MLTrainingTaskRunner mlTrainingTaskRunner;
@@ -264,6 +270,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             modelCacheHelper,
             mlEngine
         );
+        mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, client, xContentRegistry, nodeHelper, settings);
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
         mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
@@ -345,6 +352,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             nodeHelper
         );
 
+        mlModelAutoReLoader.autoReLoadModel();
+
         return ImmutableList
             .of(
                 mlEngine,
@@ -353,6 +362,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlStats,
                 mlTaskManager,
                 mlModelManager,
+                mlModelAutoReLoader,
                 mlIndicesHandler,
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,
@@ -504,7 +514,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
-                MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX
+                MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE
             );
         return settings;
     }
