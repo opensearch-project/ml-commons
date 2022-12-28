@@ -114,13 +114,7 @@ public class MLModelAutoReLoader {
         }
 
         // auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
-        CompletableFuture<Void> completableFuture = CompletableFuture.runAsync(() -> autoReLoadModelByNodeId(localNodeId));
-
-        try {
-            completableFuture.get();
-        } catch (Exception e) {
-            throw new RuntimeException("Can't auto reload model");
-        }
+        CompletableFuture.runAsync(() -> autoReLoadModelByNodeId(localNodeId));
     }
 
     /**
