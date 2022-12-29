@@ -9,6 +9,9 @@ import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FRAMEWORK_TYPE_FIELD;
+import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD;
+import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD;
+import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.POOLING_METHOD_FIELD;
 
 public class CommonValue {
 
@@ -26,11 +29,13 @@ public class CommonValue {
     public static String WARM_BOX_TYPE = "warm";
 
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
-    public static final String ML_MODEL_RELOAD_INDEX = ".plugins-ml-model-reload";
-    public static final Integer ML_MODEL_RELOAD_MAX_RETRY_TIMES = 2;
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
+    public static final String ML_MODEL_RELOAD_INDEX = ".plugins-ml-model-reload";
     public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 2;
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
+    public static final String NODE_ID_FIELD = "node_id";
+    public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
+    public static final Integer ML_MODEL_RELOAD_MAX_RETRY_TIMES = 2;
     public static final String USER_FIELD_MAPPING = "      \""
         + CommonValue.USER
         + "\": {\n"
@@ -42,9 +47,6 @@ public class CommonValue {
         + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
         + "        }\n"
         + "      }\n";
-    public static final String NODE_ID_FIELD = "node_id";
-    public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
-
     public static final String ML_MODEL_INDEX_MAPPING = "{\n"
         + "    \"_meta\": {\"schema_version\": "
         + ML_MODEL_INDEX_SCHEMA_VERSION
@@ -92,6 +94,9 @@ public class CommonValue {
         + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
         + EMBEDDING_DIMENSION_FIELD + "\":{\"type\":\"integer\"},\""
         + FRAMEWORK_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
+        + POOLING_METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
+        + NORMALIZE_RESULT_FIELD + "\":{\"type\":\"boolean\"},\""
+        + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
         + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"
         + "      \""
         + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD

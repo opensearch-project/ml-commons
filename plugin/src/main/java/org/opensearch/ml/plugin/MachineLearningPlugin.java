@@ -15,8 +15,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -147,7 +145,6 @@ import org.opensearch.watcher.ResourceWatcherService;
 
 import com.google.common.collect.ImmutableList;
 
-@Log4j2
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
@@ -351,8 +348,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             threadPool,
             nodeHelper
         );
-
-        mlModelAutoReLoader.autoReLoadModel();
 
         return ImmutableList
             .of(

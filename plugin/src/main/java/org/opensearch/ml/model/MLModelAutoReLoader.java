@@ -41,6 +41,7 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.transport.load.LoadModelResponse;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -88,6 +89,8 @@ public class MLModelAutoReLoader {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE, it -> enableAutoReLoadModel = it);
+
+        autoReLoadModel();
     }
 
     /**
@@ -112,6 +115,7 @@ public class MLModelAutoReLoader {
         int reTryTimes = getReTryTimes(localNodeId);
         if (reTryTimes > ML_MODEL_RELOAD_MAX_RETRY_TIMES) {
             log.debug("have exceeded max retry times, always failure");
+            return;
         }
 
         // auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
@@ -130,14 +134,12 @@ public class MLModelAutoReLoader {
         }
 
         SearchResponse response = queryTask(nodeId);
-
+        if (response == null || response.getHits() == null) {
+            return;
+        }
         SearchHit[] hits = response.getHits().getHits();
         if (CollectionUtils.isEmpty(hits)) {
             return;
-        }
-
-        if (hits.length != 1) {
-            log.error("Can't get the latest successful deployment in node id {}", nodeId);
         }
 
         int reTryTimes = 0;
@@ -174,14 +176,14 @@ public class MLModelAutoReLoader {
             .must(QueryBuilders.matchPhraseQuery("worker_node", nodeId));
         searchSourceBuilder.query(queryBuilder);
 
-        SortBuilder sortBuilderOrder = new FieldSortBuilder("last_update_time").order(SortOrder.DESC);
+        SortBuilder sortBuilderOrder = new FieldSortBuilder("create_time").order(SortOrder.DESC);
         searchSourceBuilder.sort(sortBuilderOrder);
 
-        SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
-        searchRequest.source(searchSourceBuilder).indices(ML_TASK_INDEX);
+        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_TASK_INDEX);
         try {
             return client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
         } catch (IndexNotFoundException e) {
+            log.error("index {} not found, the reason is {}", ML_TASK_INDEX, e.getMessage());
             throw new IndexNotFoundException("index " + ML_TASK_INDEX + " not found");
         }
     }
@@ -192,9 +194,9 @@ public class MLModelAutoReLoader {
      * @param modelId model id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) {
+    LoadModelResponse autoReLoadModelByNodeAndModelId(String nodeId, String modelId) {
         MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, new String[] { nodeId }, false, false);
-        client.execute(MLLoadModelAction.INSTANCE, mlLoadModelRequest).actionGet(5000);
+        return client.execute(MLLoadModelAction.INSTANCE, mlLoadModelRequest).actionGet(5000);
     }
 
     /**
@@ -220,10 +222,6 @@ public class MLModelAutoReLoader {
             SearchHit[] hits = response.getHits().getHits();
             if (CollectionUtils.isEmpty(hits)) {
                 return 0;
-            }
-
-            if (hits.length != 1) {
-                throw new RuntimeException("can't get retry times by " + nodeId);
             }
 
             Map<String, Object> sourceAsMap = hits[0].getSourceAsMap();
