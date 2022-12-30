@@ -11,10 +11,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING;
+import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
+import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
@@ -27,13 +30,19 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
+import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.indices.create.CreateIndexAction;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
@@ -41,10 +50,14 @@ import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -56,6 +69,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 
 public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
@@ -106,72 +120,128 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         modelManager = null;
     }
 
-    public void testIsExistedIndex() {
+    public void testAutoReLoadModel() {
+        AtomicInteger portGenerator = new AtomicInteger();
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(TestHelper.ML_ROLE);
+        DiscoveryNode node = new DiscoveryNode(
+            localNodeId,
+            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
+        when(clusterService().localNode()).thenReturn(node);
+
+        mlModelAutoReLoader.autoReLoadModel();
+
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    }
 
-        createIndex(ML_MODEL_RELOAD_INDEX);
+    public void testAutoReLoadModel_setting_false() {
+        settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.getKey(), false).build();
 
+        nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
+
+        mlModelAutoReLoader = spy(
+            new MLModelAutoReLoader(clusterService(), client().threadPool(), client(), xContentRegistry(), nodeHelper, settings)
+        );
+
+        mlModelAutoReLoader.autoReLoadModel();
+
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    }
+
+    public void testAutoReLoadModel_Is_Not_ML_Node() {
+        mlModelAutoReLoader.autoReLoadModel();
+
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    }
+
+    public void testAutoReLoadModel_Max_ReTryTimes() {
+        AtomicInteger portGenerator = new AtomicInteger();
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(TestHelper.ML_ROLE);
+        DiscoveryNode node = new DiscoveryNode(
+            localNodeId,
+            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
+        when(clusterService().localNode()).thenReturn(node);
+
+        initDataOfModelReload(localNodeId, 3);
+
+        mlModelAutoReLoader.autoReLoadModel();
+
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testSaveLatestReTryTimes_getReTryTimes() {
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    public void testAutoReLoadModelByNodeId_ReTry() throws IOException, URISyntaxException {
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        initDataOfMlModel(modelId, MLModelState.LOADED);
 
-        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 0);
+        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+
+        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
-        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        assertThat(retryTimes, is(0));
 
-        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 1);
-        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
         assertThat(retryTimes, is(1));
     }
 
-    public void testGetReTryTimes_IndexNotExisted() {
-        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        assertThat(retryTimes, is(0));
+    public void testAutoReLoadModelByNodeId_IndexNotFound() {
+        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testGetReTryTimes_EmptyHits() {
+    public void testAutoReLoadModelByNodeId_EmptyHits() {
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+
+        createIndex();
+
+        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+
+        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
-
-        createIndex(ML_MODEL_RELOAD_INDEX);
-
-        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        assertThat(retryTimes, is(0));
     }
 
     public void testAutoReLoadModelByNodeAndModelId_Exception() {
-        exceptionRule.expect(Exception.class);
+        exceptionRule.expect(RuntimeException.class);
         mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
     }
 
-    public void testQueryTask() throws IOException, URISyntaxException {
+    public void testQueryTask() throws IOException, URISyntaxException, ExecutionException, InterruptedException {
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-
         SearchResponse response = mlModelAutoReLoader.queryTask(localNodeId);
-
         SearchHit[] hits = response.getHits().getHits();
         assertThat(hits.length, is(1));
-
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
 
         initDataOfMlTask(localNodeId, modelId, MLTaskType.UPLOAD_MODEL, MLTaskState.COMPLETED);
-
         response = mlModelAutoReLoader.queryTask(localNodeId);
-
         hits = response.getHits().getHits();
         assertThat(hits.length, is(0));
-
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
 
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.RUNNING);
-
         response = mlModelAutoReLoader.queryTask(localNodeId);
-
         hits = response.getHits().getHits();
         assertThat(hits.length, is(0));
-
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
     }
 
@@ -191,42 +261,57 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId() throws IOException, URISyntaxException {
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlModel(modelId, MLModelState.LOADED);
+    public void testQueryTask_IndexNotExisted() {
+        exceptionRule.expect(IndexNotFoundException.class);
 
-        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+        mlModelAutoReLoader.queryTask(localNodeId);
+    }
 
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
+    public void testGetReTryTimes() {
+        int retryTimes;
+
+        initDataOfModelReload(localNodeId, 0);
+        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(0));
+
+        initDataOfModelReload(localNodeId, 1);
+        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(1));
+    }
+
+    public void testGetReTryTimes_IndexNotExisted() {
+        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(0));
+    }
+
+    public void testGetReTryTimes_EmptyHits() throws ExecutionException, InterruptedException {
+        createIndex(ML_MODEL_RELOAD_INDEX);
+
+        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(0));
+    }
+
+    public void testIsExistedIndex_False() throws ExecutionException, InterruptedException {
+        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    }
+
+    public void testIsExistedIndex_True() throws ExecutionException, InterruptedException {
+        createIndex(ML_MODEL_RELOAD_INDEX);
+
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId_IndexNotFound() {
-        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+    public void testSaveLatestReTryTimes() {
+        int retryTimes;
+        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 0);
 
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
-    }
+        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(0));
 
-    public void testAutoReLoadModelByNodeId_EmptyHits() throws IOException {
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 1);
 
-        createIndex();
-
-        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
-
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
-    }
-
-    public void testAutoReLoadModel() {
-        mlModelAutoReLoader.autoReLoadModel();
-
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(1));
     }
 
     private void createIndex() {
@@ -234,6 +319,19 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         createIndexRequest.mapping(ML_TASK_INDEX_MAPPING);
 
         client().execute(CreateIndexAction.INSTANCE, createIndexRequest).actionGet(5000);
+    }
+
+    private void initDataOfModelReload(String nodeId, int reTryTimes) {
+        Map<String, Object> content = new HashMap<>(2);
+        content.put(NODE_ID_FIELD, nodeId);
+        content.put(MODEL_LOAD_RETRY_TIMES_FIELD, reTryTimes);
+
+        IndexRequest indexRequest = new IndexRequest(ML_MODEL_RELOAD_INDEX);
+        indexRequest.id(nodeId);
+        indexRequest.source(content);
+        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+        client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
     }
 
     private void initDataOfMlTask(String nodeId, String modelId, MLTaskType mlTaskType, MLTaskState mlTaskState) throws IOException {
@@ -269,6 +367,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         MLModel mlModel = MLModel
             .builder()
+            .modelId(modelId)
             .name("model_name")
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .version("1.0.0")
