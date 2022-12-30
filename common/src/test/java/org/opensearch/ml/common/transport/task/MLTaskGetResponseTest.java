@@ -1,5 +1,11 @@
 package org.opensearch.ml.common.transport.task;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+
+import java.io.IOException;
+import java.time.Instant;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.Strings;
@@ -9,17 +15,11 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-
-import java.io.IOException;
-import java.time.Instant;
-
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 
 public class MLTaskGetResponseTest {
     MLTask mlTask;
@@ -85,6 +85,7 @@ public class MLTaskGetResponseTest {
                 "\"last_update_time\":123," +
                 "\"error\":\"error\"," +
                 "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}," +
-                "\"is_async\":true}", jsonStr);
+                "\"is_async\":true"+
+                ",\"is_auto_reload\":false}", jsonStr);
     }
 }
