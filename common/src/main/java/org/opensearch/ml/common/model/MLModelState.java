@@ -12,7 +12,8 @@ public enum MLModelState {
     LOADING,
     LOADED,
     PARTIALLY_LOADED,
-    UNLOADED;
+    UNLOADED,
+    LOAD_FAILED;
 
     public static MLModelState from(String value) {
         try {

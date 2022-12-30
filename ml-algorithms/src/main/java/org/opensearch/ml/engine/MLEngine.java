@@ -17,6 +17,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -31,6 +32,15 @@ public class MLEngine {
     public MLEngine(Path opensearchDataFolder) {
         djlCachePath = opensearchDataFolder.resolve("djl");
         djlModelsCachePath = djlCachePath.resolve("models_cache");
+    }
+
+    public String getCIPrebuiltModelConfigPath(String modelName, String version) {
+        return String.format("https://ci.opensearch.org/ci/dbc/models/ml-models/%s/%s/config.json", modelName, version, Locale.ROOT);
+    }
+
+    public String getCIPrebuiltModelPath(String modelName, String version) {
+        int index = modelName.lastIndexOf("/") + 1;
+        return String.format("https://ci.opensearch.org/ci/dbc/models/ml-models/%s/%s/%s.zip", modelName, version, modelName.substring(index), Locale.ROOT);
     }
 
     public Path getUploadModelPath(String modelId, String modelName, String version) {

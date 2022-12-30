@@ -28,6 +28,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -106,6 +107,8 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
     @Mock
     private IndexResponse indexResponse;
 
+    ThreadContext threadContext;
+
     private TransportUploadModelAction transportUploadModelAction;
 
     private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
@@ -114,6 +117,7 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex).build();
+        threadContext = new ThreadContext(settings);
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         transportUploadModelAction = new TransportUploadModelAction(
@@ -152,12 +156,20 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> { return null; }).when(mlModelManager).uploadMLModel(any(), any());
 
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     public void testDoExecute_successWithLocalNodeEqualToClusterNode() {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId1");
 
+        MLForwardResponse forwardResponse = Mockito.mock(MLForwardResponse.class);
+        doAnswer(invocation -> {
+            ActionListenerResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
+            handler.handleResponse(forwardResponse);
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any());
         transportUploadModelAction.doExecute(task, prepareRequest(), actionListener);
         ArgumentCaptor<UploadModelResponse> argumentCaptor = ArgumentCaptor.forClass(UploadModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -180,6 +192,16 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
             handler.handleResponse(forwardResponse);
             return null;
         }).when(transportService).sendRequest(any(), any(), any(), any());
+
+        transportUploadModelAction.doExecute(task, prepareRequest(), actionListener);
+        ArgumentCaptor<UploadModelResponse> argumentCaptor = ArgumentCaptor.forClass(UploadModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void testDoExecute_FailToSendForwardRequest() {
+        when(node1.getId()).thenReturn("NodeId1");
+        when(node2.getId()).thenReturn("NodeId2");
+        doThrow(new RuntimeException("error")).when(transportService).sendRequest(any(), any(), any(), any());
 
         transportUploadModelAction.doExecute(task, prepareRequest(), actionListener);
         ArgumentCaptor<UploadModelResponse> argumentCaptor = ArgumentCaptor.forClass(UploadModelResponse.class);
