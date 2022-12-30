@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -153,7 +154,7 @@ public class MLModelAutoReLoader {
             MLTask mlTask = MLTask.parse(parser);
 
             autoReLoadModelByNodeAndModelId(nodeId, mlTask.getModelId());
-        } catch (Exception e) {
+        } catch (RuntimeException | IOException e) {
             reTryTimes++;
             log.error("Can't auto reload model in node id {} ,has try {} times\nThe reason is:{}", nodeId, reTryTimes, e);
         }
@@ -168,7 +169,7 @@ public class MLModelAutoReLoader {
      * @param modelId model id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) throws RuntimeException {
+    void autoReLoadModelByNodeAndModelId(String nodeId, String modelId) throws IllegalArgumentException {
         MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, new String[] { nodeId }, false, false, true);
         AtomicReference<LoadModelResponse> loadModelResponse = new AtomicReference<>();
         client
@@ -178,7 +179,7 @@ public class MLModelAutoReLoader {
                 ActionListener
                     .wrap(
                         loadModelResponse::set,
-                        e -> { throw new RuntimeException("fail to reload model: " + modelId + " under the node: " + nodeId, e); }
+                        e -> { throw new RuntimeException("fail to reload model " + modelId + " under the node " + nodeId, e); }
                     )
             );
     }
