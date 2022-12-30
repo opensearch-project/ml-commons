@@ -145,9 +145,6 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         boolean isAutoReload = deployModelRequest.isAutoLoad();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                if (isAutoReload) {
-                    return;
-                }
                 FunctionName algorithm = mlModel.getAlgorithm();
                 // TODO: Track load failure
                 // mlStats.createCounterStatIfAbsent(algorithm, ActionName.LOAD, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
@@ -161,6 +158,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                     .lastUpdateTime(Instant.now())
                     .state(MLTaskState.CREATED)
                     .workerNode(workerNodes)
+                    .autoReload(isAutoReload)
                     .build();
                 mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                     String taskId = response.getId();

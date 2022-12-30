@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.common;
 
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
+
+import java.io.IOException;
+import java.time.Instant;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -17,12 +22,6 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.dataset.MLInputDataType;
-
-import java.io.IOException;
-import java.time.Instant;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.USER;
 
 @Getter
 @EqualsAndHashCode
@@ -41,6 +40,7 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
     public static final String ERROR_FIELD = "error";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
+    public static final String IS_AUTO_RELOAD_FIELD = "is_auto_reload";
 
     @Setter
     private String taskId;
@@ -61,6 +61,7 @@ public class MLTask implements ToXContentObject, Writeable {
     private String error;
     private User user; // TODO: support document level access control later
     private boolean async;
+    private boolean autoReload;
 
     @Builder(toBuilder = true)
     public MLTask(
@@ -77,7 +78,8 @@ public class MLTask implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String error,
         User user,
-        boolean async
+        boolean async,
+        boolean autoReload
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -93,6 +95,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.error = error;
         this.user = user;
         this.async = async;
+        this.autoReload=autoReload;
     }
 
     public MLTask(StreamInput input) throws IOException {
@@ -118,6 +121,7 @@ public class MLTask implements ToXContentObject, Writeable {
             this.user = null;
         }
         this.async = input.readBoolean();
+        this.autoReload=input.readBoolean();
     }
 
     @Override
@@ -145,6 +149,7 @@ public class MLTask implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeBoolean(async);
+        out.writeBoolean(autoReload);
     }
 
     @Override
@@ -190,6 +195,7 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(USER, user);
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
+        builder.field(IS_AUTO_RELOAD_FIELD, autoReload);
         return builder.endObject();
     }
 
@@ -213,6 +219,7 @@ public class MLTask implements ToXContentObject, Writeable {
         String error = null;
         User user = null;
         boolean async = false;
+        boolean autoReload = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -262,6 +269,9 @@ public class MLTask implements ToXContentObject, Writeable {
                 case IS_ASYNC_TASK_FIELD:
                     async = parser.booleanValue();
                     break;
+                    case IS_AUTO_RELOAD_FIELD:
+                        autoReload = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -282,6 +292,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 .error(error)
                 .user(user)
                 .async(async)
+            .autoReload(autoReload)
                 .build();
     }
 }
