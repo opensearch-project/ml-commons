@@ -196,7 +196,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
 
         int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        assertThat(retryTimes, is(0));
+        assertThat(retryTimes, is(1));
     }
 
     public void testAutoReLoadModelByNodeId_IndexNotFound() {

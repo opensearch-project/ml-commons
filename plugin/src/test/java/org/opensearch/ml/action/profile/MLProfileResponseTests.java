@@ -103,7 +103,7 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
                 + "\"DATA_FRAME\",\"progress\":0.4,\"output_index\":\"test_index\",\"worker_node\":\"test_node\","
                 + "\"create_time\":123,\"last_update_time\":123,\"error\":\"error\",\"user\":{\"name\":\"\","
                 + "\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
-                + "\"is_async\":false}},\"models\":{\"model1\":{\"model_state\":\"LOADED\",\"predictor\":\"test_predictor\","
+                + "\"is_async\":false,\"is_auto_reload\":false}},\"models\":{\"model1\":{\"model_state\":\"LOADED\",\"predictor\":\"test_predictor\","
                 + "\"worker_nodes\":[\"node1\",\"node2\"],\"model_inference_stats\":{\"count\":10,\"max\":20.0,"
                 + "\"min\":5.0,\"average\":11.0}}}}}}",
             taskContent
