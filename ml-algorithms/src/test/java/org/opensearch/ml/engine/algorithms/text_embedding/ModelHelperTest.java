@@ -13,6 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.transport.upload.MLUploadInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 
@@ -38,6 +40,9 @@ public class ModelHelperTest {
     @Mock
     ActionListener<Map<String, Object>> actionListener;
 
+    @Mock
+    ActionListener<MLUploadInput> uploadInputListener;
+
     @Before
     public void setup() throws URISyntaxException {
         MockitoAnnotations.openMocks(this);
@@ -62,5 +67,38 @@ public class ModelHelperTest {
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
         assertNotEquals(0, argumentCaptor.getValue().size());
+    }
+
+    @Test
+    public void testDownloadPrebuiltModelConfig_WrongModelName() {
+        String taskId = "test_task_id";
+        MLUploadInput unloadInput = MLUploadInput.builder()
+                .modelName("test_model_name")
+                .version("1.0.0")
+                .loadModel(false)
+                .modelNodeIds(new String[]{"node_id1"})
+                .build();
+        modelHelper.downloadPrebuiltModelConfig(taskId, unloadInput, uploadInputListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(uploadInputListener).onFailure(argumentCaptor.capture());
+        assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
+    }
+
+    @Test
+    public void testDownloadPrebuiltModelConfig() {
+        String taskId = "test_task_id";
+        MLUploadInput unloadInput = MLUploadInput.builder()
+                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+                .version("1.0.0")
+                .loadModel(false)
+                .modelNodeIds(new String[]{"node_id1"})
+                .build();
+        modelHelper.downloadPrebuiltModelConfig(taskId, unloadInput, uploadInputListener);
+        ArgumentCaptor<MLUploadInput> argumentCaptor = ArgumentCaptor.forClass(MLUploadInput.class);
+        verify(uploadInputListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        MLModelConfig modelConfig = argumentCaptor.getValue().getModelConfig();
+        assertNotNull(modelConfig);
+        assertEquals("mpnet", modelConfig.getModelType());
     }
 }

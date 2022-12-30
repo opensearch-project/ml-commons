@@ -24,6 +24,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel;
 import org.opensearch.ml.profile.MLModelProfile;
@@ -72,8 +73,8 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     }
 
     public void testModelState_DuplicateError() {
-        expectedEx.expect(IllegalArgumentException.class);
-        expectedEx.expectMessage("Duplicate model task");
+        expectedEx.expect(MLLimitExceededException.class);
+        expectedEx.expectMessage("Duplicate load model task");
         cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING);
         cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING);
     }
