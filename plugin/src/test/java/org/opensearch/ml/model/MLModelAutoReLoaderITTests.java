@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
@@ -197,7 +196,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
 
         int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        assertThat(retryTimes, is(1));
+        assertThat(retryTimes, is(0));
     }
 
     public void testAutoReLoadModelByNodeId_IndexNotFound() {
@@ -225,7 +224,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
     }
 
-    public void testQueryTask() throws IOException, URISyntaxException, ExecutionException, InterruptedException {
+    public void testQueryTask() throws IOException {
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         SearchResponse response = mlModelAutoReLoader.queryTask(localNodeId);
         SearchHit[] hits = response.getHits().getHits();
@@ -245,7 +244,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
     }
 
-    public void testQueryTask_MultiDataInTaskIndex() throws IOException, URISyntaxException {
+    public void testQueryTask_MultiDataInTaskIndex() throws IOException {
         initDataOfMlTask(localNodeId, "modelId1", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         initDataOfMlTask(localNodeId, "modelId2", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         initDataOfMlTask(localNodeId, "modelId3", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
@@ -284,18 +283,18 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertThat(retryTimes, is(0));
     }
 
-    public void testGetReTryTimes_EmptyHits() throws ExecutionException, InterruptedException {
+    public void testGetReTryTimes_EmptyHits() {
         createIndex(ML_MODEL_RELOAD_INDEX);
 
         int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
         assertThat(retryTimes, is(0));
     }
 
-    public void testIsExistedIndex_False() throws ExecutionException, InterruptedException {
+    public void testIsExistedIndex_False() {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testIsExistedIndex_True() throws ExecutionException, InterruptedException {
+    public void testIsExistedIndex_True() {
         createIndex(ML_MODEL_RELOAD_INDEX);
 
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
@@ -357,7 +356,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
     }
 
-    private void initDataOfMlModel(String modelId, MLModelState modelState) throws IOException, URISyntaxException {
+    private void initDataOfMlModel(String modelId, MLModelState modelState) throws IOException {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
