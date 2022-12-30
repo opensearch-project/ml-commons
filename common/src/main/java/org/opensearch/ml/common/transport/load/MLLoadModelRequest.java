@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.common.transport.load;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,16 +28,6 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.MLTaskRequest;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
@@ -38,6 +37,7 @@ public class MLLoadModelRequest extends MLTaskRequest {
     private String modelId;
     private String[] modelNodeIds;
     boolean async;
+    boolean isAutoLoad;
 
     @Builder
     public MLLoadModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask) {
@@ -45,6 +45,16 @@ public class MLLoadModelRequest extends MLTaskRequest {
         this.modelId = modelId;
         this.modelNodeIds = modelNodeIds;
         this.async = async;
+        this.isAutoLoad =false;
+    }
+
+    @Builder
+    public MLLoadModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask,boolean isAutoLoad) {
+        super(dispatchTask);
+        this.modelId = modelId;
+        this.modelNodeIds = modelNodeIds;
+        this.async = async;
+        this.isAutoLoad =isAutoLoad;
     }
 
     public MLLoadModelRequest(String modelId, boolean async) {
@@ -56,6 +66,7 @@ public class MLLoadModelRequest extends MLTaskRequest {
         this.modelId = in.readString();
         this.modelNodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
+        this.isAutoLoad =false;
     }
 
     @Override

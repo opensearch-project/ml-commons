@@ -86,7 +86,9 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
 
-        mlModelAutoReLoader = spy(new MLModelAutoReLoader(clusterService(), client(), xContentRegistry(), nodeHelper, settings));
+        mlModelAutoReLoader = spy(
+            new MLModelAutoReLoader(clusterService(), client().threadPool(), client(), xContentRegistry(), nodeHelper, settings)
+        );
         modelId = "modelId1";
         localNodeId = clusterService().localNode().getId();
         modelManager = mock(MLModelManager.class);
