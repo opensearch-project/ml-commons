@@ -12,6 +12,8 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -23,6 +25,7 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.UPLOAD_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
@@ -75,6 +78,8 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -148,11 +153,13 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
             ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
-            ML_COMMONS_MONITORING_REQUEST_COUNT
+            ML_COMMONS_MONITORING_REQUEST_COUNT,
+            ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;
@@ -247,20 +254,24 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_ExceedMaxRunningTask() {
         String error = "exceed max running task limit";
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(error);
+        doThrow(new MLLimitExceededException(error)).when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        expectedEx.expect(MLException.class);
+        expectedEx.expectMessage(error);
         modelManager.uploadMLModel(uploadInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUploadMLModel_CircuitBreakerOpen() {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Disk Circuit Breaker");
+        expectedEx.expect(MLException.class);
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.uploadMLModel(uploadInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testUploadMLModel_InitModelIndexFailure() {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex_failure(mlIndicesHandler);
@@ -272,7 +283,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_IndexModelMetaFailure() {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_client_ThreadContext(client, threadPool, threadContext);
@@ -286,7 +297,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_IndexModelChunkFailure() throws IOException {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_client_ThreadContext(client, threadPool, threadContext);
@@ -301,7 +312,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_DownloadModelFileFailure() {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
@@ -315,7 +326,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_DownloadModelFile() throws IOException {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
@@ -330,7 +341,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_LoadModel() throws IOException {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
@@ -348,7 +359,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_LoadModel_failure() throws IOException {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
@@ -366,7 +377,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testUploadMLModel_DownloadModelFile_ModelFileSizeExceedLimit() throws IOException {
-        when(mlTaskManager.checkLimitAndAddRunningTask(any(), any())).thenReturn(null);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
         when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
@@ -393,7 +404,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
         mock_client_ThreadContext(client, threadPool, threadContext);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -408,7 +419,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -423,7 +434,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NotExist(client);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -441,7 +452,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModel(model);
         setUpMock_GetModel(modelChunk0);
         setUpMock_GetModel(modelChunk0);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -461,7 +472,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModelChunks(model);
         // setUpMock_GetModel(modelChunk0);
         // setUpMock_GetModel(modelChunk1);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -473,7 +484,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testLoadModel_ModelAlreadyLoaded() {
         when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         ArgumentCaptor<String> response = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(response.capture());
         assertEquals("successful", response.getValue());
@@ -487,7 +498,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }
         when(modelCacheHelper.getLoadedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Exceed max model per node limit", failure.getValue().getMessage());
@@ -500,7 +511,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.loadModel(modelId, modelContentHashValue, functionName, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, functionName, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
@@ -578,7 +589,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.loadModel(modelId, modelContentHashValue, functionName, listener);
+        modelManager.loadModel(modelId, modelContentHashValue, functionName, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }

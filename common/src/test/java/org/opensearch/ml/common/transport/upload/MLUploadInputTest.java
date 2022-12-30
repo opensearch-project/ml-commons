@@ -1,6 +1,5 @@
 package org.opensearch.ml.common.transport.upload;
 
-import org.hamcrest.Matcher;
 import org.junit.Rule;
 import org.junit.Before;
 import org.junit.Test;
@@ -14,22 +13,17 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.*;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.search.SearchModule;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLUploadInputTest {
@@ -108,6 +102,7 @@ public class MLUploadInputTest {
                 .modelName(modelName)
                 .version(version)
                 .modelFormat(null)
+                .url(url)
                 .build();
     }
 
@@ -121,20 +116,7 @@ public class MLUploadInputTest {
                 .version(version)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(null)
-                .build();
-    }
-
-    @Test
-    public void constructor_NullModelFileUrl() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model file url is null");
-        MLUploadInput.builder()
-                .functionName(functionName)
-                .modelName(modelName)
-                .version(version)
-                .modelFormat(MLModelFormat.ONNX)
-                .modelConfig(config)
-                .url(null)
+                .url(url)
                 .build();
     }
 

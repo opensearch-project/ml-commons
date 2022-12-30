@@ -132,7 +132,8 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Memory Circuit Breaker");
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
-        expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(null, transportService, listener));
+        MLTaskRequest request = new MLTaskRequest(false);
+        expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(request, transportService, listener));
         Long value = (Long) mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
         assertEquals(1L, value.longValue());
     }
