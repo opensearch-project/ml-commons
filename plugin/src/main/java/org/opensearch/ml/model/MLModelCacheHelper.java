@@ -18,6 +18,7 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLModelProfile;
@@ -42,7 +43,7 @@ public class MLModelCacheHelper {
      */
     public synchronized void initModelState(String modelId, MLModelState state, FunctionName functionName) {
         if (isModelRunningOnNode(modelId)) {
-            throw new IllegalArgumentException("Duplicate model task");
+            throw new MLLimitExceededException("Duplicate load model task");
         }
         log.debug("init model state for model {}, state: {}", modelId, state);
         MLModelCache modelCache = new MLModelCache();

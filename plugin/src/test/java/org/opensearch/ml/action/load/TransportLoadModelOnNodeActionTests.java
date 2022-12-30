@@ -66,6 +66,8 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportException;
+import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
 public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
@@ -167,10 +169,13 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
             Collections.singleton(CLUSTER_MANAGER_ROLE),
             Version.CURRENT
         );
+        InetAddress inetAddress1 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 1 });
+        InetAddress inetAddress2 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 2 });
+        InetAddress inetAddress3 = InetAddress.getByAddress(new byte[] { (byte) 192, (byte) 168, (byte) 0, (byte) 3 });
         localNode1 = new DiscoveryNode(
             "foo1",
             "foo1",
-            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            new TransportAddress(inetAddress1, 9300),
             Collections.emptyMap(),
             Collections.singleton(CLUSTER_MANAGER_ROLE),
             Version.CURRENT
@@ -178,7 +183,7 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
         localNode2 = new DiscoveryNode(
             "foo2",
             "foo2",
-            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            new TransportAddress(inetAddress2, 9300),
             Collections.emptyMap(),
             Collections.singleton(CLUSTER_MANAGER_ROLE),
             Version.CURRENT
@@ -186,7 +191,7 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
         localNode3 = new DiscoveryNode(
             "foo3",
             "foo3",
-            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            new TransportAddress(inetAddress3, 9300),
             Collections.emptyMap(),
             Collections.singleton(CLUSTER_MANAGER_ROLE),
             Version.CURRENT
@@ -196,10 +201,10 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
         when(clusterService.localNode()).thenReturn(localNode);
 
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(3);
+            ActionListener<String> listener = invocation.getArgument(4);
             listener.onResponse("successful");
             return null;
-        }).when(mlModelManager).loadModel(any(), any(), any(), any());
+        }).when(mlModelManager).loadModel(any(), any(), any(), any(), any());
         MLForwardResponse forwardResponse = Mockito.mock(MLForwardResponse.class);
         doAnswer(invocation -> {
             ActionListenerResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
@@ -207,7 +212,14 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
             return null;
         }).when(transportService).sendRequest(any(), any(), any(), any());
 
-        DiscoveryNodes nodes = DiscoveryNodes.builder().add(clusterManagerNode).add(localNode1).add(localNode1).add(localNode1).build();
+        DiscoveryNodes nodes = DiscoveryNodes
+            .builder()
+            .add(clusterManagerNode)
+            .add(localNode)
+            .add(localNode1)
+            .add(localNode2)
+            .add(localNode3)
+            .build();
         ClusterState clusterState = new ClusterState(
             new ClusterName("Local Cluster"),
             123l,
@@ -246,7 +258,7 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
     }
 
     public void testNewResponses() {
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         Map<String, String> modelToLoadStatus = new HashMap<>();
         modelToLoadStatus.put("modelName:version", "response");
         LoadModelNodeResponse response = new LoadModelNodeResponse(localNode, modelToLoadStatus);
@@ -257,7 +269,7 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
     }
 
     public void testNewRequest() {
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
         assertNotNull(request);
     }
@@ -273,15 +285,31 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
     }
 
     public void testNodeOperation_Success() {
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final LoadModelNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
     }
 
-    public void testNodeOperation_LoadModelException() {
-        when(mlModelManager.checkAndAddRunningTask(any(), any())).thenThrow(NullPointerException.class);
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+    public void testNodeOperation_Success_DifferentCoordinatingNode() {
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode1.getId());
+        final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
+        final LoadModelNodeResponse response = action.nodeOperation(request);
+        assertNotNull(response);
+    }
+
+    public void testNodeOperation_FailToSendForwardRequest() {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(4);
+            listener.onResponse("ok");
+            return null;
+        }).when(mlModelManager).loadModel(any(), any(), any(), any(), any());
+        doAnswer(invocation -> {
+            TransportResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
+            handler.handleException(new TransportException("error"));
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any());
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final LoadModelNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
@@ -289,11 +317,19 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
 
     public void testNodeOperation_Exception() {
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(3);
+            ActionListener<String> listener = invocation.getArgument(4);
             listener.onFailure(new RuntimeException("Something went wrong"));
             return null;
-        }).when(mlModelManager).loadModel(any(), any(), any(), any());
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+        }).when(mlModelManager).loadModel(any(), any(), any(), any(), any());
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
+        final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
+        final LoadModelNodeResponse response = action.nodeOperation(request);
+        assertNotNull(response);
+    }
+
+    public void testNodeOperation_LoadModelRuntimeException() {
+        doThrow(new RuntimeException("error")).when(mlModelManager).loadModel(any(), any(), any(), any(), any());
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final LoadModelNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
@@ -301,27 +337,27 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
 
     public void testNodeOperation_MLLimitExceededException() {
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(3);
+            ActionListener<String> listener = invocation.getArgument(4);
             listener.onFailure(new MLLimitExceededException("Limit exceeded exception"));
             return null;
-        }).when(mlModelManager).loadModel(any(), any(), any(), any());
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+        }).when(mlModelManager).loadModel(any(), any(), any(), any(), any());
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final LoadModelNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
     }
 
     public void testNodeOperation_ErrorMessageNotNull() {
-        when(mlModelManager.checkAndAddRunningTask(any(), any())).thenReturn("Error message");
-        final LoadModelNodesRequest nodesRequest = prepareRequest();
+        doThrow(new MLLimitExceededException("exceed max running task limit")).when(mlModelManager).checkAndAddRunningTask(any(), any());
+        final LoadModelNodesRequest nodesRequest = prepareRequest(localNode.getId());
         final LoadModelNodeRequest request = action.newNodeRequest(nodesRequest);
         final LoadModelNodeResponse response = action.nodeOperation(request);
         assertNotNull(response);
     }
 
-    private LoadModelNodesRequest prepareRequest() {
+    private LoadModelNodesRequest prepareRequest(String coordinatingNodeId) {
         DiscoveryNode[] nodeIds = { localNode1, localNode2, localNode3 };
-        LoadModelInput loadModelInput = new LoadModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        LoadModelInput loadModelInput = new LoadModelInput("modelId", "taskId", "modelContentHash", 3, coordinatingNodeId, mlTask);
         return new LoadModelNodesRequest(nodeIds, loadModelInput);
     }
 }
