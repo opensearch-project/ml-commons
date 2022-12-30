@@ -110,7 +110,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
-        assertEquals("Can't find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Can't find task in cache: task id", argumentCaptor.getValue().getMessage());
     }
 
     public void testUpdateMLTask_NoSemaphore() {
@@ -284,17 +284,19 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         MLTask task1 = MLTask.builder().taskId("1").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
         MLTask task2 = MLTask.builder().taskId("2").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
         int limit = 1;
-        String error1 = mlTaskManager.checkLimitAndAddRunningTask(task1, limit);
+        mlTaskManager.checkLimitAndAddRunningTask(task1, limit);
         MLTask mlTask = mlTaskManager.getMLTask("1");
         assertEquals(MLTaskState.RUNNING, mlTask.getState());
-        assertNull(error1);
 
-        String error2 = mlTaskManager.checkLimitAndAddRunningTask(task2, limit);
-        assertEquals("exceed max running task limit", error2);
+        try {
+            mlTaskManager.checkLimitAndAddRunningTask(task2, limit);
+        } catch (Exception e) {
+            assertEquals("exceed max running task limit", e.getMessage());
+        }
 
         mlTaskManager.remove(task1.getTaskId());
         assertEquals(0, mlTaskManager.getRunningTaskCount());
-        assertNull(mlTaskManager.checkLimitAndAddRunningTask(task2, limit));
+        mlTaskManager.checkLimitAndAddRunningTask(task2, limit);
     }
 
     public void testMLTaskCache() {

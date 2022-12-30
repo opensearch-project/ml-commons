@@ -26,10 +26,12 @@ import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.UPLOAD_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
 import static org.opensearch.ml.stats.ActionName.UPLOAD;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -51,7 +53,6 @@ import java.util.function.Supplier;
 
 import lombok.extern.log4j.Log4j2;
 
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
@@ -77,7 +78,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.load.LoadModelResponse;
@@ -95,6 +95,7 @@ import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
@@ -109,6 +110,7 @@ import com.google.common.io.Files;
 public class MLModelManager {
 
     public static final int TIMEOUT_IN_MILLIS = 5000;
+    public static final long MODEL_FILE_SIZE_LIMIT = 4l * 1024 * 1024 * 1024;// 4GB
 
     private final Client client;
     private final ClusterService clusterService;
@@ -125,6 +127,7 @@ public class MLModelManager {
 
     private volatile Integer maxModelPerNode;
     private volatile Integer maxUploadTasksPerNode;
+    private volatile Integer maxLoadTasksPerNode;
 
     public MLModelManager(
         ClusterService clusterService,
@@ -159,6 +162,11 @@ public class MLModelManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE, it -> maxUploadTasksPerNode = it);
+
+        maxLoadTasksPerNode = ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE, it -> maxLoadTasksPerNode = it);
     }
 
     /**
@@ -168,15 +176,29 @@ public class MLModelManager {
      * @param mlTask      ML task
      */
     public void uploadMLModel(MLUploadInput uploadInput, MLTask mlTask) {
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        checkAndAddRunningTask(mlTask, maxUploadTasksPerNode);
+        try {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), UPLOAD, ML_ACTION_REQUEST_COUNT).increment();
+            if (uploadInput.getUrl() != null) {
+                uploadModelFromUrl(uploadInput, mlTask);
+            } else {
+                uploadPrebuiltModel(uploadInput, mlTask);
+            }
+        } catch (Exception e) {
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), UPLOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+            handleException(uploadInput.getFunctionName(), mlTask.getTaskId(), e);
+        } finally {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+        }
+    }
+
+    private void uploadModelFromUrl(MLUploadInput uploadInput, MLTask mlTask) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-            String errorMsg = checkAndAddRunningTask(mlTask, maxUploadTasksPerNode);
-            if (errorMsg != null) {
-                mlTaskManager.updateMLTaskDirectly(mlTask.getTaskId(), ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, errorMsg));
-                throw new MLLimitExceededException(errorMsg);
-            }
 
             mlStats.createCounterStatIfAbsent(functionName, UPLOAD, ML_ACTION_REQUEST_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
@@ -202,67 +224,8 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    modelHelper.downloadAndSplit(modelId, modelName, version, uploadInput.getUrl(), ActionListener.wrap(result -> {
-                        Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
-                        if (modelSizeInBytes / 1024 / 1024 / 1024 >= 4L) {
-                            throw new MLException("Model file size exceeds the limit of 4GB");
-                        }
-                        List<String> chunkFiles = (List<String>) result.get(CHUNK_FILES);
-                        String hashValue = (String) result.get(MODEL_FILE_HASH);
-                        Semaphore semaphore = new Semaphore(1);
-                        AtomicInteger uploaded = new AtomicInteger(0);
-                        AtomicBoolean failedToUploadChunk = new AtomicBoolean(false);
-                        // upload chunks
-                        for (String name : chunkFiles) {
-                            semaphore.tryAcquire(10, TimeUnit.SECONDS);
-                            if (failedToUploadChunk.get()) {
-                                throw new MLException("Failed to save model chunk");
-                            }
-                            File file = new File(name);
-                            byte[] bytes = Files.toByteArray(file);
-                            int chunkNum = Integer.parseInt(file.getName());
-                            MLModel mlModel = MLModel
-                                .builder()
-                                .modelId(modelId)
-                                .name(modelName)
-                                .algorithm(functionName)
-                                .version(version)
-                                .modelFormat(uploadInput.getModelFormat())
-                                .chunkNumber(chunkNum)
-                                .totalChunks(chunkFiles.size())
-                                .content(Base64.getEncoder().encodeToString(bytes))
-                                .createdTime(Instant.now())
-                                .build();
-                            IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                            String chunkId = getModelChunkId(modelId, chunkNum);
-                            indexRequest.id(chunkId);
-                            indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
-                            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                            client.index(indexRequest, ActionListener.wrap(r -> {
-                                uploaded.getAndIncrement();
-                                if (uploaded.get() == chunkFiles.size()) {
-                                    updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
-                                } else {
-                                    deleteFileQuietly(file);
-                                }
-                                semaphore.release();
-                            }, e -> {
-                                log.error("Failed to index model chunk " + chunkId, e);
-                                failedToUploadChunk.set(true);
-                                handleException(functionName, taskId, e);
-                                deleteFileQuietly(file);
-                                // remove model doc as failed to upload model
-                                deleteModel(modelId);
-                                semaphore.release();
-                                deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
-                            }));
-                        }
-                    }, e -> {
-                        log.error("Failed to index chunk file", e);
-                        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
-                        deleteModel(modelId);
-                        handleException(functionName, taskId, e);
-                    }));
+
+                    uploadModel(uploadInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
@@ -274,11 +237,95 @@ public class MLModelManager {
                 handleException(functionName, taskId, e);
             }));
         } catch (Exception e) {
-            log.error("Failed to upload model", e);
+            logException("Failed to upload model", e, log);
             handleException(functionName, taskId, e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         }
+    }
+
+    private void uploadModel(
+        MLUploadInput uploadInput,
+        String taskId,
+        FunctionName functionName,
+        String modelName,
+        String version,
+        String modelId
+    ) {
+        modelHelper.downloadAndSplit(modelId, modelName, version, uploadInput.getUrl(), ActionListener.wrap(result -> {
+            Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
+            if (modelSizeInBytes >= MODEL_FILE_SIZE_LIMIT) {
+                throw new MLException("Model file size exceeds the limit of 4GB: " + modelSizeInBytes);
+            }
+            List<String> chunkFiles = (List<String>) result.get(CHUNK_FILES);
+            String hashValue = (String) result.get(MODEL_FILE_HASH);
+            Semaphore semaphore = new Semaphore(1);
+            AtomicInteger uploaded = new AtomicInteger(0);
+            AtomicBoolean failedToUploadChunk = new AtomicBoolean(false);
+            // upload chunks
+            for (String name : chunkFiles) {
+                semaphore.tryAcquire(10, TimeUnit.SECONDS);
+                if (failedToUploadChunk.get()) {
+                    throw new MLException("Failed to save model chunk");
+                }
+                File file = new File(name);
+                byte[] bytes = Files.toByteArray(file);
+                int chunkNum = Integer.parseInt(file.getName());
+                MLModel mlModel = MLModel
+                    .builder()
+                    .modelId(modelId)
+                    .name(modelName)
+                    .algorithm(functionName)
+                    .version(version)
+                    .modelFormat(uploadInput.getModelFormat())
+                    .chunkNumber(chunkNum)
+                    .totalChunks(chunkFiles.size())
+                    .content(Base64.getEncoder().encodeToString(bytes))
+                    .createdTime(Instant.now())
+                    .build();
+                IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                String chunkId = getModelChunkId(modelId, chunkNum);
+                indexRequest.id(chunkId);
+                indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
+                indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                client.index(indexRequest, ActionListener.wrap(r -> {
+                    uploaded.getAndIncrement();
+                    if (uploaded.get() == chunkFiles.size()) {
+                        updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
+                    } else {
+                        deleteFileQuietly(file);
+                    }
+                    semaphore.release();
+                }, e -> {
+                    log.error("Failed to index model chunk " + chunkId, e);
+                    failedToUploadChunk.set(true);
+                    handleException(functionName, taskId, e);
+                    deleteFileQuietly(file);
+                    // remove model doc as failed to upload model
+                    deleteModel(modelId);
+                    semaphore.release();
+                    deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+                }));
+            }
+        }, e -> {
+            log.error("Failed to index chunk file", e);
+            deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+            deleteModel(modelId);
+            handleException(functionName, taskId, e);
+        }));
+    }
+
+    private void uploadPrebuiltModel(MLUploadInput uploadInput, MLTask mlTask) {
+        String taskId = mlTask.getTaskId();
+        modelHelper
+            .downloadPrebuiltModelConfig(
+                taskId,
+                uploadInput,
+                ActionListener.wrap(mlUploadInput -> { uploadModelFromUrl(mlUploadInput, mlTask); }, e -> {
+                    log.error("Failed to upload prebuilt model", e);
+                    handleException(uploadInput.getFunctionName(), taskId, e);
+                })
+            );
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {
@@ -289,15 +336,10 @@ public class MLModelManager {
      * Check if exceed running task limit and if circuit breaker is open.
      * @param mlTask ML task
      * @param runningTaskLimit limit
-     * @return error message if limit exceeds; otherwise return null
      */
-    public String checkAndAddRunningTask(MLTask mlTask, Integer runningTaskLimit) {
-        String error = mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
-        if (error != null) {
-            return error;
-        }
+    public void checkAndAddRunningTask(MLTask mlTask, Integer runningTaskLimit) {
         checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
-        return null;
+        mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
     }
 
     private void updateModelUploadStateAsDone(
@@ -358,7 +400,7 @@ public class MLModelManager {
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
         mlStats.createCounterStatIfAbsent(functionName, UPLOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-        Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, ExceptionUtils.getStackTrace(e), STATE_FIELD, FAILED);
+        Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
@@ -369,9 +411,16 @@ public class MLModelManager {
      * @param modelId          model id
      * @param modelContentHash model content hash value
      * @param functionName     function name
+     * @param mlTask           ML task
      * @param listener         action listener
      */
-    public void loadModel(String modelId, String modelContentHash, FunctionName functionName, ActionListener<String> listener) {
+    public void loadModel(
+        String modelId,
+        String modelContentHash,
+        FunctionName functionName,
+        MLTask mlTask,
+        ActionListener<String> listener
+    ) {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.LOAD, ML_ACTION_REQUEST_COUNT).increment();
         if (modelCacheHelper.isModelLoaded(modelId)) {
             listener.onResponse("successful");
@@ -383,6 +432,7 @@ public class MLModelManager {
         }
         modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            checkAndAddRunningTask(mlTask, maxLoadTasksPerNode);
             this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 if (mlModel.getAlgorithm() != FunctionName.TEXT_EMBEDDING) {// load model trained by built-in algorithm like kmeans
                     Predictable predictable = mlEngine.load(mlModel, null);
@@ -406,10 +456,16 @@ public class MLModelManager {
                     Map<String, Object> params = ImmutableMap
                         .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
                     Predictable predictable = mlEngine.load(mlModel, params);
-                    modelCacheHelper.setPredictor(modelId, predictable);
-                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
-                    modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
-                    listener.onResponse("successful");
+                    try {
+                        modelCacheHelper.setPredictor(modelId, predictable);
+                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+                        modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
+                        listener.onResponse("successful");
+                    } catch (Exception e) {
+                        log.error("Failed to add predictor to cache", e);
+                        predictable.close();
+                        listener.onFailure(e);
+                    }
                 }, e -> {
                     log.error("Failed to retrieve model " + modelId, e);
                     handleLoadModelException(modelId, functionName, listener, e);
@@ -515,7 +571,7 @@ public class MLModelManager {
      * @param modelId       model id
      * @param updatedFields updated fields
      */
-    public void updateModel(String modelId, ImmutableMap<String, Object> updatedFields) {
+    public void updateModel(String modelId, Map<String, Object> updatedFields) {
         updateModel(modelId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
                 log.debug("Updated ML model successfully: {}, model id: {}", response.status(), modelId);

@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 
 import lombok.extern.log4j.Log4j2;
 
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -54,6 +53,7 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -182,7 +182,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                         mlTaskManager
                             .updateMLTask(
                                 taskId,
-                                ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, ExceptionUtils.getStackTrace(ex)),
+                                ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
                                 TASK_SEMAPHORE_TIMEOUT,
                                 true
                             );
@@ -231,12 +231,11 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
             mlTaskManager
                 .updateMLTask(
                     taskId,
-                    ImmutableMap.of(MLTask.ERROR_FIELD, ExceptionUtils.getStackTrace(e), STATE_FIELD, FAILED),
+                    ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            MLModelState state = algorithm == FunctionName.TEXT_EMBEDDING ? MLModelState.UPLOADED : MLModelState.TRAINED;
-            mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, state));
+            mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.LOAD_FAILED));
         });
 
         mlModelManager
