@@ -56,7 +56,7 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
             builder.field("predictor", predictor);
         }
         if (targetWorkerNodes != null) {
-            builder.field("worker_nodes", targetWorkerNodes);
+            builder.field("target_worker_nodes", targetWorkerNodes);
         }
         if (workerNodes != null) {
             builder.field("worker_nodes", workerNodes);
