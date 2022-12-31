@@ -21,6 +21,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
@@ -247,10 +248,14 @@ public class MLTask implements ToXContentObject, Writeable {
                     outputIndex = parser.text();
                     break;
                 case WORKER_NODE_FIELD:
-                    workerNodes = new ArrayList<>();
-                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        workerNodes.add(parser.text());
+                    if (XContentParser.Token.START_ARRAY == parser.currentToken()) {
+                        workerNodes = new ArrayList<>();
+                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                            workerNodes.add(parser.text());
+                        }
+                    } else {
+                        String[] nodes = parser.text().split(",");
+                        workerNodes = Arrays.asList(nodes);
                     }
                     break;
                 case CREATE_TIME_FIELD:
