@@ -52,6 +52,7 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 @Log4j2
@@ -127,12 +128,12 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
             .createTime(Instant.now())
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
-            .workerNode(clusterService.localNode().getId())
+            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
             .build();
 
         mlTaskDispatcher.dispatch(ActionListener.wrap(node -> {
             String nodeId = node.getId();
-            mlTask.setWorkerNode(nodeId);
+            mlTask.setWorkerNodes(ImmutableList.of(nodeId));
 
             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                 String taskId = response.getId();

@@ -24,6 +24,7 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
 
     private final MLModelState modelState;
     private final String predictor;
+    private final String[] targetWorkerNodes;
     private final String[] workerNodes;
     private final MLPredictRequestStats modelInferenceStats;
     private final MLPredictRequestStats predictRequestStats;
@@ -32,12 +33,14 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
     public MLModelProfile(
         MLModelState modelState,
         String predictor,
+        String[] targetWorkerNodes,
         String[] workerNodes,
         MLPredictRequestStats modelInferenceStats,
         MLPredictRequestStats predictRequestStats
     ) {
         this.modelState = modelState;
         this.predictor = predictor;
+        this.targetWorkerNodes = targetWorkerNodes;
         this.workerNodes = workerNodes;
         this.modelInferenceStats = modelInferenceStats;
         this.predictRequestStats = predictRequestStats;
@@ -51,6 +54,9 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         if (predictor != null) {
             builder.field("predictor", predictor);
+        }
+        if (targetWorkerNodes != null) {
+            builder.field("worker_nodes", targetWorkerNodes);
         }
         if (workerNodes != null) {
             builder.field("worker_nodes", workerNodes);
@@ -72,6 +78,7 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
             this.modelState = null;
         }
         this.predictor = in.readOptionalString();
+        this.targetWorkerNodes = in.readOptionalStringArray();
         this.workerNodes = in.readOptionalStringArray();
         if (in.readBoolean()) {
             this.modelInferenceStats = new MLPredictRequestStats(in);
@@ -94,6 +101,7 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(predictor);
+        out.writeOptionalStringArray(targetWorkerNodes);
         out.writeOptionalStringArray(workerNodes);
         if (modelInferenceStats != null) {
             out.writeBoolean(true);
