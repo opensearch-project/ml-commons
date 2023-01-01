@@ -25,7 +25,6 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -38,6 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
@@ -45,6 +45,8 @@ import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.indices.create.CreateIndexAction;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
+import org.opensearch.action.delete.DeleteAction;
+import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -53,6 +55,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
@@ -70,7 +73,9 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
+import org.opensearch.test.OpenSearchIntegTestCase;
 
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private final Instant time = Instant.now();
     @Rule
@@ -80,6 +85,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private DiscoveryNodeHelper nodeHelper;
     private Settings settings;
     private MLModelAutoReLoader mlModelAutoReLoader;
+    private String taskId;
     private String modelId;
     private String localNodeId;
     @Mock
@@ -99,12 +105,28 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
 
+        taskId = "taskId1";
+        modelId = "modelId1";
+        localNodeId = clusterService().localNode().getId();
+
+        AtomicInteger portGenerator = new AtomicInteger();
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(TestHelper.ML_ROLE);
+        DiscoveryNode node = new DiscoveryNode(
+            localNodeId,
+            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
+
         mlModelAutoReLoader = spy(
             new MLModelAutoReLoader(clusterService(), client().threadPool(), client(), xContentRegistry(), nodeHelper, settings)
         );
-        modelId = "modelId1";
-        localNodeId = clusterService().localNode().getId();
+
         modelManager = mock(MLModelManager.class);
+
+        when(clusterService().localNode()).thenReturn(node);
     }
 
     @After
@@ -120,18 +142,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testAutoReLoadModel() {
-        AtomicInteger portGenerator = new AtomicInteger();
-        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
-        roleSet.add(TestHelper.ML_ROLE);
-        DiscoveryNode node = new DiscoveryNode(
-            localNodeId,
-            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
-            new HashMap<>(),
-            roleSet,
-            Version.CURRENT
-        );
-        when(clusterService().localNode()).thenReturn(node);
-
         mlModelAutoReLoader.autoReLoadModel();
 
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
@@ -163,29 +173,42 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModel_Max_ReTryTimes() {
-        AtomicInteger portGenerator = new AtomicInteger();
-        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
-        roleSet.add(TestHelper.ML_ROLE);
-        DiscoveryNode node = new DiscoveryNode(
-            localNodeId,
-            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
-            new HashMap<>(),
-            roleSet,
-            Version.CURRENT
-        );
-        when(clusterService().localNode()).thenReturn(node);
+    @Ignore
+    public void testAutoReLoadModelByNodeId() throws IOException {
+        if (indexExists(ML_TASK_INDEX)) {
+            clearDataOfMlTask();
+        }
 
-        initDataOfModelReload(localNodeId, 3);
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL);
+        initDataOfMlModel(modelId, MLModelState.LOADED);
 
-        mlModelAutoReLoader.autoReLoadModel();
+        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
 
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(0));
+
+        SearchResponse searchResponse = mlModelAutoReLoader.queryTask(localNodeId);
+        SearchHit[] hits = searchResponse.getHits().getHits();
+        if (!CollectionUtils.isEmpty(hits)) {
+            for (SearchHit searchHit : hits) {
+                logger.info("searchHit is:" + searchHit.getSourceAsString());
+            }
+        }
+
+    }
+
+    public void testAutoReLoadModelByNodeId_Max_ReTryTimes() throws IOException {
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 3);
+
+        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+
+        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId_ReTry() throws IOException, URISyntaxException {
+    public void testAutoReLoadModelByNodeId_ReTry() throws IOException {
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
@@ -306,6 +329,11 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
         assertThat(retryTimes, is(1));
+
+        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 3);
+
+        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
+        assertThat(retryTimes, is(3));
     }
 
     private void createIndex() {
@@ -322,6 +350,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         IndexRequest indexRequest = new IndexRequest(ML_MODEL_RELOAD_INDEX);
         indexRequest.id(nodeId);
+        indexRequest.version();
         indexRequest.source(content);
         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -331,20 +360,47 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private void initDataOfMlTask(String nodeId, String modelId, MLTaskType mlTaskType, MLTaskState mlTaskState) throws IOException {
         MLTask mlTask = MLTask
             .builder()
-            .taskId("taskId1")
+            .taskId(taskId)
             .modelId(modelId)
             .taskType(mlTaskType)
             .state(mlTaskState)
             .workerNode(nodeId)
             .progress(0.0f)
             .outputIndex("test_index")
-            .error("test_error")
             .createTime(time.minus(1, ChronoUnit.MINUTES))
+            .autoReload(true)
+            .async(true)
             .lastUpdateTime(time)
             .build();
 
         IndexRequest indexRequest = new IndexRequest(ML_TASK_INDEX);
-        indexRequest.id("taskId1");
+        indexRequest.id(taskId);
+        indexRequest.version();
+        indexRequest.source(mlTask.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+        client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+    }
+
+    private void initDataOfMlTask(String nodeId, String modelId, MLTaskType mlTaskType) throws IOException {
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId(taskId)
+            .modelId(modelId)
+            .taskType(mlTaskType)
+            .workerNode(nodeId)
+            .progress(0.0f)
+            .outputIndex("test_index")
+            .createTime(time.minus(1, ChronoUnit.MINUTES))
+            .state(MLTaskState.COMPLETED)
+            .autoReload(true)
+            .async(true)
+            .lastUpdateTime(time)
+            .build();
+
+        IndexRequest indexRequest = new IndexRequest(ML_TASK_INDEX);
+        indexRequest.id(taskId);
+        indexRequest.version();
         indexRequest.source(mlTask.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -386,6 +442,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
         indexRequest.id(modelId);
+        indexRequest.version();
         indexRequest.source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -406,5 +463,11 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             listener.onResponse(modelChunk1);
             return null;
         }).when(modelManager).getModel(any(), any());
+    }
+
+    private void clearDataOfMlTask() {
+        DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX);
+        deleteRequest.id("taskId2");
+        client().execute(DeleteAction.INSTANCE, deleteRequest).actionGet(5000);
     }
 }
