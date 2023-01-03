@@ -8,6 +8,7 @@ package org.opensearch.ml.model;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,7 +42,7 @@ public class MLModelCacheHelper {
      * @param state model state
      * @param functionName function name
      */
-    public synchronized void initModelState(String modelId, MLModelState state, FunctionName functionName) {
+    public synchronized void initModelState(String modelId, MLModelState state, FunctionName functionName, List<String> targetWorkerNodes) {
         if (isModelRunningOnNode(modelId)) {
             throw new MLLimitExceededException("Duplicate load model task");
         }
@@ -49,6 +50,7 @@ public class MLModelCacheHelper {
         MLModelCache modelCache = new MLModelCache();
         modelCache.setModelState(state);
         modelCache.setFunctionName(functionName);
+        modelCache.setTargetWorkerNodes(targetWorkerNodes);
         modelCaches.put(modelId, modelCache);
     }
 
@@ -253,6 +255,10 @@ public class MLModelCacheHelper {
         builder.modelState(modelCache.getModelState());
         if (modelCache.getPredictor() != null) {
             builder.predictor(modelCache.getPredictor().toString());
+        }
+        String[] targetWorkerNodes = modelCache.getTargetWorkerNodes();
+        if (targetWorkerNodes.length > 0) {
+            builder.targetWorkerNodes(targetWorkerNodes);
         }
         String[] workerNodes = modelCache.getWorkerNodes();
         if (workerNodes.length > 0) {

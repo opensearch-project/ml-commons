@@ -6,6 +6,7 @@
 package org.opensearch.ml.model;
 
 import java.util.DoubleSummaryStatistics;
+import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,14 +30,28 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLModelState modelState;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
+    private @Getter(AccessLevel.PROTECTED) Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
     private final Queue<Double> modelInferenceDurationQueue;
     private final Queue<Double> predictRequestDurationQueue;
 
     public MLModelCache() {
+        targetWorkerNodes = ConcurrentHashMap.newKeySet();
         workerNodes = ConcurrentHashMap.newKeySet();
         modelInferenceDurationQueue = new ConcurrentLinkedQueue<>();
         predictRequestDurationQueue = new ConcurrentLinkedQueue<>();
+    }
+
+    public void setTargetWorkerNodes(List<String> targetWorkerNodes) {
+        if (targetWorkerNodes == null || targetWorkerNodes.size() == 0) {
+            throw new IllegalArgumentException("Null or empty target worker nodes");
+        }
+        this.targetWorkerNodes.clear();
+        this.targetWorkerNodes.addAll(targetWorkerNodes);
+    }
+
+    public String[] getTargetWorkerNodes() {
+        return targetWorkerNodes.toArray(new String[0]);
     }
 
     public void removeWorkerNode(String nodeId) {

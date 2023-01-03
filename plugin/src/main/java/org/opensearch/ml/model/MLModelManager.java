@@ -430,7 +430,7 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Exceed max model per node limit"));
             return;
         }
-        modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName);
+        modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName, mlTask.getWorkerNodes());
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxLoadTasksPerNode);
             this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {

@@ -48,6 +48,8 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 
+import com.google.common.collect.ImmutableList;
+
 /**
  * MLTrainingTaskRunner is responsible for running training tasks.
  */
@@ -104,7 +106,7 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
             .inputType(inputDataType)
             .functionName(request.getMlInput().getFunctionName())
             .state(MLTaskState.CREATED)
-            .workerNode(clusterService.localNode().getId())
+            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
             .createTime(now)
             .lastUpdateTime(now)
             .async(request.isAsync())

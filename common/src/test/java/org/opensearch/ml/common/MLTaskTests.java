@@ -8,6 +8,7 @@ package org.opensearch.ml.common;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -32,7 +33,7 @@ public class MLTaskTests {
             .functionName(FunctionName.KMEANS)
             .state(MLTaskState.RUNNING)
             .inputType(MLInputDataType.DATA_FRAME)
-            .workerNode("node1")
+            .workerNodes(Arrays.asList("node1"))
             .progress(0.0f)
             .outputIndex("test_index")
             .error("test_error")
@@ -57,7 +58,7 @@ public class MLTaskTests {
         Assert.assertEquals(
             "{\"task_id\":\"dummy taskId\",\"model_id\":\"test_model_id\",\"task_type\":\"PREDICTION\","
                 + "\"function_name\":\"KMEANS\",\"state\":\"RUNNING\",\"input_type\":\"DATA_FRAME\",\"progress\":0.0,"
-                + "\"output_index\":\"test_index\",\"worker_node\":\"node1\",\"create_time\":1641599940000,"
+                + "\"output_index\":\"test_index\",\"worker_node\":[\"node1\"],\"create_time\":1641599940000,"
                 + "\"last_update_time\":1641600000000,\"error\":\"test_error\",\"is_async\":false}",
             taskContent
         );
