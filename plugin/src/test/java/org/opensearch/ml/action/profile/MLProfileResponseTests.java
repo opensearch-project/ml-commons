@@ -8,6 +8,7 @@ package org.opensearch.ml.action.profile;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
             .inputType(MLInputDataType.DATA_FRAME)
             .progress(0.4f)
             .outputIndex("test_index")
-            .workerNode("test_node")
+            .workerNodes(Arrays.asList("test_node"))
             .createTime(Instant.ofEpochMilli(123))
             .lastUpdateTime(Instant.ofEpochMilli(123))
             .error("error")
@@ -100,7 +101,7 @@ public class MLProfileResponseTests extends OpenSearchTestCase {
         assertEquals(
             "{\"nodes\":{\"node1\":{\"tasks\":{\"task_1\":{\"task_id\":\"test_id\",\"model_id\":\"model_id\","
                 + "\"task_type\":\"TRAINING\",\"function_name\":\"AD_LIBSVM\",\"state\":\"CREATED\",\"input_type\":"
-                + "\"DATA_FRAME\",\"progress\":0.4,\"output_index\":\"test_index\",\"worker_node\":\"test_node\","
+                + "\"DATA_FRAME\",\"progress\":0.4,\"output_index\":\"test_index\",\"worker_node\":[\"test_node\"],"
                 + "\"create_time\":123,\"last_update_time\":123,\"error\":\"error\",\"user\":{\"name\":\"\","
                 + "\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
                 + "\"is_async\":false,\"is_auto_reload\":false}},\"models\":{\"model1\":{\"model_state\":\"LOADED\",\"predictor\":\"test_predictor\","

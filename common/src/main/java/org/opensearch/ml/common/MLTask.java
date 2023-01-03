@@ -57,7 +57,7 @@ public class MLTask implements ToXContentObject, Writeable {
     private Float progress;
     private final String outputIndex;
     @Setter
-    private String workerNode;
+    private List<String> workerNodes;
     private final Instant createTime;
     private Instant lastUpdateTime;
     @Setter
@@ -76,7 +76,7 @@ public class MLTask implements ToXContentObject, Writeable {
         MLInputDataType inputType,
         Float progress,
         String outputIndex,
-        String workerNode,
+        List<String> workerNodes,
         Instant createTime,
         Instant lastUpdateTime,
         String error,
@@ -92,7 +92,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.inputType = inputType;
         this.progress = progress;
         this.outputIndex = outputIndex;
-        this.workerNode = workerNode;
+        this.workerNodes = workerNodes;
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
         this.error = error;
@@ -114,7 +114,7 @@ public class MLTask implements ToXContentObject, Writeable {
         }
         this.progress = input.readOptionalFloat();
         this.outputIndex = input.readOptionalString();
-        this.workerNode = input.readString();
+        this.workerNodes = input.readStringList();
         this.createTime = input.readInstant();
         this.lastUpdateTime = input.readInstant();
         this.error = input.readOptionalString();
@@ -142,7 +142,7 @@ public class MLTask implements ToXContentObject, Writeable {
         }
         out.writeOptionalFloat(progress);
         out.writeOptionalString(outputIndex);
-        out.writeString(workerNode);
+        out.writeStringCollection(workerNodes);
         out.writeInstant(createTime);
         out.writeInstant(lastUpdateTime);
         out.writeOptionalString(error);
@@ -182,8 +182,8 @@ public class MLTask implements ToXContentObject, Writeable {
         if (outputIndex != null) {
             builder.field(OUTPUT_INDEX_FIELD, outputIndex);
         }
-        if (workerNode != null) {
-            builder.field(WORKER_NODE_FIELD, workerNode);
+        if (workerNodes != null) {
+            builder.field(WORKER_NODE_FIELD, workerNodes);
         }
         if (createTime != null) {
             builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
@@ -216,7 +216,7 @@ public class MLTask implements ToXContentObject, Writeable {
         MLInputDataType inputType = null;
         Float progress = null;
         String outputIndex = null;
-        String workerNode = null;
+        List<String> workerNodes = null;
         Instant createTime = null;
         Instant lastUpdateTime = null;
         String error = null;
@@ -255,7 +255,15 @@ public class MLTask implements ToXContentObject, Writeable {
                     outputIndex = parser.text();
                     break;
                 case WORKER_NODE_FIELD:
-                    workerNode = parser.text();
+                    if (XContentParser.Token.START_ARRAY == parser.currentToken()) {
+                        workerNodes = new ArrayList<>();
+                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                            workerNodes.add(parser.text());
+                        }
+                    } else {
+                        String[] nodes = parser.text().split(",");
+                        workerNodes = Arrays.asList(nodes);
+                    }
                     break;
                 case CREATE_TIME_FIELD:
                     createTime = Instant.ofEpochMilli(parser.longValue());
@@ -289,7 +297,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 .inputType(inputType)
                 .progress(progress)
                 .outputIndex(outputIndex)
-                .workerNode(workerNode)
+                .workerNodes(workerNodes)
                 .createTime(createTime)
                 .lastUpdateTime(lastUpdateTime)
                 .error(error)

@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.*;
@@ -70,7 +71,7 @@ public class LoadModelNodesRequestTest {
                 .functionName(FunctionName.LINEAR_REGRESSION)
                 .state(MLTaskState.RUNNING)
                 .inputType(MLInputDataType.DATA_FRAME)
-                .workerNode("node1")
+                .workerNodes(Arrays.asList("node1"))
                 .progress(0.0f)
                 .outputIndex("test_index")
                 .error("test_error")
