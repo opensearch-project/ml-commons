@@ -60,6 +60,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.collect.ImmutableList;
+
 /**
  * MLPredictTaskRunner is responsible for running predict tasks.
  */
@@ -159,7 +161,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .inputType(inputDataType)
             .functionName(request.getMlInput().getFunctionName())
             .state(MLTaskState.CREATED)
-            .workerNode(clusterService.localNode().getId())
+            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
             .createTime(now)
             .lastUpdateTime(now)
             .async(false)
