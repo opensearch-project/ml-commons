@@ -59,7 +59,7 @@ public class MLTaskTests {
             "{\"task_id\":\"dummy taskId\",\"model_id\":\"test_model_id\",\"task_type\":\"PREDICTION\","
                 + "\"function_name\":\"KMEANS\",\"state\":\"RUNNING\",\"input_type\":\"DATA_FRAME\",\"progress\":0.0,"
                 + "\"output_index\":\"test_index\",\"worker_node\":[\"node1\"],\"create_time\":1641599940000,"
-                + "\"last_update_time\":1641600000000,\"error\":\"test_error\",\"is_async\":false,\"is_auto_reload\":false}",
+                + "\"last_update_time\":1641600000000,\"error\":\"test_error\",\"is_async\":false}",
             taskContent
         );
     }
@@ -70,6 +70,6 @@ public class MLTaskTests {
         MLTask task = MLTask.builder().build();
         task.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals("{\"is_async\":false,\"is_auto_reload\":false}", taskContent);
+        Assert.assertEquals("{\"is_async\":false}", taskContent);
     }
 }

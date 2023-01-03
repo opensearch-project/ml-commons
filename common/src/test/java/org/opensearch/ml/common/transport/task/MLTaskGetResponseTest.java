@@ -23,7 +23,6 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 
 import java.util.Arrays;
 
-
 public class MLTaskGetResponseTest {
     MLTask mlTask;
 
@@ -88,7 +87,6 @@ public class MLTaskGetResponseTest {
                 "\"last_update_time\":123," +
                 "\"error\":\"error\"," +
                 "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}," +
-                "\"is_async\":true"+
-                ",\"is_auto_reload\":false}", jsonStr);
+                "\"is_async\":true}", jsonStr);
     }
 }
