@@ -11,6 +11,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
@@ -37,7 +39,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
@@ -75,7 +76,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
 public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private final Instant time = Instant.now();
     @Rule
@@ -83,6 +84,8 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
     @Mock
     private DiscoveryNodeHelper nodeHelper;
+    @Mock
+    private SearchResponse searchResponse;
     private Settings settings;
     private MLModelAutoReLoader mlModelAutoReLoader;
     private String taskId;
@@ -127,6 +130,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         modelManager = mock(MLModelManager.class);
 
         when(clusterService().localNode()).thenReturn(node);
+        when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[] { node });
     }
 
     @After
@@ -173,7 +177,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    @Ignore
     public void testAutoReLoadModelByNodeId() throws IOException {
         if (indexExists(ML_TASK_INDEX)) {
             clearDataOfMlTask();
@@ -294,6 +297,37 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         initDataOfModelReload(localNodeId, 1);
         retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
         assertThat(retryTimes, is(1));
+    }
+
+    public void testGetReTryTimesAsync() throws InterruptedException {
+        AtomicInteger reTryTimes = new AtomicInteger(0);
+        ActionListener<SearchResponse> actionListener = ActionListener.wrap(searchResponse -> {
+            SearchHit[] hits = searchResponse.getHits().getHits();
+            if (CollectionUtils.isEmpty(hits)) {
+                reTryTimes.set(0);
+            } else {
+                Map<String, Object> sourceAsMap = hits[0].getSourceAsMap();
+                reTryTimes.set((Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD));
+            }
+        }, e -> { throw new RuntimeException("can't get reTryTimes under the node " + localNodeId + " , the reasons is: " + e); });
+
+        doAnswer(invocation -> {
+            reTryTimes.set(1);
+            return null;
+        }).when(mlModelAutoReLoader).getReTryTimesAsync(localNodeId, actionListener);
+
+        mlModelAutoReLoader.getReTryTimesAsync(localNodeId, actionListener);
+        verify(mlModelAutoReLoader, times(1)).getReTryTimesAsync(localNodeId, actionListener);
+        assertThat(reTryTimes.get(), is(1));
+
+        doAnswer(invocation -> {
+            reTryTimes.set(3);
+            return null;
+        }).when(mlModelAutoReLoader).getReTryTimesAsync(localNodeId, actionListener);
+
+        mlModelAutoReLoader.getReTryTimesAsync(localNodeId, actionListener);
+        verify(mlModelAutoReLoader, times(2)).getReTryTimesAsync(localNodeId, actionListener);
+        assertThat(reTryTimes.get(), is(3));
     }
 
     public void testGetReTryTimes_IndexNotExisted() {
@@ -467,7 +501,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
     private void clearDataOfMlTask() {
         DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX);
-        deleteRequest.id("taskId2");
+        deleteRequest.id(taskId);
         client().execute(DeleteAction.INSTANCE, deleteRequest).actionGet(5000);
     }
 }

@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_MAX_RETRY_TIM
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
 import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -60,6 +61,7 @@ import com.google.common.annotations.VisibleForTesting;
  */
 @Log4j2
 public class MLModelAutoReLoader {
+
     private final Client client;
     private final ClusterService clusterService;
     private final NamedXContentRegistry xContentRegistry;
@@ -69,12 +71,13 @@ public class MLModelAutoReLoader {
 
     /**
      * constructor method， init all the params necessary for model auto reloading
-     * @param clusterService clusterService
-     * @param threadPool threadPool
-     * @param client client
+     *
+     * @param clusterService   clusterService
+     * @param threadPool       threadPool
+     * @param client           client
      * @param xContentRegistry xContentRegistry
-     * @param nodeHelper nodeHelper
-     * @param settings settings
+     * @param nodeHelper       nodeHelper
+     * @param settings         settings
      */
     public MLModelAutoReLoader(
         ClusterService clusterService,
@@ -117,12 +120,12 @@ public class MLModelAutoReLoader {
         }
 
         // auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
-        threadPool.generic().submit(() -> autoReLoadModelByNodeId(localNodeId));
+        threadPool.executor(GENERAL_THREAD_POOL).execute(() -> autoReLoadModelByNodeId(localNodeId));
     }
 
     /**
-     * auto reload all the models under the node id
-     * the node must be a ml node
+     * auto reload all the models under the node id the node must be a ml node
+     *
      * @param localNodeId node id
      */
     @VisibleForTesting
@@ -167,9 +170,10 @@ public class MLModelAutoReLoader {
     }
 
     /**
-     *  auto reload 1 model under the node id
+     * auto reload 1 model under the node id
+     *
      * @param localNodeId node id
-     * @param modelId model id
+     * @param modelId     model id
      */
     @VisibleForTesting
     void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws IllegalArgumentException {
@@ -192,8 +196,9 @@ public class MLModelAutoReLoader {
     }
 
     /**
-     * query task index, and get the result of "task_type"="LOAD_MODEL" and "state"="COMPLETED"
-     * and "worker_node" match nodeId
+     * query task index, and get the result of "task_type"="LOAD_MODEL" and "state"="COMPLETED" and
+     * "worker_node" match nodeId
+     *
      * @param localNodeId one of query condition
      * @return SearchResponse
      */
@@ -222,6 +227,7 @@ public class MLModelAutoReLoader {
 
     /**
      * get retry times from the index ".plugins-ml-model-reload" by 1 ml node
+     *
      * @param localNodeId the filter condition to query
      * @return retry times
      */
@@ -248,8 +254,32 @@ public class MLModelAutoReLoader {
         return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
     }
 
+    @VisibleForTesting
+    void getReTryTimesAsync(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) {
+        isExistedIndexAsync(ML_MODEL_RELOAD_INDEX);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
+        QueryBuilder queryBuilder = QueryBuilders.idsQuery().addIds(localNodeId);
+        searchSourceBuilder.query(queryBuilder);
+        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
+
+        client.execute(SearchAction.INSTANCE, searchRequest, searchResponseActionListener);
+    }
+
+    void isExistedIndexAsync(String indexName) {
+        IndicesExistsRequest existsRequest = new IndicesExistsRequest(indexName);
+
+        boolean result = client.execute(IndicesExistsAction.INSTANCE, existsRequest).actionGet(5000).isExists();
+
+        if (!result) {
+            throw new IndexNotFoundException("index " + indexName + " not found");
+        }
+    }
+
     /**
      * judge whether the index ".plugins-ml-model-reload" existed
+     *
      * @param indexName index name
      * @return true: existed. false: not existed
      */
@@ -262,8 +292,9 @@ public class MLModelAutoReLoader {
 
     /**
      * save retry times
+     *
      * @param localNodeId node id
-     * @param reTryTimes actual retry times
+     * @param reTryTimes  actual retry times
      */
     @VisibleForTesting
     void saveLatestReTryTimes(String localNodeId, int reTryTimes) {
