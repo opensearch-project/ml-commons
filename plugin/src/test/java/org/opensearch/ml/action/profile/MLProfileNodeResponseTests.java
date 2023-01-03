@@ -9,6 +9,7 @@ import static org.opensearch.ml.action.profile.MLProfileNodeResponse.readProfile
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -45,7 +46,7 @@ public class MLProfileNodeResponseTests extends OpenSearchTestCase {
             .inputType(MLInputDataType.DATA_FRAME)
             .progress(0.4f)
             .outputIndex("test_index")
-            .workerNode("test_node")
+            .workerNodes(Arrays.asList("test_node"))
             .createTime(Instant.ofEpochMilli(123))
             .lastUpdateTime(Instant.ofEpochMilli(123))
             .error("error")

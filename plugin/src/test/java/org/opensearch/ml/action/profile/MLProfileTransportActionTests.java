@@ -70,7 +70,7 @@ public class MLProfileTransportActionTests extends OpenSearchIntegTestCase {
             .inputType(MLInputDataType.DATA_FRAME)
             .progress(0.4f)
             .outputIndex("test_index")
-            .workerNode("test_node")
+            .workerNodes(Arrays.asList("test_node"))
             .createTime(Instant.ofEpochMilli(123))
             .lastUpdateTime(Instant.ofEpochMilli(123))
             .error("error")

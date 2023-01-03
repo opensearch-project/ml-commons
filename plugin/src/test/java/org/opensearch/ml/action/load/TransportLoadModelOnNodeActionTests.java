@@ -243,7 +243,7 @@ public class TransportLoadModelOnNodeActionTests extends OpenSearchTestCase {
             .functionName(FunctionName.LINEAR_REGRESSION)
             .state(MLTaskState.RUNNING)
             .inputType(MLInputDataType.DATA_FRAME)
-            .workerNode("node1")
+            .workerNodes(Arrays.asList("node1"))
             .progress(0.0f)
             .outputIndex("test_index")
             .error("test_error")

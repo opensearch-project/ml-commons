@@ -137,8 +137,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
             return;
         }
 
-        String workerNodes = String.join(",", nodeIds);
-        log.warn("Will load model on these nodes: {}", workerNodes);
+        log.info("Will load model on these nodes: {}", String.join(",", nodeIds));
         String localNodeId = clusterService.localNode().getId();
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
@@ -156,7 +155,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                     .createTime(Instant.now())
                     .lastUpdateTime(Instant.now())
                     .state(MLTaskState.CREATED)
-                    .workerNode(workerNodes)
+                    .workerNodes(nodeIds)
                     .build();
                 mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                     String taskId = response.getId();

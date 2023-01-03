@@ -19,6 +19,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 
@@ -44,7 +45,7 @@ public class LoadModelInputTest {
                 .functionName(FunctionName.LINEAR_REGRESSION)
                 .state(MLTaskState.RUNNING)
                 .inputType(MLInputDataType.DATA_FRAME)
-                .workerNode("node1")
+                .workerNodes(Arrays.asList("node1"))
                 .progress(0.0f)
                 .outputIndex("test_index")
                 .error("test_error")

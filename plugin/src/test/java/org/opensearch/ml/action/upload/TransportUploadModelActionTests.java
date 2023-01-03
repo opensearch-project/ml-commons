@@ -214,6 +214,8 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
             listener.onFailure(new Exception("Failed to dispatch upload model task "));
             return null;
         }).when(mlTaskDispatcher).dispatch(any());
+        when(node1.getId()).thenReturn("NodeId1");
+        when(clusterService.localNode()).thenReturn(node1);
         transportUploadModelAction.doExecute(task, prepareRequest(), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -225,7 +227,8 @@ public class TransportUploadModelActionTests extends OpenSearchTestCase {
             listener.onFailure(new Exception("Failed to create upload model task"));
             return null;
         }).when(mlTaskManager).createMLTask(any(), any());
-
+        when(node1.getId()).thenReturn("NodeId1");
+        when(clusterService.localNode()).thenReturn(node1);
         transportUploadModelAction.doExecute(task, prepareRequest(), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
