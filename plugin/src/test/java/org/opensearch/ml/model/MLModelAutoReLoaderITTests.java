@@ -5,25 +5,33 @@
 
 package org.opensearch.ml.model;
 
-import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING;
 import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
-import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
@@ -31,25 +39,36 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.StepListener;
 import org.opensearch.action.admin.indices.create.CreateIndexAction;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.util.CollectionUtils;
+import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.search.SearchHit;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
@@ -63,6 +82,10 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private String taskId;
     private String modelId;
     private String localNodeId;
+    @Mock
+    private MLModelManager modelManager;
+    private MLModel modelChunk0;
+    private MLModel modelChunk1;
 
     @Before
     public void setup() throws Exception {
@@ -77,12 +100,26 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         localNodeId = clusterService().localNode().getId();
 
+        AtomicInteger portGenerator = new AtomicInteger();
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(TestHelper.ML_ROLE);
+        DiscoveryNode node = new DiscoveryNode(
+            localNodeId,
+            new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
+
         nodeHelper = spy(new DiscoveryNodeHelper(clusterService(), settings));
 
         mlModelAutoReLoader = spy(
             new MLModelAutoReLoader(clusterService(), client().threadPool(), client(), xContentRegistry(), nodeHelper, settings)
         );
+        modelManager = mock(MLModelManager.class);
 
+        when(clusterService().localNode()).thenReturn(node);
+        when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[] { node });
     }
 
     @After
@@ -94,14 +131,11 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         mlModelAutoReLoader = null;
         modelId = null;
         localNodeId = null;
+        modelManager = null;
     }
 
     public void testAutoReLoadModel() {
         mlModelAutoReLoader.autoReLoadModel();
-
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
     public void testAutoReLoadModel_setting_false() {
@@ -114,185 +148,203 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         );
 
         mlModelAutoReLoader.autoReLoadModel();
-
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
     public void testAutoReLoadModel_Is_Not_ML_Node() {
         mlModelAutoReLoader.autoReLoadModel();
-
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId_Max_ReTryTimes() throws IOException {
+    public void testAutoReLoadModelByNodeId() throws IOException, ExecutionException, InterruptedException {
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 3);
+        initDataOfMlModel(modelId);
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
 
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
+        mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+
+        getReTryTimesStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
+
+            Map<String, Object> sourceAsMap = response.getHits().getHits()[0].getSourceAsMap();
+            int result = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+            org.hamcrest.MatcherAssert.assertThat(result, is(0));
+        }, exception -> fail(exception.getMessage()));
     }
 
-    public void testAutoReLoadModelByNodeId_ReTry() throws IOException {
+    public void testAutoReLoadModelByNodeId_ReTry() throws IOException, ExecutionException, InterruptedException {
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
 
-        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(1));
+        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
+        mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+
+        getReTryTimesStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
+
+            Map<String, Object> sourceAsMap = response.getHits().getHits()[0].getSourceAsMap();
+            int result = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+            org.hamcrest.MatcherAssert.assertThat(result, is(1));
+        }, exception -> fail(exception.getMessage()));
     }
 
-    public void testAutoReLoadModelByNodeId_IndexNotFound() {
+    public void testAutoReLoadModelByNodeId_Max_ReTryTimes() throws IOException, ExecutionException, InterruptedException {
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+
+        final CountDownLatch inProgressLatch = new CountDownLatch(1);
+        StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
+        mlModelAutoReLoader
+            .saveLatestReTryTimes(
+                localNodeId,
+                3,
+                ActionListener.wrap(saveLatestReTryTimesStep::onResponse, saveLatestReTryTimesStep::onFailure)
+            );
+
+        saveLatestReTryTimesStep.whenComplete(response -> {
+            inProgressLatch.countDown();
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.status(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.status().getStatus(), anyOf(is(201), is(200)));
+        }, exception -> fail(exception.getMessage()));
+
+        inProgressLatch.await();
+
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
-
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testAutoReLoadModelByNodeId_EmptyHits() {
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+    public void testAutoReLoadModelByNodeId_IndexNotFound() throws ExecutionException, InterruptedException {
+        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+    }
 
+    public void testAutoReLoadModelByNodeId_EmptyHits() throws ExecutionException, InterruptedException {
         createIndex();
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
+    }
 
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_INDEX));
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    public void testAutoReLoadModelByNodeAndModelId() throws IOException {
+        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        initDataOfMlModel(modelId);
+        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
     }
 
     public void testAutoReLoadModelByNodeAndModelId_Exception() {
-        Assert.assertThrows(RuntimeException.class, () -> mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId));
+        Throwable exception = Assert
+            .assertThrows(RuntimeException.class, () -> mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId));
+
+        org.hamcrest.MatcherAssert
+            .assertThat(
+                exception.getMessage(),
+                containsString("fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: ")
+            );
     }
 
     public void testQueryTask() throws IOException {
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        SearchResponse response = mlModelAutoReLoader.queryTask(localNodeId);
-        SearchHit[] hits = response.getHits().getHits();
-        org.hamcrest.MatcherAssert.assertThat(hits.length, is(1));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        StepListener<SearchResponse> queryTaskStep = queryTaskAsync(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.UPLOAD_MODEL, MLTaskState.COMPLETED);
-        response = mlModelAutoReLoader.queryTask(localNodeId);
-        hits = response.getHits().getHits();
-        org.hamcrest.MatcherAssert.assertThat(hits.length, is(0));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        queryTaskStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
+        }, exception -> fail(exception.getMessage()));
 
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.RUNNING);
-        response = mlModelAutoReLoader.queryTask(localNodeId);
-        hits = response.getHits().getHits();
-        org.hamcrest.MatcherAssert.assertThat(hits.length, is(0));
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+        queryTaskStep = queryTaskAsync(localNodeId, modelId, MLTaskType.UPLOAD_MODEL, MLTaskState.COMPLETED);
+
+        queryTaskStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(0));
+        }, exception -> fail(exception.getMessage()));
+
+        queryTaskStep = queryTaskAsync(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.RUNNING);
+
+        queryTaskStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(0));
+        }, exception -> fail(exception.getMessage()));
     }
 
     public void testQueryTask_MultiDataInTaskIndex() throws IOException {
-        initDataOfMlTask(localNodeId, "modelId1", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlTask(localNodeId, "modelId2", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlTask(localNodeId, "modelId3", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        StepListener<SearchResponse> queryTaskStep = queryTaskAsync(localNodeId, "modelId1", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        queryTaskStep.whenComplete(response -> {}, exception -> fail(exception.getMessage()));
 
-        SearchResponse response = mlModelAutoReLoader.queryTask(localNodeId);
+        queryTaskStep = queryTaskAsync(localNodeId, "modelId2", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        queryTaskStep.whenComplete(response -> {}, exception -> fail(exception.getMessage()));
 
-        SearchHit[] hits = response.getHits().getHits();
-        org.hamcrest.MatcherAssert.assertThat(hits.length, is(1));
+        queryTaskStep = queryTaskAsync(localNodeId, "modelId3", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
-        Map<String, Object> source = hits[0].getSourceAsMap();
-        org.hamcrest.MatcherAssert.assertThat(source.get("model_id"), equalTo("modelId3"));
+        queryTaskStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
 
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_TASK_INDEX));
+            Map<String, Object> source = response.getHits().getHits()[0].getSourceAsMap();
+            org.hamcrest.MatcherAssert.assertThat(source.get("model_id"), is("modelId3"));
+        }, exception -> fail(exception.getMessage()));
+
     }
 
     public void testQueryTask_IndexNotExisted() {
-        Assert.assertThrows(IndexNotFoundException.class, () -> mlModelAutoReLoader.queryTask(localNodeId));
+        StepListener<SearchResponse> queryTaskStep = new StepListener<>();
+
+        Throwable exception = Assert
+            .assertThrows(
+                IndexNotFoundException.class,
+                () -> mlModelAutoReLoader.queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure))
+            );
+        org.hamcrest.MatcherAssert
+            .assertThat(exception.getMessage(), containsString("no such index [index " + ML_TASK_INDEX + " not found]"));
     }
 
-    public void testGetReTryTimes() {
-        int retryTimes;
-
-        initDataOfModelReload(localNodeId, 0);
-        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(0));
-
-        initDataOfModelReload(localNodeId, 1);
-        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(1));
+    public void testGetReTryTimes() throws ExecutionException, InterruptedException {
+        assertLatestReTryTimesAsync(1);
+        assertLatestReTryTimesAsync(3);
     }
 
-    public void testGetReTryTimesAsync() {
-        AtomicInteger reTryTimes = new AtomicInteger(0);
-        ActionListener<SearchResponse> actionListener = ActionListener.wrap(searchResponse -> {
-            SearchHit[] hits = searchResponse.getHits().getHits();
-            if (CollectionUtils.isEmpty(hits)) {
-                reTryTimes.set(0);
-            } else {
-                Map<String, Object> sourceAsMap = hits[0].getSourceAsMap();
-                reTryTimes.set((Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD));
-            }
-        }, e -> { throw new RuntimeException("can't get reTryTimes under the node " + localNodeId + " , the reasons is: " + e); });
+    public void testGetReTryTimes_IndexNotExisted() throws ExecutionException, InterruptedException {
+        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
 
-        doAnswer(invocation -> {
-            reTryTimes.set(1);
-            return null;
-        }).when(mlModelAutoReLoader).getReTryTimesAsync(localNodeId, actionListener);
-
-        mlModelAutoReLoader.getReTryTimesAsync(localNodeId, actionListener);
-        verify(mlModelAutoReLoader, times(1)).getReTryTimesAsync(localNodeId, actionListener);
-        org.hamcrest.MatcherAssert.assertThat(reTryTimes.get(), is(1));
-
-        doAnswer(invocation -> {
-            reTryTimes.set(3);
-            return null;
-        }).when(mlModelAutoReLoader).getReTryTimesAsync(localNodeId, actionListener);
-
-        mlModelAutoReLoader.getReTryTimesAsync(localNodeId, actionListener);
-        verify(mlModelAutoReLoader, times(2)).getReTryTimesAsync(localNodeId, actionListener);
-        org.hamcrest.MatcherAssert.assertThat(reTryTimes.get(), is(3));
+        mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
     }
 
-    public void testGetReTryTimes_IndexNotExisted() {
-        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(0));
-    }
-
-    public void testGetReTryTimes_EmptyHits() {
+    public void testGetReTryTimes_EmptyHits() throws ExecutionException, InterruptedException {
         createIndex(ML_MODEL_RELOAD_INDEX);
 
-        int retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(0));
+        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
+        mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+
+        getReTryTimesStep.whenComplete(response -> {}, exception -> {
+            org.hamcrest.MatcherAssert.assertThat(exception.getClass(), is(RuntimeException.class));
+            org.hamcrest.MatcherAssert.assertThat(exception.getMessage(), containsString("can't get reTryTimes from node"));
+        });
     }
 
-    public void testIsExistedIndex_False() {
+    public void testIsExistedIndex_False() throws ExecutionException, InterruptedException {
         assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testIsExistedIndex_True() {
+    public void testIsExistedIndex_True() throws ExecutionException, InterruptedException {
         createIndex(ML_MODEL_RELOAD_INDEX);
 
         assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
     }
 
-    public void testSaveLatestReTryTimes() {
-        int retryTimes;
-        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 0);
-
-        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(0));
-
-        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 1);
-
-        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(1));
-
-        mlModelAutoReLoader.saveLatestReTryTimes(localNodeId, 3);
-
-        retryTimes = mlModelAutoReLoader.getReTryTimes(localNodeId);
-        org.hamcrest.MatcherAssert.assertThat(retryTimes, is(3));
+    public void testSaveLatestReTryTimes() throws ExecutionException, InterruptedException {
+        assertLatestReTryTimesAsync(0);
+        assertLatestReTryTimesAsync(1);
+        assertLatestReTryTimesAsync(3);
     }
 
     private void createIndex() {
@@ -300,20 +352,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         createIndexRequest.mapping(ML_TASK_INDEX_MAPPING);
 
         client().execute(CreateIndexAction.INSTANCE, createIndexRequest).actionGet(5000);
-    }
-
-    private void initDataOfModelReload(String nodeId, int reTryTimes) {
-        Map<String, Object> content = new HashMap<>(2);
-        content.put(NODE_ID_FIELD, nodeId);
-        content.put(MODEL_LOAD_RETRY_TIMES_FIELD, reTryTimes);
-
-        IndexRequest indexRequest = new IndexRequest(ML_MODEL_RELOAD_INDEX);
-        indexRequest.id(nodeId);
-        indexRequest.version();
-        indexRequest.source(content);
-        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-
-        client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
     }
 
     private void initDataOfMlTask(String nodeId, String modelId, MLTaskType mlTaskType, MLTaskState mlTaskState) throws IOException {
@@ -341,4 +379,105 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
     }
 
+    private void assertLatestReTryTimesAsync(int reTryTimes) throws InterruptedException, ExecutionException {
+        final CountDownLatch inProgressLatch = new CountDownLatch(1);
+        StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
+        mlModelAutoReLoader
+            .saveLatestReTryTimes(
+                localNodeId,
+                reTryTimes,
+                ActionListener.wrap(saveLatestReTryTimesStep::onResponse, saveLatestReTryTimesStep::onFailure)
+            );
+
+        saveLatestReTryTimesStep.whenComplete(response -> {
+            inProgressLatch.countDown();
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.status(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.status().getStatus(), anyOf(is(201), is(200)));
+        }, exception -> fail(exception.getMessage()));
+
+        inProgressLatch.await();
+
+        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
+        mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+
+        getReTryTimesStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
+
+            Map<String, Object> sourceAsMap = response.getHits().getHits()[0].getSourceAsMap();
+            int result = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+            org.hamcrest.MatcherAssert.assertThat(result, is(reTryTimes));
+        }, exception -> fail(exception.getMessage()));
+    }
+
+    private StepListener<SearchResponse> queryTaskAsync(String localNodeId, String modelId, MLTaskType mlTaskType, MLTaskState mlTaskState)
+        throws IOException {
+        initDataOfMlTask(localNodeId, modelId, mlTaskType, mlTaskState);
+
+        StepListener<SearchResponse> queryTaskStep = new StepListener<>();
+        mlModelAutoReLoader.queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
+
+        return queryTaskStep;
+    }
+
+    private void initDataOfMlModel(String modelId) throws IOException {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(384)
+            .build();
+
+        MLModel mlModel = MLModel
+            .builder()
+            .modelId(modelId)
+            .name("model_name")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1.0.0")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelState(MLModelState.LOADED)
+            .modelConfig(modelConfig)
+            .totalChunks(2)
+            .modelContentHash("c446f747520bcc6af053813cb1e8d34944a7c4686bbb405aeaa23883b5a806c8")
+            .modelContentSizeInBytes(1000L)
+            .createdTime(time.minus(1, ChronoUnit.MINUTES))
+            .build();
+        modelChunk0 = mlModel
+            .toBuilder()
+            .content(Base64.getEncoder().encodeToString("test chunk1".getBytes(StandardCharsets.UTF_8)))
+            .build();
+        modelChunk1 = mlModel
+            .toBuilder()
+            .content(Base64.getEncoder().encodeToString("test chunk2".getBytes(StandardCharsets.UTF_8)))
+            .build();
+
+        setUpMock_GetModelChunks(mlModel);
+
+        IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+        indexRequest.id(modelId);
+        indexRequest.version();
+        indexRequest.source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+        client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
+    }
+
+    private void setUpMock_GetModelChunks(MLModel model) {
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(model);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(modelChunk0);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onResponse(modelChunk1);
+            return null;
+        }).when(modelManager).getModel(any(), any());
+    }
 }

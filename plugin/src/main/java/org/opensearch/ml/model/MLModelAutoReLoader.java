@@ -15,20 +15,25 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.StepListener;
 import org.opensearch.action.admin.indices.exists.indices.IndicesExistsAction;
-import org.opensearch.action.admin.indices.exists.indices.IndicesExistsRequest;
+import org.opensearch.action.admin.indices.exists.indices.IndicesExistsRequestBuilder;
+import org.opensearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.opensearch.action.index.IndexAction;
-import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexRequestBuilder;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchAction;
-import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
@@ -42,7 +47,6 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.transport.load.LoadModelResponse;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -61,7 +65,6 @@ import com.google.common.annotations.VisibleForTesting;
  */
 @Log4j2
 public class MLModelAutoReLoader {
-
     private final Client client;
     private final ClusterService clusterService;
     private final NamedXContentRegistry xContentRegistry;
@@ -120,7 +123,13 @@ public class MLModelAutoReLoader {
         }
 
         // auto reload all models of this local node, if it fails, reTryTimes+1, if it succeeds, reTryTimes is cleared to 0
-        threadPool.executor(GENERAL_THREAD_POOL).execute(() -> autoReLoadModelByNodeId(localNodeId));
+        threadPool.executor(GENERAL_THREAD_POOL).execute(() -> {
+            try {
+                autoReLoadModelByNodeId(localNodeId);
+            } catch (ExecutionException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     /**
@@ -129,12 +138,30 @@ public class MLModelAutoReLoader {
      * @param localNodeId node id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeId(String localNodeId) {
+    void autoReLoadModelByNodeId(String localNodeId) throws ExecutionException, InterruptedException {
         if (!isExistedIndex(ML_TASK_INDEX)) {
             return;
         }
 
-        SearchResponse response = queryTask(localNodeId);
+        final CountDownLatch queryTaskProcess = new CountDownLatch(1);
+        StepListener<SearchResponse> queryTaskStep = new StepListener<>();
+        queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
+        queryTaskStep.whenComplete(searchResponse -> {
+            queryTaskProcess.countDown();
+            queryTaskStep.onResponse(searchResponse);
+        }, queryTaskStep::onFailure);
+        queryTaskProcess.await();
+
+        final CountDownLatch getReTryTimesProcess = new CountDownLatch(1);
+        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
+        getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+        getReTryTimesStep.whenComplete(searchResponse -> {
+            getReTryTimesProcess.countDown();
+            getReTryTimesStep.onResponse(searchResponse);
+        }, getReTryTimesStep::onFailure);
+        getReTryTimesProcess.await();
+
+        SearchResponse response = queryTaskStep.result();
         if (response == null || response.getHits() == null) {
             return;
         }
@@ -144,9 +171,21 @@ public class MLModelAutoReLoader {
             return;
         }
 
+        int reTryTimes = 0;
+        // if getReTryTimesResponse is null,it means we get reTryTimes at the first time,and the index
+        // .plugins-ml-model-reload doesn't exist,so we should let reTryTimes be zero(init value)
+        // we don't do anything
+        SearchResponse getReTryTimesResponse = getReTryTimesStep.result();
+
+        // if getReTryTimesResponse is not null,it means we have saved the value of reTryTimes into the index
+        // .plugins-ml-model-reload,so we get the value of the field MODEL_LOAD_RETRY_TIMES_FIELD
+        if (getReTryTimesResponse != null) {
+            Map<String, Object> sourceAsMap = getReTryTimesResponse.getHits().getHits()[0].getSourceAsMap();
+            reTryTimes = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+        }
+
         // According to the node id to get retry times, if more than the maxi retry times, don't need to retry
         // that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
-        int reTryTimes = getReTryTimes(localNodeId);
         if (reTryTimes > ML_MODEL_RELOAD_MAX_RETRY_TIMES) {
             log.info("have exceeded max retry times, always failure");
             return;
@@ -166,7 +205,13 @@ public class MLModelAutoReLoader {
         }
 
         // Store the latest value of the reTryTimes and node id under the index ".plugins-ml-model-reload"
-        saveLatestReTryTimes(localNodeId, reTryTimes);
+        final CountDownLatch process = new CountDownLatch(1);
+        StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
+        saveLatestReTryTimes(localNodeId, reTryTimes, ActionListener.wrap(searchResponse -> {
+            process.countDown();
+            saveLatestReTryTimesStep.onResponse(searchResponse);
+        }, saveLatestReTryTimesStep::onFailure));
+        process.await();
     }
 
     /**
@@ -177,18 +222,23 @@ public class MLModelAutoReLoader {
      */
     @VisibleForTesting
     void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws IllegalArgumentException {
-        MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, new String[] { localNodeId }, false, false, true);
-        AtomicReference<LoadModelResponse> loadModelResponse = new AtomicReference<>();
+        String[] allNodeIds = nodeHelper.getAllNodeIds();
+        List<String> allNodeIdList = new ArrayList<>(List.of(allNodeIds));
+        if (!allNodeIdList.contains(localNodeId)) {
+            allNodeIdList.add(localNodeId);
+        }
+        MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, allNodeIdList.toArray(new String[] {}), false, false, true);
+
         client
             .execute(
                 MLLoadModelAction.INSTANCE,
                 mlLoadModelRequest,
                 ActionListener
                     .wrap(
-                        loadModelResponse::set,
-                        e -> {
+                        response -> {},
+                        exception -> {
                             throw new RuntimeException(
-                                "fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + e.getMessage()
+                                "fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception
                             );
                         }
                     )
@@ -200,10 +250,9 @@ public class MLModelAutoReLoader {
      * "worker_node" match nodeId
      *
      * @param localNodeId one of query condition
-     * @return SearchResponse
      */
     @VisibleForTesting
-    SearchResponse queryTask(String localNodeId) {
+    void queryTask(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().from(0).size(1);
 
         QueryBuilder queryBuilder = QueryBuilders
@@ -216,65 +265,52 @@ public class MLModelAutoReLoader {
         SortBuilder<FieldSortBuilder> sortBuilderOrder = new FieldSortBuilder("create_time").order(SortOrder.DESC);
         searchSourceBuilder.sort(sortBuilderOrder);
 
-        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_TASK_INDEX);
-        try {
-            return client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
-        } catch (IndexNotFoundException e) {
-            log.error("index {} not found, the reason is {}", ML_TASK_INDEX, e);
+        SearchRequestBuilder searchRequestBuilder = new SearchRequestBuilder(client, SearchAction.INSTANCE)
+            .setIndices(ML_TASK_INDEX)
+            .setSource(searchSourceBuilder);
+
+        searchRequestBuilder.execute(ActionListener.wrap(searchResponseActionListener::onResponse, exception -> {
+            log.error("index {} not found, the reason is {}", ML_TASK_INDEX, exception);
             throw new IndexNotFoundException("index " + ML_TASK_INDEX + " not found");
-        }
+        }));
     }
 
     /**
      * get retry times from the index ".plugins-ml-model-reload" by 1 ml node
      *
      * @param localNodeId the filter condition to query
-     * @return retry times
      */
     @VisibleForTesting
-    int getReTryTimes(String localNodeId) {
+    void getReTryTimes(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) throws ExecutionException,
+        InterruptedException {
         if (!isExistedIndex(ML_MODEL_RELOAD_INDEX)) {
-            return 0;
+            searchResponseActionListener.onResponse(null);
+            return;
         }
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
         QueryBuilder queryBuilder = QueryBuilders.idsQuery().addIds(localNodeId);
         searchSourceBuilder.query(queryBuilder);
-        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
 
-        SearchResponse response = client.execute(SearchAction.INSTANCE, searchRequest).actionGet(5000);
+        SearchRequestBuilder searchRequestBuilder = new SearchRequestBuilder(client, SearchAction.INSTANCE)
+            .setIndices(ML_MODEL_RELOAD_INDEX)
+            .setSource(searchSourceBuilder);
 
-        SearchHit[] hits = response.getHits().getHits();
-        if (CollectionUtils.isEmpty(hits)) {
-            return 0;
-        }
+        searchRequestBuilder.execute(ActionListener.wrap(searchResponse -> {
+            if (searchResponse == null || searchResponse.getHits() == null) {
+                searchResponseActionListener.onFailure(new NullPointerException("searchResponse or searchHits is null"));
+                return;
+            }
 
-        Map<String, Object> sourceAsMap = hits[0].getSourceAsMap();
-        return (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
-    }
+            SearchHit[] hits = searchResponse.getHits().getHits();
+            if (CollectionUtils.isEmpty(hits)) {
+                searchResponseActionListener.onFailure(new RuntimeException("can't get reTryTimes from node " + localNodeId));
+                return;
+            }
 
-    @VisibleForTesting
-    void getReTryTimesAsync(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) {
-        isExistedIndexAsync(ML_MODEL_RELOAD_INDEX);
-
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
-        QueryBuilder queryBuilder = QueryBuilders.idsQuery().addIds(localNodeId);
-        searchSourceBuilder.query(queryBuilder);
-        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(ML_MODEL_RELOAD_INDEX);
-
-        client.execute(SearchAction.INSTANCE, searchRequest, searchResponseActionListener);
-    }
-
-    void isExistedIndexAsync(String indexName) {
-        IndicesExistsRequest existsRequest = new IndicesExistsRequest(indexName);
-
-        boolean result = client.execute(IndicesExistsAction.INSTANCE, existsRequest).actionGet(5000).isExists();
-
-        if (!result) {
-            throw new IndexNotFoundException("index " + indexName + " not found");
-        }
+            searchResponseActionListener.onResponse(searchResponse);
+        }, searchResponseActionListener::onFailure));
     }
 
     /**
@@ -283,11 +319,14 @@ public class MLModelAutoReLoader {
      * @param indexName index name
      * @return true: existed. false: not existed
      */
-    @VisibleForTesting
-    boolean isExistedIndex(String indexName) {
-        IndicesExistsRequest existsRequest = new IndicesExistsRequest(indexName);
-
-        return client.execute(IndicesExistsAction.INSTANCE, existsRequest).actionGet(5000).isExists();
+    boolean isExistedIndex(String indexName) throws ExecutionException, InterruptedException {
+        IndicesExistsRequestBuilder indicesExistsRequestBuilder = new IndicesExistsRequestBuilder(
+            client,
+            IndicesExistsAction.INSTANCE,
+            indexName
+        );
+        IndicesExistsResponse indicesExistsResponse = indicesExistsRequestBuilder.execute().get();
+        return indicesExistsResponse.isExists();
     }
 
     /**
@@ -297,20 +336,23 @@ public class MLModelAutoReLoader {
      * @param reTryTimes  actual retry times
      */
     @VisibleForTesting
-    void saveLatestReTryTimes(String localNodeId, int reTryTimes) {
+    void saveLatestReTryTimes(String localNodeId, int reTryTimes, ActionListener<IndexResponse> indexResponseActionListener) {
         Map<String, Object> content = new HashMap<>(2);
         content.put(NODE_ID_FIELD, localNodeId);
         content.put(MODEL_LOAD_RETRY_TIMES_FIELD, reTryTimes);
 
-        IndexRequest indexRequest = new IndexRequest(ML_MODEL_RELOAD_INDEX);
-        indexRequest.id(localNodeId);
-        indexRequest.source(content);
-        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        IndexRequestBuilder indexRequestBuilder = new IndexRequestBuilder(client, IndexAction.INSTANCE, ML_MODEL_RELOAD_INDEX)
+            .setId(localNodeId)
+            .setSource(content)
+            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        IndexResponse indexResponse = client.execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
-
-        if (indexResponse.status() == RestStatus.CREATED || indexResponse.status() == RestStatus.OK) {
-            log.debug("node id:{} insert retry times successfully", localNodeId);
-        }
+        indexRequestBuilder.execute(ActionListener.wrap(indexResponse -> {
+            if (indexResponse.status() == RestStatus.CREATED || indexResponse.status() == RestStatus.OK) {
+                log.debug("node id:{} insert retry times successfully", localNodeId);
+                indexResponseActionListener.onResponse(indexResponse);
+                return;
+            }
+            indexResponseActionListener.onFailure(new RuntimeException("node id:" + localNodeId + " insert retry times unsuccessfully"));
+        }, indexResponseActionListener::onFailure));
     }
 }
