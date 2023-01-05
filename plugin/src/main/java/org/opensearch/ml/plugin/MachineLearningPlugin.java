@@ -510,7 +510,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
-                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE,
+                MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES
             );
         return settings;
     }

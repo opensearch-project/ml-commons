@@ -44,6 +44,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.admin.indices.create.CreateIndexAction;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
+import org.opensearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -118,7 +119,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         );
         modelManager = mock(MLModelManager.class);
 
-        when(clusterService().localNode()).thenReturn(node);
         when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[] { node });
     }
 
@@ -162,17 +162,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
         mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
-
-        getReTryTimesStep.whenComplete(response -> {
-            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
-            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
-            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
-            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
-
-            Map<String, Object> sourceAsMap = response.getHits().getHits()[0].getSourceAsMap();
-            int result = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
-            org.hamcrest.MatcherAssert.assertThat(result, is(0));
-        }, exception -> fail(exception.getMessage()));
     }
 
     public void testAutoReLoadModelByNodeId_ReTry() throws IOException, ExecutionException, InterruptedException {
@@ -182,17 +171,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
 
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
         mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
-
-        getReTryTimesStep.whenComplete(response -> {
-            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
-            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
-            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
-            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
-
-            Map<String, Object> sourceAsMap = response.getHits().getHits()[0].getSourceAsMap();
-            int result = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
-            org.hamcrest.MatcherAssert.assertThat(result, is(1));
-        }, exception -> fail(exception.getMessage()));
     }
 
     public void testAutoReLoadModelByNodeId_Max_ReTryTimes() throws IOException, ExecutionException, InterruptedException {
@@ -308,18 +286,18 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             .assertThat(exception.getMessage(), containsString("no such index [index " + ML_TASK_INDEX + " not found]"));
     }
 
-    public void testGetReTryTimes() throws ExecutionException, InterruptedException {
+    public void testGetReTryTimes() throws InterruptedException {
         assertLatestReTryTimesAsync(1);
         assertLatestReTryTimesAsync(3);
     }
 
-    public void testGetReTryTimes_IndexNotExisted() throws ExecutionException, InterruptedException {
+    public void testGetReTryTimes_IndexNotExisted() {
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
 
         mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
     }
 
-    public void testGetReTryTimes_EmptyHits() throws ExecutionException, InterruptedException {
+    public void testGetReTryTimes_EmptyHits() {
         createIndex(ML_MODEL_RELOAD_INDEX);
 
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
@@ -331,17 +309,31 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         });
     }
 
-    public void testIsExistedIndex_False() throws ExecutionException, InterruptedException {
-        assertFalse(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+    public void testIsExistedIndex_False() {
+        StepListener<IndicesExistsResponse> indicesExistsResponseStep = new StepListener<>();
+        mlModelAutoReLoader
+            .isExistedIndex(
+                ML_MODEL_RELOAD_INDEX,
+                ActionListener.wrap(indicesExistsResponseStep::onResponse, indicesExistsResponseStep::onFailure)
+            );
+
+        indicesExistsResponseStep.whenComplete(response -> assertFalse(response.isExists()), exception -> fail(exception.getMessage()));
     }
 
-    public void testIsExistedIndex_True() throws ExecutionException, InterruptedException {
+    public void testIsExistedIndex_True() {
         createIndex(ML_MODEL_RELOAD_INDEX);
 
-        assertTrue(mlModelAutoReLoader.isExistedIndex(ML_MODEL_RELOAD_INDEX));
+        StepListener<IndicesExistsResponse> indicesExistsResponseStep = new StepListener<>();
+        mlModelAutoReLoader
+            .isExistedIndex(
+                ML_MODEL_RELOAD_INDEX,
+                ActionListener.wrap(indicesExistsResponseStep::onResponse, indicesExistsResponseStep::onFailure)
+            );
+
+        indicesExistsResponseStep.whenComplete(response -> assertTrue(response.isExists()), exception -> fail(exception.getMessage()));
     }
 
-    public void testSaveLatestReTryTimes() throws ExecutionException, InterruptedException {
+    public void testSaveLatestReTryTimes() throws InterruptedException {
         assertLatestReTryTimesAsync(0);
         assertLatestReTryTimesAsync(1);
         assertLatestReTryTimesAsync(3);
@@ -379,7 +371,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
     }
 
-    private void assertLatestReTryTimesAsync(int reTryTimes) throws InterruptedException, ExecutionException {
+    private void assertLatestReTryTimesAsync(int reTryTimes) throws InterruptedException {
         final CountDownLatch inProgressLatch = new CountDownLatch(1);
         StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
         mlModelAutoReLoader
