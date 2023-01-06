@@ -500,6 +500,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE,
                 MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS,
+                MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS,
                 MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT,
                 MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
