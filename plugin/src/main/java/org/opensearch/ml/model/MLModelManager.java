@@ -101,6 +101,7 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 
 /**
@@ -128,6 +129,16 @@ public class MLModelManager {
     private volatile Integer maxModelPerNode;
     private volatile Integer maxUploadTasksPerNode;
     private volatile Integer maxLoadTasksPerNode;
+
+    public static final ImmutableSet MODEL_DONE_STATES = ImmutableSet
+        .of(
+            MLModelState.TRAINED,
+            MLModelState.UPLOADED,
+            MLModelState.LOADED,
+            MLModelState.PARTIALLY_LOADED,
+            MLModelState.LOAD_FAILED,
+            MLModelState.UNLOADED
+        );
 
     public MLModelManager(
         ClusterService clusterService,
@@ -422,7 +433,12 @@ public class MLModelManager {
         ActionListener<String> listener
     ) {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.LOAD, ML_ACTION_REQUEST_COUNT).increment();
+        List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelLoaded(modelId)) {
+            if (workerNodes != null && workerNodes.size() > 0) {
+                log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
+                modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
+            }
             listener.onResponse("successful");
             return;
         }
@@ -430,7 +446,7 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Exceed max model per node limit"));
             return;
         }
-        modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName, mlTask.getWorkerNodes());
+        modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName, workerNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxLoadTasksPerNode);
             this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {
@@ -596,6 +612,10 @@ public class MLModelManager {
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
         updateRequest.doc(updatedFields);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        if (updatedFields.containsKey(MLModel.MODEL_STATE_FIELD)
+            && MODEL_DONE_STATES.contains(updatedFields.get(MLModel.MODEL_STATE_FIELD))) {
+            updateRequest.retryOnConflict(3);
+        }
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
         } catch (Exception e) {
