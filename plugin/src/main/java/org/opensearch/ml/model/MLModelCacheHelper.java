@@ -122,6 +122,18 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Set target worker nodes of model.
+     * @param modelId model id
+     * @param targetWorkerNodes target worker nodes of model
+     */
+    public void setTargetWorkerNodes(String modelId, List<String> targetWorkerNodes) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache != null) {
+            modelCache.setTargetWorkerNodes(targetWorkerNodes);
+        }
+    }
+
+    /**
      * Remove model.
      * @param modelId model id
      */

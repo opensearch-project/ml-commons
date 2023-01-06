@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -268,8 +269,9 @@ public class TextEmbeddingModelTest {
             textEmbeddingModel.initModel(model, params);
         } catch (Exception e) {
             assertEquals(MLException.class, e.getClass());
-            assertEquals(IllegalArgumentException.class, e.getCause().getClass());
-            assertEquals("found multiple models", e.getCause().getMessage());
+            Throwable rootCause = ExceptionUtils.getRootCause(e);
+            assertEquals(IllegalArgumentException.class, rootCause.getClass());
+            assertEquals("found multiple models", rootCause.getMessage());
         }
     }
 
@@ -311,7 +313,7 @@ public class TextEmbeddingModelTest {
     @Test
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("model not loaded");
+        exceptionRule.expectMessage("Failed to inference text embedding");
         textEmbeddingModel.initModel(model, params);
         textEmbeddingModel.close();
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());

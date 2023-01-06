@@ -15,7 +15,9 @@ public final class MLCommonsSettings {
         .simpleString("plugins.ml_commons.task_dispatch_policy", "round_robin", Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Integer> ML_COMMONS_MAX_MODELS_PER_NODE = Setting
-        .intSetting("plugins.ml_commons.max_model_on_node", 10, 0, 1000, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .intSetting("plugins.ml_commons.max_loaded_models_per_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Integer> ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE = Setting
+        .intSetting("plugins.ml_commons.max_upload_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE = Setting
         .intSetting("plugins.ml_commons.max_load_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_ML_TASK_PER_NODE = Setting
@@ -32,6 +34,8 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    public static final Setting<Integer> ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS = Setting
+        .intSetting("plugins.ml_commons.ml_task_timeout_in_seconds", 600, 1, 86400, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Long> ML_COMMONS_MONITORING_REQUEST_COUNT = Setting
         .longSetting(
             "plugins.ml_commons.monitoring_request_count",
@@ -41,9 +45,6 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
-
-    public static final Setting<Integer> ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE = Setting
-        .intSetting("plugins.ml_commons.max_upload_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<String> ML_COMMONS_TRUSTED_URL_REGEX = Setting
         .simpleString(
