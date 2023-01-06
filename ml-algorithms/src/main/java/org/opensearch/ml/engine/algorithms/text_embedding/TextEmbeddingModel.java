@@ -232,7 +232,7 @@ public class TextEmbeddingModel implements Predictable {
                     }
                     log.info("Load model {} successfully on {} devices", modelId, devices.length);
                     return null;
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     String errorMessage = "Failed to load model " + modelId;
                     log.error(errorMessage, e);
                     close();
@@ -296,7 +296,7 @@ public class TextEmbeddingModel implements Predictable {
                 }
                 return new ModelTensorOutput(tensorOutputs);
             });
-        } catch (PrivilegedActionException e) {
+        } catch (Throwable e) {
             String errorMsg = "Failed to inference text embedding";
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);
