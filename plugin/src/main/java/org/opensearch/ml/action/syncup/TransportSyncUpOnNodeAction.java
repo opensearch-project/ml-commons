@@ -204,6 +204,16 @@ public class TransportSyncUpOnNodeAction extends
                         modelState = MLModelState.PARTIALLY_LOADED;
                     } else {
                         modelState = MLModelState.LOADED;
+                        if (mlTask.getWorkerNodes().size() < workerNodes.length) {
+                            log
+                                .warn(
+                                    "Model loaded on more nodes than target worker nodes. taskId:{}, modelId: {}, workerNodes: {}, targetWorkerNodes: {}",
+                                    taskId,
+                                    modelId,
+                                    Arrays.toString(workerNodes),
+                                    Arrays.toString(mlTask.getWorkerNodes().toArray(new String[0]))
+                                );
+                        }
                     }
                     log.info("Reset model state as {} for model {}", modelState, modelId);
                     mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, modelState));
