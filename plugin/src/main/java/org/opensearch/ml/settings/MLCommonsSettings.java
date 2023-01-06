@@ -15,7 +15,7 @@ public final class MLCommonsSettings {
         .simpleString("plugins.ml_commons.task_dispatch_policy", "round_robin", Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Integer> ML_COMMONS_MAX_MODELS_PER_NODE = Setting
-        .intSetting("plugins.ml_commons.max_loaded_models_per_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .intSetting("plugins.ml_commons.max_model_on_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE = Setting
         .intSetting("plugins.ml_commons.max_upload_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE = Setting
