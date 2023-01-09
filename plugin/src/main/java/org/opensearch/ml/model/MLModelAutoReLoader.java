@@ -143,21 +143,21 @@ public class MLModelAutoReLoader {
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
         StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
 
-        isExistedIndex(ML_TASK_INDEX, indicesExistsResponseStepListener);
-
         indicesExistsResponseStepListener.whenComplete(indicesExistsResponse -> {
             if (indicesExistsResponse.isExists()) {
                 queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
             }
         }, indicesExistsResponseStepListener::onFailure);
 
+        isExistedIndex(ML_TASK_INDEX, indicesExistsResponseStepListener);
+
+        getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+
         queryTaskStep.whenComplete(searchResponse -> {
             SearchHit[] hits = searchResponse.getHits().getHits();
             if (CollectionUtils.isEmpty(hits)) {
                 return;
             }
-
-            getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
 
             getReTryTimesStep.whenComplete(getReTryTimesResponse -> {
                 // if getReTryTimesResponse is null,it means we get reTryTimes at the first time,and the index

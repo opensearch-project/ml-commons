@@ -156,6 +156,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testAutoReLoadModelByNodeId() throws IOException, ExecutionException, InterruptedException {
+        createIndex(ML_MODEL_RELOAD_INDEX);
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         initDataOfMlModel(modelId);
 
@@ -166,6 +167,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testAutoReLoadModelByNodeId_ReTry() throws IOException, ExecutionException, InterruptedException {
+        createIndex(ML_MODEL_RELOAD_INDEX);
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
