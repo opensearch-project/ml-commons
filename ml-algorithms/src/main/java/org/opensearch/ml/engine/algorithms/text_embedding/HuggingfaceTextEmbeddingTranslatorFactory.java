@@ -31,12 +31,12 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
         SUPPORTED_TYPES.add(new Pair<>(Input.class, Output.class));
     }
 
-    private final TextEmbeddingModelConfig.PoolingMethod poolingMode;
+    private final TextEmbeddingModelConfig.PoolingMode poolingMode;
     private boolean normalizeResult;
     private final String modelType;
     private final boolean neuron;
 
-    public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMethod poolingMode, boolean normalizeResult, String modelType, boolean neuron) {
+    public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType, boolean neuron) {
         this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;

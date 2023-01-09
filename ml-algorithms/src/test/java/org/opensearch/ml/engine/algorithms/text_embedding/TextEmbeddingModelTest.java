@@ -162,36 +162,36 @@ public class TextEmbeddingModelTest {
     public void initModel_predict_TorchScript_Huggingface() throws URISyntaxException {
         String modelFile = "all-MiniLM-L6-v2_torchscript_huggingface.zip";
         String modelType = "bert";
-        TextEmbeddingModelConfig.PoolingMethod poolingMethod = TextEmbeddingModelConfig.PoolingMethod.MEAN;
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.MEAN;
         boolean normalize = true;
         int modelMaxLength = 512;
         MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
-        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMethod, normalize, modelMaxLength, modelFormat, dimension);
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, dimension);
     }
 
     @Test
     public void initModel_predict_ONNX_bert() throws URISyntaxException {
         String modelFile = "all-MiniLM-L6-v2_onnx.zip";
         String modelType = "bert";
-        TextEmbeddingModelConfig.PoolingMethod poolingMethod = TextEmbeddingModelConfig.PoolingMethod.MEAN;
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.MEAN;
         boolean normalize = true;
         int modelMaxLength = 512;
         MLModelFormat modelFormat = MLModelFormat.ONNX;
-        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMethod, normalize, modelMaxLength, modelFormat, dimension);
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, dimension);
     }
 
     @Test
     public void initModel_predict_ONNX_albert() throws URISyntaxException {
         String modelFile = "paraphrase-albert-small-v2_onnx.zip";
         String modelType = "albert";
-        TextEmbeddingModelConfig.PoolingMethod poolingMethod = TextEmbeddingModelConfig.PoolingMethod.MEAN;
+        TextEmbeddingModelConfig.PoolingMode poolingMode = TextEmbeddingModelConfig.PoolingMode.MEAN;
         boolean normalize = false;
         int modelMaxLength = 512;
         MLModelFormat modelFormat = MLModelFormat.ONNX;
-        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMethod, normalize, modelMaxLength, modelFormat, 768);
+        initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, 768);
     }
 
-    private void initModel_predict_HuggingfaceModel(String modelFile, String modelType, TextEmbeddingModelConfig.PoolingMethod poolingMethod,
+    private void initModel_predict_HuggingfaceModel(String modelFile, String modelType, TextEmbeddingModelConfig.PoolingMode poolingMode,
                                         boolean normalizeResult, Integer modelMaxLength,
                                    MLModelFormat modelFormat, int dimension) throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -201,7 +201,7 @@ public class TextEmbeddingModelTest {
         TextEmbeddingModelConfig onnxModelConfig = modelConfig.toBuilder()
                 .frameworkType(HUGGINGFACE_TRANSFORMERS)
                 .modelType(modelType)
-                .poolingMode(poolingMethod)
+                .poolingMode(poolingMode)
                 .normalizeResult(normalizeResult)
                 .modelMaxLength(modelMaxLength)
                 .build();

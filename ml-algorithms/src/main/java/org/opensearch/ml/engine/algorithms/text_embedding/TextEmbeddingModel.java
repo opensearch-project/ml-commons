@@ -188,7 +188,7 @@ public class TextEmbeddingModel implements Predictable {
                         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
                         TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
                         String modelType = textEmbeddingModelConfig.getModelType();
-                        TextEmbeddingModelConfig.PoolingMethod poolingMethod = textEmbeddingModelConfig.getPoolingMode();
+                        TextEmbeddingModelConfig.PoolingMode poolingMode = textEmbeddingModelConfig.getPoolingMode();
                         boolean normalizeResult = textEmbeddingModelConfig.isNormalizeResult();
                         Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
                         if (modelMaxLength != null) {
@@ -196,7 +196,7 @@ public class TextEmbeddingModel implements Predictable {
                         }
                         //TODO: refactor this when we support more engine type
                         if (ONNX_ENGINE.equals(engine)) { //ONNX
-                            criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator(poolingMethod, normalizeResult, modelType));
+                            criteriaBuilder.optTranslator(new ONNXSentenceTransformerTextEmbeddingTranslator(poolingMode, normalizeResult, modelType));
                         } else { // pytorch
                             if (transformersType == SENTENCE_TRANSFORMERS) {
                                 criteriaBuilder.optTranslator(new SentenceTransformerTextEmbeddingTranslator());
@@ -205,7 +205,7 @@ public class TextEmbeddingModel implements Predictable {
                                 if (transformersType.name().endsWith("_NEURON")) {
                                     neuron = true;
                                 }
-                                criteriaBuilder.optTranslatorFactory(new HuggingfaceTextEmbeddingTranslatorFactory(poolingMethod, normalizeResult, modelType, neuron));
+                                criteriaBuilder.optTranslatorFactory(new HuggingfaceTextEmbeddingTranslatorFactory(poolingMode, normalizeResult, modelType, neuron));
                             }
                         }
                         Criteria<Input, Output> criteria = criteriaBuilder.build();

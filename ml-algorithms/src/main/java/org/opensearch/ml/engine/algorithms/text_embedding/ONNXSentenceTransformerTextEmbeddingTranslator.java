@@ -31,12 +31,12 @@ import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingMo
 public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTranslator {
     private static final int[] AXIS = {0};
     private HuggingFaceTokenizer tokenizer;
-    private TextEmbeddingModelConfig.PoolingMethod poolingMethod;
+    private TextEmbeddingModelConfig.PoolingMode poolingMode;
     private boolean normalizeResult;
     private String modelType;
 
-    public ONNXSentenceTransformerTextEmbeddingTranslator(TextEmbeddingModelConfig.PoolingMethod poolingMethod, boolean normalizeResult, String modelType) {
-        this.poolingMethod = poolingMethod;
+    public ONNXSentenceTransformerTextEmbeddingTranslator(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType) {
+        this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;
     }
@@ -90,7 +90,7 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         long[] attentionMask = encoding.getAttentionMask();
         NDManager manager = ctx.getNDManager();
         NDArray inputAttentionMask = manager.create(attentionMask);
-        switch (this.poolingMethod) {
+        switch (this.poolingMode) {
             case MEAN:
                 embeddings = meanPool(embeddings, inputAttentionMask, false);
                 break;

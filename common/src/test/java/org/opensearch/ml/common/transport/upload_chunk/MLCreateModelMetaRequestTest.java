@@ -31,7 +31,7 @@ public class MLCreateModelMetaRequestTest {
 	@Before
 	public void setUp() {
 		config = new TextEmbeddingModelConfig("Model Type", 123, FrameworkType.SENTENCE_TRANSFORMERS, "All Config",
-				TextEmbeddingModelConfig.PoolingMethod.MEAN, true, 512);
+				TextEmbeddingModelConfig.PoolingMode.MEAN, true, 512);
 		mlCreateModelMetaInput = new MLCreateModelMetaInput("Model Name", FunctionName.BATCH_RCF, "1.0",
 				"Model Description", MLModelFormat.TORCH_SCRIPT, MLModelState.LOADING, 200L, "123", config, 2);
 	}
