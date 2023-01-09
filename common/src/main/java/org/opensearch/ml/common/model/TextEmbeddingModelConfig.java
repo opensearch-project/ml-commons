@@ -33,19 +33,19 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
 
     public static final String EMBEDDING_DIMENSION_FIELD = "embedding_dimension";
     public static final String FRAMEWORK_TYPE_FIELD = "framework_type";
-    public static final String POOLING_METHOD_FIELD = "pooling_method";
+    public static final String POOLING_MODE_FIELD = "pooling_mode";
     public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
     public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
 
     private final Integer embeddingDimension;
     private final FrameworkType frameworkType;
-    private final PoolingMethod poolingMethod;
+    private final PoolingMode poolingMode;
     private final boolean normalizeResult;
     private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
     public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig,
-                                    PoolingMethod poolingMethod, boolean normalizeResult, Integer modelMaxLength) {
+                                    PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength) {
         super(modelType, allConfig);
         if (embeddingDimension == null) {
             throw new IllegalArgumentException("embedding dimension is null");
@@ -55,10 +55,10 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         }
         this.embeddingDimension = embeddingDimension;
         this.frameworkType = frameworkType;
-        if (poolingMethod != null) {
-            this.poolingMethod = poolingMethod;
+        if (poolingMode != null) {
+            this.poolingMode = poolingMode;
         } else {
-            this.poolingMethod = PoolingMethod.MEAN;
+            this.poolingMode = PoolingMode.MEAN;
         }
         this.normalizeResult = normalizeResult;
         this.modelMaxLength = modelMaxLength;
@@ -69,7 +69,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
-        PoolingMethod poolingMethod = PoolingMethod.MEAN;
+        PoolingMode poolingMode = PoolingMode.MEAN;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
 
@@ -91,8 +91,8 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
                     break;
-                case POOLING_METHOD_FIELD:
-                    poolingMethod = PoolingMethod.from(parser.text().toUpperCase(Locale.ROOT));
+                case POOLING_MODE_FIELD:
+                    poolingMode = PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case NORMALIZE_RESULT_FIELD:
                     normalizeResult = parser.booleanValue();
@@ -105,7 +105,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
                     break;
             }
         }
-        return new TextEmbeddingModelConfig(modelType,  embeddingDimension, frameworkType, allConfig, poolingMethod, normalizeResult, modelMaxLength);
+        return new TextEmbeddingModelConfig(modelType,  embeddingDimension, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength);
     }
 
     @Override
@@ -117,7 +117,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         super(in);
         embeddingDimension = in.readInt();
         frameworkType = in.readEnum(FrameworkType.class);
-        poolingMethod = in.readEnum(PoolingMethod.class);
+        poolingMode = in.readEnum(PoolingMode.class);
         normalizeResult = in.readBoolean();
         modelMaxLength = in.readOptionalInt();
     }
@@ -127,7 +127,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         super.writeTo(out);
         out.writeInt(embeddingDimension);
         out.writeEnum(frameworkType);
-        out.writeEnum(poolingMethod);
+        out.writeEnum(poolingMode);
         out.writeBoolean(normalizeResult);
         out.writeOptionalInt(modelMaxLength);
     }
@@ -150,19 +150,32 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         if (modelMaxLength != null) {
             builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
         }
-        builder.field(POOLING_METHOD_FIELD, poolingMethod);
+        builder.field(POOLING_MODE_FIELD, poolingMode);
         builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
         builder.endObject();
         return builder;
     }
 
-    public enum PoolingMethod {
-        MEAN,
-        CLS;
+    public enum PoolingMode {
+        MEAN("mean"),
+        MEAN_SQRT_LEN("mean_sqrt_len"),
+        MAX("max"),
+        WEIGHTED_MEAN("weightedmean"),
+        CLS("cls"),
+        LAST_TOKEN("lasttoken");
 
-        public static PoolingMethod from(String value) {
+        private String name;
+
+        public String getName() {
+            return name;
+        }
+        PoolingMode(String name) {
+            this.name = name;
+        }
+
+        public static PoolingMode from(String value) {
             try {
-                return PoolingMethod.valueOf(value);
+                return PoolingMode.valueOf(value);
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong pooling method");
             }
