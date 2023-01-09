@@ -225,7 +225,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testQueryTask() throws IOException {
-        StepListener<SearchResponse> queryTaskStep = queryTaskAsync(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        StepListener<SearchResponse> queryTaskStep = queryTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
         queryTaskStep.whenComplete(response -> {
             org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
@@ -234,7 +234,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
         }, exception -> fail(exception.getMessage()));
 
-        queryTaskStep = queryTaskAsync(localNodeId, modelId, MLTaskType.UPLOAD_MODEL, MLTaskState.COMPLETED);
+        queryTaskStep = queryTask(localNodeId, modelId, MLTaskType.UPLOAD_MODEL, MLTaskState.COMPLETED);
 
         queryTaskStep.whenComplete(response -> {
             org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
@@ -243,7 +243,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(0));
         }, exception -> fail(exception.getMessage()));
 
-        queryTaskStep = queryTaskAsync(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.RUNNING);
+        queryTaskStep = queryTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.RUNNING);
 
         queryTaskStep.whenComplete(response -> {
             org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
@@ -254,13 +254,13 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testQueryTask_MultiDataInTaskIndex() throws IOException {
-        StepListener<SearchResponse> queryTaskStep = queryTaskAsync(localNodeId, "modelId1", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        StepListener<SearchResponse> queryTaskStep = queryTask(localNodeId, "modelId1", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         queryTaskStep.whenComplete(response -> {}, exception -> fail(exception.getMessage()));
 
-        queryTaskStep = queryTaskAsync(localNodeId, "modelId2", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        queryTaskStep = queryTask(localNodeId, "modelId2", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
         queryTaskStep.whenComplete(response -> {}, exception -> fail(exception.getMessage()));
 
-        queryTaskStep = queryTaskAsync(localNodeId, "modelId3", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
+        queryTaskStep = queryTask(localNodeId, "modelId3", MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
 
         queryTaskStep.whenComplete(response -> {
             org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
@@ -405,7 +405,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         }, exception -> fail(exception.getMessage()));
     }
 
-    private StepListener<SearchResponse> queryTaskAsync(String localNodeId, String modelId, MLTaskType mlTaskType, MLTaskState mlTaskState)
+    private StepListener<SearchResponse> queryTask(String localNodeId, String modelId, MLTaskType mlTaskType, MLTaskState mlTaskState)
         throws IOException {
         initDataOfMlTask(localNodeId, modelId, mlTaskType, mlTaskState);
 

@@ -268,6 +268,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlEngine
         );
         mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, threadPool, client, xContentRegistry, nodeHelper, settings);
+        mlModelAutoReLoader.autoReLoadModel();
+
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
         mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);

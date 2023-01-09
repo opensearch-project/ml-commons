@@ -9,12 +9,10 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
 import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -104,15 +102,12 @@ public class MLModelAutoReLoader {
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE, it -> enableAutoReLoadModel = it);
 
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_MODEL_RELOAD_MAX_RETRY_TIMES, it -> autoReLoadMaxReTryTimes = it);
-
-        autoReLoadModel();
     }
 
     /**
      * the main method: model auto reloading
      */
-    @VisibleForTesting
-    void autoReLoadModel() {
+    public void autoReLoadModel() {
         log.info("enableAutoReLoadModel: {} ", enableAutoReLoadModel);
 
         // if we don't need to reload automatically, just return without doing anything
@@ -127,7 +122,7 @@ public class MLModelAutoReLoader {
 
         String localNodeId = clusterService.localNode().getId();
         // auto reload all models of this local ml node
-        threadPool.executor(GENERAL_THREAD_POOL).execute(() -> {
+        threadPool.generic().submit(() -> {
             try {
                 autoReLoadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
@@ -183,7 +178,7 @@ public class MLModelAutoReLoader {
                     return;
                 }
 
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hits[0].getSourceRef())) {
+                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hits[0].getSourceRef());) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLTask mlTask = MLTask.parse(parser);
 
@@ -191,7 +186,7 @@ public class MLModelAutoReLoader {
 
                     // if reload the model successfully,the number of unsuccessful reload should be reset to zero.
                     reTryTimes = 0;
-                } catch (RuntimeException | IOException e) {
+                } catch (RuntimeException e) {
                     reTryTimes++;
                     log.error("Can't auto reload model in node id {} ,has tried {} times\nThe reason is:{}", localNodeId, reTryTimes, e);
                 }
@@ -202,11 +197,11 @@ public class MLModelAutoReLoader {
                     reTryTimes,
                     ActionListener.wrap(saveLatestReTryTimesStep::onResponse, saveLatestReTryTimesStep::onFailure)
                 );
-
-                saveLatestReTryTimesStep
-                    .whenComplete(response -> log.info("successfully complete all steps"), saveLatestReTryTimesStep::onFailure);
             }, getReTryTimesStep::onFailure);
         }, queryTaskStep::onFailure);
+
+        saveLatestReTryTimesStep
+            .whenComplete(response -> { log.info("successfully complete all steps"); }, saveLatestReTryTimesStep::onFailure);
     }
 
     /**
@@ -216,7 +211,7 @@ public class MLModelAutoReLoader {
      * @param modelId     model id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws IllegalArgumentException {
+    void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws RuntimeException {
         String[] allNodeIds = nodeHelper.getAllNodeIds();
         List<String> allNodeIdList = new ArrayList<>(List.of(allNodeIds));
         if (!allNodeIdList.contains(localNodeId)) {
