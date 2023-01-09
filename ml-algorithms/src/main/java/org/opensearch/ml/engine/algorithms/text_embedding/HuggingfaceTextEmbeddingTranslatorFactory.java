@@ -31,13 +31,13 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
         SUPPORTED_TYPES.add(new Pair<>(Input.class, Output.class));
     }
 
-    private final TextEmbeddingModelConfig.PoolingMethod poolingMethod;
+    private final TextEmbeddingModelConfig.PoolingMode poolingMode;
     private boolean normalizeResult;
     private final String modelType;
     private final boolean neuron;
 
-    public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMethod poolingMethod, boolean normalizeResult, String modelType, boolean neuron) {
-        this.poolingMethod = poolingMethod;
+    public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType, boolean neuron) {
+        this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;
         this.neuron = neuron;
@@ -62,12 +62,12 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
                             .optTokenizerPath(modelPath)
                             .optManager(model.getNDManager())
                             .build();
+            boolean inputTokenTypeIds = neuron && ("bert".equalsIgnoreCase(modelType) || "albert".equalsIgnoreCase(modelType));
             HuggingfaceTextEmbeddingTranslator translator =
                     HuggingfaceTextEmbeddingTranslator.builder(tokenizer, arguments)
-                            .poolingMethod(poolingMethod)
-                            .normalizeResult(normalizeResult)
-                            .modelType(modelType)
-                            .neuron(neuron)
+                            .optPoolingMode(poolingMode.getName())
+                            .optNormalize(normalizeResult)
+                            .optInputTokenTypeIds(inputTokenTypeIds)
                             .build();
             if (input == String.class && output == float[].class) {
                 return (Translator<I, O>) translator;
