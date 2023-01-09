@@ -30,7 +30,7 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLModelState modelState;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
-    private @Getter(AccessLevel.PROTECTED) Set<String> targetWorkerNodes;
+    private final Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
     private final Queue<Double> modelInferenceDurationQueue;
     private final Queue<Double> predictRequestDurationQueue;

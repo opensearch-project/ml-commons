@@ -140,7 +140,7 @@ public class MLModelMetaCreateTests extends OpenSearchTestCase {
                     123,
                     FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
-                    TextEmbeddingModelConfig.PoolingMethod.MEAN,
+                    TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512
                 )
