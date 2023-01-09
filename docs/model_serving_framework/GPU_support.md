@@ -1,7 +1,8 @@
 With model serving framework(released in 2.4 as experimental feature), user can upload deep learning NLP model(support 
-text embedding model only now) to OpenSearch cluster and run on ML node. To get better performance, we need GPU 
-acceleration. This doc explains how to prepare GPU ML node to run model serving framework (the setup is one-time effort).
-This doc focus on two types of GPU device: NVIDIA GPU and AWS Inferentia.
+text embedding model only now) to OpenSearch cluster and run on [ML node](https://opensearch.org/docs/latest/ml-commons-plugin/index/#ml-node).
+To get better performance, we need GPU acceleration. We will support GPU ML node from 2.5. This doc explains how to 
+prepare GPU ML node to run model serving framework (the setup is one-time effort). This doc focus on two types of GPU 
+device: NVIDIA GPU and AWS Inferentia.
 
 # 1. NVIDIA GPU
 
@@ -73,7 +74,7 @@ Ubuntu AMI:  `Deep Learning AMI GPU PyTorch 1.12.1 (Ubuntu 20.04) 20221114`
 Download OpenSearch and set `OS_HOME` first. In this example, we install OpenSearch in home folder.
 
 ```
-cd ~; wget https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/2.5.0/6801/linux/x64/tar/dist/opensearch/opensearch-2.5.0-linux-x64.tar.gz
+cd ~; wget https://artifacts.opensearch.org/releases/bundle/opensearch/2.5.0/opensearch-2.5.0-linux-x64.tar.gz
 tar -xvf opensearch-2.5.0-linux-x64.tar.gz
 
 echo "export OS_HOME=~/opensearch-2.5.0" | tee -a ~/.bash_profile
@@ -163,7 +164,7 @@ Amazon Linux AMI: `Deep Learning AMI GPU PyTorch 1.12.1 (Amazon Linux 2) 2022111
 Download OpenSearch and set `OS_HOME` first. In this example, we install OpenSearch in home folder.
 
 ```
-cd ~; wget https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/2.5.0/6801/linux/x64/tar/dist/opensearch/opensearch-2.5.0-linux-x64.tar.gz
+cd ~; wget https://artifacts.opensearch.org/releases/bundle/opensearch/2.5.0/opensearch-2.5.0-linux-x64.tar.gz
 tar -xvf opensearch-2.5.0-linux-x64.tar.gz
 
 echo "export OS_HOME=~/opensearch-2.5.0" | tee -a ~/.bash_profile
