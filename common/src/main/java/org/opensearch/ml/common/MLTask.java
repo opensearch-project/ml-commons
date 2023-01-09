@@ -79,7 +79,8 @@ public class MLTask implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String error,
         User user,
-        boolean async
+        boolean async,
+        boolean autoReload
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
