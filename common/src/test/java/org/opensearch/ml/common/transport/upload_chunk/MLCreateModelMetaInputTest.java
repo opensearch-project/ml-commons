@@ -76,7 +76,7 @@ public class MLCreateModelMetaInputTest {
 		mLCreateModelMetaInput.toXContent(builder, EMPTY_PARAMS);
 		String mlModelContent = TestHelper.xContentBuilderToString(builder);
 		final String expected = "{\"name\":\"Model Name\",\"function_name\":\"BATCH_RCF\",\"version\":\"1.0\",\"description\":\"Model Description\",\"model_format\":\"TORCH_SCRIPT\",\"model_state\":\"LOADING\",\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\",\"model_config\":{\"model_type\":\"Model Type\"," +
-				"\"embedding_dimension\":123,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"All Config\",\"model_max_length\":512,\"pooling_method\":\"MEAN\",\"normalize_result\":true},\"total_chunks\":2}";
+				"\"embedding_dimension\":123,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"All Config\",\"model_max_length\":512,\"pooling_mode\":\"MEAN\",\"normalize_result\":true},\"total_chunks\":2}";
 		assertEquals(expected, mlModelContent);
 	}
 }

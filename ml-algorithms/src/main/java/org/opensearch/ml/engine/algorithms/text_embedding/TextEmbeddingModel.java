@@ -170,8 +170,9 @@ public class TextEmbeddingModel implements Predictable {
                             findModelFile = true;
                             int dotIndex = name.lastIndexOf(".");
                             String suffix = name.substring(dotIndex);
-                            if (!modelName.equals(name.substring(0, dotIndex))) {
-                                file.renameTo(new File(modelPath.resolve(modelName + suffix).toUri()));
+                            String targetModelFileName = modelPath.getFileName().toString();
+                            if (!targetModelFileName.equals(name.substring(0, dotIndex))) {
+                                file.renameTo(new File(modelPath.resolve(targetModelFileName + suffix).toUri()));
                             }
                         }
                     }
@@ -187,7 +188,7 @@ public class TextEmbeddingModel implements Predictable {
                         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
                         TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
                         String modelType = textEmbeddingModelConfig.getModelType();
-                        TextEmbeddingModelConfig.PoolingMethod poolingMethod = textEmbeddingModelConfig.getPoolingMethod();
+                        TextEmbeddingModelConfig.PoolingMethod poolingMethod = textEmbeddingModelConfig.getPoolingMode();
                         boolean normalizeResult = textEmbeddingModelConfig.isNormalizeResult();
                         Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
                         if (modelMaxLength != null) {

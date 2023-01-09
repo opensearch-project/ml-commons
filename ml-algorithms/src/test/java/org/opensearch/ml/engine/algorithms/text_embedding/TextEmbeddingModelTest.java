@@ -201,7 +201,7 @@ public class TextEmbeddingModelTest {
         TextEmbeddingModelConfig onnxModelConfig = modelConfig.toBuilder()
                 .frameworkType(HUGGINGFACE_TRANSFORMERS)
                 .modelType(modelType)
-                .poolingMethod(poolingMethod)
+                .poolingMode(poolingMethod)
                 .normalizeResult(normalizeResult)
                 .modelMaxLength(modelMaxLength)
                 .build();

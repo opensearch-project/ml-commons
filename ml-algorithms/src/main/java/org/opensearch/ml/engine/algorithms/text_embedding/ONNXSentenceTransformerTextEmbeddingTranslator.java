@@ -81,13 +81,30 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
     /** {@inheritDoc} */
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
-        NDArray embeddings = null;
+        NDArray embeddings = list.get(0);
+        int shapeLength = embeddings.getShape().getShape().length;
+        if (shapeLength == 3) {
+            embeddings = embeddings.get(0);
+        }
+        Encoding encoding = (Encoding) ctx.getAttachment("encoding");
+        long[] attentionMask = encoding.getAttentionMask();
+        NDManager manager = ctx.getNDManager();
+        NDArray inputAttentionMask = manager.create(attentionMask);
         switch (this.poolingMethod) {
             case MEAN:
-                embeddings = meanPooling(ctx, list);
+                embeddings = meanPool(embeddings, inputAttentionMask, false);
+                break;
+            case MEAN_SQRT_LEN:
+                embeddings = meanPool(embeddings, inputAttentionMask, true);
+                break;
+            case MAX:
+                embeddings = maxPool(embeddings, inputAttentionMask);
+                break;
+            case WEIGHTED_MEAN:
+                embeddings = weightedMeanPool(embeddings, inputAttentionMask);
                 break;
             case CLS:
-                embeddings = list.get(0).get(0).get(0);
+                embeddings = embeddings.get(0);
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported pooling method");
@@ -108,24 +125,38 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         return output;
     }
 
-    private static NDArray meanPooling(TranslatorContext ctx, NDList list) {
-        NDArray embeddings = list.get(0);
-        int shapeLength = embeddings.getShape().getShape().length;
-        if (shapeLength == 3) {
-            embeddings = embeddings.get(0);
-        }
-        Encoding encoding = (Encoding) ctx.getAttachment("encoding");
-        long[] attentionMask = encoding.getAttentionMask();
-        NDManager manager = ctx.getNDManager();
-        NDArray inputAttentionMask = manager.create(attentionMask);
+    private NDArray meanPool(NDArray embeddings, NDArray inputAttentionMask, boolean sqrt) {
         long[] shape = embeddings.getShape().getShape();
         inputAttentionMask = inputAttentionMask.expandDims(-1).broadcast(shape);
         NDArray inputAttentionMaskSum = inputAttentionMask.sum(AXIS);
         NDArray clamp = inputAttentionMaskSum.clip(1e-9, 1e12);
         NDArray prod = embeddings.mul(inputAttentionMask);
         NDArray sum = prod.sum(AXIS);
-        embeddings = sum.div(clamp);
-        return embeddings;
+        if (sqrt) {
+            return sum.div(clamp.sqrt());
+        }
+        return sum.div(clamp);
+    }
+
+    private NDArray maxPool(NDArray embeddings, NDArray inputAttentionMask) {
+        long[] shape = embeddings.getShape().getShape();
+        inputAttentionMask = inputAttentionMask.expandDims(-1).broadcast(shape);
+        inputAttentionMask = inputAttentionMask.eq(0);
+        embeddings = embeddings.duplicate();
+        embeddings.set(inputAttentionMask, -1e9); // Set padding tokens to large negative value
+
+        return embeddings.max(AXIS, true);
+    }
+
+    private NDArray weightedMeanPool(NDArray embeddings, NDArray attentionMask) {
+        long[] shape = embeddings.getShape().getShape();
+        NDArray weight = embeddings.getManager().arange(1, shape[0] + 1);
+        weight = weight.expandDims(-1).broadcast(shape);
+
+        attentionMask = attentionMask.expandDims(-1).broadcast(shape).mul(weight);
+        NDArray maskSum = attentionMask.sum(AXIS);
+        NDArray embeddingSum = embeddings.mul(attentionMask).sum(AXIS);
+        return embeddingSum.div(maskSum);
     }
 
     @Override
