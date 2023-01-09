@@ -28,6 +28,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -287,8 +288,8 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testGetReTryTimes() throws InterruptedException {
-        assertLatestReTryTimesAsync(1);
-        assertLatestReTryTimesAsync(3);
+        assertLatestReTryTimes(1);
+        assertLatestReTryTimes(3);
     }
 
     public void testGetReTryTimes_IndexNotExisted() {
@@ -334,9 +335,9 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     }
 
     public void testSaveLatestReTryTimes() throws InterruptedException {
-        assertLatestReTryTimesAsync(0);
-        assertLatestReTryTimesAsync(1);
-        assertLatestReTryTimesAsync(3);
+        assertLatestReTryTimes(0);
+        assertLatestReTryTimes(1);
+        assertLatestReTryTimes(3);
     }
 
     private void createIndex() {
@@ -353,7 +354,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             .modelId(modelId)
             .taskType(mlTaskType)
             .state(mlTaskState)
-            .workerNode(nodeId)
+            .workerNodes(List.of(nodeId))
             .progress(0.0f)
             .outputIndex("test_index")
             .createTime(time.minus(1, ChronoUnit.MINUTES))
@@ -371,7 +372,7 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         client().execute(IndexAction.INSTANCE, indexRequest).actionGet(5000);
     }
 
-    private void assertLatestReTryTimesAsync(int reTryTimes) throws InterruptedException {
+    private void assertLatestReTryTimes(int reTryTimes) throws InterruptedException {
         final CountDownLatch inProgressLatch = new CountDownLatch(1);
         StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
         mlModelAutoReLoader

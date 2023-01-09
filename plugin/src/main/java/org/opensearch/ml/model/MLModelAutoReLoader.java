@@ -224,14 +224,12 @@ public class MLModelAutoReLoader {
                 MLLoadModelAction.INSTANCE,
                 mlLoadModelRequest,
                 ActionListener
-                    .wrap(
-                        response -> log.info("the model {} is auto reloading under the node {} ", modelId, localNodeId),
-                        exception -> {
-                            throw new RuntimeException(
-                                "fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception
-                            );
-                        }
-                    )
+                    .wrap(response -> log.info("the model {} is auto reloading under the node {} ", modelId, localNodeId), exception -> {
+                        log.info("fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception);
+                        throw new RuntimeException(
+                            "fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception
+                        );
+                    })
             );
     }
 
