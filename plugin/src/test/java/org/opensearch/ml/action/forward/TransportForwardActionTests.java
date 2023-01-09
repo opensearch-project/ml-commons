@@ -266,7 +266,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
                     123,
                     TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
-                    TextEmbeddingModelConfig.PoolingMethod.MEAN,
+                    TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512
                 )

@@ -102,8 +102,8 @@ public class ModelHelper {
                                     case TextEmbeddingModelConfig.FRAMEWORK_TYPE_FIELD:
                                         configBuilder.frameworkType(TextEmbeddingModelConfig.FrameworkType.from(configEntry.getValue().toString()));
                                         break;
-                                    case TextEmbeddingModelConfig.POOLING_METHOD_FIELD:
-                                        configBuilder.poolingMethod(TextEmbeddingModelConfig.PoolingMethod.from(configEntry.getValue().toString()));
+                                    case TextEmbeddingModelConfig.POOLING_MODE_FIELD:
+                                        configBuilder.poolingMode(TextEmbeddingModelConfig.PoolingMode.from(configEntry.getValue().toString()));
                                         break;
                                     case TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD:
                                         configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
