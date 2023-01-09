@@ -10,6 +10,9 @@ import static org.opensearch.ml.common.CommonValue.USER;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -269,8 +272,8 @@ public class MLTask implements ToXContentObject, Writeable {
                 case IS_ASYNC_TASK_FIELD:
                     async = parser.booleanValue();
                     break;
-                    case IS_AUTO_RELOAD_FIELD:
-                        autoReload = parser.booleanValue();
+                case IS_AUTO_RELOAD_FIELD:
+                    autoReload = parser.booleanValue();
                     break;
                 default:
                     parser.skipChildren();
@@ -292,7 +295,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 .error(error)
                 .user(user)
                 .async(async)
-            .autoReload(autoReload)
+                .autoReload(autoReload)
                 .build();
     }
 }
