@@ -6,6 +6,7 @@
 package org.opensearch.ml.action;
 
 import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 import static org.opensearch.ml.utils.TestData.TARGET_FIELD;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
@@ -24,6 +25,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
@@ -408,5 +410,10 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
         MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, syncUpRequest).actionGet(5000);
         return syncUpResponse;
+    }
+
+    @Override
+    protected Settings nodeSettings(int ordinal) {
+        return Settings.builder().put(super.nodeSettings(ordinal)).put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), false).build();
     }
 }
