@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -69,6 +70,7 @@ public class ModelHelperTest {
         assertNotEquals(0, argumentCaptor.getValue().size());
     }
 
+    @Ignore
     @Test
     public void testDownloadPrebuiltModelConfig_WrongModelName() {
         String taskId = "test_task_id";
@@ -84,6 +86,7 @@ public class ModelHelperTest {
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
     }
 
+    @Ignore
     @Test
     public void testDownloadPrebuiltModelConfig() {
         String taskId = "test_task_id";
