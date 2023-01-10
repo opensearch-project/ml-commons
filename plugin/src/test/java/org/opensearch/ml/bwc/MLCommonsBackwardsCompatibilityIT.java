@@ -22,15 +22,16 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.rest.MLCommonsRestTestCase;
+import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
 
-    private ClusterType CLUSTER_TYPE;
-    private String CLUSTER_NAME;
-    private String MIXED_CLUSTER_TEST_ROUND;
+    private final ClusterType CLUSTER_TYPE = ClusterType.parse(System.getProperty("tests.rest.bwcsuite"));
+    private final String CLUSTER_NAME = System.getProperty("tests.clustername");
+    private String MIXED_CLUSTER_TEST_ROUND = System.getProperty("tests.rest.bwcsuite_round");
     private final String irisIndex = "iris_data_backwards_compatibility_it";
     private SearchSourceBuilder searchSourceBuilder;
     private KMeansParams kMeansParams;
@@ -42,10 +43,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
                 "Test cannot be run outside the BWC gradle task 'bwcTestSuite' or its dependent tasks",
                 System.getProperty("tests.rest.bwcsuite") != null
             );
-
-        CLUSTER_TYPE = ClusterType.parse(System.getProperty("tests.rest.bwcsuite"));
-        CLUSTER_NAME = System.getProperty("tests.clustername");
-        MIXED_CLUSTER_TEST_ROUND = System.getProperty("tests.rest.bwcsuite_round");
         searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.query(new MatchAllQueryBuilder());
         searchSourceBuilder.size(1000);
@@ -79,53 +76,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
             // account for delayed shards
             .put(OpenSearchRestTestCase.CLIENT_SOCKET_TIMEOUT, "90s")
             .build();
-    }
-
-    public void testBackwardsCompatibility() throws Exception {
-        String uri = getUri();
-        Map<String, Map<String, Object>> responseMap = (Map<String, Map<String, Object>>) getAsMap(uri).get("nodes");
-        for (Map<String, Object> response : responseMap.values()) {
-            List<Map<String, Object>> plugins = (List<Map<String, Object>>) response.get("plugins");
-            Set<Object> pluginNames = plugins.stream().map(map -> map.get("name")).collect(Collectors.toSet());
-            switch (CLUSTER_TYPE) {
-                case OLD:
-                    assertTrue(pluginNames.contains("opensearch-ml"));
-                    ingestIrisData(irisIndex);
-                    // train model
-                    train(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
-                        String modelId = (String) trainResult.get("model_id");
-                        assertNotNull(modelId);
-                        String status = (String) trainResult.get("status");
-                        assertEquals(MLTaskState.COMPLETED.name(), status);
-                    }, false);
-                case MIXED:
-                    assertTrue(pluginNames.contains("opensearch-ml"));
-                    // then predict with old model
-                    String modelId = getModelIdWithFunctionName(FunctionName.KMEANS);
-                    predict(client(), FunctionName.KMEANS, modelId, irisIndex, kMeansParams, searchSourceBuilder, predictResult -> {
-                        String predictStatus = (String) predictResult.get("status");
-                        assertEquals(MLTaskState.COMPLETED.name(), predictStatus);
-                        Map<String, Object> predictionResult = (Map<String, Object>) predictResult.get("prediction_result");
-                        ArrayList rows = (ArrayList) predictionResult.get("rows");
-                        assertTrue(rows.size() > 1);
-                    });
-                    // train predict with old data
-                    trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                        ArrayList rows = (ArrayList) predictionResult.get("rows");
-                        assertTrue(rows.size() > 0);
-                    });
-                    break;
-                case UPGRADED:
-                    assertTrue(pluginNames.contains("opensearch-ml"));
-                    ingestIrisData(irisIndex);
-                    trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                        ArrayList rows = (ArrayList) predictionResult.get("rows");
-                        assertTrue(rows.size() > 0);
-                    });
-                    break;
-            }
-            break;
-        }
     }
 
     private enum ClusterType {
@@ -185,6 +135,53 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
         return mixedClusterTestRound;
     }
 
+    public void testBackwardsCompatibility() throws Exception {
+        String uri = getUri();
+        Map<String, Map<String, Object>> responseMap = (Map<String, Map<String, Object>>) getAsMap(uri).get("nodes");
+        for (Map<String, Object> response : responseMap.values()) {
+            List<Map<String, Object>> plugins = (List<Map<String, Object>>) response.get("plugins");
+            Set<Object> pluginNames = plugins.stream().map(map -> map.get("name")).collect(Collectors.toSet());
+            switch (CLUSTER_TYPE) {
+                case OLD:
+                    assertTrue(pluginNames.contains("opensearch-ml"));
+                    ingestIrisData(irisIndex);
+                    // train model
+                    train(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+                        String modelId = (String) trainResult.get("model_id");
+                        assertNotNull(modelId);
+                        String status = (String) trainResult.get("status");
+                        assertEquals(MLTaskState.COMPLETED.name(), status);
+                    }, false);
+                case MIXED:
+                    assertTrue(pluginNames.contains("opensearch-ml"));
+                    // then predict with old model
+                    String modelId = getModelIdWithFunctionName(FunctionName.KMEANS);
+                    predict(client(), FunctionName.KMEANS, modelId, irisIndex, kMeansParams, searchSourceBuilder, predictResult -> {
+                        String predictStatus = (String) predictResult.get("status");
+                        assertEquals(MLTaskState.COMPLETED.name(), predictStatus);
+                        Map<String, Object> predictionResult = (Map<String, Object>) predictResult.get("prediction_result");
+                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                        assertTrue(rows.size() > 1);
+                    });
+                    // train predict with old data
+                    trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
+                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                        assertTrue(rows.size() > 0);
+                    });
+                    break;
+                case UPGRADED:
+                    assertTrue(pluginNames.contains("opensearch-ml"));
+                    ingestIrisData(irisIndex);
+                    trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
+                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                        assertTrue(rows.size() > 0);
+                    });
+                    break;
+            }
+            break;
+        }
+    }
+
     private String getModelIdWithFunctionName(FunctionName functionName) throws IOException {
         String modelQuery = "{\"query\": {"
             + "\"term\": {"
@@ -204,5 +201,12 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
         List<Map<String, Object>> hitsModels = (List<Map<String, Object>>) hitsModelsMap.get("hits");
         Set<Object> modelIdSet = hitsModels.stream().map(map -> map.get("_id")).collect(Collectors.toSet());
         return modelIdSet.iterator().next().toString();
+    }
+
+    private void verifyMlResponse(String uri) throws Exception {
+        Response response = TestHelper.makeRequest(client(), "GET", uri, null, TestData.matchAllSearchQuery(), null);
+        HttpEntity entity = response.getEntity();
+        String entityString = TestHelper.httpEntityToString(entity);
+        assertNull(entityString);
     }
 }
