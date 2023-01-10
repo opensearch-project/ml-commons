@@ -68,7 +68,7 @@ public class TransportUploadModelAction extends HandledTransportAction<ActionReq
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
     MLStats mlStats;
-    String trustedUrlRegex;
+    volatile String trustedUrlRegex;
 
     @Inject
     public TransportUploadModelAction(
