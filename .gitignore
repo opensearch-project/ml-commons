@@ -5,4 +5,5 @@ client/build/
 common/build/
 ml-algorithms/build/
 plugin/build/
+plugin/src/test/resources/bwc/*
 .DS_Store

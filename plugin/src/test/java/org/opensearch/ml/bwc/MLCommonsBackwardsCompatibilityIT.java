@@ -202,7 +202,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
         Map modelResponseMap = gson.fromJson(entityString, Map.class);
         Map hitsModelsMap = (Map) modelResponseMap.get("hits");
         List<Map<String, Object>> hitsModels = (List<Map<String, Object>>) hitsModelsMap.get("hits");
-        Set<Object> KMeansModelIdSet = hitsModels.stream().map(map -> map.get("_id")).collect(Collectors.toSet());
-        return KMeansModelIdSet.iterator().next().toString();
+        Set<Object> modelIdSet = hitsModels.stream().map(map -> map.get("_id")).collect(Collectors.toSet());
+        return modelIdSet.iterator().next().toString();
     }
 }
