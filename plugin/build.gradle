@@ -136,6 +136,13 @@ integTest {
         }
     }
 
+    // BWC test can only run within the BWC gradle task bwcsuite or its dependent tasks.
+    if (System.getProperty('tests.rest.bwcsuite') == null) {
+        filter {
+            excludeTestsMatching "org.opensearch.ml.bwc.*IT"
+        }
+    }
+
     // The 'doFirst' delays till execution time.
     doFirst {
         // Tell the test JVM if the cluster JVM is running under a debugger so that tests can
