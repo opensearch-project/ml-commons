@@ -414,10 +414,6 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     @Override
     protected Settings nodeSettings(int ordinal) {
-        return Settings
-            .builder()
-            .put(super.nodeSettings(ordinal))
-            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), false)
-            .build();
+        return Settings.builder().put(super.nodeSettings(ordinal)).put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), false).build();
     }
 }
