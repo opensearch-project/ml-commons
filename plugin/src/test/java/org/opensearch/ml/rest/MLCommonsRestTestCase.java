@@ -52,6 +52,7 @@ import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.util.Timeout;
 import org.junit.After;
+import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
@@ -104,6 +105,20 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
 
         return isHttps;
+    }
+
+    @Before
+    public void setupSettings() throws IOException {
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
     @Override
