@@ -6,6 +6,7 @@
 package org.opensearch.ml.action;
 
 import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 import static org.opensearch.ml.utils.TestData.TARGET_FIELD;
@@ -414,6 +415,12 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     @Override
     protected Settings nodeSettings(int ordinal) {
-        return Settings.builder().put(super.nodeSettings(ordinal)).put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), false).build();
+        return Settings
+            .builder()
+            .put(super.nodeSettings(ordinal))
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), false)
+            // Set native memory threshold as 100 to prevent IT failures
+            .put(ML_COMMONS_NATIVE_MEM_THRESHOLD.getKey(), 100)
+            .build();
     }
 }
