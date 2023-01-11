@@ -14,10 +14,10 @@ import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.stats.MLNodeLevelStat;
