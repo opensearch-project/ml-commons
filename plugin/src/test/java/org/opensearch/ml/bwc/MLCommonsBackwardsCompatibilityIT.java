@@ -27,7 +27,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
-public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
+public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompatibilityRestTestCase {
 
     private final ClusterType CLUSTER_TYPE = ClusterType.parse(System.getProperty("tests.rest.bwcsuite"));
     private final String CLUSTER_NAME = System.getProperty("tests.clustername");
