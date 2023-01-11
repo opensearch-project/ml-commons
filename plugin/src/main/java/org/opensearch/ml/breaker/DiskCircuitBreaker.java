@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.breaker;
-
-import org.opensearch.ml.common.exception.MLException;
+package org.opensearch.ml.breaker;
 
 import java.io.File;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+
+import org.opensearch.ml.common.exception.MLException;
 
 /**
  * A circuit breaker for disk usage.
@@ -32,14 +32,14 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
 
     @Override
     public String getName() {
-        return  ML_DISK_CB;
+        return ML_DISK_CB;
     }
 
     @Override
     public boolean isOpen() {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
-                return (new File(diskDir).getFreeSpace()/1024/1024/1024) < getThreshold();  // in GB
+                return (new File(diskDir).getFreeSpace() / 1024 / 1024 / 1024) < getThreshold();  // in GB
             });
         } catch (PrivilegedActionException e) {
             throw new MLException("Failed to run disk circuit breaker");

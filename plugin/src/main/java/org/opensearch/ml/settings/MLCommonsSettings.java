@@ -53,4 +53,7 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    public static final Setting<Integer> ML_COMMONS_NATIVE_MEM_THRESHOLD = Setting
+        .intSetting("plugins.ml_commons.native_mem_threshold", 90, 0, 100, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
