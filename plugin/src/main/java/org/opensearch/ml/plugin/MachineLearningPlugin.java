@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import lombok.SneakyThrows;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -56,11 +58,11 @@ import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.MLModelMetaCreate;
 import org.opensearch.ml.action.upload_chunk.TransportCreateModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
+import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
 import org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
@@ -131,6 +133,7 @@ import org.opensearch.ml.task.MLTrainAndPredictTaskRunner;
 import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
+import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.RepositoriesService;
@@ -207,6 +210,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             );
     }
 
+    @SneakyThrows
     @Override
     public Collection<Object> createComponents(
         Client client,
@@ -232,7 +236,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 
         JvmService jvmService = new JvmService(environment.settings());
-        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init(environment.dataFiles()[0]);
+        OsService osService = new OsService(environment.settings());
+        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService, osService, settings, clusterService)
+            .init(environment.dataFiles()[0]);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
         // cluster level stats
@@ -505,7 +511,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
-                MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX
+                MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
+                MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD
             );
         return settings;
     }

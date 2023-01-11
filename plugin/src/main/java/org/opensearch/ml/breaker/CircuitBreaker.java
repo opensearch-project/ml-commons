@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.breaker;
+package org.opensearch.ml.breaker;
 
 /**
  * An interface for circuit breaker.
