@@ -49,7 +49,6 @@ import org.apache.http.message.BasicHeader;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
 import org.junit.After;
-import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
@@ -114,16 +113,16 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
     @Override
     protected Settings restAdminSettings() {
         return Settings
-                .builder()
-                // disable the warning exception for admin client since it's only used for cleanup.
-                .put("strictDeprecationMode", false)
-                .put("http.port", 9200)
-                .put(OPENSEARCH_SECURITY_SSL_HTTP_ENABLED, isHttps())
-                .put(OPENSEARCH_SECURITY_SSL_HTTP_PEMCERT_FILEPATH, "sample.pem")
-                .put(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_FILEPATH, "test-kirk.jks")
-                .put(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_PASSWORD, "changeit")
-                .put(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD, "changeit")
-                .build();
+            .builder()
+            // disable the warning exception for admin client since it's only used for cleanup.
+            .put("strictDeprecationMode", false)
+            .put("http.port", 9200)
+            .put(OPENSEARCH_SECURITY_SSL_HTTP_ENABLED, isHttps())
+            .put(OPENSEARCH_SECURITY_SSL_HTTP_PEMCERT_FILEPATH, "sample.pem")
+            .put(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_FILEPATH, "test-kirk.jks")
+            .put(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_PASSWORD, "changeit")
+            .put(OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD, "changeit")
+            .build();
     }
 
     // Utility fn for deleting indices. Should only be used when not allowed in a regular context
@@ -176,13 +175,13 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         Response response = adminClient().performRequest(new Request("GET", "/_cat/indices?format=json&expand_wildcards=all"));
         XContentType xContentType = XContentType.fromMediaType(response.getEntity().getContentType().getValue());
         try (
-                XContentParser parser = xContentType
-                        .xContent()
-                        .createParser(
-                                NamedXContentRegistry.EMPTY,
-                                DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
-                                response.getEntity().getContent()
-                        )
+            XContentParser parser = xContentType
+                .xContent()
+                .createParser(
+                    NamedXContentRegistry.EMPTY,
+                    DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
+                    response.getEntity().getContent()
+                )
         ) {
             XContentParser.Token token = parser.nextToken();
             List<Map<String, Object>> parserList = null;
@@ -211,19 +210,19 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         builder.setDefaultHeaders(defaultHeaders);
         builder.setHttpClientConfigCallback(httpClientBuilder -> {
             String userName = Optional
-                    .ofNullable(System.getProperty("user"))
-                    .orElseThrow(() -> new RuntimeException("user name is missing"));
+                .ofNullable(System.getProperty("user"))
+                .orElseThrow(() -> new RuntimeException("user name is missing"));
             String password = Optional
-                    .ofNullable(System.getProperty("password"))
-                    .orElseThrow(() -> new RuntimeException("password is missing"));
+                .ofNullable(System.getProperty("password"))
+                .orElseThrow(() -> new RuntimeException("password is missing"));
             CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
             credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(userName, password));
             try {
                 return httpClientBuilder
-                        .setDefaultCredentialsProvider(credentialsProvider)
-                        // disable the certificate since our testing cluster just uses the default security configuration
-                        .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-                        .setSSLContext(SSLContextBuilder.create().loadTrustMaterial(null, (chains, authType) -> true).build());
+                    .setDefaultCredentialsProvider(credentialsProvider)
+                    // disable the certificate since our testing cluster just uses the default security configuration
+                    .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                    .setSSLContext(SSLContextBuilder.create().loadTrustMaterial(null, (chains, authType) -> true).build());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -231,7 +230,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
         final String socketTimeoutString = settings.get(CLIENT_SOCKET_TIMEOUT);
         final TimeValue socketTimeout = TimeValue
-                .parseTimeValue(socketTimeoutString == null ? "60s" : socketTimeoutString, CLIENT_SOCKET_TIMEOUT);
+            .parseTimeValue(socketTimeoutString == null ? "60s" : socketTimeoutString, CLIENT_SOCKET_TIMEOUT);
         builder.setRequestConfigCallback(conf -> conf.setSocketTimeout(Math.toIntExact(socketTimeout.getMillis())));
         if (settings.hasValue(CLIENT_PATH_PREFIX)) {
             builder.setPathPrefix(settings.get(CLIENT_PATH_PREFIX));
@@ -249,14 +248,14 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
     protected Response ingestIrisData(String indexName) throws IOException {
         String irisDataIndexMapping = "";
         TestHelper
-                .makeRequest(
-                        client(),
-                        "PUT",
-                        indexName,
-                        null,
-                        TestHelper.toHttpEntity(irisDataIndexMapping),
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
-                );
+            .makeRequest(
+                client(),
+                "PUT",
+                indexName,
+                null,
+                TestHelper.toHttpEntity(irisDataIndexMapping),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
 
         Response statsResponse = TestHelper.makeRequest(client(), "GET", indexName, ImmutableMap.of(), "", null);
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
@@ -264,25 +263,25 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         assertTrue(result.contains(indexName));
 
         Response bulkResponse = TestHelper
-                .makeRequest(
-                        client(),
-                        "POST",
-                        "_bulk?refresh=true",
-                        null,
-                        TestHelper.toHttpEntity(TestData.IRIS_DATA.replaceAll("iris_data", indexName)),
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-                );
+            .makeRequest(
+                client(),
+                "POST",
+                "_bulk?refresh=true",
+                null,
+                TestHelper.toHttpEntity(TestData.IRIS_DATA.replaceAll("iris_data", indexName)),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
         return bulkResponse;
     }
 
     protected void validateStats(
-            FunctionName functionName,
-            ActionName actionName,
-            int expectedMinimumTotalFailureCount,
-            int expectedMinimumTotalAlgoFailureCount,
-            int expectedMinimumTotalRequestCount,
-            int expectedMinimumTotalAlgoRequestCount
+        FunctionName functionName,
+        ActionName actionName,
+        int expectedMinimumTotalFailureCount,
+        int expectedMinimumTotalAlgoFailureCount,
+        int expectedMinimumTotalRequestCount,
+        int expectedMinimumTotalAlgoRequestCount
     ) throws IOException {
         Response statsResponse = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/stats", null, "", null);
         Map<String, Object> map = parseResponseToMap(statsResponse);
@@ -326,7 +325,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
     protected Response ingestModelData() throws IOException {
         Response trainModelResponse = TestHelper
-                .makeRequest(client(), "POST", "_plugins/_ml/_train/sample_algo", null, TestHelper.toHttpEntity(trainModelDataJson()), null);
+            .makeRequest(client(), "POST", "_plugins/_ml/_train/sample_algo", null, TestHelper.toHttpEntity(trainModelDataJson()), null);
         HttpEntity entity = trainModelResponse.getEntity();
         assertNotNull(trainModelResponse);
         return trainModelResponse;
@@ -338,78 +337,78 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             endpoint += "?async=true";
         }
         Response response = TestHelper
-                .makeRequest(client(), "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
+            .makeRequest(client(), "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
         TimeUnit.SECONDS.sleep(5);
         verifyResponse(consumer, response);
     }
 
     public Response createIndexRole(String role, String index) throws IOException {
         return TestHelper
-                .makeRequest(
-                        client(),
-                        "PUT",
-                        "/_opendistro/_security/api/roles/" + role,
-                        null,
-                        TestHelper
-                                .toHttpEntity(
-                                        "{\n"
-                                                + "\"cluster_permissions\": [\n"
-                                                + "],\n"
-                                                + "\"index_permissions\": [\n"
-                                                + "{\n"
-                                                + "\"index_patterns\": [\n"
-                                                + "\""
-                                                + index
-                                                + "\"\n"
-                                                + "],\n"
-                                                + "\"dls\": \"\",\n"
-                                                + "\"fls\": [],\n"
-                                                + "\"masked_fields\": [],\n"
-                                                + "\"allowed_actions\": [\n"
-                                                + "\"crud\",\n"
-                                                + "\"indices:admin/create\"\n"
-                                                + "]\n"
-                                                + "}\n"
-                                                + "],\n"
-                                                + "\"tenant_permissions\": []\n"
-                                                + "}"
-                                ),
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
-                );
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/roles/" + role,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        "{\n"
+                            + "\"cluster_permissions\": [\n"
+                            + "],\n"
+                            + "\"index_permissions\": [\n"
+                            + "{\n"
+                            + "\"index_patterns\": [\n"
+                            + "\""
+                            + index
+                            + "\"\n"
+                            + "],\n"
+                            + "\"dls\": \"\",\n"
+                            + "\"fls\": [],\n"
+                            + "\"masked_fields\": [],\n"
+                            + "\"allowed_actions\": [\n"
+                            + "\"crud\",\n"
+                            + "\"indices:admin/create\"\n"
+                            + "]\n"
+                            + "}\n"
+                            + "],\n"
+                            + "\"tenant_permissions\": []\n"
+                            + "}"
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
     }
 
     public Response createSearchRole(String role, String index) throws IOException {
         return TestHelper
-                .makeRequest(
-                        client(),
-                        "PUT",
-                        "/_opendistro/_security/api/roles/" + role,
-                        null,
-                        TestHelper
-                                .toHttpEntity(
-                                        "{\n"
-                                                + "\"cluster_permissions\": [\n"
-                                                + "],\n"
-                                                + "\"index_permissions\": [\n"
-                                                + "{\n"
-                                                + "\"index_patterns\": [\n"
-                                                + "\""
-                                                + index
-                                                + "\"\n"
-                                                + "],\n"
-                                                + "\"dls\": \"\",\n"
-                                                + "\"fls\": [],\n"
-                                                + "\"masked_fields\": [],\n"
-                                                + "\"allowed_actions\": [\n"
-                                                + "\"indices:data/read/search\"\n"
-                                                + "]\n"
-                                                + "}\n"
-                                                + "],\n"
-                                                + "\"tenant_permissions\": []\n"
-                                                + "}"
-                                ),
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
-                );
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/roles/" + role,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        "{\n"
+                            + "\"cluster_permissions\": [\n"
+                            + "],\n"
+                            + "\"index_permissions\": [\n"
+                            + "{\n"
+                            + "\"index_patterns\": [\n"
+                            + "\""
+                            + index
+                            + "\"\n"
+                            + "],\n"
+                            + "\"dls\": \"\",\n"
+                            + "\"fls\": [],\n"
+                            + "\"masked_fields\": [],\n"
+                            + "\"allowed_actions\": [\n"
+                            + "\"indices:data/read/search\"\n"
+                            + "]\n"
+                            + "}\n"
+                            + "],\n"
+                            + "\"tenant_permissions\": []\n"
+                            + "}"
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
     }
 
     public Response createUser(String name, String password, ArrayList<String> backendRoles) throws IOException {
@@ -418,37 +417,37 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             backendRolesString.add(backendRoles.get(i));
         }
         return TestHelper
-                .makeRequest(
-                        client(),
-                        "PUT",
-                        "/_opendistro/_security/api/internalusers/" + name,
-                        null,
-                        TestHelper
-                                .toHttpEntity(
-                                        " {\n"
-                                                + "\"password\": \""
-                                                + password
-                                                + "\",\n"
-                                                + "\"backend_roles\": "
-                                                + backendRolesString
-                                                + ",\n"
-                                                + "\"attributes\": {\n"
-                                                + "}} "
-                                ),
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
-                );
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/internalusers/" + name,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        " {\n"
+                            + "\"password\": \""
+                            + password
+                            + "\",\n"
+                            + "\"backend_roles\": "
+                            + backendRolesString
+                            + ",\n"
+                            + "\"attributes\": {\n"
+                            + "}} "
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
     }
 
     public Response deleteUser(String user) throws IOException {
         return TestHelper
-                .makeRequest(
-                        client(),
-                        "DELETE",
-                        "/_opendistro/_security/api/internalusers/" + user,
-                        null,
-                        "",
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
-                );
+            .makeRequest(
+                client(),
+                "DELETE",
+                "/_opendistro/_security/api/internalusers/" + user,
+                null,
+                "",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
     }
 
     public Response createRoleMapping(String role, ArrayList<String> users) throws IOException {
@@ -457,42 +456,42 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             usersString.add(users.get(i));
         }
         return TestHelper
-                .makeRequest(
-                        client(),
-                        "PUT",
-                        "/_opendistro/_security/api/rolesmapping/" + role,
-                        null,
-                        TestHelper
-                                .toHttpEntity(
-                                        "{\n" + "  \"backend_roles\" : [  ],\n" + "  \"hosts\" : [  ],\n" + "  \"users\" : " + usersString + "\n" + "}"
-                                ),
-                        ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
-                );
+            .makeRequest(
+                client(),
+                "PUT",
+                "/_opendistro/_security/api/rolesmapping/" + role,
+                null,
+                TestHelper
+                    .toHttpEntity(
+                        "{\n" + "  \"backend_roles\" : [  ],\n" + "  \"hosts\" : [  ],\n" + "  \"users\" : " + usersString + "\n" + "}"
+                    ),
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
+            );
     }
 
     public void trainAndPredict(
-            RestClient client,
-            FunctionName functionName,
-            String indexName,
-            MLAlgoParams params,
-            SearchSourceBuilder searchSourceBuilder,
-            Consumer<Map<String, Object>> function
+        RestClient client,
+        FunctionName functionName,
+        String indexName,
+        MLAlgoParams params,
+        SearchSourceBuilder searchSourceBuilder,
+        Consumer<Map<String, Object>> function
     ) throws IOException {
         MLInputDataset inputData = SearchQueryInputDataset
-                .builder()
-                .indices(ImmutableList.of(indexName))
-                .searchSourceBuilder(searchSourceBuilder)
-                .build();
+            .builder()
+            .indices(ImmutableList.of(indexName))
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
         Response response = TestHelper
-                .makeRequest(
-                        client,
-                        "POST",
-                        "/_plugins/_ml/_train_predict/" + functionName.name().toLowerCase(Locale.ROOT),
-                        ImmutableMap.of(),
-                        TestHelper.toHttpEntity(kmeansInput),
-                        null
-                );
+            .makeRequest(
+                client,
+                "POST",
+                "/_plugins/_ml/_train_predict/" + functionName.name().toLowerCase(Locale.ROOT),
+                ImmutableMap.of(),
+                TestHelper.toHttpEntity(kmeansInput),
+                null
+            );
         Map map = parseResponseToMap(response);
         Map<String, Object> predictionResult = (Map<String, Object>) map.get("prediction_result");
         if (function != null) {
@@ -501,19 +500,19 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
     }
 
     public void train(
-            RestClient client,
-            FunctionName functionName,
-            String indexName,
-            MLAlgoParams params,
-            SearchSourceBuilder searchSourceBuilder,
-            Consumer<Map<String, Object>> function,
-            boolean async
+        RestClient client,
+        FunctionName functionName,
+        String indexName,
+        MLAlgoParams params,
+        SearchSourceBuilder searchSourceBuilder,
+        Consumer<Map<String, Object>> function,
+        boolean async
     ) throws IOException {
         MLInputDataset inputData = SearchQueryInputDataset
-                .builder()
-                .indices(ImmutableList.of(indexName))
-                .searchSourceBuilder(searchSourceBuilder)
-                .build();
+            .builder()
+            .indices(ImmutableList.of(indexName))
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
         String endpoint = "/_plugins/_ml/_train/" + functionName.name().toLowerCase(Locale.ROOT);
         if (async) {
@@ -524,19 +523,19 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
     }
 
     public void predict(
-            RestClient client,
-            FunctionName functionName,
-            String modelId,
-            String indexName,
-            MLAlgoParams params,
-            SearchSourceBuilder searchSourceBuilder,
-            Consumer<Map<String, Object>> function
+        RestClient client,
+        FunctionName functionName,
+        String modelId,
+        String indexName,
+        MLAlgoParams params,
+        SearchSourceBuilder searchSourceBuilder,
+        Consumer<Map<String, Object>> function
     ) throws IOException {
         MLInputDataset inputData = SearchQueryInputDataset
-                .builder()
-                .indices(ImmutableList.of(indexName))
-                .searchSourceBuilder(searchSourceBuilder)
-                .build();
+            .builder()
+            .indices(ImmutableList.of(indexName))
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
         String endpoint = "/_plugins/_ml/_predict/" + functionName.name().toLowerCase(Locale.ROOT) + "/" + modelId;
         Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
@@ -592,21 +591,21 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
     public MLUploadInput createUploadModelInput() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-                .builder()
-                .modelType("bert")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(768)
-                .build();
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(768)
+            .build();
         return MLUploadInput
-                .builder()
-                .modelName("test_model_name")
-                .version("1.0.0")
-                .functionName(FunctionName.TEXT_EMBEDDING)
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .modelConfig(modelConfig)
-                .url(SENTENCE_TRANSFORMER_MODEL_URL)
-                .loadModel(false)
-                .build();
+            .builder()
+            .modelName("test_model_name")
+            .version("1.0.0")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .url(SENTENCE_TRANSFORMER_MODEL_URL)
+            .loadModel(false)
+            .build();
     }
 
     public void uploadModel(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
@@ -620,7 +619,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
     }
 
     public void loadModel(RestClient client, MLUploadInput uploadInput, Consumer<Map<String, Object>> function) throws IOException,
-            InterruptedException {
+        InterruptedException {
         String taskId = uploadModel(TestHelper.toJsonString(uploadInput));
         waitForTask(taskId, MLTaskState.COMPLETED);
         getTask(client(), taskId, response -> {
@@ -645,7 +644,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
     public String loadModel(String modelId) throws IOException {
         Response response = TestHelper
-                .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_load", null, (String) null, null);
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_load", null, (String) null, null);
         return parseTaskIdFromResponse(response);
     }
 
@@ -681,16 +680,16 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
     public MLInput createPredictTextEmbeddingInput() {
         TextDocsInputDataSet textDocsInputDataSet = TextDocsInputDataSet
-                .builder()
-                .docs(Arrays.asList("today is sunny", "this is a happy dog"))
-                .build();
+            .builder()
+            .docs(Arrays.asList("today is sunny", "this is a happy dog"))
+            .build();
         return MLInput.builder().inputDataset(textDocsInputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
     }
 
     public Map predictTextEmbedding(String modelId) throws IOException {
         MLInput input = createPredictTextEmbeddingInput();
         Response response = TestHelper
-                .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, TestHelper.toJsonString(input), null);
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_predict", null, TestHelper.toJsonString(input), null);
         Map result = parseResponseToMap(response);
         List<Object> embeddings = (List) result.get("inference_results");
         assertEquals(2, embeddings.size());
@@ -716,8 +715,8 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             if (modelProfile.containsKey("model_state")) {
                 assertEquals(MLModelState.LOADED.name(), modelProfile.get("model_state"));
                 assertTrue(
-                        ((String) modelProfile.get("predictor"))
-                                .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
+                    ((String) modelProfile.get("predictor"))
+                        .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
                 );
             }
             List<String> workNodes = (List) modelProfile.get("worker_nodes");
@@ -727,7 +726,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
     public Map unloadModel(String modelId) throws IOException {
         Response response = TestHelper
-                .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_unload", null, (String) null, null);
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_unload", null, (String) null, null);
         return parseResponseToMap(response);
     }
 

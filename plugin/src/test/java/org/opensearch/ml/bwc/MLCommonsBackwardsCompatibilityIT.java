@@ -21,7 +21,6 @@ import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
-import org.opensearch.ml.rest.MLCommonsRestTestCase;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
