@@ -95,7 +95,7 @@ public class MLCircuitBreakerServiceTests {
 
     @Test
     public void testInit() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.native_mem_threshold", 90).build();
+        Settings settings = Settings.builder().put(ML_COMMONS_NATIVE_MEM_THRESHOLD.getKey(), 90).build();
         ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_NATIVE_MEM_THRESHOLD)));
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         mlCircuitBreakerService = new MLCircuitBreakerService(jvmService, osService, settings, clusterService);

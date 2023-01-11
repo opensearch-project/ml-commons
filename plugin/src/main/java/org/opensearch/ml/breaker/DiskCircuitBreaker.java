@@ -18,6 +18,7 @@ import org.opensearch.ml.common.exception.MLException;
 public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
     private static final String ML_DISK_CB = "Disk Circuit Breaker";
     public static final long DEFAULT_DISK_SHORTAGE_THRESHOLD = 5L;
+    private static final long GB = 1024 * 1024 * 1024;
     private String diskDir;
 
     public DiskCircuitBreaker(String diskDir) {
@@ -39,7 +40,7 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
     public boolean isOpen() {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<Boolean>) () -> {
-                return (new File(diskDir).getFreeSpace() / 1024 / 1024 / 1024) < getThreshold();  // in GB
+                return (new File(diskDir).getFreeSpace() / GB) < getThreshold();  // in GB
             });
         } catch (PrivilegedActionException e) {
             throw new MLException("Failed to run disk circuit breaker");

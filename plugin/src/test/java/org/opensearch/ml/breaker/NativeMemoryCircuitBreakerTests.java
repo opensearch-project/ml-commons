@@ -41,7 +41,7 @@ public class NativeMemoryCircuitBreakerTests {
 
     @Before
     public void setup() {
-        settings = Settings.builder().put("plugins.ml_commons.native_mem_threshold", 90).build();
+        settings = Settings.builder().put(ML_COMMONS_NATIVE_MEM_THRESHOLD.getKey(), 90).build();
         clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_NATIVE_MEM_THRESHOLD)));
         MockitoAnnotations.openMocks(this);
         when(osService.stats()).thenReturn(osStats);
