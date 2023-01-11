@@ -56,12 +56,7 @@ public class MLNodeUtils {
         ThresholdCircuitBreaker openCircuitBreaker = mlCircuitBreakerService.checkOpenCB();
         if (openCircuitBreaker != null) {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
-            throw new MLLimitExceededException(
-                openCircuitBreaker.getName()
-                    + " is open, threshold is "
-                    + openCircuitBreaker.getThreshold()
-                    + ". Please check your resources!"
-            );
+            throw new MLLimitExceededException(openCircuitBreaker.getName() + " is open, please check your resources!");
         }
     }
 }

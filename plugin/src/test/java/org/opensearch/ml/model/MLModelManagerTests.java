@@ -270,7 +270,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
         when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
         expectedEx.expect(MLException.class);
-        expectedEx.expectMessage("Disk Circuit Breaker is open, threshold is 87. Please check your resources!");
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.uploadMLModel(uploadInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }

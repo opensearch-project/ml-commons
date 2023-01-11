@@ -16,6 +16,7 @@ import org.opensearch.ml.common.exception.MLException;
  * A circuit breaker for disk usage.
  */
 public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
+    // TODO: make this value configurable as cluster setting
     private static final String ML_DISK_CB = "Disk Circuit Breaker";
     public static final long DEFAULT_DISK_SHORTAGE_THRESHOLD = 5L;
     private static final long GB = 1024 * 1024 * 1024;
