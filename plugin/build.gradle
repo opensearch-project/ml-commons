@@ -377,12 +377,12 @@ checkstyle {
     toolVersion = '8.29'
 }
 
-String bwcVersion = "1.3.0.0"
+String bwcVersion = "2.0.0.0"
 String bwcShortVersion = bwcVersion[0..4]
 String baseName = "mlCommonsBwcCluster"
 String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
 String bwcFilePath = "src/test/resources/org/opensearch/ml/bwc/"
-String bwcRemoteFile = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + bwcShortVersion + "/latest/linux/x64/builds/opensearch/plugins/" + bwcMlPlugin
+String bwcRemoteFile = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + bwcShortVersion + "/latest/linux/x64/tar/builds/opensearch/plugins/" + bwcMlPlugin
 String project_no_snapshot = project.version.replace("-SNAPSHOT","")
 String opensearch_no_snapshot = opensearch_version.replace("-SNAPSHOT","")
 String opensearchMlPlugin = "opensearch-ml-" + project_no_snapshot + ".zip"
@@ -535,5 +535,7 @@ task "${baseName}#fullRestartClusterTask"(type: StandaloneRestIntegTestTask) {
 task bwcTestSuite(type: StandaloneRestIntegTestTask) {
     exclude '**/*Test*'
     exclude '**/*IT*'
+    dependsOn tasks.named("${baseName}#mixedClusterTask")
+    dependsOn tasks.named("${baseName}#rollingUpgradeClusterTask")
     dependsOn tasks.named("${baseName}#fullRestartClusterTask")
 }
