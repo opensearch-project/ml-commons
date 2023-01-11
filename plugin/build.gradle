@@ -377,7 +377,7 @@ checkstyle {
     toolVersion = '8.29'
 }
 
-String bwcVersion = "2.0.0.0"
+String bwcVersion = "2.4.0.0"
 String bwcShortVersion = bwcVersion[0..4]
 String baseName = "mlCommonsBwcCluster"
 String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"

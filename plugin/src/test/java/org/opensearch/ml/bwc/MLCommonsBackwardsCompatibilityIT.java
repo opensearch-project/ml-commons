@@ -141,11 +141,17 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
         for (Map<String, Object> response : responseMap.values()) {
             List<Map<String, Object>> plugins = (List<Map<String, Object>>) response.get("plugins");
             Set<Object> pluginNames = plugins.stream().map(map -> map.get("name")).collect(Collectors.toSet());
-            String opensearchVersion = plugins.stream().map(map -> map.get("opensearch_version")).collect(Collectors.toSet()).iterator().next().toString();
+            String opensearchVersion = plugins
+                .stream()
+                .map(map -> map.get("opensearch_version"))
+                .collect(Collectors.toSet())
+                .iterator()
+                .next()
+                .toString();
             switch (CLUSTER_TYPE) {
                 case OLD:
                     assertTrue(pluginNames.contains("opensearch-ml"));
-                    assertEquals("2.0.0", opensearchVersion);
+                    assertEquals("2.4.0", opensearchVersion);
                     ingestIrisData(irisIndex);
                     // train model
                     train(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
@@ -157,7 +163,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
                 case MIXED:
                     assertTrue(pluginNames.contains("opensearch-ml"));
                     // then predict with old model
-                    if (opensearchVersion.equals("2.0.0")) {
+                    if (opensearchVersion.equals("2.4.0")) {
                         String modelId = getModelIdWithFunctionName(FunctionName.KMEANS);
                         predict(client(), FunctionName.KMEANS, modelId, irisIndex, kMeansParams, searchSourceBuilder, predictResult -> {
                             String predictStatus = (String) predictResult.get("status");
@@ -166,7 +172,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsRestTestCase {
                             ArrayList rows = (ArrayList) predictionResult.get("rows");
                             assertTrue(rows.size() > 1);
                         });
-                    } else if (opensearchVersion.equals("2.5.0")){
+                    } else if (opensearchVersion.equals("2.5.0")) {
                         // train predict with old data
                         ingestIrisData(irisIndex);
                         trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
