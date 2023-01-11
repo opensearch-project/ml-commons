@@ -3,8 +3,6 @@
 Compatible with OpenSearch 2.5.0
 
 ### Features
-* support uploading prebuilt model ([#655](https://github.com/opensearch-project/ml-commons/pull/655))
-* disable prebuilt model ([#682](https://github.com/opensearch-project/ml-commons/pull/682))
 * Add native memory circuit breaker. ([#689](https://github.com/opensearch-project/ml-commons/pull/689))
 
 ### Enhancements
