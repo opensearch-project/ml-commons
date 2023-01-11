@@ -71,12 +71,13 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -145,6 +146,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     @Mock
     private MLModelCacheHelper modelCacheHelper;
     private MLEngine mlEngine;
+    @Mock
+    ThresholdCircuitBreaker thresholdCircuitBreaker;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -263,7 +266,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUploadMLModel_CircuitBreakerOpen() {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
-        when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Disk Circuit Breaker");
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.uploadMLModel(uploadInput, mlTask);

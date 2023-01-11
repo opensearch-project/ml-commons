@@ -27,11 +27,12 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.transport.MLTaskRequest;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -55,6 +56,8 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     MLCircuitBreakerService mlCircuitBreakerService;
     @Mock
     ClusterService clusterService;
+    @Mock
+    ThresholdCircuitBreaker thresholdCircuitBreaker;
 
     MLTaskRunner mlTaskRunner;
     MLTask mlTask;
@@ -129,7 +132,9 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     }
 
     public void testRun_CircuitBreakerOpen() {
-        when(mlCircuitBreakerService.checkOpenCB()).thenReturn("Memory Circuit Breaker");
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Memory Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
         MLTaskRequest request = new MLTaskRequest(false);
