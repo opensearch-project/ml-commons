@@ -13,6 +13,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
 import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
@@ -25,6 +27,9 @@ import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompatibilityRestTestCase {
 
@@ -171,7 +176,8 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             ArrayList rows = (ArrayList) predictionResult.get("rows");
                             assertTrue(rows.size() > 1);
                         });
-                    } else if (Integer.parseInt(opensearchVersion.substring(2, 3)) > 4) {
+                    } else if (isNewerVersion(opensearchVersion)) {
+                        testSettingShifting();
                         // train predict with old data
                         ingestIrisData(irisIndex);
                         trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
@@ -184,7 +190,8 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                     break;
                 case UPGRADED:
                     assertTrue(pluginNames.contains("opensearch-ml"));
-                    assertTrue(Integer.parseInt(opensearchVersion.substring(2, 3)) > 4);
+                    assertTrue(isNewerVersion(opensearchVersion));
+                    testSettingShifting();
                     ingestIrisData(irisIndex);
                     trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
                         ArrayList rows = (ArrayList) predictionResult.get("rows");
@@ -194,6 +201,28 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
             }
             break;
         }
+    }
+
+    private void testSettingShifting() throws IOException {
+        Response bwcResponse = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
+
+        String jsonEntity = "{\n"
+            + "  \"persistent\" : {\n"
+            + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
+            + "  }\n"
+            + "}";
+        bwcResponse = TestHelper
+            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
+        assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
     }
 
     private String getModelIdWithFunctionName(FunctionName functionName) throws IOException {
@@ -215,6 +244,10 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
         List<Map<String, Object>> hitsModels = (List<Map<String, Object>>) hitsModelsMap.get("hits");
         Set<Object> modelIdSet = hitsModels.stream().map(map -> map.get("_id")).collect(Collectors.toSet());
         return modelIdSet.iterator().next().toString();
+    }
+
+    private boolean isNewerVersion(String osVersion) {
+        return (Integer.parseInt(osVersion.substring(2, 3)) > 4) || (Integer.parseInt(osVersion.substring(0, 1)) > 2);
     }
 
     private void verifyMlResponse(String uri) throws Exception {
