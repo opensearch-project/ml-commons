@@ -49,6 +49,7 @@ import org.apache.http.message.BasicHeader;
 import org.apache.http.ssl.SSLContextBuilder;
 import org.apache.http.util.EntityUtils;
 import org.junit.After;
+import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
@@ -103,6 +104,20 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         }
 
         return isHttps;
+    }
+
+    @Before
+    public void setupSettings() throws IOException {
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
     @Override

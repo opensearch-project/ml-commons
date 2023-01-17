@@ -171,7 +171,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             ArrayList rows = (ArrayList) predictionResult.get("rows");
                             assertTrue(rows.size() > 1);
                         });
-                    } else if (opensearchVersion.equals("2.5.0")) {
+                    } else if (Integer.parseInt(opensearchVersion.substring(2, 3)) > 4) {
                         // train predict with old data
                         ingestIrisData(irisIndex);
                         trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
@@ -184,7 +184,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                     break;
                 case UPGRADED:
                     assertTrue(pluginNames.contains("opensearch-ml"));
-                    assertEquals("2.5.0", opensearchVersion);
+                    assertTrue(Integer.parseInt(opensearchVersion.substring(2, 3)) > 4);
                     ingestIrisData(irisIndex);
                     trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
                         ArrayList rows = (ArrayList) predictionResult.get("rows");
