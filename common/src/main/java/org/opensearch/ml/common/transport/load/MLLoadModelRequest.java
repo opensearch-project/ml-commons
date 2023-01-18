@@ -37,7 +37,6 @@ public class MLLoadModelRequest extends MLTaskRequest {
     private String modelId;
     private String[] modelNodeIds;
     boolean async;
-    boolean isAutoLoad;
 
     @Builder
     public MLLoadModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask) {
@@ -45,16 +44,6 @@ public class MLLoadModelRequest extends MLTaskRequest {
         this.modelId = modelId;
         this.modelNodeIds = modelNodeIds;
         this.async = async;
-        this.isAutoLoad =false;
-    }
-
-    @Builder
-    public MLLoadModelRequest(String modelId, String[] modelNodeIds, boolean async, boolean dispatchTask,boolean isAutoLoad) {
-        super(dispatchTask);
-        this.modelId = modelId;
-        this.modelNodeIds = modelNodeIds;
-        this.async = async;
-        this.isAutoLoad =isAutoLoad;
     }
 
     public MLLoadModelRequest(String modelId, boolean async) {
@@ -66,7 +55,6 @@ public class MLLoadModelRequest extends MLTaskRequest {
         this.modelId = in.readString();
         this.modelNodeIds = in.readOptionalStringArray();
         this.async = in.readBoolean();
-        this.isAutoLoad =false;
     }
 
     @Override

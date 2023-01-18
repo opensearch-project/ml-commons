@@ -222,7 +222,7 @@ public class MLModelAutoReLoader {
         if (!allNodeIdList.contains(localNodeId)) {
             allNodeIdList.add(localNodeId);
         }
-        MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, allNodeIdList.toArray(new String[] {}), false, false, true);
+        MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, allNodeIdList.toArray(new String[] {}), false, false);
 
         client
             .execute(

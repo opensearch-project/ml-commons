@@ -158,7 +158,6 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         String localNodeId = clusterService.localNode().getId();
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
-        boolean isAutoReload = deployModelRequest.isAutoLoad();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName algorithm = mlModel.getAlgorithm();
@@ -173,7 +172,6 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                     .createTime(Instant.now())
                     .lastUpdateTime(Instant.now())
                     .state(MLTaskState.CREATED)
-                    .autoReload(isAutoReload)
                     .workerNodes(nodeIds)
                     .build();
                 mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
