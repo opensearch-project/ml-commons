@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.ImmutableMap;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
@@ -29,7 +30,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompatibilityRestTestCase {
 
@@ -213,15 +213,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                 "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
-        assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
-
-        String jsonEntity = "{\n"
-            + "  \"persistent\" : {\n"
-            + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
-            + "  }\n"
-            + "}";
-        bwcResponse = TestHelper
-            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
         assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
     }
 
