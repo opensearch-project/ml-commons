@@ -12,8 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.utils.TestHelper.getProfileRestRequest;
-import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
+import static org.opensearch.ml.utils.TestHelper.*;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -26,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -41,6 +41,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
+import org.opensearch.common.collect.MapBuilder;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
@@ -281,6 +282,14 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         }).when(client).execute(eq(MLProfileAction.INSTANCE), any(), any());
 
         RestRequest request = getRestRequest();
+        profileAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
+        verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+    }
+
+    public void test_WhenViewIsModel_ReturnModelViewResult() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "model"));
         profileAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
