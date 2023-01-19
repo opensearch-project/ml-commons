@@ -167,7 +167,12 @@ public class MLTaskDispatcher {
     private void dispatchTaskWithRoundRobin(ActionListener<DiscoveryNode> listener) {
         DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
         if (eligibleNodes == null || eligibleNodes.length == 0) {
-            throw new MLResourceNotFoundException("no eligible node found, ml node is required to run this request");
+            throw new MLResourceNotFoundException(
+                "No eligible node found to execute this request. It's best practice to"
+                    + " provision ML nodes to serve your models. You can disable this setting to serve the model on your data"
+                    + " node for development purposes by disabling the \"plugins.ml_commons.only_run_on_ml_node\" "
+                    + "configuration using the _cluster/setting api"
+            );
         }
         dispatchTaskWithRoundRobin(eligibleNodes, listener);
     }
