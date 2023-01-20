@@ -193,6 +193,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                 }
                             );
                         } catch (ResponseException e1) {
+                            assertEquals(mlNodeSettingExceptionMessage(), "{" + e1.getMessage().split("[{]", 2)[1]);
                             mlNodeSettingShifting();
                             try {
                                 trainAndPredict(
@@ -207,6 +208,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                     }
                                 );
                             } catch (ResponseException e2) {
+                                assertEquals(memoryThresholdSettingExceptionMessage(), "{" + e2.getMessage().split("[{]", 2)[1]);
                                 memoryThresholdSettingShifting();
                                 trainAndPredict(
                                     client(),
@@ -235,6 +237,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             assertTrue(rows.size() > 0);
                         });
                     } catch (ResponseException e1) {
+                        assertEquals(mlNodeSettingExceptionMessage(), "{" + e1.getMessage().split("[{]", 2)[1]);
                         mlNodeSettingShifting();
                         try {
                             trainAndPredict(
@@ -249,6 +252,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                 }
                             );
                         } catch (ResponseException e2) {
+                            assertEquals(memoryThresholdSettingExceptionMessage(), "{" + e2.getMessage().split("[{]", 2)[1]);
                             memoryThresholdSettingShifting();
                             trainAndPredict(
                                 client(),
@@ -267,6 +271,18 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
             }
             break;
         }
+    }
+
+    private String mlNodeSettingExceptionMessage() {
+        return "{\"error\":{\"root_cause\":[{\"type\":\"m_l_resource_not_found_exception\",\"reason\":\"No eligible node found to execute this request. "
+            + "It's best practice to provision ML nodes to serve your models. You can disable this setting to serve the model on your data node for development purposes by disabling the \\\"plugins.ml_commons.only_run_on_ml_node\\\" configuration using the _cluster/setting api\"}],"
+            + "\"type\":\"m_l_resource_not_found_exception\",\"reason\":\"No eligible node found to execute this request. It's best practice to provision ML nodes to serve your models. "
+            + "You can disable this setting to serve the model on your data node for development purposes by disabling the \\\"plugins.ml_commons.only_run_on_ml_node\\\" configuration using the _cluster/setting api\"},\"status\":500}";
+    }
+
+    private String memoryThresholdSettingExceptionMessage() {
+        return "{\"error\":{\"root_cause\":[{\"type\":\"illegal_argument_exception\",\"reason\":\"persistent setting [plugins.ml_commons.native_memory_threshold], not recognized\"}],"
+            + "\"type\":\"illegal_argument_exception\",\"reason\":\"persistent setting [plugins.ml_commons.native_memory_threshold], not recognized\"},\"status\":400}}";
     }
 
     private void mlNodeSettingShifting() throws IOException {
