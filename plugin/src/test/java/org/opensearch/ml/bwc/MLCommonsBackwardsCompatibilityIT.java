@@ -19,6 +19,7 @@ import org.apache.http.message.BasicHeader;
 import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
@@ -177,29 +178,40 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             assertTrue(rows.size() > 1);
                         });
                     } else if (isNewerVersion(opensearchVersion)) {
-                        testSettingShifting();
                         // train predict with old data
                         ingestIrisData(irisIndex);
+                        try {
+                            trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
+                                ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                assertTrue(rows.size() > 0);
+                            });
+                        } catch(ResponseException e) {
+                            testSettingShifting();
+                            trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
+                                ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                assertTrue(rows.size() > 0);
+                            });
+                        }
+                    } else {
+                        throw new AssertionError("Cannot get the correct version for opensearch ml-commons plugin for the bwc test.");
+                    }
+                case UPGRADED:
+                    assertTrue(pluginNames.contains("opensearch-ml"));
+                    assertTrue(isNewerVersion(opensearchVersion));
+                    ingestIrisData(irisIndex);
+                    try {
                         trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
                             ArrayList rows = (ArrayList) predictionResult.get("rows");
                             assertTrue(rows.size() > 0);
                         });
-                    } else {
-                        throw new AssertionError("Cannot get the correct version for opensearch ml-commons plugin for the bwc test.");
+                    } catch(ResponseException e) {
+                        testSettingShifting();
+                        trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
+                            ArrayList rows = (ArrayList) predictionResult.get("rows");
+                            assertTrue(rows.size() > 0);
+                        });
                     }
-                    break;
-                case UPGRADED:
-                    assertTrue(pluginNames.contains("opensearch-ml"));
-                    assertTrue(isNewerVersion(opensearchVersion));
-                    testSettingShifting();
-                    ingestIrisData(irisIndex);
-                    trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                        ArrayList rows = (ArrayList) predictionResult.get("rows");
-                        assertTrue(rows.size() > 0);
-                    });
-                    break;
             }
-            break;
         }
     }
 
