@@ -11,6 +11,7 @@ Test on AWS EC2 `g5.xlarge`, 64-bit(x86)
 - Ubuntu AMI:  `Deep Learning AMI GPU PyTorch 1.12.1 (Ubuntu 20.04) 20221114`
 - Amazon Linux AMI: `Deep Learning AMI GPU PyTorch 1.12.1 (Amazon Linux 2) 20221114`
 - PyTorch: 1.12.1
+- CUDA: 11.6
 
 ## 1.1 mount nvidia-uvm device
 
@@ -60,6 +61,7 @@ Test on AWS EC2 `inf1.xlarge`,  64-bit(x86)
 - Ubuntu AMI:  `Deep Learning AMI GPU PyTorch 1.12.1 (Ubuntu 20.04) 20221114`
 - Amazon Linux AMI: `Deep Learning AMI GPU PyTorch 1.12.1 (Amazon Linux 2) 20221114`
 - PyTorch: 1.12.1
+- CUDA: 11.6
 
 ## 2.1 Fresh setup script
 
@@ -443,17 +445,17 @@ Tested on AWS EC2 `g5.xlarge`, 64-bit(x86)
 
 Some example commands.
 
-Host:
+Start nivida/cuda docker container:
 ```
 sudo sysctl -w vm.max_map_count=262144
 docker run -it --runtime=nvidia --gpus all -p 9200:9200 nvidia/cuda:11.6.2-cudnn8-devel-ubuntu20.04 /bin/bash
 ```
-Docker:
+Start OpenSearch in nivida/cuda docker container:
 ```
 wget https://artifacts.opensearch.org/releases/bundle/opensearch/2.5.0/opensearch-2.5.0-linux-x64.tar.gz
 tar -xvf opensearch-2.5.0-linux-x64.tar.gz
 cd opensearch-2.5.0
-bin/opensearch
+bash opensearch-tar-install.sh
 ```
 
 
