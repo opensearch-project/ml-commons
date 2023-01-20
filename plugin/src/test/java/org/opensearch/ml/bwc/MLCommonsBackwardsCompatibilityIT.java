@@ -281,8 +281,8 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
     }
 
     private String memoryThresholdSettingExceptionMessage() {
-        return "{\"error\":{\"root_cause\":[{\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"m_l_limit_exceeded_exception: Native Memory Circuit Breaker is open, please check your resources!\"}],"
-            + "\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"m_l_limit_exceeded_exception: Native Memory Circuit Breaker is open, please check your resources!\"},\"status\":500}";
+        return "{\"error\":{\"root_cause\":[{\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"Native Memory Circuit Breaker is open, please check your resources!\"}],"
+            + "\"type\":\"m_l_limit_exceeded_exception\",\"reason\":Native Memory Circuit Breaker is open, please check your resources!\"},\"status\":500}";
     }
 
     private void mlNodeSettingShifting() throws IOException {
