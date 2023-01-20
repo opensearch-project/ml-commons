@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.ImmutableMap;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
@@ -31,6 +30,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompatibilityRestTestCase {
 
@@ -181,16 +181,45 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                         // train predict with old data
                         ingestIrisData(irisIndex);
                         try {
-                            trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                                ArrayList rows = (ArrayList) predictionResult.get("rows");
-                                assertTrue(rows.size() > 0);
-                            });
-                        } catch(ResponseException e) {
-                            testSettingShifting();
-                            trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                                ArrayList rows = (ArrayList) predictionResult.get("rows");
-                                assertTrue(rows.size() > 0);
-                            });
+                            trainAndPredict(
+                                client(),
+                                FunctionName.KMEANS,
+                                irisIndex,
+                                kMeansParams,
+                                searchSourceBuilder,
+                                predictionResult -> {
+                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                    assertTrue(rows.size() > 0);
+                                }
+                            );
+                        } catch (ResponseException e1) {
+                            mlNodeSettingShifting();
+                            try {
+                                trainAndPredict(
+                                    client(),
+                                    FunctionName.KMEANS,
+                                    irisIndex,
+                                    kMeansParams,
+                                    searchSourceBuilder,
+                                    predictionResult -> {
+                                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                        assertTrue(rows.size() > 0);
+                                    }
+                                );
+                            } catch (ResponseException e2) {
+                                memoryThresholdSettingShifting();
+                                trainAndPredict(
+                                    client(),
+                                    FunctionName.KMEANS,
+                                    irisIndex,
+                                    kMeansParams,
+                                    searchSourceBuilder,
+                                    predictionResult -> {
+                                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                        assertTrue(rows.size() > 0);
+                                    }
+                                );
+                            }
                         }
                     } else {
                         throw new AssertionError("Cannot get the correct version for opensearch ml-commons plugin for the bwc test.");
@@ -205,12 +234,34 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             ArrayList rows = (ArrayList) predictionResult.get("rows");
                             assertTrue(rows.size() > 0);
                         });
-                    } catch(ResponseException e) {
-                        testSettingShifting();
-                        trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                            ArrayList rows = (ArrayList) predictionResult.get("rows");
-                            assertTrue(rows.size() > 0);
-                        });
+                    } catch (ResponseException e1) {
+                        mlNodeSettingShifting();
+                        try {
+                            trainAndPredict(
+                                client(),
+                                FunctionName.KMEANS,
+                                irisIndex,
+                                kMeansParams,
+                                searchSourceBuilder,
+                                predictionResult -> {
+                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                    assertTrue(rows.size() > 0);
+                                }
+                            );
+                        } catch (ResponseException e2) {
+                            memoryThresholdSettingShifting();
+                            trainAndPredict(
+                                client(),
+                                FunctionName.KMEANS,
+                                irisIndex,
+                                kMeansParams,
+                                searchSourceBuilder,
+                                predictionResult -> {
+                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                    assertTrue(rows.size() > 0);
+                                }
+                            );
+                        }
                     }
                     break;
             }
@@ -218,7 +269,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
         }
     }
 
-    private void testSettingShifting() throws IOException {
+    private void mlNodeSettingShifting() throws IOException {
         Response bwcResponse = TestHelper
             .makeRequest(
                 client(),
@@ -228,6 +279,17 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                 "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
+        assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
+    }
+
+    private void memoryThresholdSettingShifting() throws IOException {
+        String jsonEntity = "{\n"
+            + "  \"persistent\" : {\n"
+            + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
+            + "  }\n"
+            + "}";
+        Response bwcResponse = TestHelper
+            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
         assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
     }
 
