@@ -195,6 +195,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                     } else {
                         throw new AssertionError("Cannot get the correct version for opensearch ml-commons plugin for the bwc test.");
                     }
+                    break;
                 case UPGRADED:
                     assertTrue(pluginNames.contains("opensearch-ml"));
                     assertEquals("2.6.0", opensearchVersion);
@@ -211,7 +212,9 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             assertTrue(rows.size() > 0);
                         });
                     }
+                    break;
             }
+            break;
         }
     }
 
