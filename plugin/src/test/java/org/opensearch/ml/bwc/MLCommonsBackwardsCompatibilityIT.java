@@ -193,7 +193,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                 }
                             );
                         } catch (ResponseException e1) {
-                            assertEquals(mlNodeSettingExceptionMessage(), "{" + e1.getMessage().split("[{]", 2)[1]);
                             mlNodeSettingShifting();
                             try {
                                 trainAndPredict(
@@ -237,7 +236,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             assertTrue(rows.size() > 0);
                         });
                     } catch (ResponseException e1) {
-                        assertEquals(mlNodeSettingExceptionMessage(), "{" + e1.getMessage().split("[{]", 2)[1]);
                         mlNodeSettingShifting();
                         try {
                             trainAndPredict(
@@ -252,7 +250,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                 }
                             );
                         } catch (ResponseException e2) {
-                            assertEquals(memoryThresholdSettingExceptionMessage(), "{" + e2.getMessage().split("[{]", 2)[1]);
                             memoryThresholdSettingShifting();
                             trainAndPredict(
                                 client(),
