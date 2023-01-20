@@ -198,7 +198,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                     break;
                 case UPGRADED:
                     assertTrue(pluginNames.contains("opensearch-ml"));
-                    assertEquals("2.6.0", opensearchVersion);
+                    assertTrue(isNewerVersion(opensearchVersion));
                     ingestIrisData(irisIndex);
                     try {
                         trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
