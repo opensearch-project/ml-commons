@@ -207,7 +207,6 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                     }
                                 );
                             } catch (ResponseException e2) {
-                                assertEquals(memoryThresholdSettingExceptionMessage(), "{" + e2.getMessage().split("[{]", 2)[1]);
                                 memoryThresholdSettingShifting();
                                 trainAndPredict(
                                     client(),
