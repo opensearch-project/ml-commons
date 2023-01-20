@@ -430,6 +430,32 @@ For the second one run this
 sudo sysctl -w vm.max_map_count=262144
 ```
 
+# 3. DOCKER
+
+Tested on AWS EC2 `g5.xlarge`, 64-bit(x86)
+
+- Amazon Linux AMI: `AWS Deep Learning Base AMI GPU CUDA 11 (Ubuntu 20.04) 20221104`
+- PyTorch: 1.12.1
+- Docker: 20.10.21
+- CUDA: 11.6
+- CUDA Driver: 510.47.03
+- Docker Image: nvidia/cuda:11.6.2-cudnn8-devel-ubuntu20.04
+
+Some example commands.
+
+Host:
+```
+sudo sysctl -w vm.max_map_count=262144
+docker run -it --runtime=nvidia --gpus all -p 9200:9200 nvidia/cuda:11.6.2-cudnn8-devel-ubuntu20.04 /bin/bash
+```
+Docker:
+```
+wget https://artifacts.opensearch.org/releases/bundle/opensearch/2.5.0/opensearch-2.5.0-linux-x64.tar.gz
+tar -xvf opensearch-2.5.0-linux-x64.tar.gz
+cd opensearch-2.5.0
+bin/opensearch
+```
+
 
 
 
