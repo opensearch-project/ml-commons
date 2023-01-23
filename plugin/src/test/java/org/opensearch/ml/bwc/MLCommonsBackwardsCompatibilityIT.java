@@ -207,18 +207,8 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                     }
                                 );
                             } catch (ResponseException e2) {
-                                memoryThresholdSettingShifting();
-                                trainAndPredict(
-                                    client(),
-                                    FunctionName.KMEANS,
-                                    irisIndex,
-                                    kMeansParams,
-                                    searchSourceBuilder,
-                                    predictionResult -> {
-                                        ArrayList rows = (ArrayList) predictionResult.get("rows");
-                                        assertTrue(rows.size() > 0);
-                                    }
-                                );
+                                assertEquals(memoryThresholdSettingExceptionMessage(CLUSTER_TYPE), "{" + e2.getMessage().split("[{]", 2)[1]);
+                                break;
                             }
                         }
                     } else {
@@ -249,17 +239,18 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                                 }
                             );
                         } catch (ResponseException e2) {
+                            assertEquals(memoryThresholdSettingExceptionMessage(CLUSTER_TYPE), "{" + e2.getMessage().split("[{]", 2)[1]);
                             memoryThresholdSettingShifting();
                             trainAndPredict(
-                                client(),
-                                FunctionName.KMEANS,
-                                irisIndex,
-                                kMeansParams,
-                                searchSourceBuilder,
-                                predictionResult -> {
-                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
-                                    assertTrue(rows.size() > 0);
-                                }
+                                    client(),
+                                    FunctionName.KMEANS,
+                                    irisIndex,
+                                    kMeansParams,
+                                    searchSourceBuilder,
+                                    predictionResult -> {
+                                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                        assertTrue(rows.size() > 0);
+                                    }
                             );
                         }
                     }
@@ -276,9 +267,16 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
             + "You can disable this setting to serve the model on your data node for development purposes by disabling the \\\"plugins.ml_commons.only_run_on_ml_node\\\" configuration using the _cluster/setting api\"},\"status\":500}";
     }
 
-    private String memoryThresholdSettingExceptionMessage() {
-        return "{\"error\":{\"root_cause\":[{\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"Native Memory Circuit Breaker is open, please check your resources!\"}],"
-            + "\"type\":\"m_l_limit_exceeded_exception\",\"reason\":Native Memory Circuit Breaker is open, please check your resources!\"},\"status\":500}";
+    private String memoryThresholdSettingExceptionMessage(ClusterType clusterType) {
+        if (clusterType == ClusterType.MIXED){
+            return "{\"error\":{\"root_cause\":[{\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"Native Memory Circuit Breaker is open, please check your resources!\"}],"
+                    + "\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"Native Memory Circuit Breaker is open, please check your resources!\"},\"status\":500}";
+        } else if (clusterType == ClusterType.UPGRADED) {
+        return "{\"error\":{\"root_cause\":[{\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"m_l_limit_exceeded_exception: Native Memory Circuit Breaker is open, please check your resources!\"}],"
+            + "\"type\":\"m_l_limit_exceeded_exception\",\"reason\":\"m_l_limit_exceeded_exception: Native Memory Circuit Breaker is open, please check your resources!\"},\"status\":500}";}
+        else {
+            throw new AssertionError("Invalid ClusterType");
+        }
     }
 
     private void mlNodeSettingShifting() throws IOException {
