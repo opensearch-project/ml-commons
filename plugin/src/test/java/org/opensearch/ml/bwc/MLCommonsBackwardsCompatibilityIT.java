@@ -178,7 +178,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             assertTrue(rows.size() > 1);
                         });
                     } else if (isNewerVersion(opensearchVersion)) {
-                        // train predict with old data
+                        ingestIrisData(irisIndex);
                         try {
                             trainAndPredict(
                                 client(),
