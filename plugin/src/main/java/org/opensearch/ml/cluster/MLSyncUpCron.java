@@ -173,7 +173,7 @@ public class MLSyncUpCron implements Runnable {
                     new String[] {
                         MLModel.MODEL_STATE_FIELD,
                         MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
-                        MLModel.LAST_UPDATE_TIME_FIELD,
+                        MLModel.LAST_UPDATED_TIME_FIELD,
                         MLModel.CURRENT_WORKER_NODE_COUNT_FIELD },
                     null
                 );
@@ -185,76 +185,29 @@ public class MLSyncUpCron implements Runnable {
                     String modelId = hit.getId();
                     Map<String, Object> sourceAsMap = hit.getSourceAsMap();
                     MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
-                    Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATE_TIME_FIELD)
-                        ? (Long) sourceAsMap.get(MLModel.LAST_UPDATE_TIME_FIELD)
+                    Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
+                        ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
                         : null;
-                    int planningWorkerNodeCount = 0;
-                    if (sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)) {
-                        planningWorkerNodeCount = (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD);
-                    }
-                    int currentWorkerNodeCountInIndex = 0;
-                    if (sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)) {
-                        currentWorkerNodeCountInIndex = (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD);
-                    }
-                    Set<String> loadTaskNodes = loadingModels.get(modelId);
-                    if (loadTaskNodes == null || loadTaskNodes.size() == 0) {
-                        int currentWorkerNodeCount = modelWorkerNodes.containsKey(modelId) ? modelWorkerNodes.get(modelId).size() : 0;
-                        if (currentWorkerNodeCount == 0
-                            && state != MLModelState.LOAD_FAILED
-                            && !(state == MLModelState.LOADING
-                                && lastUpdateTime != null
-                                && lastUpdateTime + LOAD_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
-                            newModelStates.put(modelId, MLModelState.LOAD_FAILED);
-                        }
-                        if (currentWorkerNodeCount > 0) {
-                            if (currentWorkerNodeCount < planningWorkerNodeCount
-                                && (state != MLModelState.PARTIALLY_LOADED || currentWorkerNodeCountInIndex != currentWorkerNodeCount)) {
-                                newModelStates.put(modelId, MLModelState.PARTIALLY_LOADED);
-                            } else if (planningWorkerNodeCount > 0
-                                && currentWorkerNodeCount >= planningWorkerNodeCount
-                                && state != MLModelState.LOADED) {
-                                newModelStates.put(modelId, MLModelState.LOADED);
-                                if (currentWorkerNodeCount > planningWorkerNodeCount) {
-                                    log
-                                        .warn(
-                                            "Model {} loaded on more nodes [{}] than planing worker node[{}]",
-                                            modelId,
-                                            currentWorkerNodeCount,
-                                            planningWorkerNodeCount
-                                        );
-                                }
-                            }
-                        }
-                    } else if (state != MLModelState.LOADING) {
-                        newModelStates.put(modelId, MLModelState.LOADING);
+                    int planningWorkerNodeCount = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
+                        ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
+                        : 0;
+                    int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
+                        ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
+                        : 0;
+                    MLModelState mlModelState = getNewModelState(
+                        loadingModels,
+                        modelWorkerNodes,
+                        modelId,
+                        state,
+                        lastUpdateTime,
+                        planningWorkerNodeCount,
+                        currentWorkerNodeCountInIndex
+                    );
+                    if (mlModelState != null) {
+                        newModelStates.put(modelId, mlModelState);
                     }
                 }
-                if (newModelStates.size() > 0) {
-                    BulkRequest bulkUpdateRequest = new BulkRequest();
-                    for (String modelId : newModelStates.keySet()) {
-                        UpdateRequest updateRequest = new UpdateRequest();
-                        Instant now = Instant.now();
-                        ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-                        builder
-                            .put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name())
-                            .put(MLModel.LAST_UPDATE_TIME_FIELD, now.toEpochMilli());
-                        Set<String> workerNodes = modelWorkerNodes.get(modelId);
-                        int currentWorkNodeCount = workerNodes == null ? 0 : workerNodes.size();
-                        builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
-                        updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
-                        bulkUpdateRequest.add(updateRequest);
-                    }
-                    log.info("Refresh model state: {}", newModelStates);
-                    client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
-                        updateModelStateSemaphore.release();
-                        log.debug("Refresh model state successfully");
-                    }, e -> {
-                        updateModelStateSemaphore.release();
-                        log.error("Failed to bulk update model state", e);
-                    }));
-                } else {
-                    updateModelStateSemaphore.release();
-                }
+                bulkUpdateModelState(modelWorkerNodes, newModelStates);
             }, e -> {
                 updateModelStateSemaphore.release();
                 log.error("Failed to search models", e);
@@ -262,6 +215,85 @@ public class MLSyncUpCron implements Runnable {
         } catch (Exception e) {
             updateModelStateSemaphore.release();
             log.error("Failed to refresh model state", e);
+        }
+    }
+
+    private MLModelState getNewModelState(
+        Map<String, Set<String>> loadingModels,
+        Map<String, Set<String>> modelWorkerNodes,
+
+        String modelId,
+        MLModelState state,
+        Long lastUpdateTime,
+        int planningWorkerNodeCount,
+        int currentWorkerNodeCountInIndex
+    ) {
+        Set<String> loadTaskNodes = loadingModels.get(modelId);
+        if (loadTaskNodes != null && loadTaskNodes.size() > 0 && state != MLModelState.LOADING) {
+            // no
+            return MLModelState.LOADING;
+        }
+        int currentWorkerNodeCount = modelWorkerNodes.containsKey(modelId) ? modelWorkerNodes.get(modelId).size() : 0;
+        if (currentWorkerNodeCount == 0
+            && state != MLModelState.LOAD_FAILED
+            && !(state == MLModelState.LOADING
+                && lastUpdateTime != null
+                && lastUpdateTime + LOAD_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
+            // If model not deployed to any node and no node is loading the model, then set model state as LOAD_FAILED
+            return MLModelState.LOAD_FAILED;
+        }
+        if (currentWorkerNodeCount > 0) {
+            if (currentWorkerNodeCount < planningWorkerNodeCount
+                && (state != MLModelState.PARTIALLY_LOADED || currentWorkerNodeCountInIndex != currentWorkerNodeCount)) {
+                // If model deployed to some node/nodes, but not deployed to all nodes planned by user,
+                // then set model state as PARTIALLY_LOADED.
+                return MLModelState.PARTIALLY_LOADED;
+            } else if (planningWorkerNodeCount > 0 && currentWorkerNodeCount >= planningWorkerNodeCount && state != MLModelState.LOADED) {
+                if (currentWorkerNodeCount > planningWorkerNodeCount) {
+                    // This case should not happen that model loaded to more nodes than planned. So log this as warning if
+                    // it happens.
+                    log
+                        .warn(
+                            "Model {} loaded on more nodes [{}] than planing worker node[{}]",
+                            modelId,
+                            currentWorkerNodeCount,
+                            planningWorkerNodeCount
+                        );
+                }
+
+                // If model deployed to all nodes planned by user, then set model state as LOADED.
+                return MLModelState.LOADED;
+            }
+        }
+        return null;
+    }
+
+    private void bulkUpdateModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, MLModelState> newModelStates) {
+        if (newModelStates.size() > 0) {
+            BulkRequest bulkUpdateRequest = new BulkRequest();
+            for (String modelId : newModelStates.keySet()) {
+                UpdateRequest updateRequest = new UpdateRequest();
+                Instant now = Instant.now();
+                ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
+                builder
+                    .put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name())
+                    .put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+                Set<String> workerNodes = modelWorkerNodes.get(modelId);
+                int currentWorkNodeCount = workerNodes == null ? 0 : workerNodes.size();
+                builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
+                updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
+                bulkUpdateRequest.add(updateRequest);
+            }
+            log.info("Refresh model state: {}", newModelStates);
+            client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
+                updateModelStateSemaphore.release();
+                log.debug("Refresh model state successfully");
+            }, e -> {
+                updateModelStateSemaphore.release();
+                log.error("Failed to bulk update model state", e);
+            }));
+        } else {
+            updateModelStateSemaphore.release();
         }
     }
 }

@@ -21,8 +21,8 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
 
     private String modelStatus;
     private String[] loadedModelIds;
-    private String[] runningLoadModelIds;
-    private String[] runningLoadModelTaskIds;
+    private String[] runningLoadModelIds; // model ids which have loading model task running
+    private String[] runningLoadModelTaskIds; // load model task ids which is running
 
     public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] loadedModelIds, String[] runningLoadModelIds,
                                 String[] runningLoadModelTaskIds) {

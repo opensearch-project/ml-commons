@@ -328,7 +328,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         if (currentWorkerNodeCount != null) {
             content.field(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkerNodeCount);
         }
-        content.field(MLModel.LAST_UPDATE_TIME_FIELD, lastUpdateTime);
+        content.field(MLModel.LAST_UPDATED_TIME_FIELD, lastUpdateTime);
         content.endObject();
 
         SearchHit[] hits = new SearchHit[1];

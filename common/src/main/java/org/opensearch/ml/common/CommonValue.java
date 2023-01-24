@@ -107,7 +107,7 @@ public class CommonValue {
             + MLModel.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LAST_UPDATE_TIME_FIELD
+            + MLModel.LAST_UPDATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
             + MLModel.LAST_UPLOADED_TIME_FIELD

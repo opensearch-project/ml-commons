@@ -617,7 +617,7 @@ public class MLModelManager {
         }
         Map<String, Object> newUpdatedFields = new HashMap<>();
         newUpdatedFields.putAll(updatedFields);
-        newUpdatedFields.put(MLModel.LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
+        newUpdatedFields.put(MLModel.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
         updateRequest.doc(newUpdatedFields);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);

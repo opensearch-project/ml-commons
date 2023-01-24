@@ -44,7 +44,7 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
-    public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String LAST_UPLOADED_TIME_FIELD = "last_uploaded_time";
     public static final String LAST_LOADED_TIME_FIELD = "last_loaded_time";
     public static final String LAST_UNLOADED_TIME_FIELD = "last_unloaded_time";
@@ -78,8 +78,8 @@ public class MLModel implements ToXContentObject {
     private String modelId; // model chunk doc only
     private Integer chunkNumber; // model chunk doc only
     private Integer totalChunks; // model chunk doc only
-    private Integer planningWorkerNodeCount;
-    private Integer currentWorkerNodeCount;
+    private Integer planningWorkerNodeCount; // plan to deploy model to how many nodes
+    private Integer currentWorkerNodeCount; // model is deployed to how many nodes
 
     @Builder(toBuilder = true)
     public MLModel(String name,
@@ -245,7 +245,7 @@ public class MLModel implements ToXContentObject {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
         if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
         if (lastUploadedTime != null) {
             builder.field(LAST_UPLOADED_TIME_FIELD, lastUploadedTime.toEpochMilli());
@@ -364,7 +364,7 @@ public class MLModel implements ToXContentObject {
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case LAST_UPDATE_TIME_FIELD:
+                case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case LAST_UPLOADED_TIME_FIELD:
