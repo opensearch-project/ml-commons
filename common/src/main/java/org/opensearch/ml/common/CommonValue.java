@@ -11,7 +11,7 @@ import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FRAMEWORK_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.MODEL_MAX_LENGTH_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.POOLING_METHOD_FIELD;
+import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.POOLING_MODE_FIELD;
 
 public class CommonValue {
 
@@ -35,6 +35,7 @@ public class CommonValue {
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
     public static final String NODE_ID_FIELD = "node_id";
     public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
+    public static final Integer ML_MODEL_RELOAD_MAX_RETRY_TIMES = 2;
     public static final String USER_FIELD_MAPPING = "      \""
         + CommonValue.USER
         + "\": {\n"
@@ -93,7 +94,7 @@ public class CommonValue {
         + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
         + EMBEDDING_DIMENSION_FIELD + "\":{\"type\":\"integer\"},\""
         + FRAMEWORK_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
-        + POOLING_METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
+        + POOLING_MODE_FIELD + "\":{\"type\":\"keyword\"},\""
         + NORMALIZE_RESULT_FIELD + "\":{\"type\":\"boolean\"},\""
         + MODEL_MAX_LENGTH_FIELD + "\":{\"type\":\"integer\"},\""
         + ALL_CONFIG_FIELD + "\":{\"type\":\"text\"}}},\n"

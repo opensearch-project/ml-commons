@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import lombok.SneakyThrows;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -211,6 +213,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             );
     }
 
+    @SneakyThrows
     @Override
     public Collection<Object> createComponents(
         Client client,
@@ -236,7 +239,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 
         JvmService jvmService = new JvmService(environment.settings());
-        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService).init(environment.dataFiles()[0]);
+        OsService osService = new OsService(environment.settings());
+        MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService, osService, settings, clusterService)
+            .init(environment.dataFiles()[0]);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
         // cluster level stats
@@ -351,8 +356,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             threadPool,
             nodeHelper
         );
-
-        mlModelAutoReLoader.autoReLoadModel();
 
         return ImmutableList
             .of(

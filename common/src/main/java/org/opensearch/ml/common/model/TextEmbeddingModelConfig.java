@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.common.model;
 
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Locale;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,19 +20,14 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 
-import java.io.IOException;
-import java.util.Locale;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-
 @Setter
 @Getter
 public class TextEmbeddingModelConfig extends MLModelConfig {
     public static final String PARSE_FIELD_NAME = FunctionName.TEXT_EMBEDDING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            TextEmbeddingModelConfig.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        TextEmbeddingModelConfig.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String EMBEDDING_DIMENSION_FIELD = "embedding_dimension";
@@ -45,7 +44,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
 
     @Builder(toBuilder = true)
     public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig,
-                                    PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength) {
+        PoolingMode poolingMode, boolean normalizeResult, Integer modelMaxLength) {
         super(modelType, allConfig);
         if (embeddingDimension == null) {
             throw new IllegalArgumentException("embedding dimension is null");
