@@ -24,6 +24,7 @@ import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -154,7 +155,8 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_LoadModelDone_Error_NullTaskWorkerNodes() {
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(null);
-        MLTaskCache mlTaskCache = MLTaskCache.builder().mlTask(createMlTask(MLTaskType.UPLOAD_MODEL)).build();
+        List<String> workerNodes = Arrays.asList(nodeId1, nodeId2);
+        MLTaskCache mlTaskCache = MLTaskCache.builder().mlTask(createMlTask(MLTaskType.UPLOAD_MODEL)).workerNodes(workerNodes).build();
         mlTaskCache.addError(nodeId1, error);
         doReturn(mlTaskCache).when(mlTaskManager).getMLTaskCache(anyString());
         when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1, nodeId2 });

@@ -30,7 +30,7 @@ public class CommonValue {
 
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
-    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 2;
+    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 3;
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
@@ -85,6 +85,12 @@ public class CommonValue {
             + MLModel.MODEL_CONTENT_SIZE_IN_BYTES_FIELD
             + "\" : {\"type\": \"long\"},\n"
             + "      \""
+            + MLModel.PLANNING_WORKER_NODE_COUNT_FIELD
+            + "\" : {\"type\": \"integer\"},\n"
+            + "      \""
+            + MLModel.CURRENT_WORKER_NODE_COUNT_FIELD
+            + "\" : {\"type\": \"integer\"},\n"
+            + "      \""
             + MLModel.MODEL_CONFIG_FIELD
             + "\" : {\"properties\":{\""
             + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
@@ -99,6 +105,9 @@ public class CommonValue {
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
             + MLModel.CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLModel.LAST_UPDATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
             + MLModel.LAST_UPLOADED_TIME_FIELD
