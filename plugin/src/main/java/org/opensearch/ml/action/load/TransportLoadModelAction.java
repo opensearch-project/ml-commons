@@ -257,7 +257,8 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         mlModelManager
             .updateModel(
                 modelId,
-                ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.LOADING),
+                ImmutableMap
+                    .of(MLModel.MODEL_STATE_FIELD, MLModelState.LOADING, MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, eligibleNodes.size()),
                 ActionListener
                     .wrap(
                         r -> client.execute(MLLoadModelOnNodeAction.INSTANCE, loadModelRequest, actionListener),

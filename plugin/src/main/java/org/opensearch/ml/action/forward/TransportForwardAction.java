@@ -100,15 +100,18 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
 
                     if (workNodes == null || workNodes.size() == 0) {
                         MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
+                        int currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
                         MLTaskState taskState = mlTaskCache.hasError() ? MLTaskState.COMPLETED_WITH_ERROR : MLTaskState.COMPLETED;
                         if (mlTaskCache.allNodeFailed()) {
                             taskState = MLTaskState.FAILED;
+                            currentWorkerNodeCount = 0;
                         } else {
                             syncModelWorkerNodes(modelId);
                         }
                         ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
                         builder.put(MLTask.STATE_FIELD, taskState);
                         if (mlTaskCache.hasError()) {
+                            currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize() - mlTaskCache.getErrors().size();
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
@@ -125,7 +128,14 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             .updateModel(
                                 modelId,
                                 ImmutableMap
-                                    .of(MLModel.MODEL_STATE_FIELD, modelState, MLModel.LAST_LOADED_TIME_FIELD, Instant.now().toEpochMilli())
+                                    .of(
+                                        MLModel.MODEL_STATE_FIELD,
+                                        modelState,
+                                        MLModel.LAST_LOADED_TIME_FIELD,
+                                        Instant.now().toEpochMilli(),
+                                        MLModel.CURRENT_WORKER_NODE_COUNT_FIELD,
+                                        currentWorkerNodeCount
+                                    )
                             );
                     }
                     listener.onResponse(new MLForwardResponse("ok", null));

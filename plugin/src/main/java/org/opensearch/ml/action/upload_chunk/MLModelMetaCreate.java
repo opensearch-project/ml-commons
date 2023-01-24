@@ -48,6 +48,7 @@ public class MLModelMetaCreate {
             FunctionName functionName = mlCreateModelMetaInput.getFunctionName();
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                    Instant now = Instant.now();
                     MLModel mlModelMeta = MLModel
                         .builder()
                         .name(modelName)
@@ -60,7 +61,8 @@ public class MLModelMetaCreate {
                         .totalChunks(mlCreateModelMetaInput.getTotalChunks())
                         .modelContentHash(mlCreateModelMetaInput.getModelContentHashValue())
                         .modelContentSizeInBytes(mlCreateModelMetaInput.getModelContentSizeInBytes())
-                        .createdTime(Instant.now())
+                        .createdTime(now)
+                        .lastUpdateTime(now)
                         .build();
                     IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                     indexRequest
