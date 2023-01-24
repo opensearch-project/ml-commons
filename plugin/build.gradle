@@ -387,11 +387,7 @@ String baseName = "mlCommonsBwcCluster"
 String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
 String bwcFilePath = "src/test/resources/org/opensearch/ml/bwc/"
 String bwcRemoteFile = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + bwcShortVersion + "/latest/linux/x64/tar/builds/opensearch/plugins/" + bwcMlPlugin
-String project_no_snapshot = project.version.replace("-SNAPSHOT","")
-String opensearch_no_snapshot = opensearch_version.replace("-SNAPSHOT","")
-String opensearchMlPlugin = "opensearch-ml-" + project_no_snapshot + ".zip"
-String opensearchMlRemoteFile = 'https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/' + opensearch_no_snapshot +
-        '/latest/linux/x64/tar/builds/opensearch/plugins/' + opensearchMlPlugin
+String opensearchMlPlugin = "opensearch-ml-" + project.version + ".zip"
 
 2.times {i ->
     testClusters {
@@ -405,6 +401,10 @@ String opensearchMlRemoteFile = 'https://ci.opensearch.org/ci/dbc/distribution-b
                     return new RegularFile() {
                         @Override
                         File getAsFile() {
+                            File bwcDir = new File('./plugin/' + bwcFilePath)
+                            if (!bwcDir.exists()) {
+                                bwcDir.mkdirs()
+                            }
                             File dir = new File('./plugin/' + bwcFilePath + bwcVersion)
                             if (!dir.exists()) {
                                 dir.mkdirs()
@@ -431,13 +431,11 @@ List<Provider<RegularFile>> plugins = [
                 return new RegularFile() {
                     @Override
                     File getAsFile() {
-                        if (new File('./plugin/' + bwcFilePath + project.version).exists()) {
-                            project.delete(files('./plugin/' + bwcFilePath + project.version))
+                        project.mkdir "$bwcFilePath/$project.version"
+                        copy {
+                            from "$buildDir/distributions/$opensearchMlPlugin"
+                            into "$bwcFilePath/$project.version"
                         }
-                        project.mkdir bwcFilePath + project.version
-                        ant.get(src: opensearchMlRemoteFile,
-                                dest: bwcFilePath + project.version,
-                                httpusecaches: false)
                         return fileTree(bwcFilePath + project.version).getSingleFile()
                     }
                 }
