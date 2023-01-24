@@ -27,7 +27,7 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS = Setting
         .intSetting(
             "plugins.ml_commons.sync_up_job_interval_in_seconds",
-            10,
+            3,
             0,
             86400,
             Setting.Property.NodeScope,

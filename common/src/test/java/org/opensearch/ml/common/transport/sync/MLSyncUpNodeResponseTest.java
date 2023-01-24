@@ -12,6 +12,8 @@ import org.opensearch.common.transport.TransportAddress;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
@@ -23,6 +25,7 @@ public class MLSyncUpNodeResponseTest {
     private final String modelStatus = "modelStatus";
     private final String[] loadedModelIds = {"loadedModelIds"};
     private final String[] runningLoadModelTaskIds = {"runningLoadModelTaskIds"};
+    private final String[] runningLoadModelIds = {"modelid1"};
     @Before
     public void setUp() throws Exception {
         localNode = new DiscoveryNode(
@@ -37,7 +40,7 @@ public class MLSyncUpNodeResponseTest {
 
     @Test
     public void testSerializationDeserialization() throws IOException {
-        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelTaskIds);
+        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLSyncUpNodeResponse newResponse = new MLSyncUpNodeResponse(output.bytes().streamInput());
@@ -50,7 +53,7 @@ public class MLSyncUpNodeResponseTest {
 
     @Test
     public void testReadProfile() throws IOException {
-        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelTaskIds);
+        MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(localNode, modelStatus, loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLSyncUpNodeResponse newResponse = MLSyncUpNodeResponse.readStats(output.bytes().streamInput());
