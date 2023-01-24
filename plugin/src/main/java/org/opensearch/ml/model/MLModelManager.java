@@ -217,6 +217,7 @@ public class MLModelManager {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
             String modelName = uploadInput.getModelName();
             String version = uploadInput.getVersion();
+            Instant now = Instant.now();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel
                     .builder()
@@ -227,7 +228,8 @@ public class MLModelManager {
                     .modelFormat(uploadInput.getModelFormat())
                     .modelState(MLModelState.UPLOADING)
                     .modelConfig(uploadInput.getModelConfig())
-                    .createdTime(Instant.now())
+                    .createdTime(now)
+                    .lastUpdateTime(now)
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -284,6 +286,7 @@ public class MLModelManager {
                 File file = new File(name);
                 byte[] bytes = Files.toByteArray(file);
                 int chunkNum = Integer.parseInt(file.getName());
+                Instant now = Instant.now();
                 MLModel mlModel = MLModel
                     .builder()
                     .modelId(modelId)
@@ -294,7 +297,8 @@ public class MLModelManager {
                     .chunkNumber(chunkNum)
                     .totalChunks(chunkFiles.size())
                     .content(Base64.getEncoder().encodeToString(bytes))
-                    .createdTime(Instant.now())
+                    .createdTime(now)
+                    .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                 String chunkId = getModelChunkId(modelId, chunkNum);
@@ -611,11 +615,14 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
             return;
         }
+        Map<String, Object> newUpdatedFields = new HashMap<>();
+        newUpdatedFields.putAll(updatedFields);
+        newUpdatedFields.put(MLModel.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
-        updateRequest.doc(updatedFields);
+        updateRequest.doc(newUpdatedFields);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        if (updatedFields.containsKey(MLModel.MODEL_STATE_FIELD)
-            && MODEL_DONE_STATES.contains(updatedFields.get(MLModel.MODEL_STATE_FIELD))) {
+        if (newUpdatedFields.containsKey(MLModel.MODEL_STATE_FIELD)
+            && MODEL_DONE_STATES.contains(newUpdatedFields.get(MLModel.MODEL_STATE_FIELD))) {
             updateRequest.retryOnConflict(3);
         }
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {

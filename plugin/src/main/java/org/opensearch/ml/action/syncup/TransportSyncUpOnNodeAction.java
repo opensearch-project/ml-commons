@@ -27,11 +27,9 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeRequest;
@@ -148,9 +146,12 @@ public class TransportSyncUpOnNodeAction extends
 
         String[] loadedModelIds = null;
         String[] runningLoadModelTaskIds = null;
+        String[] runningLoadModelIds = null;
         if (syncUpInput.isGetLoadedModels()) {
             loadedModelIds = mlModelManager.getLocalLoadedModels();
-            runningLoadModelTaskIds = mlTaskManager.getLocalRunningLoadModelTasks();
+            List<String[]> localRunningLoadModel = mlTaskManager.getLocalRunningLoadModelTasks();
+            runningLoadModelTaskIds = localRunningLoadModel.get(0);
+            runningLoadModelIds = localRunningLoadModel.get(1);
         }
 
         if (syncUpInput.isClearRoutingTable()) {
@@ -162,18 +163,14 @@ public class TransportSyncUpOnNodeAction extends
             mlModelManager.syncModelWorkerNodes(modelRoutingTable);
         }
 
-        if (syncUpInput.isSyncRunningLoadModelTasks()) {
-            mlTaskManager.syncRunningLoadModelTasks(runningLoadModelTasks);
-        }
-
-        cleanUpLocalCache();
+        cleanUpLocalCache(runningLoadModelTasks);
         cleanUpLocalCacheFiles();
 
-        return new MLSyncUpNodeResponse(clusterService.localNode(), "ok", loadedModelIds, runningLoadModelTaskIds);
+        return new MLSyncUpNodeResponse(clusterService.localNode(), "ok", loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds);
     }
 
     @VisibleForTesting
-    void cleanUpLocalCache() {
+    void cleanUpLocalCache(Map<String, Set<String>> runningLoadModelTasks) {
         String[] allTaskIds = mlTaskManager.getAllTaskIds();
         if (allTaskIds == null) {
             return;
@@ -185,6 +182,12 @@ public class TransportSyncUpOnNodeAction extends
             Instant now = Instant.now();
             if (now.isAfter(lastUpdateTime.plusSeconds(mlTaskTimeout))) {
                 log.info("ML task timeout. task id: {}, task type: {}", taskId, mlTask.getTaskType());
+                if (mlTask.getTaskType() == MLTaskType.LOAD_MODEL
+                    && mlTask.getState() == MLTaskState.CREATED
+                    && runningLoadModelTasks != null
+                    && runningLoadModelTasks.containsKey(taskId)) {
+                    continue;
+                }
                 mlTaskManager
                     .updateMLTask(
                         taskId,
@@ -193,31 +196,6 @@ public class TransportSyncUpOnNodeAction extends
                         10_000,
                         true
                     );
-
-                if (mlTask.getTaskType() == MLTaskType.LOAD_MODEL) {
-                    String modelId = mlTask.getModelId();
-                    String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
-                    MLModelState modelState;
-                    if (workerNodes == null || workerNodes.length == 0) {
-                        modelState = MLModelState.LOAD_FAILED;
-                    } else if (mlTask.getWorkerNodes().size() > workerNodes.length) {
-                        modelState = MLModelState.PARTIALLY_LOADED;
-                    } else {
-                        modelState = MLModelState.LOADED;
-                        if (mlTask.getWorkerNodes().size() < workerNodes.length) {
-                            log
-                                .warn(
-                                    "Model loaded on more nodes than target worker nodes. taskId:{}, modelId: {}, workerNodes: {}, targetWorkerNodes: {}",
-                                    taskId,
-                                    modelId,
-                                    Arrays.toString(workerNodes),
-                                    Arrays.toString(mlTask.getWorkerNodes().toArray(new String[0]))
-                                );
-                        }
-                    }
-                    log.info("Reset model state as {} for model {}", modelState, modelId);
-                    mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, modelState));
-                }
             }
         }
     }
