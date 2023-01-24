@@ -13,9 +13,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
 import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
@@ -25,6 +28,9 @@ import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompatibilityRestTestCase {
 
@@ -171,29 +177,118 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
                             ArrayList rows = (ArrayList) predictionResult.get("rows");
                             assertTrue(rows.size() > 1);
                         });
-                    } else if (opensearchVersion.equals("2.5.0")) {
-                        // train predict with old data
+                    } else if (isNewerVersion(opensearchVersion)) {
                         ingestIrisData(irisIndex);
-                        trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                            ArrayList rows = (ArrayList) predictionResult.get("rows");
-                            assertTrue(rows.size() > 0);
-                        });
+                        try {
+                            trainAndPredict(
+                                client(),
+                                FunctionName.KMEANS,
+                                irisIndex,
+                                kMeansParams,
+                                searchSourceBuilder,
+                                predictionResult -> {
+                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                    assertTrue(rows.size() > 0);
+                                }
+                            );
+                        } catch (ResponseException e1) {
+                            mlNodeSettingShifting();
+                            try {
+                                trainAndPredict(
+                                    client(),
+                                    FunctionName.KMEANS,
+                                    irisIndex,
+                                    kMeansParams,
+                                    searchSourceBuilder,
+                                    predictionResult -> {
+                                        ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                        assertTrue(rows.size() > 0);
+                                    }
+                                );
+                            } catch (ResponseException e2) {
+                                Map modelResponseMap = gson.fromJson(("{" + e2.getMessage().split("[{]", 2)[1]), Map.class);
+                                Map errorMap = (Map) modelResponseMap.get("error");
+                                List<Map<String, Object>> rootCauses = (List<Map<String, Object>>) errorMap.get("root_cause");
+                                Set<Object> rootCauseTypeSet = rootCauses.stream().map(map -> map.get("type")).collect(Collectors.toSet());
+                                assertEquals("m_l_limit_exceeded_exception", rootCauseTypeSet.iterator().next().toString());
+                                break;
+                            }
+                        }
                     } else {
                         throw new AssertionError("Cannot get the correct version for opensearch ml-commons plugin for the bwc test.");
                     }
                     break;
                 case UPGRADED:
                     assertTrue(pluginNames.contains("opensearch-ml"));
-                    assertEquals("2.5.0", opensearchVersion);
+                    assertTrue(isNewerVersion(opensearchVersion));
                     ingestIrisData(irisIndex);
-                    trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
-                        ArrayList rows = (ArrayList) predictionResult.get("rows");
-                        assertTrue(rows.size() > 0);
-                    });
+                    try {
+                        trainAndPredict(client(), FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, predictionResult -> {
+                            ArrayList rows = (ArrayList) predictionResult.get("rows");
+                            assertTrue(rows.size() > 0);
+                        });
+                    } catch (ResponseException e1) {
+                        mlNodeSettingShifting();
+                        try {
+                            trainAndPredict(
+                                client(),
+                                FunctionName.KMEANS,
+                                irisIndex,
+                                kMeansParams,
+                                searchSourceBuilder,
+                                predictionResult -> {
+                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                    assertTrue(rows.size() > 0);
+                                }
+                            );
+                        } catch (ResponseException e2) {
+                            Map modelResponseMap = gson.fromJson(("{" + e2.getMessage().split("[{]", 2)[1]), Map.class);
+                            Map errorMap = (Map) modelResponseMap.get("error");
+                            List<Map<String, Object>> rootCauses = (List<Map<String, Object>>) errorMap.get("root_cause");
+                            Set<Object> rootCauseTypeSet = rootCauses.stream().map(map -> map.get("type")).collect(Collectors.toSet());
+                            assertEquals("m_l_limit_exceeded_exception", rootCauseTypeSet.iterator().next().toString());
+                            memoryThresholdSettingShifting();
+                            trainAndPredict(
+                                client(),
+                                FunctionName.KMEANS,
+                                irisIndex,
+                                kMeansParams,
+                                searchSourceBuilder,
+                                predictionResult -> {
+                                    ArrayList rows = (ArrayList) predictionResult.get("rows");
+                                    assertTrue(rows.size() > 0);
+                                }
+                            );
+                        }
+                    }
                     break;
             }
             break;
         }
+    }
+
+    private void mlNodeSettingShifting() throws IOException {
+        Response bwcResponse = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
+    }
+
+    private void memoryThresholdSettingShifting() throws IOException {
+        String jsonEntity = "{\n"
+            + "  \"persistent\" : {\n"
+            + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
+            + "  }\n"
+            + "}";
+        Response bwcResponse = TestHelper
+            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
+        assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
     }
 
     private String getModelIdWithFunctionName(FunctionName functionName) throws IOException {
@@ -215,6 +310,10 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
         List<Map<String, Object>> hitsModels = (List<Map<String, Object>>) hitsModelsMap.get("hits");
         Set<Object> modelIdSet = hitsModels.stream().map(map -> map.get("_id")).collect(Collectors.toSet());
         return modelIdSet.iterator().next().toString();
+    }
+
+    private boolean isNewerVersion(String osVersion) {
+        return (Integer.parseInt(osVersion.substring(2, 3)) > 4) || (Integer.parseInt(osVersion.substring(0, 1)) > 2);
     }
 
     private void verifyMlResponse(String uri) throws Exception {
