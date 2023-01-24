@@ -16,6 +16,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.component.LifecycleListener;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -28,6 +29,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
     private ThreadPool threadPool;
     private Scheduler.Cancellable syncModelRoutingCron;
     private DiscoveryNodeHelper nodeHelper;
+    private final MLIndicesHandler mlIndicesHandler;
 
     private volatile Integer jobInterval;
 
@@ -36,13 +38,15 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         Client client,
         Settings settings,
         ThreadPool threadPool,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLIndicesHandler mlIndicesHandler
     ) {
         this.clusterService = clusterService;
         this.client = client;
         this.threadPool = threadPool;
         this.clusterService.addListener(this);
         this.nodeHelper = nodeHelper;
+        this.mlIndicesHandler = mlIndicesHandler;
 
         this.jobInterval = ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS, it -> {
@@ -62,7 +66,11 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
     private void startSyncModelRoutingCron() {
         if (jobInterval > 0) {
             syncModelRoutingCron = threadPool
-                .scheduleWithFixedDelay(new MLSyncUpCron(client, nodeHelper), TimeValue.timeValueSeconds(jobInterval), GENERAL_THREAD_POOL);
+                .scheduleWithFixedDelay(
+                    new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler),
+                    TimeValue.timeValueSeconds(jobInterval),
+                    GENERAL_THREAD_POOL
+                );
         } else {
             log.debug("Stop ML syncup job as its interval is: {}", jobInterval);
         }
