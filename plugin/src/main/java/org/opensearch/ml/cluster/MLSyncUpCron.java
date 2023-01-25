@@ -230,7 +230,7 @@ public class MLSyncUpCron implements Runnable {
     ) {
         Set<String> loadTaskNodes = loadingModels.get(modelId);
         if (loadTaskNodes != null && loadTaskNodes.size() > 0 && state != MLModelState.LOADING) {
-            // no
+            // If some node/nodes are loading the model and model state is not LOADING, then set model state as LOADING.
             return MLModelState.LOADING;
         }
         int currentWorkerNodeCount = modelWorkerNodes.containsKey(modelId) ? modelWorkerNodes.get(modelId).size() : 0;
@@ -254,7 +254,7 @@ public class MLSyncUpCron implements Runnable {
                     // it happens.
                     log
                         .warn(
-                            "Model {} loaded on more nodes [{}] than planing worker node[{}]",
+                            "Model {} loaded on more nodes [{}] than planning worker node [{}]",
                             modelId,
                             currentWorkerNodeCount,
                             planningWorkerNodeCount
