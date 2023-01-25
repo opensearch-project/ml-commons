@@ -178,20 +178,20 @@ By default, it will monitor last 100 predict requests. You can tune this setting
 
 ```
 # Sample request
-POST /_plugins/_ml/profile/models/yQlW5YUB1qmVrJFlPDXc
+GET /_plugins/_ml/profile/models/zwla5YUB1qmVrJFlwzXJ
 
 # Sample response
 {
     "nodes": {
-        "0TLL4hHxRv6_G3n6y1l0BQ": {
+        "0TLL4hHxRv6_G3n6y1l0BQ": { # node id
             "models": {
-                "yQlW5YUB1qmVrJFlPDXc": {
+                "zwla5YUB1qmVrJFlwzXJ": { # model id
                     "model_state": "LOADED",
                     "predictor": "org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@1a0b0793",
-                    "target_worker_nodes": [
+                    "target_worker_nodes": [ # plan to deploy model to these nodes
                         "0TLL4hHxRv6_G3n6y1l0BQ"
                     ],
-                    "worker_nodes": [
+                    "worker_nodes": [ # model deployed to these nodes
                         "0TLL4hHxRv6_G3n6y1l0BQ"
                     ],
                     "model_inference_stats": { // in Millisecond, time used in model part
