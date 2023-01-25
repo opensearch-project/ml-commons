@@ -296,6 +296,7 @@ public class MLModelAutoReLoader {
             SearchHit[] hits = searchResponse.getHits().getHits();
             if (CollectionUtils.isEmpty(hits)) {
                 searchResponseActionListener.onResponse(null);
+                return;
             }
 
             searchResponseActionListener.onResponse(searchResponse);
