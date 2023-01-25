@@ -356,6 +356,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         );
 
         mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, threadPool, client, xContentRegistry, nodeHelper, settings);
+        mlModelAutoReLoader.autoReLoadModel();
 
         return ImmutableList
             .of(

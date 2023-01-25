@@ -71,9 +71,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.utils.TestHelper;
-import org.opensearch.test.OpenSearchIntegTestCase;
 
-@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
 public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
     private final Instant time = Instant.now();
 

@@ -229,7 +229,7 @@ public class MLModelAutoReLoader {
                 mlLoadModelRequest,
                 ActionListener
                     .wrap(response -> log.info("the model {} is auto reloading under the node {} ", modelId, localNodeId), exception -> {
-                        log.info("fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception);
+                        log.error("fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception);
                         throw new RuntimeException(
                             "fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception
                         );
@@ -295,8 +295,7 @@ public class MLModelAutoReLoader {
         searchRequestBuilder.execute(ActionListener.wrap(searchResponse -> {
             SearchHit[] hits = searchResponse.getHits().getHits();
             if (CollectionUtils.isEmpty(hits)) {
-                searchResponseActionListener.onFailure(new RuntimeException("can't get reTryTimes from node " + localNodeId));
-                return;
+                searchResponseActionListener.onResponse(null);
             }
 
             searchResponseActionListener.onResponse(searchResponse);
