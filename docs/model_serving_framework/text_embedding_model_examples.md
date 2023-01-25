@@ -43,7 +43,10 @@ ml-commons supports several other settings. You can tune them according to your 
 We can trace this example model [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) to torchscript with two options:
 
 ## 1.1 trace sentence transformers model
-If you have [`sentence-transformers`](https://pypi.org/project/sentence-transformers/) installed. You can trace this model directly: `SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')`.
+If you have [`sentence-transformers`](https://pypi.org/project/sentence-transformers/) installed. You can save this model directly: `SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')` and then trace the model using torchScipt.
+Refer to [opensearch-py-ml doc](https://opensearch-project.github.io/opensearch-py-ml/reference/api/sentence_transformer.save_as_pt.html) and
+opensearch-py-ml code: [sentencetransformermodel.py#save_as_pt](https://github.com/opensearch-project/opensearch-py-ml/blob/main/opensearch_py_ml/ml_models/sentencetransformermodel.py#L687)
+
 Sentence transformer model already includes post-processing logic. So no need to specify `pooling_mode`/`normalize_result` when upload model.
 
 - Step 1: upload model. This step will save model to model index.
