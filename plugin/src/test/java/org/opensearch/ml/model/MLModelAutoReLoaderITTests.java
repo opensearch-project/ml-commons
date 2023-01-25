@@ -155,17 +155,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         mlModelAutoReLoader.autoReLoadModel();
     }
 
-    public void testAutoReLoadModelByNodeId() throws IOException, ExecutionException, InterruptedException {
-        createIndex(ML_MODEL_RELOAD_INDEX);
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlModel(modelId);
-
-        mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
-
-        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
-        mlModelAutoReLoader.getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
-    }
-
     public void testAutoReLoadModelByNodeId_ReTry() throws IOException, ExecutionException, InterruptedException {
         createIndex(ML_MODEL_RELOAD_INDEX);
         initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
@@ -208,12 +197,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
         createIndex();
 
         mlModelAutoReLoader.autoReLoadModelByNodeId(localNodeId);
-    }
-
-    public void testAutoReLoadModelByNodeAndModelId() throws IOException {
-        initDataOfMlTask(localNodeId, modelId, MLTaskType.LOAD_MODEL, MLTaskState.COMPLETED);
-        initDataOfMlModel(modelId);
-        mlModelAutoReLoader.autoReLoadModelByNodeAndModelId(localNodeId, modelId);
     }
 
     public void testAutoReLoadModelByNodeAndModelId_Exception() {
