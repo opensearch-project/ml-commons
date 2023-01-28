@@ -7,6 +7,12 @@
 
 package org.opensearch.ml.action.profile;
 
+import java.io.IOException;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Before;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.ToXContent;
@@ -23,12 +29,6 @@ import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 
 public class MLProfileModelResponseTests extends OpenSearchTestCase {
 
@@ -64,8 +64,8 @@ public class MLProfileModelResponseTests extends OpenSearchTestCase {
     }
 
     public void test_create_MLProfileModelResponse_withArgs() throws IOException {
-        String[] targetWorkerNodes = new String[]{"node1", "node2"};
-        String[] workerNodes = new String[]{"node1"};
+        String[] targetWorkerNodes = new String[] { "node1", "node2" };
+        String[] workerNodes = new String[] { "node1" };
         Map<String, MLModelProfile> profileMap = new HashMap<>();
         Map<String, MLTask> taskMap = new HashMap<>();
         profileMap.put("node1", mlModelProfile);
@@ -93,8 +93,8 @@ public class MLProfileModelResponseTests extends OpenSearchTestCase {
     }
 
     public void test_toXContent() throws IOException {
-        String[] targetWorkerNodes = new String[]{"node1", "node2"};
-        String[] workerNodes = new String[]{"node1"};
+        String[] targetWorkerNodes = new String[] { "node1", "node2" };
+        String[] workerNodes = new String[] { "node1" };
         Map<String, MLModelProfile> profileMap = new HashMap<>();
         Map<String, MLTask> taskMap = new HashMap<>();
         profileMap.put("node1", mlModelProfile);

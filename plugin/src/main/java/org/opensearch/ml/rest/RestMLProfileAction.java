@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.ImmutableMap;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -44,6 +43,7 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 @Log4j2
 public class RestMLProfileAction extends BaseRestHandler {
@@ -144,8 +144,10 @@ public class RestMLProfileAction extends BaseRestHandler {
             for (Map.Entry<String, MLModelProfile> entry : modelProfileMap.entrySet()) {
                 MLProfileModelResponse mlProfileModelResponse = modelCentricMap.get(entry.getKey());
                 if (mlProfileModelResponse == null) {
-                    mlProfileModelResponse = new MLProfileModelResponse(entry.getValue().getTargetWorkerNodes(),
-                        entry.getValue().getWorkerNodes());
+                    mlProfileModelResponse = new MLProfileModelResponse(
+                        entry.getValue().getTargetWorkerNodes(),
+                        entry.getValue().getWorkerNodes()
+                    );
                     modelCentricMap.put(entry.getKey(), mlProfileModelResponse);
                 }
                 if (mlProfileModelResponse.getTargetWorkerNodes() == null || mlProfileModelResponse.getWorkerNodes() == null) {
@@ -153,9 +155,14 @@ public class RestMLProfileAction extends BaseRestHandler {
                     mlProfileModelResponse.setWorkerNodes(entry.getValue().getWorkerNodes());
                 }
                 // Create a new object and remove targetWorkerNodes and workerNodes.
-                MLModelProfile modelProfile = new MLModelProfile(entry.getValue().getModelState(),
-                    entry.getValue().getPredictor(), null, null, entry.getValue().getModelInferenceStats(),
-                    entry.getValue().getPredictRequestStats());
+                MLModelProfile modelProfile = new MLModelProfile(
+                    entry.getValue().getModelState(),
+                    entry.getValue().getPredictor(),
+                    null,
+                    null,
+                    entry.getValue().getModelInferenceStats(),
+                    entry.getValue().getPredictRequestStats()
+                );
                 mlProfileModelResponse.getMlModelProfileMap().putAll(ImmutableMap.of(nodeId, modelProfile));
             }
 

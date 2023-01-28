@@ -7,9 +7,14 @@
 
 package org.opensearch.ml.action.profile;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
@@ -17,10 +22,6 @@ import org.opensearch.common.xcontent.ToXContentFragment;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.profile.MLModelProfile;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 @Getter
 @NoArgsConstructor
@@ -55,27 +56,27 @@ public class MLProfileModelResponse implements ToXContentFragment, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         if (targetWorkerNodes != null) {
-           builder.field("target_worker_nodes", targetWorkerNodes);
+            builder.field("target_worker_nodes", targetWorkerNodes);
         }
         if (workerNodes != null) {
             builder.field("worker_nodes", workerNodes);
         }
         if (mlModelProfileMap.size() > 0) {
-           builder.startObject("nodes");
-           for (Map.Entry<String, MLModelProfile> entry : mlModelProfileMap.entrySet()) {
-               builder.field(entry.getKey(), entry.getValue());
-           }
-           builder.endObject();
+            builder.startObject("nodes");
+            for (Map.Entry<String, MLModelProfile> entry : mlModelProfileMap.entrySet()) {
+                builder.field(entry.getKey(), entry.getValue());
+            }
+            builder.endObject();
         }
         if (mlTaskMap.size() > 0) {
-           builder.startObject("tasks");
-           for (Map.Entry<String, MLTask> entry : mlTaskMap.entrySet()) {
-               builder.field(entry.getKey(), entry.getValue());
-           }
-           builder.endObject();
+            builder.startObject("tasks");
+            for (Map.Entry<String, MLTask> entry : mlTaskMap.entrySet()) {
+                builder.field(entry.getKey(), entry.getValue());
+            }
+            builder.endObject();
         }
-       builder.endObject();
-       return builder;
+        builder.endObject();
+        return builder;
     }
 
     @Override

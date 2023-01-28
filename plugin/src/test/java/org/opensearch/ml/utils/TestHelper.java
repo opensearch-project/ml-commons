@@ -215,7 +215,7 @@ public class TestHelper {
     }
 
     public static RestRequest getProfileRestRequest(MLProfileInput input) throws IOException {
-       return new FakeRestRequest.Builder(getXContentRegistry())
+        return new FakeRestRequest.Builder(getXContentRegistry())
             .withContent(new BytesArray(buildRequestContent(input)), XContentType.JSON)
             .build();
     }
