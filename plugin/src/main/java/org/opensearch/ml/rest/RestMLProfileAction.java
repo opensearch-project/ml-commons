@@ -144,8 +144,8 @@ public class RestMLProfileAction extends BaseRestHandler {
             for (Map.Entry<String, MLModelProfile> entry : modelProfileMap.entrySet()) {
                 MLProfileModelResponse mlProfileModelResponse = modelCentricMap.get(entry.getKey());
                 if (mlProfileModelResponse == null) {
-                    mlProfileModelResponse = new MLProfileModelResponse(entry.getValue().getModelState(), entry.getValue()
-                        .getTargetWorkerNodes(), entry.getValue().getWorkerNodes());
+                    mlProfileModelResponse = new MLProfileModelResponse(entry.getValue().getTargetWorkerNodes(),
+                        entry.getValue().getWorkerNodes());
                     modelCentricMap.put(entry.getKey(), mlProfileModelResponse);
                 }
                 if (mlProfileModelResponse.getTargetWorkerNodes() == null || mlProfileModelResponse.getWorkerNodes() == null) {

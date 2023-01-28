@@ -16,7 +16,6 @@ import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.common.xcontent.ToXContentFragment;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.profile.MLModelProfile;
 
 import java.io.IOException;
@@ -36,7 +35,7 @@ public class MLProfileModelResponse implements ToXContentFragment, Writeable {
 
     private Map<String, MLTask> mlTaskMap = new HashMap<>();
 
-    public MLProfileModelResponse(MLModelState modelState, String[] targetWorkerNodes, String[] workerNodes) {
+    public MLProfileModelResponse(String[] targetWorkerNodes, String[] workerNodes) {
         this.targetWorkerNodes = targetWorkerNodes;
         this.workerNodes = workerNodes;
     }
@@ -54,27 +53,27 @@ public class MLProfileModelResponse implements ToXContentFragment, Writeable {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-       builder.startObject();
-       if (targetWorkerNodes != null) {
+        builder.startObject();
+        if (targetWorkerNodes != null) {
            builder.field("target_worker_nodes", targetWorkerNodes);
-       }
-       if (workerNodes != null) {
-           builder.field("worker_nodes", workerNodes);
-       }
-       if (mlModelProfileMap.size() > 0) {
+        }
+        if (workerNodes != null) {
+            builder.field("worker_nodes", workerNodes);
+        }
+        if (mlModelProfileMap.size() > 0) {
            builder.startObject("nodes");
            for (Map.Entry<String, MLModelProfile> entry : mlModelProfileMap.entrySet()) {
                builder.field(entry.getKey(), entry.getValue());
            }
            builder.endObject();
-       }
-       if (mlTaskMap.size() > 0) {
+        }
+        if (mlTaskMap.size() > 0) {
            builder.startObject("tasks");
            for (Map.Entry<String, MLTask> entry : mlTaskMap.entrySet()) {
                builder.field(entry.getKey(), entry.getValue());
            }
            builder.endObject();
-       }
+        }
        builder.endObject();
        return builder;
     }
@@ -83,17 +82,18 @@ public class MLProfileModelResponse implements ToXContentFragment, Writeable {
     public void writeTo(StreamOutput streamOutput) throws IOException {
         streamOutput.writeOptionalStringArray(workerNodes);
         streamOutput.writeOptionalStringArray(targetWorkerNodes);
-        if (mlTaskMap.size() > 0) {
-            streamOutput.writeBoolean(true);
-            streamOutput.writeMap(mlTaskMap, StreamOutput::writeString, (o, r) -> r.writeTo(o));
-        } else {
-            streamOutput.writeBoolean(false);
-        }
         if (mlModelProfileMap.size() > 0) {
             streamOutput.writeBoolean(true);
             streamOutput.writeMap(mlModelProfileMap, StreamOutput::writeString, (o, r) -> r.writeTo(o));
         } else {
             streamOutput.writeBoolean(false);
         }
+        if (mlTaskMap.size() > 0) {
+            streamOutput.writeBoolean(true);
+            streamOutput.writeMap(mlTaskMap, StreamOutput::writeString, (o, r) -> r.writeTo(o));
+        } else {
+            streamOutput.writeBoolean(false);
+        }
+
     }
 }
