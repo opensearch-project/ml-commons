@@ -10,10 +10,13 @@ import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -231,6 +234,8 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
 
         when(mlTaskManager.contains(anyString())).thenReturn(true);
 
+        DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
+        when(discoveryNode.getId()).thenReturn("node1");
         transportLoadModelAction
             .updateModelLoadStatusAndTriggerOnNodesAction(
                 modelId,
@@ -238,10 +243,16 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
                 mlModel,
                 localNodeId,
                 mlTask,
-                eligibleNodes,
+                Arrays.asList(discoveryNode),
                 FunctionName.ANOMALY_LOCALIZATION
             );
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(mlModelManager).updateModel(anyString(), captor.capture(), any());
+        Map<String, Object> map = captor.getValue();
+        assertNotNull(map.get(MLModel.PLANNING_WORKER_NODES_FIELD));
+        assertEquals(1, (((List) map.get(MLModel.PLANNING_WORKER_NODES_FIELD)).size()));
     }
 
     public void testUpdateModelLoadStatusAndTriggerOnNodesAction_whenMLTaskManagerThrowException_ListenerOnFailureExecuted() {
