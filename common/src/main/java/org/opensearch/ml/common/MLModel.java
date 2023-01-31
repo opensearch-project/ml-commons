@@ -21,6 +21,8 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
@@ -54,6 +56,7 @@ public class MLModel implements ToXContentObject {
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks";
     public static final String PLANNING_WORKER_NODE_COUNT_FIELD = "planning_worker_node_count";
     public static final String CURRENT_WORKER_NODE_COUNT_FIELD = "current_worker_node_count";
+    public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
 
     private String name;
     private FunctionName algorithm;
@@ -81,6 +84,7 @@ public class MLModel implements ToXContentObject {
     private Integer planningWorkerNodeCount; // plan to deploy model to how many nodes
     private Integer currentWorkerNodeCount; // model is deployed to how many nodes
 
+    private String[] planningWorkerNodes; // plan to deploy model to these nodes
     @Builder(toBuilder = true)
     public MLModel(String name,
                    FunctionName algorithm,
@@ -101,7 +105,8 @@ public class MLModel implements ToXContentObject {
                    String modelId, Integer chunkNumber,
                    Integer totalChunks,
                    Integer planningWorkerNodeCount,
-                   Integer currentWorkerNodeCount) {
+                   Integer currentWorkerNodeCount,
+                   String[] planningWorkerNodes) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -123,6 +128,7 @@ public class MLModel implements ToXContentObject {
         this.totalChunks = totalChunks;
         this.planningWorkerNodeCount = planningWorkerNodeCount;
         this.currentWorkerNodeCount = currentWorkerNodeCount;
+        this.planningWorkerNodes = planningWorkerNodes;
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -158,6 +164,7 @@ public class MLModel implements ToXContentObject {
             totalChunks = input.readOptionalInt();
             planningWorkerNodeCount = input.readOptionalInt();
             currentWorkerNodeCount = input.readOptionalInt();
+            planningWorkerNodes = input.readOptionalStringArray();
         }
     }
 
@@ -203,6 +210,7 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInt(totalChunks);
         out.writeOptionalInt(planningWorkerNodeCount);
         out.writeOptionalInt(currentWorkerNodeCount);
+        out.writeOptionalStringArray(planningWorkerNodes);
     }
 
     @Override
@@ -271,6 +279,9 @@ public class MLModel implements ToXContentObject {
         if (currentWorkerNodeCount != null) {
             builder.field(CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkerNodeCount);
         }
+        if (planningWorkerNodes != null && planningWorkerNodes.length > 0) {
+            builder.field(PLANNING_WORKER_NODES_FIELD, planningWorkerNodes);
+        }
         builder.endObject();
         return builder;
     }
@@ -300,6 +311,7 @@ public class MLModel implements ToXContentObject {
         Integer totalChunks = null;
         Integer planningWorkerNodeCount = null;
         Integer currentWorkerNodeCount = null;
+        List<String> planningWorkerNodes = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -361,6 +373,12 @@ public class MLModel implements ToXContentObject {
                 case CURRENT_WORKER_NODE_COUNT_FIELD:
                     currentWorkerNodeCount = parser.intValue();
                     break;
+                case PLANNING_WORKER_NODES_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        planningWorkerNodes.add(parser.text());
+                    }
+                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
@@ -403,6 +421,7 @@ public class MLModel implements ToXContentObject {
                 .totalChunks(totalChunks)
                 .planningWorkerNodeCount(planningWorkerNodeCount)
                 .currentWorkerNodeCount(currentWorkerNodeCount)
+                .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
                 .build();
     }
 

@@ -254,11 +254,19 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
             mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.LOAD_FAILED));
         });
 
+        List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
         mlModelManager
             .updateModel(
                 modelId,
                 ImmutableMap
-                    .of(MLModel.MODEL_STATE_FIELD, MLModelState.LOADING, MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, eligibleNodes.size()),
+                    .of(
+                        MLModel.MODEL_STATE_FIELD,
+                        MLModelState.LOADING,
+                        MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
+                        eligibleNodes.size(),
+                        MLModel.PLANNING_WORKER_NODES_FIELD,
+                        workerNodes
+                    ),
                 ActionListener
                     .wrap(
                         r -> client.execute(MLLoadModelOnNodeAction.INSTANCE, loadModelRequest, actionListener),
