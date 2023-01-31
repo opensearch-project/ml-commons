@@ -161,4 +161,8 @@ public class RestActionUtils {
         return Optional.ofNullable(request.param(paramName)).map(s -> s.split(","));
     }
 
+    public static Optional<String> getStringParam(RestRequest request, String paramName) {
+        return Optional.ofNullable(request.param(paramName));
+    }
+
 }

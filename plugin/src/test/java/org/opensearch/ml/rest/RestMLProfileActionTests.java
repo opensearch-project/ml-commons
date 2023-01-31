@@ -12,8 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.utils.TestHelper.getProfileRestRequest;
-import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
+import static org.opensearch.ml.utils.TestHelper.*;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -68,6 +67,7 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class RestMLProfileActionTests extends OpenSearchTestCase {
     @Rule
@@ -281,6 +281,14 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
         }).when(client).execute(eq(MLProfileAction.INSTANCE), any(), any());
 
         RestRequest request = getRestRequest();
+        profileAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
+        verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
+    }
+
+    public void test_WhenViewIsModel_ReturnModelViewResult() throws Exception {
+        MLProfileInput mlProfileInput = new MLProfileInput();
+        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "model"));
         profileAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());
