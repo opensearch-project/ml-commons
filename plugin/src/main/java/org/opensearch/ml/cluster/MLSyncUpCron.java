@@ -61,6 +61,10 @@ public class MLSyncUpCron implements Runnable {
 
     @Override
     public void run() {
+        if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX)) {
+            // no need to run sync up job if no model index
+            return;
+        }
         log.debug("ML sync job starts");
         DiscoveryNode[] allNodes = nodeHelper.getAllNodes();
         MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
@@ -131,16 +135,14 @@ public class MLSyncUpCron implements Runnable {
                 );
 
             // refresh model status
-            if (clusterService.state().getRoutingTable().hasIndex(ML_MODEL_INDEX)) {
-                mlIndicesHandler
-                    .initModelIndexIfAbsent(
-                        ActionListener
-                            .wrap(
-                                res -> { refreshModelState(modelWorkerNodes, loadingModels); },
-                                e -> { log.error("Failed to init model index", e); }
-                            )
-                    );
-            }
+            mlIndicesHandler
+                .initModelIndexIfAbsent(
+                    ActionListener
+                        .wrap(
+                            res -> { refreshModelState(modelWorkerNodes, loadingModels); },
+                            e -> { log.error("Failed to init model index", e); }
+                        )
+                );
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
 
