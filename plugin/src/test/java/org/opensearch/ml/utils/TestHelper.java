@@ -215,14 +215,22 @@ public class TestHelper {
     }
 
     public static RestRequest getProfileRestRequest(MLProfileInput input) throws IOException {
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(buildRequestContent(input)), XContentType.JSON)
+            .build();
+    }
+
+    public static RestRequest getProfileRestRequestWithQueryParams(MLProfileInput input, Map<String, String> params) throws IOException {
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(buildRequestContent(input)), XContentType.JSON)
+            .withParams(params)
+            .build();
+    }
+
+    private static String buildRequestContent(MLProfileInput input) throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String requestContent = TestHelper.xContentBuilderToString(builder);
-
-        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
-            .withContent(new BytesArray(requestContent), XContentType.JSON)
-            .build();
-        return request;
+        return TestHelper.xContentBuilderToString(builder);
     }
 
     public static RestRequest getStatsRestRequest() {
