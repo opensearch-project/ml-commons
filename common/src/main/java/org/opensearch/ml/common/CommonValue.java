@@ -91,6 +91,9 @@ public class CommonValue {
             + MLModel.CURRENT_WORKER_NODE_COUNT_FIELD
             + "\" : {\"type\": \"integer\"},\n"
             + "      \""
+            + MLModel.PLANNING_WORKER_NODES_FIELD
+            + "\": {\"type\": \"keyword\"},\n"
+            + "      \""
             + MLModel.MODEL_CONFIG_FIELD
             + "\" : {\"properties\":{\""
             + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""
