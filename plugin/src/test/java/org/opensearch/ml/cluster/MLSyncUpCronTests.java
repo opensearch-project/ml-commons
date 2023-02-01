@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
+import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -41,9 +43,16 @@ import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.collect.ImmutableOpenMap;
+import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -77,12 +86,45 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     private final String mlNode1Id = "mlNode1";
     private final String mlNode2Id = "mlNode2";
 
+    private ClusterState testState;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mlNode1 = new DiscoveryNode(mlNode1Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         mlNode2 = new DiscoveryNode(mlNode2Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         syncUpCron = new MLSyncUpCron(client, clusterService, nodeHelper, null);
+
+        testState = setupTestClusterState();
+        when(clusterService.state()).thenReturn(testState);
+    }
+
+    public void testRun_NoMLModelIndex() {
+        Metadata metadata = new Metadata.Builder().indices(ImmutableOpenMap.<String, IndexMetadata>builder().build()).build();
+        DiscoveryNode node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            ImmutableSet.of(DiscoveryNodeRole.DATA_ROLE),
+            Version.CURRENT
+        );
+        ClusterState state = new ClusterState(
+            new ClusterName("test cluster"),
+            123l,
+            "111111",
+            metadata,
+            null,
+            DiscoveryNodes.builder().add(node).build(),
+            null,
+            null,
+            0,
+            false
+        );
+        ;
+        when(clusterService.state()).thenReturn(state);
+
+        syncUpCron.run();
+        verify(client, never()).execute(eq(MLSyncUpAction.INSTANCE), any(), any());
     }
 
     public void testRun() {
