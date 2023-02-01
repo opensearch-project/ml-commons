@@ -348,7 +348,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             client,
             settings,
             threadPool,
-            nodeHelper
+            nodeHelper,
+            mlIndicesHandler
         );
 
         return ImmutableList

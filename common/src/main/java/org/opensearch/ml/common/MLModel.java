@@ -44,6 +44,7 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String LAST_UPLOADED_TIME_FIELD = "last_uploaded_time";
     public static final String LAST_LOADED_TIME_FIELD = "last_loaded_time";
     public static final String LAST_UNLOADED_TIME_FIELD = "last_unloaded_time";
@@ -51,6 +52,8 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String CHUNK_NUMBER_FIELD = "chunk_number";
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks";
+    public static final String PLANNING_WORKER_NODE_COUNT_FIELD = "planning_worker_node_count";
+    public static final String CURRENT_WORKER_NODE_COUNT_FIELD = "current_worker_node_count";
 
     private String name;
     private FunctionName algorithm;
@@ -66,6 +69,7 @@ public class MLModel implements ToXContentObject {
     private String modelContentHash;
     private MLModelConfig modelConfig;
     private Instant createdTime;
+    private Instant lastUpdateTime;
     private Instant lastUploadedTime;
     private Instant lastLoadedTime;
     private Instant lastUnloadedTime;
@@ -74,9 +78,30 @@ public class MLModel implements ToXContentObject {
     private String modelId; // model chunk doc only
     private Integer chunkNumber; // model chunk doc only
     private Integer totalChunks; // model chunk doc only
+    private Integer planningWorkerNodeCount; // plan to deploy model to how many nodes
+    private Integer currentWorkerNodeCount; // model is deployed to how many nodes
 
     @Builder(toBuilder = true)
-    public MLModel(String name, FunctionName algorithm, String version, String content, User user, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHash, MLModelConfig modelConfig, Instant createdTime, Instant lastUploadedTime, Instant lastLoadedTime, Instant lastUnloadedTime, String modelId, Integer chunkNumber, Integer totalChunks) {
+    public MLModel(String name,
+                   FunctionName algorithm,
+                   String version,
+                   String content,
+                   User user,
+                   String description,
+                   MLModelFormat modelFormat,
+                   MLModelState modelState,
+                   Long modelContentSizeInBytes,
+                   String modelContentHash,
+                   MLModelConfig modelConfig,
+                   Instant createdTime,
+                   Instant lastUpdateTime,
+                   Instant lastUploadedTime,
+                   Instant lastLoadedTime,
+                   Instant lastUnloadedTime,
+                   String modelId, Integer chunkNumber,
+                   Integer totalChunks,
+                   Integer planningWorkerNodeCount,
+                   Integer currentWorkerNodeCount) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -89,12 +114,15 @@ public class MLModel implements ToXContentObject {
         this.modelContentHash = modelContentHash;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
+        this.lastUpdateTime = lastUpdateTime;
         this.lastUploadedTime = lastUploadedTime;
         this.lastLoadedTime = lastLoadedTime;
         this.lastUnloadedTime = lastUnloadedTime;
         this.modelId = modelId;
         this.chunkNumber = chunkNumber;
         this.totalChunks = totalChunks;
+        this.planningWorkerNodeCount = planningWorkerNodeCount;
+        this.currentWorkerNodeCount = currentWorkerNodeCount;
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -121,12 +149,15 @@ public class MLModel implements ToXContentObject {
                 modelConfig = new TextEmbeddingModelConfig(input);
             }
             createdTime = input.readOptionalInstant();
+            lastUpdateTime = input.readOptionalInstant();
             lastUploadedTime = input.readOptionalInstant();
             lastLoadedTime = input.readOptionalInstant();
             lastUnloadedTime = input.readOptionalInstant();
             modelId = input.readOptionalString();
             chunkNumber = input.readOptionalInt();
             totalChunks = input.readOptionalInt();
+            planningWorkerNodeCount = input.readOptionalInt();
+            currentWorkerNodeCount = input.readOptionalInt();
         }
     }
 
@@ -163,12 +194,15 @@ public class MLModel implements ToXContentObject {
             out.writeBoolean(false);
         }
         out.writeOptionalInstant(createdTime);
+        out.writeOptionalInstant(lastUpdateTime);
         out.writeOptionalInstant(lastUploadedTime);
         out.writeOptionalInstant(lastLoadedTime);
         out.writeOptionalInstant(lastUnloadedTime);
         out.writeOptionalString(modelId);
         out.writeOptionalInt(chunkNumber);
         out.writeOptionalInt(totalChunks);
+        out.writeOptionalInt(planningWorkerNodeCount);
+        out.writeOptionalInt(currentWorkerNodeCount);
     }
 
     @Override
@@ -210,6 +244,9 @@ public class MLModel implements ToXContentObject {
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
+        if (lastUpdateTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
         if (lastUploadedTime != null) {
             builder.field(LAST_UPLOADED_TIME_FIELD, lastUploadedTime.toEpochMilli());
         }
@@ -227,6 +264,12 @@ public class MLModel implements ToXContentObject {
         }
         if (totalChunks != null) {
             builder.field(TOTAL_CHUNKS_FIELD, totalChunks);
+        }
+        if (planningWorkerNodeCount != null) {
+            builder.field(PLANNING_WORKER_NODE_COUNT_FIELD, planningWorkerNodeCount);
+        }
+        if (currentWorkerNodeCount != null) {
+            builder.field(CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkerNodeCount);
         }
         builder.endObject();
         return builder;
@@ -248,12 +291,15 @@ public class MLModel implements ToXContentObject {
         String modelContentHash = null;
         MLModelConfig modelConfig = null;
         Instant createdTime = null;
+        Instant lastUpdateTime = null;
         Instant lastUploadedTime = null;
         Instant lastLoadedTime = null;
         Instant lastUnloadedTime = null;
         String modelId = null;
         Integer chunkNumber = null;
         Integer totalChunks = null;
+        Integer planningWorkerNodeCount = null;
+        Integer currentWorkerNodeCount = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -309,8 +355,17 @@ public class MLModel implements ToXContentObject {
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
+                case PLANNING_WORKER_NODE_COUNT_FIELD:
+                    planningWorkerNodeCount = parser.intValue();
+                    break;
+                case CURRENT_WORKER_NODE_COUNT_FIELD:
+                    currentWorkerNodeCount = parser.intValue();
+                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case LAST_UPLOADED_TIME_FIELD:
                     lastUploadedTime = Instant.ofEpochMilli(parser.longValue());
@@ -339,12 +394,15 @@ public class MLModel implements ToXContentObject {
                 .modelContentHash(modelContentHash)
                 .modelConfig(modelConfig)
                 .createdTime(createdTime)
+                .lastUpdateTime(lastUpdateTime)
                 .lastUploadedTime(lastUploadedTime)
                 .lastLoadedTime(lastLoadedTime)
                 .lastUnloadedTime(lastUnloadedTime)
                 .modelId(modelId)
                 .chunkNumber(chunkNumber)
                 .totalChunks(totalChunks)
+                .planningWorkerNodeCount(planningWorkerNodeCount)
+                .currentWorkerNodeCount(currentWorkerNodeCount)
                 .build();
     }
 
