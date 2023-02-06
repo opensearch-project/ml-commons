@@ -78,7 +78,7 @@ public abstract class DLModel implements Predictable {
                 return predict(modelId, mlInput.getInputDataset());
             });
         } catch (Throwable e) {
-            String errorMsg = "Failed to inference text embedding";
+            String errorMsg = "Failed to inference " + mlInput.getAlgorithm() + " model: " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);
         }
@@ -245,7 +245,7 @@ public abstract class DLModel implements Predictable {
                         this.models = modelList.toArray(new ZooModel[0]);
                         modelList.clear();
                     }
-                    log.info("Load model {} successfully on {} devices", modelId, devices.length);
+                    log.info("Model {} is successfully loaded on {} devices", modelId, devices.length);
                     return null;
                 } catch (Throwable e) {
                     String errorMessage = "Failed to load model " + modelId;

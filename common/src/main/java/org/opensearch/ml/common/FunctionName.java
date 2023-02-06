@@ -27,8 +27,8 @@ public enum FunctionName {
     }
 
     /**
-     * Check if model is DL model.
-     * @return true for DL model.
+     * Check if model is deep learning model.
+     * @return true for deep learning model.
      */
     public static boolean isDLModel(FunctionName functionName) {
         if (functionName == TEXT_EMBEDDING) {
