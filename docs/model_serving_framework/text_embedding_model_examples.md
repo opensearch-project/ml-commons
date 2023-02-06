@@ -63,7 +63,7 @@ POST /_plugins/_ml/models/_upload
     "embedding_dimension": 384,
     "framework_type": "sentence_transformers"
   },
-  "url": "https://github.com/opensearch-project/ml-commons/tree/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true"
+  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true"
 }
 
 # Sample response
@@ -262,7 +262,7 @@ POST /_plugins/_ml/models/_upload
     "pooling_mode":"mean",
     "normalize_result":"true"
   },
-  "url": "https://github.com/opensearch-project/ml-commons/tree/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_huggingface.zip?raw=true"
+  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_huggingface.zip?raw=true"
 }
 ```
 
@@ -289,6 +289,6 @@ POST /_plugins/_ml/models/_upload
     "pooling_mode":"mean",
     "normalize_result":"true"
   },
-  "url": "https://github.com/opensearch-project/ml-commons/tree/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_onnx.zip?raw=true"
+  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_onnx.zip?raw=true"
 }
 ```

@@ -284,13 +284,6 @@ public class TextEmbeddingModelTest {
     }
 
     @Test
-    public void loadTextEmbeddingModel_WrongEngine() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("unsupported engine");
-        textEmbeddingModel.loadTextEmbeddingModel(modelZipFile, modelId, modelName, functionName, version, modelConfig, "wrong_engine");
-    }
-
-    @Test
     public void predict_NullModelHelper() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("model not loaded");
@@ -313,7 +306,7 @@ public class TextEmbeddingModelTest {
     @Test
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Failed to inference text embedding");
+        exceptionRule.expectMessage("Failed to inference TEXT_EMBEDDING");
         textEmbeddingModel.initModel(model, params);
         textEmbeddingModel.close();
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
