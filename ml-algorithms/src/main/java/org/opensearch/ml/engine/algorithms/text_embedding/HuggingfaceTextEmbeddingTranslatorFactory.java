@@ -37,7 +37,7 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
     private final boolean neuron;
 
     public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType, boolean neuron) {
-        this.poolingMode = poolingMode;
+        this.poolingMode = poolingMode == null ? TextEmbeddingModelConfig.PoolingMode.MEAN : poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;
         this.neuron = neuron;
