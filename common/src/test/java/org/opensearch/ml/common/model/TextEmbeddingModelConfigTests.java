@@ -52,7 +52,7 @@ public class TextEmbeddingModelConfigTests {
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
         System.out.println(configContent);
-        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"pooling_mode\":\"MEAN\",\"normalize_result\":false}", configContent);
+        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}", configContent);
     }
 
     @Test

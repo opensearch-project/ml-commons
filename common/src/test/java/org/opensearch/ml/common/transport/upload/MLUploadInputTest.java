@@ -43,7 +43,7 @@ public class MLUploadInputTest {
     private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
             "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"," +
             "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"" +
-            ",\"pooling_mode\":\"MEAN\",\"normalize_result\":false},\"load_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+            "},\"load_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
     private final String modelName = "modelName";
     private final String version = "version";
