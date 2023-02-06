@@ -456,7 +456,7 @@ public class MLModelManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxLoadTasksPerNode);
             this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                if (mlModel.getAlgorithm() != FunctionName.TEXT_EMBEDDING) {// load model trained by built-in algorithm like kmeans
+                if (!FunctionName.isDLModel(mlModel.getAlgorithm())) {// load model trained by built-in algorithm like kmeans
                     Predictable predictable = mlEngine.load(mlModel, null);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
