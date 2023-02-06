@@ -306,7 +306,7 @@ public class TextEmbeddingModelTest {
     @Test
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Failed to inference text embedding");
+        exceptionRule.expectMessage("Failed to inference TEXT_EMBEDDING");
         textEmbeddingModel.initModel(model, params);
         textEmbeddingModel.close();
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());

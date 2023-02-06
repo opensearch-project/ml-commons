@@ -266,7 +266,7 @@ public abstract class DLModel implements Predictable {
                 }
             });
         } catch (PrivilegedActionException e) {
-            String errorMsg = "Failed to load model";
+            String errorMsg = "Failed to load model " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);
         }
