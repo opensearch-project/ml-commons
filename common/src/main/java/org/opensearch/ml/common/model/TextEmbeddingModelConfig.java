@@ -55,11 +55,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         }
         this.embeddingDimension = embeddingDimension;
         this.frameworkType = frameworkType;
-        if (poolingMode != null) {
-            this.poolingMode = poolingMode;
-        } else {
-            this.poolingMode = PoolingMode.MEAN;
-        }
+        this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelMaxLength = modelMaxLength;
     }
@@ -69,7 +65,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
-        PoolingMode poolingMode = PoolingMode.MEAN;
+        PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
 
@@ -117,7 +113,11 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         super(in);
         embeddingDimension = in.readInt();
         frameworkType = in.readEnum(FrameworkType.class);
-        poolingMode = in.readEnum(PoolingMode.class);
+        if (in.readBoolean()) {
+            poolingMode = in.readEnum(PoolingMode.class);
+        } else {
+            poolingMode = null;
+        }
         normalizeResult = in.readBoolean();
         modelMaxLength = in.readOptionalInt();
     }
@@ -127,7 +127,12 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         super.writeTo(out);
         out.writeInt(embeddingDimension);
         out.writeEnum(frameworkType);
-        out.writeEnum(poolingMode);
+        if (poolingMode != null) {
+            out.writeBoolean(true);
+            out.writeEnum(poolingMode);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeBoolean(normalizeResult);
         out.writeOptionalInt(modelMaxLength);
     }
@@ -150,8 +155,12 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         if (modelMaxLength != null) {
             builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
         }
-        builder.field(POOLING_MODE_FIELD, poolingMode);
-        builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
+        if (poolingMode != null) {
+            builder.field(POOLING_MODE_FIELD, poolingMode);
+        }
+        if (normalizeResult) {
+            builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
+        }
         builder.endObject();
         return builder;
     }
