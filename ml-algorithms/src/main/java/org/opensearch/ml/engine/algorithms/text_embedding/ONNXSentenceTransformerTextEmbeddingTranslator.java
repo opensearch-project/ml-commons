@@ -36,7 +36,7 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
     private String modelType;
 
     public ONNXSentenceTransformerTextEmbeddingTranslator(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType) {
-        this.poolingMode = poolingMode;
+        this.poolingMode = poolingMode == null ? TextEmbeddingModelConfig.PoolingMode.MEAN : poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;
     }
