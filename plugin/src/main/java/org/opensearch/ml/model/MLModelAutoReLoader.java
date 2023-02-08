@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutionException;
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.admin.indices.exists.indices.IndicesExistsAction;
@@ -127,6 +128,8 @@ public class MLModelAutoReLoader {
             try {
                 autoReLoadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
+                log.error("the model auto-reloading has exception,and the root cause exception message is: {}",
+                    ExceptionUtils.getRootCauseStackTrace(e));
                 throw new RuntimeException(e);
             }
         });
