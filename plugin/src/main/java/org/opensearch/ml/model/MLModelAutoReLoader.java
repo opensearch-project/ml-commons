@@ -109,7 +109,7 @@ public class MLModelAutoReLoader {
      * the main method: model auto reloading
      */
     public void autoReLoadModel() {
-        log.info("enableAutoReLoadModel: {} ", enableAutoReLoadModel);
+        log.info("auto reload model enabled: {} ", enableAutoReLoadModel);
 
         // if we don't need to reload automatically, just return without doing anything
         if (!enableAutoReLoadModel) {
