@@ -253,8 +253,13 @@ public class MLModelAutoReLoader {
         QueryBuilder queryBuilder = QueryBuilders
             .boolQuery()
             .must(QueryBuilders.matchPhraseQuery("task_type", "LOAD_MODEL"))
-            .must(QueryBuilders.matchPhraseQuery("state", "COMPLETED"))
-            .must(QueryBuilders.matchPhraseQuery("worker_node", localNodeId));
+            .must(QueryBuilders.matchPhraseQuery("worker_node", localNodeId))
+            .must(
+                QueryBuilders
+                    .boolQuery()
+                    .should(QueryBuilders.matchPhraseQuery("state", "COMPLETED"))
+                    .should(QueryBuilders.matchPhraseQuery("state", "COMPLETED_WITH_ERROR"))
+            );
         searchSourceBuilder.query(queryBuilder);
 
         SortBuilder<FieldSortBuilder> sortBuilderOrder = new FieldSortBuilder("create_time").order(SortOrder.DESC);

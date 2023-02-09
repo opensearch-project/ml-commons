@@ -436,6 +436,25 @@ public class MLModelAutoReLoaderTests extends OpenSearchTestCase {
         }, exception -> fail(exception.getMessage()));
     }
 
+    public void testQueryTask_MultiDataInTaskIndex_TaskState_COMPLETED_WITH_ERROR() throws IOException {
+        StepListener<SearchResponse> queryTaskStep = queryTask(
+            localNodeId,
+            "modelId3",
+            MLTaskType.LOAD_MODEL,
+            MLTaskState.COMPLETED_WITH_ERROR
+        );
+
+        queryTaskStep.whenComplete(response -> {
+            org.hamcrest.MatcherAssert.assertThat(response, notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits(), notNullValue());
+            org.hamcrest.MatcherAssert.assertThat(response.getHits().getHits().length, is(1));
+
+            Map<String, Object> source = response.getHits().getHits()[0].getSourceAsMap();
+            org.hamcrest.MatcherAssert.assertThat(source.get("model_id"), is("modelId3"));
+        }, exception -> fail(exception.getMessage()));
+    }
+
     public void testQueryTask_IndexNotExisted() {
         StepListener<SearchResponse> queryTaskStep = new StepListener<>();
 
