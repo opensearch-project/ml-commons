@@ -60,15 +60,15 @@ import com.google.common.annotations.VisibleForTesting;
  * Manager class for ML models and nodes. It contains ML model auto reload operations etc.
  */
 @Log4j2
-public class MLModelAutoReLoader {
+public class MLModelAutoReloader {
 
     private final Client client;
     private final ClusterService clusterService;
     private final NamedXContentRegistry xContentRegistry;
     private final DiscoveryNodeHelper nodeHelper;
     private final ThreadPool threadPool;
-    private volatile Boolean enableAutoReLoadModel;
-    private volatile Integer autoReLoadMaxReTryTimes;
+    private volatile Boolean enableAutoReloadModel;
+    private volatile Integer autoReloadMaxRetryTimes;
 
     /**
      * constructor method， init all the params necessary for model auto reloading
@@ -80,7 +80,7 @@ public class MLModelAutoReLoader {
      * @param nodeHelper       nodeHelper
      * @param settings         settings
      */
-    public MLModelAutoReLoader(
+    public MLModelAutoReloader(
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
@@ -94,23 +94,23 @@ public class MLModelAutoReLoader {
         this.nodeHelper = nodeHelper;
         this.threadPool = threadPool;
 
-        enableAutoReLoadModel = ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.get(settings);
-        autoReLoadMaxReTryTimes = ML_MODEL_RELOAD_MAX_RETRY_TIMES.get(settings);
+        enableAutoReloadModel = ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE.get(settings);
+        autoReloadMaxRetryTimes = ML_MODEL_RELOAD_MAX_RETRY_TIMES.get(settings);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE, it -> enableAutoReLoadModel = it);
+            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE, it -> enableAutoReloadModel = it);
 
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_MODEL_RELOAD_MAX_RETRY_TIMES, it -> autoReLoadMaxReTryTimes = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_MODEL_RELOAD_MAX_RETRY_TIMES, it -> autoReloadMaxRetryTimes = it);
     }
 
     /**
      * the main method: model auto reloading
      */
-    public void autoReLoadModel() {
-        log.info("auto reload model enabled: {} ", enableAutoReLoadModel);
+    public void autoReloadModel() {
+        log.info("auto reload model enabled: {} ", enableAutoReloadModel);
 
         // if we don't need to reload automatically, just return without doing anything
-        if (!enableAutoReLoadModel) {
+        if (!enableAutoReloadModel) {
             return;
         }
 
@@ -123,7 +123,7 @@ public class MLModelAutoReLoader {
         // auto reload all models of this local ml node
         threadPool.generic().submit(() -> {
             try {
-                autoReLoadModelByNodeId(localNodeId);
+                autoReloadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
                 log
                     .error(
@@ -141,10 +141,10 @@ public class MLModelAutoReLoader {
      * @param localNodeId node id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeId(String localNodeId) throws ExecutionException, InterruptedException {
+    void autoReloadModelByNodeId(String localNodeId) throws ExecutionException, InterruptedException {
         StepListener<SearchResponse> queryTaskStep = new StepListener<>();
-        StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
-        StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
+        StepListener<SearchResponse> getRetryTimesStep = new StepListener<>();
+        StepListener<IndexResponse> saveLatestRetryTimesStep = new StepListener<>();
 
         if (!clusterService.state().metadata().indices().containsKey(ML_TASK_INDEX)) {
             // ML_TASK_INDEX did not exist,do nothing
@@ -153,7 +153,7 @@ public class MLModelAutoReLoader {
 
         queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
 
-        getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
+        getRetryTimes(localNodeId, ActionListener.wrap(getRetryTimesStep::onResponse, getRetryTimesStep::onFailure));
 
         queryTaskStep.whenComplete(searchResponse -> {
             SearchHit[] hits = searchResponse.getHits().getHits();
@@ -161,21 +161,21 @@ public class MLModelAutoReLoader {
                 return;
             }
 
-            getReTryTimesStep.whenComplete(getReTryTimesResponse -> {
-                int reTryTimes = 0;
-                // if getReTryTimesResponse is null,it means we get reTryTimes at the first time,and the index
-                // .plugins-ml-model-reload doesn't exist,so we should let reTryTimes be zero(init value)
+            getRetryTimesStep.whenComplete(getReTryTimesResponse -> {
+                int retryTimes = 0;
+                // if getReTryTimesResponse is null,it means we get retryTimes at the first time,and the index
+                // .plugins-ml-model-reload doesn't exist,so we should let retryTimes be zero(init value)
                 // we don't do anything
-                // if getReTryTimesResponse is not null,it means we have saved the value of reTryTimes into the index
+                // if getReTryTimesResponse is not null,it means we have saved the value of retryTimes into the index
                 // .plugins-ml-model-reload,so we get the value of the field MODEL_LOAD_RETRY_TIMES_FIELD
                 if (getReTryTimesResponse != null) {
                     Map<String, Object> sourceAsMap = getReTryTimesResponse.getHits().getHits()[0].getSourceAsMap();
-                    reTryTimes = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
+                    retryTimes = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
                 }
 
                 // According to the node id to get retry times, if more than the max retry times, don't need to retry
                 // that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
-                if (reTryTimes > autoReLoadMaxReTryTimes) {
+                if (retryTimes > autoReloadMaxRetryTimes) {
                     log.info("have exceeded max retry times, always failure");
                     return;
                 }
@@ -184,25 +184,25 @@ public class MLModelAutoReLoader {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLTask mlTask = MLTask.parse(parser);
 
-                    autoReLoadModelByNodeAndModelId(localNodeId, mlTask.getModelId());
+                    autoReloadModelByNodeAndModelId(localNodeId, mlTask.getModelId());
 
                     // if reload the model successfully,the number of unsuccessful reload should be reset to zero.
-                    reTryTimes = 0;
+                    retryTimes = 0;
                 } catch (MLException e) {
-                    reTryTimes++;
-                    log.error("Can't auto reload model in node id {} ,has tried {} times\nThe reason is:{}", localNodeId, reTryTimes, e);
+                    retryTimes++;
+                    log.error("Can't auto reload model in node id {} ,has tried {} times\nThe reason is:{}", localNodeId, retryTimes, e);
                 }
 
-                // Store the latest value of the reTryTimes and node id under the index ".plugins-ml-model-reload"
-                saveLatestReTryTimes(
+                // Store the latest value of the retryTimes and node id under the index ".plugins-ml-model-reload"
+                saveLatestRetryTimes(
                     localNodeId,
-                    reTryTimes,
-                    ActionListener.wrap(saveLatestReTryTimesStep::onResponse, saveLatestReTryTimesStep::onFailure)
+                    retryTimes,
+                    ActionListener.wrap(saveLatestRetryTimesStep::onResponse, saveLatestRetryTimesStep::onFailure)
                 );
-            }, getReTryTimesStep::onFailure);
+            }, getRetryTimesStep::onFailure);
         }, queryTaskStep::onFailure);
 
-        saveLatestReTryTimesStep.whenComplete(response -> log.info("successfully complete all steps"), saveLatestReTryTimesStep::onFailure);
+        saveLatestRetryTimesStep.whenComplete(response -> log.info("successfully complete all steps"), saveLatestRetryTimesStep::onFailure);
     }
 
     /**
@@ -212,7 +212,7 @@ public class MLModelAutoReLoader {
      * @param modelId     model id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws MLException {
+    void autoReloadModelByNodeAndModelId(String localNodeId, String modelId) throws MLException {
         String[] allNodeIds = nodeHelper.getAllNodeIds();
         List<String> allNodeIdList = new ArrayList<>(List.of(allNodeIds));
         if (!allNodeIdList.contains(localNodeId)) {
@@ -275,7 +275,7 @@ public class MLModelAutoReLoader {
      * @param localNodeId the filter condition to query
      */
     @VisibleForTesting
-    void getReTryTimes(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) {
+    void getRetryTimes(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) {
         if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_RELOAD_INDEX)) {
             // ML_MODEL_RELOAD_INDEX did not exist, it means it is our first time to do model auto-reloading operation
             searchResponseActionListener.onResponse(null);
@@ -304,13 +304,13 @@ public class MLModelAutoReLoader {
     /**
      * save retry times
      * @param localNodeId node id
-     * @param reTryTimes actual retry times
+     * @param retryTimes actual retry times
      */
     @VisibleForTesting
-    void saveLatestReTryTimes(String localNodeId, int reTryTimes, ActionListener<IndexResponse> indexResponseActionListener) {
+    void saveLatestRetryTimes(String localNodeId, int retryTimes, ActionListener<IndexResponse> indexResponseActionListener) {
         Map<String, Object> content = new HashMap<>(2);
         content.put(NODE_ID_FIELD, localNodeId);
-        content.put(MODEL_LOAD_RETRY_TIMES_FIELD, reTryTimes);
+        content.put(MODEL_LOAD_RETRY_TIMES_FIELD, retryTimes);
 
         IndexRequestBuilder indexRequestBuilder = new IndexRequestBuilder(client, IndexAction.INSTANCE, ML_MODEL_RELOAD_INDEX)
             .setId(localNodeId)

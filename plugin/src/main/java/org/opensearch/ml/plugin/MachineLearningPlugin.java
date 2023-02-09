@@ -99,7 +99,7 @@ import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerI
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
-import org.opensearch.ml.model.MLModelAutoReLoader;
+import org.opensearch.ml.model.MLModelAutoReloader;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
@@ -176,7 +176,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLModelChunkUploader mlModelChunkUploader;
     private MLEngine mlEngine;
 
-    private MLModelAutoReLoader mlModelAutoReLoader;
+    private MLModelAutoReloader mlModelAutoReloader;
 
     private Client client;
     private ClusterService clusterService;
@@ -355,8 +355,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlIndicesHandler
         );
 
-        mlModelAutoReLoader = new MLModelAutoReLoader(clusterService, threadPool, client, xContentRegistry, nodeHelper, settings);
-        mlModelAutoReLoader.autoReLoadModel();
+        mlModelAutoReloader = new MLModelAutoReloader(clusterService, threadPool, client, xContentRegistry, nodeHelper, settings);
+        mlModelAutoReloader.autoReloadModel();
 
         return ImmutableList
             .of(
@@ -380,7 +380,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
-                mlModelAutoReLoader
+                mlModelAutoReloader
             );
     }
 
