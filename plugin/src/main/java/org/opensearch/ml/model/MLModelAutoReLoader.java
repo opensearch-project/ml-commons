@@ -43,6 +43,7 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.load.MLLoadModelAction;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -130,7 +131,7 @@ public class MLModelAutoReLoader {
                         "the model auto-reloading has exception,and the root cause message is: {}",
                         ExceptionUtils.getRootCauseMessage(e)
                     );
-                throw new RuntimeException(e);
+                throw new MLException(e);
             }
         });
     }
@@ -191,7 +192,7 @@ public class MLModelAutoReLoader {
 
                     // if reload the model successfully,the number of unsuccessful reload should be reset to zero.
                     result.setReTryTimes(reTryTimes);
-                } catch (RuntimeException e) {
+                } catch (MLException e) {
                     reTryTimes = result.getReTryTimes();
                     reTryTimes++;
                     result.setReTryTimes(reTryTimes);
@@ -217,7 +218,7 @@ public class MLModelAutoReLoader {
      * @param modelId     model id
      */
     @VisibleForTesting
-    void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws RuntimeException {
+    void autoReLoadModelByNodeAndModelId(String localNodeId, String modelId) throws MLException {
         String[] allNodeIds = nodeHelper.getAllNodeIds();
         List<String> allNodeIdList = new ArrayList<>(List.of(allNodeIds));
         if (!allNodeIdList.contains(localNodeId)) {
@@ -232,7 +233,7 @@ public class MLModelAutoReLoader {
                 ActionListener
                     .wrap(response -> log.info("the model {} is auto reloading under the node {} ", modelId, localNodeId), exception -> {
                         log.error("fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception);
-                        throw new RuntimeException(
+                        throw new MLException(
                             "fail to reload model " + modelId + " under the node " + localNodeId + "\nthe reason is: " + exception
                         );
                     })
@@ -323,7 +324,7 @@ public class MLModelAutoReLoader {
                 indexResponseActionListener.onResponse(indexResponse);
                 return;
             }
-            indexResponseActionListener.onFailure(new RuntimeException("node id:" + localNodeId + " insert retry times unsuccessfully"));
+            indexResponseActionListener.onFailure(new MLException("node id:" + localNodeId + " insert retry times unsuccessfully"));
         }, indexResponseActionListener::onFailure));
     }
 
