@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import lombok.Data;
 import lombok.extern.log4j.Log4j2;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -143,7 +142,6 @@ public class MLModelAutoReLoader {
      */
     @VisibleForTesting
     void autoReLoadModelByNodeId(String localNodeId) throws ExecutionException, InterruptedException {
-        // StepListener<IndicesExistsResponse> indicesExistsResponseStepListener = new StepListener<>();
         StepListener<SearchResponse> queryTaskStep = new StepListener<>();
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
         StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
@@ -157,15 +155,14 @@ public class MLModelAutoReLoader {
 
         getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
 
-        Result result = new Result();
         queryTaskStep.whenComplete(searchResponse -> {
             SearchHit[] hits = searchResponse.getHits().getHits();
             if (CollectionUtils.isEmpty(hits)) {
                 return;
             }
-            result.setHits(hits);
 
             getReTryTimesStep.whenComplete(getReTryTimesResponse -> {
+                int reTryTimes = 0;
                 // if getReTryTimesResponse is null,it means we get reTryTimes at the first time,and the index
                 // .plugins-ml-model-reload doesn't exist,so we should let reTryTimes be zero(init value)
                 // we don't do anything
@@ -173,29 +170,26 @@ public class MLModelAutoReLoader {
                 // .plugins-ml-model-reload,so we get the value of the field MODEL_LOAD_RETRY_TIMES_FIELD
                 if (getReTryTimesResponse != null) {
                     Map<String, Object> sourceAsMap = getReTryTimesResponse.getHits().getHits()[0].getSourceAsMap();
-                    result.setReTryTimes((Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD));
+                    reTryTimes = (Integer) sourceAsMap.get(MODEL_LOAD_RETRY_TIMES_FIELD);
                 }
 
                 // According to the node id to get retry times, if more than the max retry times, don't need to retry
                 // that the number of unsuccessful reload has reached the maximum number of times, do not need to reload
-                if (result.getReTryTimes() > autoReLoadMaxReTryTimes) {
+                if (reTryTimes > autoReLoadMaxReTryTimes) {
                     log.info("have exceeded max retry times, always failure");
                     return;
                 }
 
-                int reTryTimes = 0;
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, result.getHits()[0].getSourceRef())) {
+                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hits[0].getSourceRef())) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     MLTask mlTask = MLTask.parse(parser);
 
                     autoReLoadModelByNodeAndModelId(localNodeId, mlTask.getModelId());
 
                     // if reload the model successfully,the number of unsuccessful reload should be reset to zero.
-                    result.setReTryTimes(reTryTimes);
+                    reTryTimes = 0;
                 } catch (MLException e) {
-                    reTryTimes = result.getReTryTimes();
                     reTryTimes++;
-                    result.setReTryTimes(reTryTimes);
                     log.error("Can't auto reload model in node id {} ,has tried {} times\nThe reason is:{}", localNodeId, reTryTimes, e);
                 }
 
@@ -331,11 +325,5 @@ public class MLModelAutoReLoader {
             }
             indexResponseActionListener.onFailure(new MLException("node id:" + localNodeId + " insert retry times unsuccessfully"));
         }, indexResponseActionListener::onFailure));
-    }
-
-    @Data
-    static class Result {
-        private SearchHit[] hits;
-        private int reTryTimes = 0;
     }
 }
