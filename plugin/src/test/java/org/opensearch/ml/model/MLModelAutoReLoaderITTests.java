@@ -45,7 +45,6 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.admin.indices.create.CreateIndexAction;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
-import org.opensearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -293,30 +292,6 @@ public class MLModelAutoReLoaderITTests extends MLCommonsIntegTestCase {
             org.hamcrest.MatcherAssert.assertThat(exception.getClass(), is(RuntimeException.class));
             org.hamcrest.MatcherAssert.assertThat(exception.getMessage(), containsString("can't get reTryTimes from node"));
         });
-    }
-
-    public void testIsExistedIndex_False() {
-        StepListener<IndicesExistsResponse> indicesExistsResponseStep = new StepListener<>();
-        mlModelAutoReLoader
-            .isExistedIndex(
-                ML_MODEL_RELOAD_INDEX,
-                ActionListener.wrap(indicesExistsResponseStep::onResponse, indicesExistsResponseStep::onFailure)
-            );
-
-        indicesExistsResponseStep.whenComplete(response -> assertFalse(response.isExists()), exception -> fail(exception.getMessage()));
-    }
-
-    public void testIsExistedIndex_True() {
-        createIndex(ML_MODEL_RELOAD_INDEX);
-
-        StepListener<IndicesExistsResponse> indicesExistsResponseStep = new StepListener<>();
-        mlModelAutoReLoader
-            .isExistedIndex(
-                ML_MODEL_RELOAD_INDEX,
-                ActionListener.wrap(indicesExistsResponseStep::onResponse, indicesExistsResponseStep::onFailure)
-            );
-
-        indicesExistsResponseStep.whenComplete(response -> assertTrue(response.isExists()), exception -> fail(exception.getMessage()));
     }
 
     public void testSaveLatestReTryTimes() throws InterruptedException {

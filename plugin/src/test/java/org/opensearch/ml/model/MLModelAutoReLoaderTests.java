@@ -52,7 +52,6 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.admin.indices.create.CreateIndexAction;
 import org.opensearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
-import org.opensearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequestBuilder;
 import org.opensearch.action.index.IndexResponse;
@@ -472,30 +471,6 @@ public class MLModelAutoReLoaderTests extends OpenSearchTestCase {
         });
     }
 
-    public void testIsExistedIndex_False() {
-        StepListener<IndicesExistsResponse> indicesExistsResponseStep = new StepListener<>();
-        mlModelAutoReLoader
-            .isExistedIndex(
-                ML_MODEL_RELOAD_INDEX,
-                ActionListener.wrap(indicesExistsResponseStep::onResponse, indicesExistsResponseStep::onFailure)
-            );
-
-        indicesExistsResponseStep.whenComplete(response -> assertFalse(response.isExists()), exception -> fail(exception.getMessage()));
-    }
-
-    public void testIsExistedIndex_True() {
-        createIndex(ML_MODEL_RELOAD_INDEX);
-
-        StepListener<IndicesExistsResponse> indicesExistsResponseStep = new StepListener<>();
-        mlModelAutoReLoader
-            .isExistedIndex(
-                ML_MODEL_RELOAD_INDEX,
-                ActionListener.wrap(indicesExistsResponseStep::onResponse, indicesExistsResponseStep::onFailure)
-            );
-
-        indicesExistsResponseStep.whenComplete(response -> assertTrue(response.isExists()), exception -> fail(exception.getMessage()));
-    }
-
     public void testSaveLatestReTryTimes() {
         assertLatestReTryTimes(0);
         assertLatestReTryTimes(1);
@@ -559,7 +534,7 @@ public class MLModelAutoReLoaderTests extends OpenSearchTestCase {
                 ImmutableOpenMap
                     .<String, IndexMetadata>builder()
                     .fPut(
-                        "indexName",
+                        ML_MODEL_RELOAD_INDEX,
                         IndexMetadata
                             .builder("test")
                             .settings(

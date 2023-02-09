@@ -25,9 +25,6 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
-import org.opensearch.action.admin.indices.exists.indices.IndicesExistsAction;
-import org.opensearch.action.admin.indices.exists.indices.IndicesExistsRequestBuilder;
-import org.opensearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequestBuilder;
 import org.opensearch.action.index.IndexResponse;
@@ -128,8 +125,11 @@ public class MLModelAutoReLoader {
             try {
                 autoReLoadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
-                log.error("the model auto-reloading has exception,and the root cause exception message is: {}",
-                    ExceptionUtils.getRootCauseStackTrace(e));
+                log
+                    .error(
+                        "the model auto-reloading has exception,and the root cause message is: {}",
+                        ExceptionUtils.getRootCauseMessage(e)
+                    );
                 throw new RuntimeException(e);
             }
         });
@@ -142,18 +142,17 @@ public class MLModelAutoReLoader {
      */
     @VisibleForTesting
     void autoReLoadModelByNodeId(String localNodeId) throws ExecutionException, InterruptedException {
-        StepListener<IndicesExistsResponse> indicesExistsResponseStepListener = new StepListener<>();
+        // StepListener<IndicesExistsResponse> indicesExistsResponseStepListener = new StepListener<>();
         StepListener<SearchResponse> queryTaskStep = new StepListener<>();
         StepListener<SearchResponse> getReTryTimesStep = new StepListener<>();
         StepListener<IndexResponse> saveLatestReTryTimesStep = new StepListener<>();
 
-        indicesExistsResponseStepListener.whenComplete(indicesExistsResponse -> {
-            if (indicesExistsResponse.isExists()) {
-                queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
-            }
-        }, indicesExistsResponseStepListener::onFailure);
+        if (!clusterService.state().metadata().indices().containsKey(ML_TASK_INDEX)) {
+            // ML_TASK_INDEX did not exist,do nothing
+            return;
+        }
 
-        isExistedIndex(ML_TASK_INDEX, indicesExistsResponseStepListener);
+        queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
 
         getReTryTimes(localNodeId, ActionListener.wrap(getReTryTimesStep::onResponse, getReTryTimesStep::onFailure));
 
@@ -277,14 +276,10 @@ public class MLModelAutoReLoader {
      */
     @VisibleForTesting
     void getReTryTimes(String localNodeId, ActionListener<SearchResponse> searchResponseActionListener) {
-        StepListener<IndicesExistsResponse> indicesExistsResponseStepListener = new StepListener<>();
-        isExistedIndex(ML_MODEL_RELOAD_INDEX, indicesExistsResponseStepListener);
-
-        indicesExistsResponseStepListener.whenComplete(indicesExistsResponse -> {
-            if (!indicesExistsResponse.isExists()) {
-                searchResponseActionListener.onResponse(null);
-            }
-        }, indicesExistsResponseStepListener::onFailure);
+        if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_RELOAD_INDEX)) {
+            // ML_MODEL_RELOAD_INDEX did not exist, it means it is our first time to do model auto-reloading operation
+            searchResponseActionListener.onResponse(null);
+        }
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MODEL_LOAD_RETRY_TIMES_FIELD }, null);
@@ -304,21 +299,6 @@ public class MLModelAutoReLoader {
 
             searchResponseActionListener.onResponse(searchResponse);
         }, searchResponseActionListener::onFailure));
-    }
-
-    /**
-     * judge whether the index ".plugins-ml-model-reload" existed
-     *
-     * @param indexName index name
-     */
-    void isExistedIndex(String indexName, ActionListener<IndicesExistsResponse> actionListener) {
-        IndicesExistsRequestBuilder indicesExistsRequestBuilder = new IndicesExistsRequestBuilder(
-            client,
-            IndicesExistsAction.INSTANCE,
-            indexName
-        );
-
-        indicesExistsRequestBuilder.execute(ActionListener.wrap(actionListener::onResponse, actionListener::onFailure));
     }
 
     /**
