@@ -13,6 +13,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 
@@ -25,6 +26,8 @@ import java.util.Map;
  */
 public class MLEngine {
 
+    private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
+
     @Getter
     private final Path djlCachePath;
     private final Path djlModelsCachePath;
@@ -34,13 +37,18 @@ public class MLEngine {
         djlModelsCachePath = djlCachePath.resolve("models_cache");
     }
 
-    public String getCIPrebuiltModelConfigPath(String modelName, String version) {
-        return String.format("https://ci.opensearch.org/ci/dbc/models/ml-models/%s/%s/config.json", modelName, version, Locale.ROOT);
+    public String getPrebuiltModelConfigPath(String modelName, String version, MLModelFormat modelFormat) {
+        String format = modelFormat.name().toLowerCase(Locale.ROOT);
+        return String.format("%s/%s/%s/%s/config.json", MODEL_REPO, modelName, version, format, Locale.ROOT);
     }
 
-    public String getCIPrebuiltModelPath(String modelName, String version) {
-        int index = modelName.lastIndexOf("/") + 1;
-        return String.format("https://ci.opensearch.org/ci/dbc/models/ml-models/%s/%s/%s.zip", modelName, version, modelName.substring(index), Locale.ROOT);
+    public String getPrebuiltModelPath(String modelName, String version, MLModelFormat modelFormat) {
+        int index = modelName.indexOf("/") + 1;
+        // /huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.0/onnx/sentence-transformers_msmarco-distilbert-base-tas-b-1.0.0-torch_script.zip
+        // /huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.0/onnx/config.json
+        String format = modelFormat.name().toLowerCase(Locale.ROOT);
+        String modelZipFileName = modelName.substring(index).replace("/", "_") + "-" + version + "-" + format;
+        return String.format("%s/%s/%s/%s/%s.zip", MODEL_REPO, modelName, version, format, modelZipFileName, Locale.ROOT);
     }
 
     public Path getUploadModelPath(String modelId, String modelName, String version) {

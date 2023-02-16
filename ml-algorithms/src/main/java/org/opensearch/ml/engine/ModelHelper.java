@@ -25,6 +25,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -55,6 +56,7 @@ public class ModelHelper {
     public void downloadPrebuiltModelConfig(String taskId, MLUploadInput uploadInput, ActionListener<MLUploadInput> listener) {
         String modelName = uploadInput.getModelName();
         String version = uploadInput.getVersion();
+        MLModelFormat modelFormat = uploadInput.getModelFormat();
         boolean loadModel = uploadInput.isLoadModel();
         String[] modelNodeIds = uploadInput.getModelNodeIds();
         try {
@@ -63,8 +65,8 @@ public class ModelHelper {
                 Path modelUploadPath = mlEngine.getUploadModelPath(taskId, modelName, version);
                 String configCacheFilePath = modelUploadPath.resolve("config.json").toString();
 
-                String configFileUrl = mlEngine.getCIPrebuiltModelConfigPath(modelName, version);
-                String modelZipFileUrl = mlEngine.getCIPrebuiltModelPath(modelName, version);
+                String configFileUrl = mlEngine.getPrebuiltModelConfigPath(modelName, version, modelFormat);
+                String modelZipFileUrl = mlEngine.getPrebuiltModelPath(modelName, version, modelFormat);
                 DownloadUtils.download(configFileUrl, configCacheFilePath, new ProgressBar());
 
                 Map<?, ?> config = null;
@@ -103,7 +105,7 @@ public class ModelHelper {
                                         configBuilder.frameworkType(TextEmbeddingModelConfig.FrameworkType.from(configEntry.getValue().toString()));
                                         break;
                                     case TextEmbeddingModelConfig.POOLING_MODE_FIELD:
-                                        configBuilder.poolingMode(TextEmbeddingModelConfig.PoolingMode.from(configEntry.getValue().toString()));
+                                        configBuilder.poolingMode(TextEmbeddingModelConfig.PoolingMode.from(configEntry.getValue().toString().toUpperCase(Locale.ROOT)));
                                         break;
                                     case TextEmbeddingModelConfig.NORMALIZE_RESULT_FIELD:
                                         configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
