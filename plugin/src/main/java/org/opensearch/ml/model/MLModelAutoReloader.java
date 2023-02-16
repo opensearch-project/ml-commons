@@ -13,11 +13,12 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -32,6 +33,7 @@ import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
@@ -125,11 +127,7 @@ public class MLModelAutoReloader {
             try {
                 autoReloadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
-                log
-                    .error(
-                        "the model auto-reloading has exception,and the root cause message is: {}",
-                        ExceptionUtils.getRootCauseMessage(e)
-                    );
+                log.error("the model auto-reloading has exception,and the message is: {}", ExceptionUtils.getStackTrace(e));
                 throw new MLException(e);
             }
         });
@@ -213,12 +211,16 @@ public class MLModelAutoReloader {
      */
     @VisibleForTesting
     void autoReloadModelByNodeAndModelId(String localNodeId, String modelId) throws MLException {
-        String[] allNodeIds = nodeHelper.getAllNodeIds();
-        List<String> allNodeIdList = new ArrayList<>(List.of(allNodeIds));
-        if (!allNodeIdList.contains(localNodeId)) {
-            allNodeIdList.add(localNodeId);
+        List<String> allMLNodeIdList = Arrays
+            .stream(nodeHelper.getAllNodes())
+            .filter(MLNodeUtils::isMLNode)
+            .map(DiscoveryNode::getId)
+            .collect(Collectors.toList());
+
+        if (!allMLNodeIdList.contains(localNodeId)) {
+            allMLNodeIdList.add(localNodeId);
         }
-        MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, allNodeIdList.toArray(new String[] {}), false, false);
+        MLLoadModelRequest mlLoadModelRequest = new MLLoadModelRequest(modelId, allMLNodeIdList.toArray(new String[] {}), false, false);
 
         client
             .execute(
