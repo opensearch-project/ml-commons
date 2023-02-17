@@ -14,14 +14,15 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import com.google.common.annotations.VisibleForTesting;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.index.IndexAction;
@@ -53,6 +54,8 @@ import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.threadpool.ThreadPool;
+
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Manager class for ML models and nodes. It contains ML model auto reload operations etc.
@@ -319,9 +322,10 @@ public class MLModelAutoReloader {
             if (indexResponse.status() == RestStatus.CREATED || indexResponse.status() == RestStatus.OK) {
                 log.info("node id:{} insert retry times successfully", localNodeId);
                 indexResponseActionListener.onResponse(indexResponse);
-                return;
             }
-            indexResponseActionListener.onFailure(new MLException("node id:" + localNodeId + " insert retry times unsuccessfully"));
-        }, indexResponseActionListener::onFailure));
+        }, e -> {
+            log.error("node id:" + localNodeId + " insert retry times unsuccessfully", e);
+            indexResponseActionListener.onFailure(new MLException(e));
+        }));
     }
 }
