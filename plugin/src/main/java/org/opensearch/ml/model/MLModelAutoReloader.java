@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 
 import lombok.extern.log4j.Log4j2;
 
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.index.IndexAction;
@@ -128,7 +127,7 @@ public class MLModelAutoReloader {
             try {
                 autoReloadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
-                log.error("the model auto-reloading has exception,and the message is: {}", ExceptionUtils.getStackTrace(e));
+                log.error("the model auto-reloading has exception,and the root cause message is: {}", e);
                 throw new MLException(e);
             }
         });
