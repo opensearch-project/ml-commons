@@ -184,7 +184,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
 
         public static PoolingMode from(String value) {
             try {
-                return PoolingMode.valueOf(value);
+                return PoolingMode.valueOf(value.toUpperCase(Locale.ROOT));
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong pooling method");
             }
@@ -197,7 +197,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
 
         public static FrameworkType from(String value) {
             try {
-                return FrameworkType.valueOf(value);
+                return FrameworkType.valueOf(value.toUpperCase(Locale.ROOT));
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong framework type");
             }
