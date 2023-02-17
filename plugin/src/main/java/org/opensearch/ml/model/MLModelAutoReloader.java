@@ -14,15 +14,14 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.index.IndexAction;
@@ -39,7 +38,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -55,8 +53,6 @@ import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.threadpool.ThreadPool;
-
-import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Manager class for ML models and nodes. It contains ML model auto reload operations etc.
@@ -267,7 +263,7 @@ public class MLModelAutoReloader {
 
         searchRequestBuilder.execute(ActionListener.wrap(searchResponseActionListener::onResponse, exception -> {
             log.error("index {} not found, the reason is {}", ML_TASK_INDEX, exception);
-            throw new IndexNotFoundException("index " + ML_TASK_INDEX + " not found");
+            throw new MLException("index " + ML_TASK_INDEX + " not found");
         }));
     }
 
