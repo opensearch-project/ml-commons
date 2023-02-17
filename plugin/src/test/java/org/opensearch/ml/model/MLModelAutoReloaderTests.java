@@ -16,6 +16,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
@@ -75,7 +76,6 @@ import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -83,6 +83,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -99,6 +100,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
 public class MLModelAutoReloaderTests extends OpenSearchTestCase {
+
     private final Instant time = Instant.now();
     private static final AtomicInteger portGenerator = new AtomicInteger();
     private ClusterState testState;
@@ -200,7 +202,7 @@ public class MLModelAutoReloaderTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(threadPool.generic()).thenReturn(taskExecutorService);
+        when(threadPool.executor(LOAD_THREAD_POOL)).thenReturn(taskExecutorService);
 
         modelManager = spy(
             new MLModelManager(
@@ -461,9 +463,8 @@ public class MLModelAutoReloaderTests extends OpenSearchTestCase {
         mlModelAutoReloader.queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure));
 
         queryTaskStep.whenComplete(response -> {}, exception -> {
-            org.hamcrest.MatcherAssert.assertThat(exception.getClass(), is(IndexNotFoundException.class));
-            org.hamcrest.MatcherAssert
-                .assertThat(exception.getMessage(), containsString("no such index [index " + ML_TASK_INDEX + " not found]"));
+            org.hamcrest.MatcherAssert.assertThat(exception.getClass(), is(MLException.class));
+            org.hamcrest.MatcherAssert.assertThat(exception.getMessage(), containsString("index " + ML_TASK_INDEX + " not found"));
         });
     }
 

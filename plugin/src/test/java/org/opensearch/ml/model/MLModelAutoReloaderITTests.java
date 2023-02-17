@@ -57,7 +57,6 @@ import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -65,6 +64,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -285,11 +285,10 @@ public class MLModelAutoReloaderITTests extends MLCommonsIntegTestCase {
 
         Throwable exception = Assert
             .assertThrows(
-                IndexNotFoundException.class,
+                MLException.class,
                 () -> mlModelAutoReloader.queryTask(localNodeId, ActionListener.wrap(queryTaskStep::onResponse, queryTaskStep::onFailure))
             );
-        org.hamcrest.MatcherAssert
-            .assertThat(exception.getMessage(), containsString("no such index [index " + ML_TASK_INDEX + " not found]"));
+        org.hamcrest.MatcherAssert.assertThat(exception.getMessage(), containsString("index " + ML_TASK_INDEX + " not found"));
     }
 
     public void testGetReTryTimes() throws InterruptedException {
