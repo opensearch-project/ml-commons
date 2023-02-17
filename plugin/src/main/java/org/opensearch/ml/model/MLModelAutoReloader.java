@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_RELOAD_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.MODEL_LOAD_RETRY_TIMES_FIELD;
 import static org.opensearch.ml.common.CommonValue.NODE_ID_FIELD;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
@@ -123,7 +124,7 @@ public class MLModelAutoReloader {
 
         String localNodeId = clusterService.localNode().getId();
         // auto reload all models of this local ml node
-        threadPool.generic().submit(() -> {
+        threadPool.executor(LOAD_THREAD_POOL).execute(() -> {
             try {
                 autoReloadModelByNodeId(localNodeId);
             } catch (ExecutionException | InterruptedException e) {
