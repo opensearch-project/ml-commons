@@ -25,6 +25,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
@@ -36,6 +37,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.UUID;
 
+import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
@@ -52,6 +54,17 @@ public class MLEngineTest {
     }
 
     @Test
+    public void testPrebuiltModelPath() {
+        String modelName = "huggingface/sentence-transformers/msmarco-distilbert-base-tas-b";
+        String version = "1.0.1";
+        MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
+        String prebuiltModelPath = mlEngine.getPrebuiltModelPath(modelName, version, modelFormat);
+        String prebuiltModelConfigPath = mlEngine.getPrebuiltModelConfigPath(modelName, version, modelFormat);
+        assertEquals("https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/sentence-transformers_msmarco-distilbert-base-tas-b-1.0.1-torch_script.zip", prebuiltModelPath);
+        assertEquals("https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/config.json", prebuiltModelConfigPath);
+    }
+
+    @Test
     public void predictKMeans() {
         MLModel model = trainKMeansModel();
         DataFrame predictionDataFrame = constructTestDataFrame(10);
@@ -59,7 +72,7 @@ public class MLEngineTest {
         Input mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
         MLPredictionOutput output = (MLPredictionOutput)mlEngine.predict(mlInput, model);
         DataFrame predictions = output.getPredictionResult();
-        Assert.assertEquals(10, predictions.size());
+        assertEquals(10, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
     }
 
@@ -71,7 +84,7 @@ public class MLEngineTest {
         Input mlInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build();
         MLPredictionOutput output = (MLPredictionOutput)mlEngine.predict(mlInput, model);
         DataFrame predictions = output.getPredictionResult();
-        Assert.assertEquals(2, predictions.size());
+        assertEquals(2, predictions.size());
     }
 
 
@@ -83,7 +96,7 @@ public class MLEngineTest {
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
         MLPredictionOutput output = (MLPredictionOutput)predictor.predict(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build());
         DataFrame predictions = output.getPredictionResult();
-        Assert.assertEquals(2, predictions.size());
+        assertEquals(2, predictions.size());
     }
 
     @Test
@@ -99,16 +112,16 @@ public class MLEngineTest {
     @Test
     public void trainKMeans() {
         MLModel model = trainKMeansModel();
-        Assert.assertEquals(FunctionName.KMEANS.name(), model.getName());
-        Assert.assertEquals("1.0.0", model.getVersion());
+        assertEquals(FunctionName.KMEANS.name(), model.getName());
+        assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 
     @Test
     public void trainLinearRegression() {
         MLModel model = trainLinearRegressionModel();
-        Assert.assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
-        Assert.assertEquals("1.0.0", model.getVersion());
+        assertEquals(FunctionName.LINEAR_REGRESSION.name(), model.getName());
+        assertEquals("1.0.0", model.getVersion());
         Assert.assertNotNull(model.getContent());
     }
 
@@ -216,7 +229,7 @@ public class MLEngineTest {
         MLInputDataset inputData = new DataFrameInputDataset(dataFrame);
         Input input = new MLInput(FunctionName.KMEANS, parameters, inputData);
         MLPredictionOutput output = (MLPredictionOutput) mlEngine.trainAndPredict(input);
-        Assert.assertEquals(dataSize, output.getPredictionResult().size());
+        assertEquals(dataSize, output.getPredictionResult().size());
     }
 
     @Test
@@ -231,7 +244,7 @@ public class MLEngineTest {
     public void executeLocalSampleCalculator() {
         Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
         LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) mlEngine.execute(input);
-        Assert.assertEquals(3.0, output.getResult(), 1e-5);
+        assertEquals(3.0, output.getResult(), 1e-5);
     }
 
     @Test
