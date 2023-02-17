@@ -195,9 +195,7 @@ public class MLModelManager {
             if (uploadInput.getUrl() != null) {
                 uploadModelFromUrl(uploadInput, mlTask);
             } else {
-                throw new IllegalArgumentException("model file URL is null");
-                // TODO: support prebuilt model later
-                // uploadPrebuiltModel(uploadInput, mlTask);
+                uploadPrebuiltModel(uploadInput, mlTask);
             }
         } catch (Exception e) {
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), UPLOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();

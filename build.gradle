@@ -71,10 +71,6 @@ ext {
     noticeFile = rootProject.file('NOTICE.txt')
 }
 
-dependencies {
-    implementation 'junit:junit:${versions.junit}'
-}
-
 // updateVersion: Task to auto increment to the next development iteration
 task updateVersion {
     onlyIf { System.getProperty('newVersion') }
