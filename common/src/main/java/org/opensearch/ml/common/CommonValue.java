@@ -32,6 +32,10 @@ public class CommonValue {
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 3;
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
+
+    public static final String ML_MODEL_RELOAD_INDEX = ".plugins-ml-model-reload";
+    public static final String NODE_ID_FIELD = "node_id";
+    public static final String MODEL_LOAD_RETRY_TIMES_FIELD = "retry_times";
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
