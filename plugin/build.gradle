@@ -234,9 +234,9 @@ task release(type: Copy, group: 'build') {
 
 jacocoTestReport {
     reports {
-        xml.enabled true
-        html.enabled true
-        csv.enabled false
+        xml.getRequired().set(true)
+        csv.getRequired().set(false)
+        html.getRequired().set(true)
     }
 
     dependsOn test
@@ -382,5 +382,5 @@ tasks.withType(licenseHeaders.class) {
 }
 
 checkstyle {
-    toolVersion = '8.29'
+    toolVersion = '8.38'
 }
