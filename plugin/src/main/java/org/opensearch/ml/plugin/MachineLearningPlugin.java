@@ -99,6 +99,7 @@ import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerI
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.model.MLModelAutoReloader;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
@@ -174,6 +175,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private MLModelMetaCreate mlModelMetaCreate;
     private MLModelChunkUploader mlModelChunkUploader;
     private MLEngine mlEngine;
+
+    private MLModelAutoReloader mlModelAutoReloader;
 
     private Client client;
     private ClusterService clusterService;
@@ -352,6 +355,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlIndicesHandler
         );
 
+        mlModelAutoReloader = new MLModelAutoReloader(clusterService, threadPool, client, xContentRegistry, nodeHelper, settings);
+        mlModelAutoReloader.autoReloadModel();
+
         return ImmutableList
             .of(
                 mlEngine,
@@ -373,7 +379,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 modelHelper,
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
-                mlCircuitBreakerService
+                mlCircuitBreakerService,
+                mlModelAutoReloader
             );
     }
 
@@ -513,7 +520,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
-                MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD
+                MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_RELOAD_ENABLE,
+                MLCommonsSettings.ML_MODEL_RELOAD_MAX_RETRY_TIMES
             );
         return settings;
     }
