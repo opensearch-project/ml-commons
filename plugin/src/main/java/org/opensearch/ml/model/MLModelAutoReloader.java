@@ -72,7 +72,7 @@ public class MLModelAutoReloader {
     private volatile Integer autoReloadMaxRetryTimes;
 
     /**
-     * constructor method， init all the params necessary for model auto reloading
+     * constructor method, init all the params necessary for model auto reloading
      *
      * @param clusterService   clusterService
      * @param threadPool       threadPool
