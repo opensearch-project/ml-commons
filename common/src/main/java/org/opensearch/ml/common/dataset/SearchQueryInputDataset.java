@@ -5,26 +5,25 @@
 
 package org.opensearch.ml.common.dataset;
 
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.common.xcontent.XContentParser;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.ml.common.annotation.InputDataSet;
-import org.opensearch.search.SearchModule;
-import org.opensearch.search.builder.SearchSourceBuilder;
-
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.annotation.InputDataSet;
+import org.opensearch.search.SearchModule;
+import org.opensearch.search.builder.SearchSourceBuilder;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Search query based input data. The client just need give the search query, and ML plugin will read the data based on it,

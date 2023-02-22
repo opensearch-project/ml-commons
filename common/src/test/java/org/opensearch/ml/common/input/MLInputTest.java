@@ -14,22 +14,16 @@ import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.common.xcontent.ToXContent;
-import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.MatchAllQueryBuilder;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
-import org.opensearch.ml.common.dataframe.ColumnValue;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.dataframe.DoubleValue;
-import org.opensearch.ml.common.dataframe.Row;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataframe.*;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -46,9 +40,7 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.*;
 
 public class MLInputTest {
 

@@ -4,22 +4,21 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.xcontent.ToXContent;
-import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 
 import java.io.IOException;
 import java.time.Instant;
 
 import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
 
 public class MLTaskGetResponseTest {
     MLTask mlTask;

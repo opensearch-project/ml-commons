@@ -10,7 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLOutputType;

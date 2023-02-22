@@ -2,26 +2,21 @@ package org.opensearch.ml.common.transport.load;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.transport.TransportAddress;
-import org.opensearch.common.xcontent.*;
-import org.opensearch.ml.common.TestHelper;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchModule;
-import org.opensearch.tasks.Task;
-import org.opensearch.tasks.TaskId;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.InetAddress;
 import java.util.Collections;
-import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static org.junit.Assert.*;
 

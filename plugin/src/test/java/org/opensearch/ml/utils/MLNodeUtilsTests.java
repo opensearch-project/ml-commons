@@ -5,25 +5,25 @@
 
 package org.opensearch.ml.utils;
 
-import static java.util.Collections.emptyMap;
-import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
-
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
-
 import org.junit.Assert;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.common.bytes.BytesReference;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.common.xcontent.ToXContent;
-import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
+
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+
+import static java.util.Collections.emptyMap;
+import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 public class MLNodeUtilsTests extends OpenSearchTestCase {
 

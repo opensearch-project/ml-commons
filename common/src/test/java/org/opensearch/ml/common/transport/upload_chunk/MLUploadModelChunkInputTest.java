@@ -5,27 +5,27 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.opensearch.common.xcontent.ToXContent.EMPTY_PARAMS;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.function.Function;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.function.Function;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class MLUploadModelChunkInputTest {
 
