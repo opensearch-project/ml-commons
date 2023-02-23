@@ -2,17 +2,21 @@
 
 Compatible with OpenSearch 2.6.0
 
-### Features
+### Experimental Features
 
 * enable prebuilt model. ([#729](https://github.com/opensearch-project/ml-commons/pull/729))
 
 ### Enhancements
 
 * tune error message for no ML node case ([#699](https://github.com/opensearch-project/ml-commons/pull/699))
-* Enhance profile API to add model centric result controlled by view parameter ([#714](https://github.com/opensearch-project/ml-commons/pull/714))
-* tune model config: change pooling mode to optional ([#724](https://github.com/opensearch-project/ml-commons/pull/724))
+* [experimental] Enhance profile API to add model centric result controlled by view parameter ([#714](https://github.com/opensearch-project/ml-commons/pull/714))
+* [experimental] tune model config: change pooling mode to optional ([#724](https://github.com/opensearch-project/ml-commons/pull/724))
 * check state before deleting model or task ([#725](https://github.com/opensearch-project/ml-commons/pull/725))
-* fixing gradle issue ([#735](https://github.com/opensearch-project/ml-commons/pull/735)) 
+
+### Bug Fixes
+
+* fixing gradle issue ([#735](https://github.com/opensearch-project/ml-commons/pull/735))
+* fix delete model API ([#748](https://github.com/opensearch-project/ml-commons/pull/748))
 
 ### Documentation
 
