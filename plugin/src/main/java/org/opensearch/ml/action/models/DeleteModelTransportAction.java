@@ -78,7 +78,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+            client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -114,7 +114,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         actionListener.onFailure(e);
                     }
                 }
-            }, e -> { actionListener.onFailure(new MLResourceNotFoundException("Fail to find model")); }), () -> context.restore()));
+            }, e -> { actionListener.onFailure(new MLResourceNotFoundException("Fail to find model")); }));
         } catch (Exception e) {
             log.error("Failed to delete ML model " + modelId, e);
             actionListener.onFailure(e);
