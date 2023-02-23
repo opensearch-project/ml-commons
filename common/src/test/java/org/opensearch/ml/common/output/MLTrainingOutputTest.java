@@ -7,12 +7,13 @@ package org.opensearch.ml.common.output;
 
 import org.junit.Test;
 import org.opensearch.common.Strings;
-import org.opensearch.common.xcontent.ToXContent;
-import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
+
 import static org.junit.Assert.assertEquals;
 
 public class MLTrainingOutputTest {

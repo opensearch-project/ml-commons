@@ -19,7 +19,7 @@ import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;

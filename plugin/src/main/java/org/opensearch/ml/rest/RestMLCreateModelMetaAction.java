@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaRequest;
