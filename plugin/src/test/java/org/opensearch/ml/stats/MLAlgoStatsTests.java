@@ -16,8 +16,8 @@ import java.util.Set;
 
 import org.junit.Before;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 

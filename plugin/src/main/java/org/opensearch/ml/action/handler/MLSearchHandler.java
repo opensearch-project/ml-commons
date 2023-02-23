@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.action.handler;
 
-import com.google.common.base.Throwables;
+import static org.opensearch.rest.RestStatus.BAD_REQUEST;
+import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
@@ -20,8 +23,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.rest.RestStatus;
 
-import static org.opensearch.rest.RestStatus.BAD_REQUEST;
-import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
+import com.google.common.base.Throwables;
 
 /**
  * Handle general get and search request in ml common.

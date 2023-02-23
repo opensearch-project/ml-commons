@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexAction;
@@ -44,14 +52,6 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 public class IntegTestUtils extends OpenSearchIntegTestCase {
     public static final String TESTING_DATA = "{\n"
