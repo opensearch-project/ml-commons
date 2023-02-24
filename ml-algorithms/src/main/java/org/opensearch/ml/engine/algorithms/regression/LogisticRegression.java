@@ -104,7 +104,7 @@ public class LogisticRegression implements Trainable, Predictable {
             throw new IllegalArgumentException("MiniBatchSize should not be negative.");
         }
 
-        // loggingInterval – Log the loss after this many iterations. If -1 don't log anything.
+        // loggingInterval - Log the loss after this many iterations. If -1 don't log anything.
         if (parameters.getLoggingInterval() != null && parameters.getLoggingInterval() < -1) {
             throw new IllegalArgumentException("Invalid Logging intervals");
         }
