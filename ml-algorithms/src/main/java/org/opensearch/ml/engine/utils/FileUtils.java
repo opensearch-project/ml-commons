@@ -85,7 +85,7 @@ public class FileUtils {
      * @throws IOException
      */
     public static void write(byte[] data, File destinationFile, boolean append) throws IOException {
-        org.apache.commons.io.FileUtils.createParentDirectories(destinationFile);
+        org.apache.commons.io.FileUtils.forceMkdir(destinationFile.getParentFile());
         try (FileOutputStream fileOutputStream = new FileOutputStream(destinationFile, append);
              OutputStream output = new BufferedOutputStream(fileOutputStream)){
             output.write(data);
