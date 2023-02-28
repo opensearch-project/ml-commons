@@ -51,7 +51,8 @@ public class TextEmbeddingModelConfigTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"}", configContent);
+        System.out.println(configContent);
+        assertEquals("{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"pooling_method\":\"MEAN\",\"normalize_result\":false}", configContent);
     }
 
     @Test

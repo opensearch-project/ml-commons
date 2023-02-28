@@ -7,13 +7,13 @@ package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import ai.djl.Model;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
-import ai.djl.huggingface.translator.TextEmbeddingTranslator;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
 import ai.djl.util.Pair;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -29,6 +29,18 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
     static {
         SUPPORTED_TYPES.add(new Pair<>(String.class, float[].class));
         SUPPORTED_TYPES.add(new Pair<>(Input.class, Output.class));
+    }
+
+    private final TextEmbeddingModelConfig.PoolingMethod poolingMethod;
+    private boolean normalizeResult;
+    private final String modelType;
+    private final boolean neuron;
+
+    public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMethod poolingMethod, boolean normalizeResult, String modelType, boolean neuron) {
+        this.poolingMethod = poolingMethod;
+        this.normalizeResult = normalizeResult;
+        this.modelType = modelType;
+        this.neuron = neuron;
     }
 
     /** {@inheritDoc} */
@@ -51,7 +63,12 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
                             .optManager(model.getNDManager())
                             .build();
             HuggingfaceTextEmbeddingTranslator translator =
-                    HuggingfaceTextEmbeddingTranslator.builder(tokenizer, arguments).build();
+                    HuggingfaceTextEmbeddingTranslator.builder(tokenizer, arguments)
+                            .poolingMethod(poolingMethod)
+                            .normalizeResult(normalizeResult)
+                            .modelType(modelType)
+                            .neuron(neuron)
+                            .build();
             if (input == String.class && output == float[].class) {
                 return (Translator<I, O>) translator;
             } else if (input == Input.class && output == Output.class) {

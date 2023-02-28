@@ -33,12 +33,19 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
 
     public static final String EMBEDDING_DIMENSION_FIELD = "embedding_dimension";
     public static final String FRAMEWORK_TYPE_FIELD = "framework_type";
+    public static final String POOLING_METHOD_FIELD = "pooling_method";
+    public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
+    public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
 
-    private Integer embeddingDimension;
-    private FrameworkType frameworkType;
+    private final Integer embeddingDimension;
+    private final FrameworkType frameworkType;
+    private final PoolingMethod poolingMethod;
+    private final boolean normalizeResult;
+    private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
-    public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig) {
+    public TextEmbeddingModelConfig(String modelType, Integer embeddingDimension, FrameworkType frameworkType, String allConfig,
+                                    PoolingMethod poolingMethod, boolean normalizeResult, Integer modelMaxLength) {
         super(modelType, allConfig);
         if (embeddingDimension == null) {
             throw new IllegalArgumentException("embedding dimension is null");
@@ -48,6 +55,13 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         }
         this.embeddingDimension = embeddingDimension;
         this.frameworkType = frameworkType;
+        if (poolingMethod != null) {
+            this.poolingMethod = poolingMethod;
+        } else {
+            this.poolingMethod = PoolingMethod.MEAN;
+        }
+        this.normalizeResult = normalizeResult;
+        this.modelMaxLength = modelMaxLength;
     }
 
     public static TextEmbeddingModelConfig parse(XContentParser parser) throws IOException {
@@ -55,6 +69,9 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
+        PoolingMethod poolingMethod = PoolingMethod.MEAN;
+        boolean normalizeResult = false;
+        Integer modelMaxLength = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -74,12 +91,21 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
                     break;
+                case POOLING_METHOD_FIELD:
+                    poolingMethod = PoolingMethod.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case NORMALIZE_RESULT_FIELD:
+                    normalizeResult = parser.booleanValue();
+                    break;
+                case MODEL_MAX_LENGTH_FIELD:
+                    modelMaxLength = parser.intValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new TextEmbeddingModelConfig(modelType,  embeddingDimension, frameworkType, allConfig);
+        return new TextEmbeddingModelConfig(modelType,  embeddingDimension, frameworkType, allConfig, poolingMethod, normalizeResult, modelMaxLength);
     }
 
     @Override
@@ -91,6 +117,9 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         super(in);
         embeddingDimension = in.readInt();
         frameworkType = in.readEnum(FrameworkType.class);
+        poolingMethod = in.readEnum(PoolingMethod.class);
+        normalizeResult = in.readBoolean();
+        modelMaxLength = in.readOptionalInt();
     }
 
     @Override
@@ -98,6 +127,9 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         super.writeTo(out);
         out.writeInt(embeddingDimension);
         out.writeEnum(frameworkType);
+        out.writeEnum(poolingMethod);
+        out.writeBoolean(normalizeResult);
+        out.writeOptionalInt(modelMaxLength);
     }
 
     @Override
@@ -115,13 +147,31 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         if (allConfig != null) {
             builder.field(ALL_CONFIG_FIELD, allConfig);
         }
+        if (modelMaxLength != null) {
+            builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
+        }
+        builder.field(POOLING_METHOD_FIELD, poolingMethod);
+        builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
         builder.endObject();
         return builder;
     }
 
+    public enum PoolingMethod {
+        MEAN,
+        CLS;
+
+        public static PoolingMethod from(String value) {
+            try {
+                return PoolingMethod.valueOf(value);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong pooling method");
+            }
+        }
+    }
     public enum FrameworkType {
         HUGGINGFACE_TRANSFORMERS,
-        SENTENCE_TRANSFORMERS;
+        SENTENCE_TRANSFORMERS,
+        HUGGINGFACE_TRANSFORMERS_NEURON;
 
         public static FrameworkType from(String value) {
             try {
