@@ -68,6 +68,14 @@ publishing {
             name = 'staging'
             url = "${rootProject.buildDir}/local-staging-repo"
         }
+        maven {
+            name = "Snapshots"
+            url = "https://aws.oss.sonatype.org/content/repositories/snapshots"
+            credentials {
+                username "$System.env.SONATYPE_USERNAME"
+                password "$System.env.SONATYPE_PASSWORD"
+            }
+        }
     }
     publications {
         shadow(MavenPublication) { publication ->
@@ -99,6 +107,34 @@ publishing {
                 }
             }
         }
+        jars(MavenPublication) { publication ->
+            from components.java
+
+            pom {
+                name = "OpenSearch Machine Learning Client"
+                packaging = "jar"
+                url = "https://github.com/opensearch-project/ml-commons"
+                description = "OpenSearch Machine Learning Client"
+                scm {
+                    connection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    developerConnection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    url = "git@github.com:opensearch-project/ml-commons.git"
+                }
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        name = "OpenSearch"
+                        url = "https://github.com/opensearch-project/ml-commons"
+                    }
+                }
+            }
+        }
+
     }
 
 }
