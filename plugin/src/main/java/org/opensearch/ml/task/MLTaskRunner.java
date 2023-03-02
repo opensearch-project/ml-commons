@@ -84,9 +84,9 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     }
 
     public void run(Request request, TransportService transportService, ActionListener<Response> listener) {
-        checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         if (!request.isDispatchTask()) {
             log.debug("Run ML request {} locally", request.getRequestID());
+            checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
             executeTask(request, listener);
             return;
         }
@@ -107,6 +107,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
             if (clusterService.localNode().getId().equals(nodeId)) {
                 // Execute ML task locally
                 log.debug("Execute ML request {} locally on node {}", request.getRequestID(), nodeId);
+                checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
                 executeTask(request, listener);
             } else {
                 // Execute ML task remotely

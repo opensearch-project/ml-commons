@@ -74,7 +74,7 @@ public class MLIndicesHandler {
                 CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping);
                 client.admin().indices().create(request, actionListener);
             } else {
-                log.info("index:{} is already created", indexName);
+                log.debug("index:{} is already created", indexName);
                 if (indexMappingUpdated.containsKey(indexName) && !indexMappingUpdated.get(indexName).get()) {
                     shouldUpdateIndex(indexName, index.getVersion(), ActionListener.wrap(r -> {
                         if (r) {

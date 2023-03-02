@@ -1,5 +1,6 @@
 package org.opensearch.ml.common.transport.upload;
 
+import org.junit.Rule;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -107,6 +108,7 @@ public class MLUploadInputTest {
                 .modelName(modelName)
                 .version(version)
                 .modelFormat(null)
+                .url(url)
                 .build();
     }
 
@@ -120,20 +122,7 @@ public class MLUploadInputTest {
                 .version(version)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(null)
-                .build();
-    }
-
-    @Test
-    public void constructor_NullModelFileUrl() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model file url is null");
-        MLUploadInput.builder()
-                .functionName(functionName)
-                .modelName(modelName)
-                .version(version)
-                .modelFormat(MLModelFormat.ONNX)
-                .modelConfig(config)
-                .url(null)
+                .url(url)
                 .build();
     }
 
