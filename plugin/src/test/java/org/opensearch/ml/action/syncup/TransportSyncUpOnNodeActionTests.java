@@ -7,9 +7,16 @@ package org.opensearch.ml.action.syncup;
 
 import static java.util.Collections.emptyMap;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -18,6 +25,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,6 +37,7 @@ import java.util.Set;
 
 import org.junit.Before;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -44,6 +53,10 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
@@ -52,11 +65,13 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
 public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
@@ -104,6 +119,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterName()).thenReturn(new ClusterName("Local Cluster"));
         action = new TransportSyncUpOnNodeAction(
             transportService,
+            settings,
             actionFilters,
             modelHelper,
             mlTaskManager,
@@ -221,6 +237,79 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         testFolder.delete();
     }
 
+    public void testCleanUpLocalCache_NoTasks() {
+        when(mlTaskManager.getAllTaskIds()).thenReturn(null);
+        action.cleanUpLocalCache();
+        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+    }
+
+    public void testCleanUpLocalCache_EmptyTasks() {
+        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] {});
+        action.cleanUpLocalCache();
+        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+    }
+
+    public void testCleanUpLocalCache_NotExpiredMLTask() {
+        String taskId = randomAlphaOfLength(5);
+        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
+        MLTask mlTask = MLTask.builder().lastUpdateTime(Instant.now()).build();
+        MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
+        when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
+        action.cleanUpLocalCache();
+        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+    }
+
+    public void testCleanUpLocalCache_ExpiredMLTask_Upload() {
+        String taskId = randomAlphaOfLength(5);
+        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
+        MLTask mlTask = MLTask.builder().taskType(MLTaskType.UPLOAD_MODEL).lastUpdateTime(Instant.now().minusSeconds(86400)).build();
+        MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
+        when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
+        action.cleanUpLocalCache();
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlModelManager, never()).updateModel(anyString(), any());
+    }
+
+    public void testCleanUpLocalCache_ExpiredMLTask_Load_NullWorkerNode() {
+        testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState.LOAD_FAILED);
+    }
+
+    public void testCleanUpLocalCache_ExpiredMLTask_Load_PartiallyLoaded() {
+        testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState.PARTIALLY_LOADED);
+    }
+
+    public void testCleanUpLocalCache_ExpiredMLTask_Load_Loaded() {
+        testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState.LOADED);
+    }
+
+    private void testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState modelState) {
+        String taskId = randomAlphaOfLength(5);
+        String modelId = randomAlphaOfLength(5);
+        when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
+        MLTask.MLTaskBuilder mlTaskBuilder = MLTask
+            .builder()
+            .modelId(modelId)
+            .taskType(MLTaskType.LOAD_MODEL)
+            .lastUpdateTime(Instant.now().minusSeconds(86400));
+        if (MLModelState.PARTIALLY_LOADED == modelState) {
+            mlTaskBuilder.workerNodes(ImmutableList.of("node1", "node2"));
+        } else if (MLModelState.LOADED == modelState) {
+            mlTaskBuilder.workerNodes(ImmutableList.of("node1"));
+        }
+
+        MLTask mlTask = mlTaskBuilder.build();
+        MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
+        if (MLModelState.LOAD_FAILED != modelState) {
+            when(mlModelManager.getWorkerNodes(modelId)).thenReturn(new String[] { "node1" });
+        }
+        when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
+        action.cleanUpLocalCache();
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(mlModelManager, times(1)).updateModel(eq(modelId), argumentCaptor.capture());
+        assertEquals(modelState, argumentCaptor.getValue().get(MLModel.MODEL_STATE_FIELD));
+    }
+
     private MLSyncUpInput prepareRequest() {
         Map<String, String[]> addedWorkerNodes = new HashMap<>();
         addedWorkerNodes.put("modelId1", new String[] { "nodeId1", "nodeId2", "nodeId3" });
@@ -262,8 +351,12 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
     }
 
     private void mockSettings(boolean onlyRunOnMLNode) {
-        settings = Settings.builder().put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), onlyRunOnMLNode).build();
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ONLY_RUN_ON_ML_NODE);
+        settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), onlyRunOnMLNode)
+            .put(ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS.getKey(), 30)
+            .build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ONLY_RUN_ON_ML_NODE, ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
     }
 }

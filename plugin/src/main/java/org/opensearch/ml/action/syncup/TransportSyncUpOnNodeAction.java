@@ -6,9 +6,11 @@
 package org.opensearch.ml.action.syncup;
 
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +25,13 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeRequest;
@@ -34,9 +42,13 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableMap;
 
 @Log4j2
 public class TransportSyncUpOnNodeAction extends
@@ -51,9 +63,12 @@ public class TransportSyncUpOnNodeAction extends
     NamedXContentRegistry xContentRegistry;
     MLEngine mlEngine;
 
+    private volatile Integer mlTaskTimeout;
+
     @Inject
     public TransportSyncUpOnNodeAction(
         TransportService transportService,
+        Settings settings,
         ActionFilters actionFilters,
         ModelHelper modelHelper,
         MLTaskManager mlTaskManager,
@@ -84,6 +99,9 @@ public class TransportSyncUpOnNodeAction extends
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.mlEngine = mlEngine;
+
+        this.mlTaskTimeout = ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS, it -> { mlTaskTimeout = it; });
     }
 
     @Override
@@ -148,9 +166,60 @@ public class TransportSyncUpOnNodeAction extends
             mlTaskManager.syncRunningLoadModelTasks(runningLoadModelTasks);
         }
 
+        cleanUpLocalCache();
         cleanUpLocalCacheFiles();
 
         return new MLSyncUpNodeResponse(clusterService.localNode(), "ok", loadedModelIds, runningLoadModelTaskIds);
+    }
+
+    @VisibleForTesting
+    void cleanUpLocalCache() {
+        String[] allTaskIds = mlTaskManager.getAllTaskIds();
+        if (allTaskIds == null) {
+            return;
+        }
+        for (String taskId : allTaskIds) {
+            MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
+            MLTask mlTask = mlTaskCache.getMlTask();
+            Instant lastUpdateTime = mlTask.getLastUpdateTime();
+            Instant now = Instant.now();
+            if (now.isAfter(lastUpdateTime.plusSeconds(mlTaskTimeout))) {
+                log.info("ML task timeout. task id: {}, task type: {}", taskId, mlTask.getTaskType());
+                mlTaskManager
+                    .updateMLTask(
+                        taskId,
+                        ImmutableMap
+                            .of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, "timeout after " + mlTaskTimeout + " seconds"),
+                        10_000,
+                        true
+                    );
+
+                if (mlTask.getTaskType() == MLTaskType.LOAD_MODEL) {
+                    String modelId = mlTask.getModelId();
+                    String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+                    MLModelState modelState;
+                    if (workerNodes == null || workerNodes.length == 0) {
+                        modelState = MLModelState.LOAD_FAILED;
+                    } else if (mlTask.getWorkerNodes().size() > workerNodes.length) {
+                        modelState = MLModelState.PARTIALLY_LOADED;
+                    } else {
+                        modelState = MLModelState.LOADED;
+                        if (mlTask.getWorkerNodes().size() < workerNodes.length) {
+                            log
+                                .warn(
+                                    "Model loaded on more nodes than target worker nodes. taskId:{}, modelId: {}, workerNodes: {}, targetWorkerNodes: {}",
+                                    taskId,
+                                    modelId,
+                                    Arrays.toString(workerNodes),
+                                    Arrays.toString(mlTask.getWorkerNodes().toArray(new String[0]))
+                                );
+                        }
+                    }
+                    log.info("Reset model state as {} for model {}", modelState, modelId);
+                    mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, modelState));
+                }
+            }
+        }
     }
 
     private void cleanUpLocalCacheFiles() {

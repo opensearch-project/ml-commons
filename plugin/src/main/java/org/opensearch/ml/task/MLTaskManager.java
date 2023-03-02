@@ -50,6 +50,7 @@ import org.opensearch.rest.RestStatus;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 
 /**
  * MLTaskManager is responsible for managing MLTask.
@@ -62,6 +63,9 @@ public class MLTaskManager {
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
+
+    public static final ImmutableSet TASK_DONE_STATES = ImmutableSet
+        .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
     /**
      * Constructor to create ML task manager.
@@ -320,6 +324,9 @@ public class MLTaskManager {
                 updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
                 updateRequest.doc(updatedContent);
                 updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
+                    updateRequest.retryOnConflict(3);
+                }
                 ActionListener<UpdateResponse> actionListener = semaphore == null
                     ? listener
                     : ActionListener.runAfter(listener, () -> semaphore.release());
@@ -360,6 +367,9 @@ public class MLTaskManager {
             updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
             updateRequest.doc(updatedContent);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
+                updateRequest.retryOnConflict(3);
+            }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
             } catch (Exception e) {

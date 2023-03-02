@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -126,6 +127,22 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                 if (allEligibleNodeIds.contains(nodeId)) {
                     eligibleNodes.add(nodeMapping.get(nodeId));
                     nodeIds.add(nodeId);
+                }
+            }
+            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+            if (workerNodes != null && workerNodes.length > 0) {
+                Set<String> difference = new HashSet<String>(Arrays.asList(workerNodes));
+                difference.removeAll(Arrays.asList(targetNodeIds));
+                if (difference.size() > 0) {
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Model already deployed to these nodes: "
+                                    + Arrays.toString(difference.toArray(new String[0]))
+                                    + ", but they are not included in target node ids. Unload model from these nodes if don't need them any more."
+                            )
+                        );
+                    return;
                 }
             }
         } else {
