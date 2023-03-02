@@ -5,14 +5,13 @@
 
 package org.opensearch.ml.bwc;
 
-import static org.junit.Assert.*;
 import static org.opensearch.ml.common.input.parameter.clustering.KMeansParams.DistanceType.COSINE;
 
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import org.apache.http.HttpEntity;
+import org.apache.hc.core5.http.HttpEntity;
 import org.junit.Assume;
 import org.junit.Before;
 import org.opensearch.client.Response;
