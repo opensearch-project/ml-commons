@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 
@@ -52,7 +53,7 @@ public class MLForwardRequestTest {
                 .functionName(functionName)
                 .state(MLTaskState.RUNNING)
                 .inputType(MLInputDataType.DATA_FRAME)
-                .workerNode("mlTaskNode1")
+                .workerNodes(Arrays.asList("mlTaskNode1"))
                 .progress(0.0f)
                 .outputIndex("test_index")
                 .error("test_error")

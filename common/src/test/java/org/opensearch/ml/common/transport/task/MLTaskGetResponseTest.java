@@ -17,6 +17,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
@@ -34,7 +35,7 @@ public class MLTaskGetResponseTest {
                 .inputType(MLInputDataType.DATA_FRAME)
                 .progress(1.3f)
                 .outputIndex("some index")
-                .workerNode("some node")
+                .workerNodes(Arrays.asList("some node"))
                 .createTime(Instant.ofEpochMilli(123))
                 .lastUpdateTime(Instant.ofEpochMilli(123))
                 .error("error")
@@ -58,7 +59,7 @@ public class MLTaskGetResponseTest {
         assertEquals(response.mlTask.getInputType(), parsedResponse.mlTask.getInputType());
         assertEquals(response.mlTask.getProgress(), parsedResponse.mlTask.getProgress());
         assertEquals(response.mlTask.getOutputIndex(), parsedResponse.mlTask.getOutputIndex());
-        assertEquals(response.mlTask.getWorkerNode(), parsedResponse.mlTask.getWorkerNode());
+        assertEquals(response.mlTask.getWorkerNodes(), parsedResponse.mlTask.getWorkerNodes());
         assertEquals(response.mlTask.getCreateTime(), parsedResponse.mlTask.getCreateTime());
         assertEquals(response.mlTask.getLastUpdateTime(), parsedResponse.mlTask.getLastUpdateTime());
         assertEquals(response.mlTask.getError(), parsedResponse.mlTask.getError());
@@ -79,7 +80,7 @@ public class MLTaskGetResponseTest {
                 "\"input_type\":\"DATA_FRAME\"," +
                 "\"progress\":1.3," +
                 "\"output_index\":\"some index\"," +
-                "\"worker_node\":\"some node\"," +
+                "\"worker_node\":[\"some node\"]," +
                 "\"create_time\":123," +
                 "\"last_update_time\":123," +
                 "\"error\":\"error\"," +
