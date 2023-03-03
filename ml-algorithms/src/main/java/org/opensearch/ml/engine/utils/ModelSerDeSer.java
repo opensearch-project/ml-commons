@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.utils;
 
 import lombok.experimental.UtilityClass;
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.serialization.ValidatingObjectInputStream;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
@@ -13,9 +14,11 @@ import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.Base64;
 
+@Log4j2
 @UtilityClass
 public class ModelSerDeSer {
     // Welcome list includes OpenSearch ml plugin classes, JDK common classes and Tribuo libraries.
@@ -49,11 +52,13 @@ public class ModelSerDeSer {
 
     public static Object deserialize(byte[] modelBin) {
         try (ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
-             ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream)){
+             ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream);
+             ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(modelBin))){
             // Validate the model class type to avoid deserialization attack.
             validatingObjectInputStream.accept(ACCEPT_CLASS_PATTERNS);
-            return validatingObjectInputStream.readObject();
-        } catch (IOException | ClassNotFoundException e) {
+            return objectInputStream.readObject();
+        } catch (Throwable e) {
+            log.error("Failed to deserialize model", e);
             throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
         }
     }
