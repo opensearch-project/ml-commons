@@ -21,10 +21,20 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.get.GetResult;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -49,6 +59,9 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
     @Mock
     DeleteResponse deleteResponse;
 
+    @Mock
+    NamedXContentRegistry xContentRegistry;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -61,7 +74,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
 
         mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId("test_id").build();
-        deleteTaskTransportAction = spy(new DeleteTaskTransportAction(transportService, actionFilters, client));
+        deleteTaskTransportAction = spy(new DeleteTaskTransportAction(transportService, actionFilters, client, xContentRegistry));
 
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -69,23 +82,76 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void testDeleteModel_Success() {
+    public void testDeleteTask_Success() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onResponse(deleteResponse);
             return null;
         }).when(client).delete(any(), any());
+        GetResponse getResponse = prepareMLTask(MLTaskState.COMPLETED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
 
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
     }
 
-    public void testDeleteModel_RuntimeException() {
+    public void testDeleteTask_CheckTaskState() throws IOException {
+        GetResponse getResponse = prepareMLTask(MLTaskState.RUNNING);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Task cannot be deleted in running state. Try after sometime", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_ResourceNotFoundException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new MLResourceNotFoundException("errorMessage"));
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_GetResponseNullException() {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(null);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_RuntimeException() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("errorMessage"));
             return null;
         }).when(client).delete(any(), any());
+
+        GetResponse getResponse = prepareMLTask(MLTaskState.COMPLETED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
 
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -93,11 +159,20 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteModel_ThreadContextError() {
+    public void testDeleteTask_ThreadContextError() {
         when(threadPool.getThreadContext()).thenThrow(new RuntimeException("thread context error"));
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("thread context error", argumentCaptor.getValue().getMessage());
+    }
+
+    public GetResponse prepareMLTask(MLTaskState mlTaskState) throws IOException {
+        MLTask mlTask = MLTask.builder().taskId("taskID").state(mlTaskState).build();
+        XContentBuilder content = mlTask.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        return getResponse;
     }
 }

@@ -26,15 +26,25 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.ScrollableHitSource;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -62,19 +72,23 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     BulkByScrollResponse bulkByScrollResponse;
 
+    @Mock
+    NamedXContentRegistry xContentRegistry;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     DeleteModelTransportAction deleteModelTransportAction;
     MLModelDeleteRequest mlModelDeleteRequest;
     ThreadContext threadContext;
+    MLModel model;
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
         mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
-        deleteModelTransportAction = spy(new DeleteModelTransportAction(transportService, actionFilters, client));
+        deleteModelTransportAction = spy(new DeleteModelTransportAction(transportService, actionFilters, client, xContentRegistry));
 
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -82,7 +96,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void testDeleteModel_Success() {
+    public void testDeleteModel_Success() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onResponse(deleteResponse);
@@ -96,8 +110,72 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
+        GetResponse getResponse = prepareMLModel(MLModelState.UPLOADED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
+    }
+
+    public void testDeleteModel_CheckModelState() throws IOException {
+        GetResponse getResponse = prepareMLModel(MLModelState.LOADING);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Model cannot be deleted in loading or loaded state. Try unloading first and then delete",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_ModelNotFoundException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new Exception());
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Fail to find model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteModel_ResourceNotFoundException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new ResourceNotFoundException("errorMessage"));
+            return null;
+        }).when(client).delete(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.UPLOADED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<ResourceNotFoundException> argumentCaptor = ArgumentCaptor.forClass(ResourceNotFoundException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModelChunks_Success() {
@@ -112,7 +190,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(deleteResponse);
     }
 
-    public void testDeleteModel_RuntimeException() {
+    public void testDeleteModel_RuntimeException() throws IOException {
+        GetResponse getResponse = prepareMLModel(MLModelState.UPLOADED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("errorMessage"));
@@ -197,5 +282,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
+    }
+
+    public GetResponse prepareMLModel(MLModelState mlModelState) throws IOException {
+        MLModel mlModel = MLModel.builder().modelId("test_id").modelState(mlModelState).build();
+        XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        return getResponse;
     }
 }
