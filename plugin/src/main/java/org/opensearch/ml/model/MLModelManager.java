@@ -43,6 +43,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Semaphore;
@@ -525,8 +526,8 @@ public class MLModelManager {
      */
     public void getModel(String modelId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
         GetRequest getRequest = new GetRequest();
-        FetchSourceContext featchContext = new FetchSourceContext(true, includes, excludes);
-        getRequest.index(ML_MODEL_INDEX).id(modelId).fetchSourceContext(featchContext);
+        FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
+        getRequest.index(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchContext);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
@@ -785,6 +786,10 @@ public class MLModelManager {
 
     public FunctionName getModelFunctionName(String modelId) {
         return modelCacheHelper.getFunctionName(modelId);
+    }
+
+    public Optional<FunctionName> getOptionalModelFunctionName(String modelId) {
+        return modelCacheHelper.getOptionalFunctionName(modelId);
     }
 
     public boolean isModelRunningOnNode(String modelId) {

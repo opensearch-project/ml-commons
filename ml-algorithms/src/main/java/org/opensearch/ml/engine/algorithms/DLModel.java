@@ -61,13 +61,13 @@ public abstract class DLModel implements Predictable {
 
     @Override
     public MLOutput predict(MLInput mlInput, MLModel model) {
-        throw new MLException("model not loaded");
+        throw new IllegalArgumentException("model not loaded");
     }
 
     @Override
     public MLOutput predict(MLInput mlInput) {
         if (modelHelper == null || modelId == null) {
-            throw new MLException("model not loaded");
+            throw new IllegalArgumentException("model not loaded");
         }
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {

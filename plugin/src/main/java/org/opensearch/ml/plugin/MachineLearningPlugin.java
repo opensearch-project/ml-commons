@@ -390,7 +390,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLStatsAction restMLStatsAction = new RestMLStatsAction(mlStats, clusterService, indexUtils);
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
-        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction();
+        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager);
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();

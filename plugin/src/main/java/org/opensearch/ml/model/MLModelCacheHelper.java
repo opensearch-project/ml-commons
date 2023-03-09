@@ -10,6 +10,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -310,6 +311,12 @@ public class MLModelCacheHelper {
     public FunctionName getFunctionName(String modelId) {
         MLModelCache modelCache = getExistingModelCache(modelId);
         return modelCache.getFunctionName();
+    }
+
+    public Optional<FunctionName> getOptionalFunctionName(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        FunctionName functionName = modelCache == null ? null : modelCache.getFunctionName();
+        return Optional.ofNullable(functionName);
     }
 
     private MLModelCache getExistingModelCache(String modelId) {
