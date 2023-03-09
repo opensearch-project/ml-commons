@@ -38,7 +38,6 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.load.LoadModelNodesResponse;
 import org.opensearch.ml.common.transport.load.LoadModelResponse;
 import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
@@ -173,7 +172,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
         when(mlLoadModelRequest1.getModelNodeIds()).thenReturn(null);
         ActionListener<LoadModelResponse> loadModelResponseListener = mock(ActionListener.class);
         loadModelAction.doExecute(mock(Task.class), mlLoadModelRequest1, loadModelResponseListener);
-        verify(loadModelResponseListener).onFailure(any(MLResourceNotFoundException.class));
+        verify(loadModelResponseListener).onFailure(any(IllegalArgumentException.class));
     }
 
     public void testDoExecute_whenGetModelHasNPE_exception() {
