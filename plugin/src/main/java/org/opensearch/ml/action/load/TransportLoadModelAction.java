@@ -39,7 +39,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.load.LoadModelInput;
 import org.opensearch.ml.common.transport.load.LoadModelNodesRequest;
@@ -150,7 +149,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
             eligibleNodes.addAll(Arrays.asList(allEligibleNodes));
         }
         if (nodeIds.size() == 0) {
-            listener.onFailure(new MLResourceNotFoundException("no eligible node found"));
+            listener.onFailure(new IllegalArgumentException("no eligible node found"));
             return;
         }
 

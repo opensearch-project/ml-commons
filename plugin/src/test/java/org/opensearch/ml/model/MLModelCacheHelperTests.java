@@ -280,4 +280,12 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertNull(modelProfile.getWorkerNodes());
         assertNull(modelProfile.getModelInferenceStats());
     }
+
+    public void testGetFunctionName() {
+        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        assertEquals(FunctionName.TEXT_EMBEDDING, cacheHelper.getFunctionName(modelId));
+        assertEquals(FunctionName.TEXT_EMBEDDING, cacheHelper.getOptionalFunctionName(modelId).get());
+        assertFalse(cacheHelper.getOptionalFunctionName(randomAlphaOfLength(10)).isPresent());
+    }
+
 }

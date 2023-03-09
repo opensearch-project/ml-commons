@@ -41,7 +41,6 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -130,7 +129,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
             if (workerNodes == null || workerNodes.length == 0) {
                 if (algorithm == FunctionName.TEXT_EMBEDDING) {
-                    listener.onFailure(new MLException("model not loaded"));
+                    listener.onFailure(new IllegalArgumentException("model not loaded"));
                     return;
                 } else {
                     workerNodes = nodeHelper.getEligibleNodeIds();
@@ -215,7 +214,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     internalListener.onResponse(response);
                     return;
                 } else if (algorithm == FunctionName.TEXT_EMBEDDING) {
-                    throw new MLException("model not loaded");
+                    throw new IllegalArgumentException("model not loaded");
                 }
             } catch (Exception e) {
                 handlePredictFailure(mlTask, internalListener, e, false);
