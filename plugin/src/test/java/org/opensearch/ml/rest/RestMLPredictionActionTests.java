@@ -14,6 +14,7 @@ import static org.opensearch.ml.utils.TestHelper.verifyParsedKMeansMLInput;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -21,6 +22,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
@@ -33,6 +35,7 @@ import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -52,10 +55,14 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
 
     @Mock
     RestChannel channel;
+    @Mock
+    MLModelManager modelManager;
 
     @Before
     public void setup() {
-        restMLPredictionAction = new RestMLPredictionAction();
+        MockitoAnnotations.openMocks(this);
+        when(modelManager.getOptionalModelFunctionName(anyString())).thenReturn(Optional.empty());
+        restMLPredictionAction = new RestMLPredictionAction(modelManager);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -74,7 +81,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction();
+        RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction(modelManager);
         assertNotNull(mlPredictionAction);
     }
 

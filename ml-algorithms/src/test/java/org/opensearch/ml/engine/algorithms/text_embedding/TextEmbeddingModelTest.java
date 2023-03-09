@@ -285,14 +285,14 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void predict_NullModelHelper() {
-        exceptionRule.expect(MLException.class);
+        exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not loaded");
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void predict_NullModelId() {
-        exceptionRule.expect(MLException.class);
+        exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not loaded");
         model.setModelId(null);
         try {
@@ -321,7 +321,7 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void predict_BeforeInitingModel() {
-        exceptionRule.expect(MLException.class);
+        exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not loaded");
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
     }

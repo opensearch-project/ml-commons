@@ -14,12 +14,14 @@ import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -27,9 +29,11 @@ import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.rest.action.RestToXContentListener;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -39,10 +43,14 @@ import com.google.common.collect.ImmutableList;
 public class RestMLPredictionAction extends BaseRestHandler {
     private static final String ML_PREDICTION_ACTION = "ml_prediction_action";
 
+    private MLModelManager modelManager;
+
     /**
      * Constructor
      */
-    public RestMLPredictionAction() {}
+    public RestMLPredictionAction(MLModelManager modelManager) {
+        this.modelManager = modelManager;
+    }
 
     @Override
     public String getName() {
@@ -65,6 +73,11 @@ public class RestMLPredictionAction extends BaseRestHandler {
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         String algorithm = request.param(PARAMETER_ALGORITHM);
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
+        Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
+
+        if (algorithm == null && functionName.isPresent()) {
+            algorithm = functionName.get().name();
+        }
 
         if (algorithm != null) {
             MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, algorithm, request);
@@ -86,7 +99,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
             }, e -> {
                 log.error("Failed to get ML model", e);
                 try {
-                    channel.sendResponse(new BytesRestResponse(channel, e));
+                    channel.sendResponse(new BytesRestResponse(channel, RestStatus.BAD_REQUEST, e));
                 } catch (IOException ex) {
                     log.error("Failed to send error response", ex);
                 }
