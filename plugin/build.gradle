@@ -31,6 +31,10 @@ ext {
     noticeFile = rootProject.file('NOTICE')
 }
 
+checkstyle {
+    toolVersion = '8.38'
+}
+
 opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
@@ -381,6 +385,3 @@ tasks.withType(licenseHeaders.class) {
     additionalLicense 'AL   ', 'Apache', 'Licensed under the Apache License, Version 2.0 (the "License")'
 }
 
-checkstyle {
-    toolVersion = '8.38'
-}
