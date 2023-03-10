@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -15,15 +14,16 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.transport.upload.MLUploadInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 
+import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.util.Map;
-import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -35,6 +35,7 @@ public class ModelHelperTest {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private ModelHelper modelHelper;
+    private MLModelFormat modelFormat;
     private String modelId;
     private MLEngine mlEngine;
 
@@ -47,6 +48,7 @@ public class ModelHelperTest {
     @Before
     public void setup() throws URISyntaxException {
         MockitoAnnotations.openMocks(this);
+        modelFormat = MLModelFormat.TORCH_SCRIPT;
         modelId = "model_id";
         mlEngine = new MLEngine(Path.of("/tmp/test" + modelId));
         modelHelper = new ModelHelper(mlEngine);
@@ -54,7 +56,7 @@ public class ModelHelperTest {
 
     @Test
     public void testDownloadAndSplit_UrlFailure() {
-        modelHelper.downloadAndSplit(modelId, "model_name", "1", "http://testurl", actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
@@ -63,20 +65,58 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelId, "model_name", "1", modelUrl, actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
         assertNotEquals(0, argumentCaptor.getValue().size());
     }
 
-    @Ignore
+    @Test
+    public void testVerifyModelZipFile() throws IOException {
+        String modelUrl = getClass().getResource("traced_small_model.zip").toString().substring(5);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+    }
+
+    @Test
+    public void testVerifyModelZipFile_WrongModelFormat_ONNX() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Model format is TORCH_SCRIPT, but find .onnx file");
+        String modelUrl = getClass().getResource("traced_small_model_wrong_onnx.zip").toString().substring(5);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+    }
+
+    @Test
+    public void testVerifyModelZipFile_WrongModelFormat_TORCH_SCRIPT() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Model format is ONNX, but find .pt file");
+        String modelUrl = getClass().getResource("traced_small_model_wrong_onnx.zip").toString().substring(5);
+        modelHelper.verifyModelZipFile(MLModelFormat.ONNX, modelUrl);
+    }
+
+    @Test
+    public void testVerifyModelZipFile_DuplicateModelFile() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Find multiple model files, but expected only one");
+        String modelUrl = getClass().getResource("traced_small_model_duplicate_pt.zip").toString().substring(5);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+    }
+
+    @Test
+    public void testVerifyModelZipFile_MissingTokenizer() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("No tokenizer file");
+        String modelUrl = getClass().getResource("traced_small_model_missing_tokenizer.zip").toString().substring(5);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+    }
+
     @Test
     public void testDownloadPrebuiltModelConfig_WrongModelName() {
         String taskId = "test_task_id";
         MLUploadInput unloadInput = MLUploadInput.builder()
                 .modelName("test_model_name")
-                .version("1.0.0")
+                .version("1.0.1")
+                .modelFormat(modelFormat)
                 .loadModel(false)
                 .modelNodeIds(new String[]{"node_id1"})
                 .build();
@@ -86,13 +126,13 @@ public class ModelHelperTest {
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
     }
 
-    @Ignore
     @Test
     public void testDownloadPrebuiltModelConfig() {
         String taskId = "test_task_id";
         MLUploadInput unloadInput = MLUploadInput.builder()
                 .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-                .version("1.0.0")
+                .version("1.0.1")
+                .modelFormat(modelFormat)
                 .loadModel(false)
                 .modelNodeIds(new String[]{"node_id1"})
                 .build();
