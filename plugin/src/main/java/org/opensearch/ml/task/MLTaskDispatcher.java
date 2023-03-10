@@ -26,7 +26,6 @@ import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 
 import com.google.common.collect.ImmutableSet;
@@ -167,7 +166,7 @@ public class MLTaskDispatcher {
     private void dispatchTaskWithRoundRobin(ActionListener<DiscoveryNode> listener) {
         DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
         if (eligibleNodes == null || eligibleNodes.length == 0) {
-            throw new MLResourceNotFoundException(
+            throw new IllegalArgumentException(
                 "No eligible node found to execute this request. It's best practice to"
                     + " provision ML nodes to serve your models. You can disable this setting to serve the model on your data"
                     + " node for development purposes by disabling the \"plugins.ml_commons.only_run_on_ml_node\" "

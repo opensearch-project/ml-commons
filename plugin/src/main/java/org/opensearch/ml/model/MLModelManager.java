@@ -266,69 +266,77 @@ public class MLModelManager {
         String version,
         String modelId
     ) {
-        modelHelper.downloadAndSplit(modelId, modelName, version, uploadInput.getUrl(), ActionListener.wrap(result -> {
-            Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
-            if (modelSizeInBytes >= MODEL_FILE_SIZE_LIMIT) {
-                throw new MLException("Model file size exceeds the limit of 4GB: " + modelSizeInBytes);
-            }
-            List<String> chunkFiles = (List<String>) result.get(CHUNK_FILES);
-            String hashValue = (String) result.get(MODEL_FILE_HASH);
-            Semaphore semaphore = new Semaphore(1);
-            AtomicInteger uploaded = new AtomicInteger(0);
-            AtomicBoolean failedToUploadChunk = new AtomicBoolean(false);
-            // upload chunks
-            for (String name : chunkFiles) {
-                semaphore.tryAcquire(10, TimeUnit.SECONDS);
-                if (failedToUploadChunk.get()) {
-                    throw new MLException("Failed to save model chunk");
-                }
-                File file = new File(name);
-                byte[] bytes = Files.toByteArray(file);
-                int chunkNum = Integer.parseInt(file.getName());
-                Instant now = Instant.now();
-                MLModel mlModel = MLModel
-                    .builder()
-                    .modelId(modelId)
-                    .name(modelName)
-                    .algorithm(functionName)
-                    .version(version)
-                    .modelFormat(uploadInput.getModelFormat())
-                    .chunkNumber(chunkNum)
-                    .totalChunks(chunkFiles.size())
-                    .content(Base64.getEncoder().encodeToString(bytes))
-                    .createdTime(now)
-                    .lastUpdateTime(now)
-                    .build();
-                IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                String chunkId = getModelChunkId(modelId, chunkNum);
-                indexRequest.id(chunkId);
-                indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
-                indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(indexRequest, ActionListener.wrap(r -> {
-                    uploaded.getAndIncrement();
-                    if (uploaded.get() == chunkFiles.size()) {
-                        updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
-                    } else {
-                        deleteFileQuietly(file);
+        modelHelper
+            .downloadAndSplit(
+                uploadInput.getModelFormat(),
+                modelId,
+                modelName,
+                version,
+                uploadInput.getUrl(),
+                ActionListener.wrap(result -> {
+                    Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
+                    if (modelSizeInBytes >= MODEL_FILE_SIZE_LIMIT) {
+                        throw new MLException("Model file size exceeds the limit of 4GB: " + modelSizeInBytes);
                     }
-                    semaphore.release();
+                    List<String> chunkFiles = (List<String>) result.get(CHUNK_FILES);
+                    String hashValue = (String) result.get(MODEL_FILE_HASH);
+                    Semaphore semaphore = new Semaphore(1);
+                    AtomicInteger uploaded = new AtomicInteger(0);
+                    AtomicBoolean failedToUploadChunk = new AtomicBoolean(false);
+                    // upload chunks
+                    for (String name : chunkFiles) {
+                        semaphore.tryAcquire(10, TimeUnit.SECONDS);
+                        if (failedToUploadChunk.get()) {
+                            throw new MLException("Failed to save model chunk");
+                        }
+                        File file = new File(name);
+                        byte[] bytes = Files.toByteArray(file);
+                        int chunkNum = Integer.parseInt(file.getName());
+                        Instant now = Instant.now();
+                        MLModel mlModel = MLModel
+                            .builder()
+                            .modelId(modelId)
+                            .name(modelName)
+                            .algorithm(functionName)
+                            .version(version)
+                            .modelFormat(uploadInput.getModelFormat())
+                            .chunkNumber(chunkNum)
+                            .totalChunks(chunkFiles.size())
+                            .content(Base64.getEncoder().encodeToString(bytes))
+                            .createdTime(now)
+                            .lastUpdateTime(now)
+                            .build();
+                        IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                        String chunkId = getModelChunkId(modelId, chunkNum);
+                        indexRequest.id(chunkId);
+                        indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
+                        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                        client.index(indexRequest, ActionListener.wrap(r -> {
+                            uploaded.getAndIncrement();
+                            if (uploaded.get() == chunkFiles.size()) {
+                                updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
+                            } else {
+                                deleteFileQuietly(file);
+                            }
+                            semaphore.release();
+                        }, e -> {
+                            log.error("Failed to index model chunk " + chunkId, e);
+                            failedToUploadChunk.set(true);
+                            handleException(functionName, taskId, e);
+                            deleteFileQuietly(file);
+                            // remove model doc as failed to upload model
+                            deleteModel(modelId);
+                            semaphore.release();
+                            deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+                        }));
+                    }
                 }, e -> {
-                    log.error("Failed to index model chunk " + chunkId, e);
-                    failedToUploadChunk.set(true);
-                    handleException(functionName, taskId, e);
-                    deleteFileQuietly(file);
-                    // remove model doc as failed to upload model
-                    deleteModel(modelId);
-                    semaphore.release();
+                    log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
-                }));
-            }
-        }, e -> {
-            log.error("Failed to index chunk file", e);
-            deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
-            deleteModel(modelId);
-            handleException(functionName, taskId, e);
-        }));
+                    deleteModel(modelId);
+                    handleException(functionName, taskId, e);
+                })
+            );
     }
 
     private void uploadPrebuiltModel(MLUploadInput uploadInput, MLTask mlTask) {
