@@ -7,10 +7,12 @@ package org.opensearch.ml.engine;
 
 import ai.djl.training.util.DownloadUtils;
 import ai.djl.training.util.ProgressBar;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -136,13 +138,14 @@ public class ModelHelper {
 
     /**
      * Download model from URL and split it into smaller chunks.
+     * @param modelFormat model format
      * @param taskId task id
      * @param modelName model name
      * @param version model version
      * @param url model file URL
      * @param listener action listener
      */
-    public void downloadAndSplit(String taskId, String modelName, String version, String url, ActionListener<Map<String, Object>> listener) {
+    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, ActionListener<Map<String, Object>> listener) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 Path modelUploadPath = mlEngine.getUploadModelPath(taskId, modelName, version);
@@ -151,7 +154,7 @@ public class ModelHelper {
                 File modelZipFile = new File(modelPath);
                 log.debug("download model to file {}", modelZipFile.getAbsolutePath());
                 DownloadUtils.download(url, modelPath, new ProgressBar());
-                verifyModelZipFile(modelPath);
+                verifyModelZipFile(modelFormat, modelPath);
 
                 List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
                 Map<String, Object> result = new HashMap<>();
@@ -168,30 +171,40 @@ public class ModelHelper {
         }
     }
 
-    private void verifyModelZipFile(String modelZipFilePath) throws IOException {
-        boolean hasModelFile = false;
+    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath) throws IOException {
+        boolean hasPtFile = false;
+        boolean hasOnnxFile = false;
         boolean hasTokenizerFile = false;
         try (ZipFile zipFile = new ZipFile(modelZipFilePath)) {
             Enumeration zipEntries = zipFile.entries();
             while (zipEntries.hasMoreElements()) {
                 String fileName = ((ZipEntry) zipEntries.nextElement()).getName();
-                if (fileName.endsWith(PYTORCH_FILE_EXTENSION) || fileName.endsWith(ONNX_FILE_EXTENSION)) {
-                    if (hasModelFile) {
-                        throw new IllegalArgumentException("Find multiple model files, but expected only one");
-                    }
-                    hasModelFile = true;
-                }
+                hasPtFile = hasModelFile(modelFormat, MLModelFormat.TORCH_SCRIPT, PYTORCH_FILE_EXTENSION, hasPtFile, fileName);
+                hasOnnxFile = hasModelFile(modelFormat, MLModelFormat.ONNX, ONNX_FILE_EXTENSION, hasOnnxFile, fileName);
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
                     hasTokenizerFile = true;
                 }
             }
         }
-        if (!hasModelFile) {
+        if (!hasPtFile && !hasOnnxFile) {
             throw new IllegalArgumentException("Can't find model file");
         }
         if (!hasTokenizerFile) {
-            throw new IllegalArgumentException("Can't find tokenizer file");
+            throw new IllegalArgumentException("No tokenizer file");
         }
+    }
+
+    private static boolean hasModelFile(MLModelFormat modelFormat, MLModelFormat targetModelFormat, String fileExtension, boolean hasModelFile, String fileName) {
+        if (fileName.endsWith(fileExtension)) {
+            if (modelFormat != targetModelFormat) {
+                throw new IllegalArgumentException("Model format is " + modelFormat + ", but find " + fileExtension + " file");
+            }
+            if (hasModelFile) {
+                throw new IllegalArgumentException("Find multiple model files, but expected only one");
+            }
+            return true;
+        }
+        return hasModelFile;
     }
 
     public void deleteFileCache(String modelId) {
