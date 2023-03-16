@@ -31,6 +31,7 @@ public class UnloadModelNodesResponseTest {
     private ClusterName clusterName;
     private DiscoveryNode node1;
     private DiscoveryNode node2;
+    private Map<String, Integer> modelWorkerNodeCounts;
 
     @Before
     public void setUp() throws Exception {
@@ -51,6 +52,8 @@ public class UnloadModelNodesResponseTest {
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
                 Version.CURRENT
         );
+        modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", 1);
     }
 
     @Test
@@ -69,12 +72,16 @@ public class UnloadModelNodesResponseTest {
         List<UnloadModelNodeResponse> nodes = new ArrayList<>();
 
         Map<String, String> modelToUnloadStatus1 = new HashMap<>();
-        modelToUnloadStatus1.put("modelName:version1", "response");
-        nodes.add(new UnloadModelNodeResponse(node1, modelToUnloadStatus1));
+        modelToUnloadStatus1.put("modelId1", "response");
+        Map<String, Integer> modelWorkerNodeCounts1 = new HashMap<>();
+        modelWorkerNodeCounts1.put("modelId1", 1);
+        nodes.add(new UnloadModelNodeResponse(node1, modelToUnloadStatus1, modelWorkerNodeCounts1));
 
         Map<String, String> modelToUnloadStatus2 = new HashMap<>();
-        modelToUnloadStatus2.put("modelName:version2", "response");
-        nodes.add(new UnloadModelNodeResponse(node2, modelToUnloadStatus2));
+        modelToUnloadStatus2.put("modelId2", "response");
+        Map<String, Integer> modelWorkerNodeCounts2 = new HashMap<>();
+        modelWorkerNodeCounts2.put("modelId2", 2);
+        nodes.add(new UnloadModelNodeResponse(node2, modelToUnloadStatus2, modelWorkerNodeCounts2));
 
         List<FailedNodeException> failures = new ArrayList<>();
         UnloadModelNodesResponse response = new UnloadModelNodesResponse(clusterName, nodes, failures);
@@ -82,7 +89,7 @@ public class UnloadModelNodesResponseTest {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals(
-                "{\"foo1\":{\"stats\":{\"modelName:version1\":\"response\"}},\"foo2\":{\"stats\":{\"modelName:version2\":\"response\"}}}",
+                "{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}",
                 jsonStr
         );
     }
