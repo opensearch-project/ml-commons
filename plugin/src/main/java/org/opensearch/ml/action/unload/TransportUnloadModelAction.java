@@ -97,8 +97,19 @@ public class TransportUnloadModelAction extends
     ) {
         if (responses != null) {
             Map<String, List<String>> removedNodeMap = new HashMap<>();
+            Map<String, Integer> modelWorkNodeCounts = new HashMap<>();
             responses.stream().forEach(r -> {
                 Set<String> notFoundModels = new HashSet<>();
+                Map<String, Integer> nodeCounts = r.getModelWorkerNodeCounts();
+                if (nodeCounts != null) {
+                    for (Map.Entry<String, Integer> entry : nodeCounts.entrySet()) {
+                        if (!modelWorkNodeCounts.containsKey(entry.getKey())
+                            || modelWorkNodeCounts.get(entry.getKey()) < entry.getValue()) {
+                            modelWorkNodeCounts.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+
                 Map<String, String> modelUnloadStatus = r.getModelUnloadStatus();
                 for (Map.Entry<String, String> entry : modelUnloadStatus.entrySet()) {
                     String status = entry.getValue();
@@ -128,7 +139,11 @@ public class TransportUnloadModelAction extends
                     BulkRequest bulkRequest = new BulkRequest();
                     for (String modelId : removedNodeMap.keySet()) {
                         UpdateRequest updateRequest = new UpdateRequest();
-                        updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(ImmutableMap.of(MODEL_STATE_FIELD, MLModelState.UNLOADED));
+                        int removedNodeCount = removedNodeMap.get(modelId).size();
+                        MLModelState mlModelState = modelWorkNodeCounts.get(modelId) > removedNodeCount
+                            ? MLModelState.PARTIALLY_LOADED
+                            : MLModelState.UNLOADED;
+                        updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(ImmutableMap.of(MODEL_STATE_FIELD, mlModelState));
                         bulkRequest.add(updateRequest);
                     }
                     ActionListener<BulkResponse> actionListenr = ActionListener
@@ -181,8 +196,17 @@ public class TransportUnloadModelAction extends
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
 
         String[] modelIds = unloadModelNodesRequest.getModelIds();
+
+        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
+        if (modelIds != null) {
+            for (String modelId : modelIds) {
+                String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+                modelWorkerNodeCounts.put(modelId, workerNodes == null ? 0 : workerNodes.length);
+            }
+        }
+
         Map<String, String> modelUnloadStatus = mlModelManager.unloadModel(modelIds);
         mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).decrement();
-        return new UnloadModelNodeResponse(clusterService.localNode(), modelUnloadStatus);
+        return new UnloadModelNodeResponse(clusterService.localNode(), modelUnloadStatus, modelWorkerNodeCounts);
     }
 }
