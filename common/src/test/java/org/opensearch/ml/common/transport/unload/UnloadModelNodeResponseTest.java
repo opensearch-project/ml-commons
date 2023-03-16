@@ -8,12 +8,8 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.transport.TransportAddress;
-import org.opensearch.common.xcontent.XContentBuilder;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.Collections;
@@ -29,6 +25,8 @@ public class UnloadModelNodeResponseTest {
     @Mock
     private DiscoveryNode localNode;
 
+    private Map<String, Integer> modelWorkerNodeCounts;
+
     @Before
     public void setUp() throws Exception {
         localNode = new DiscoveryNode(
@@ -39,13 +37,15 @@ public class UnloadModelNodeResponseTest {
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
                 Version.CURRENT
         );
+        modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", 1);
     }
 
     @Test
     public void testSerializationDeserialization() throws IOException {
         Map<String, String> modelToLoadStatus = new HashMap<>();
-        modelToLoadStatus.put("modelName:version", "response");
-        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, modelToLoadStatus);
+        modelToLoadStatus.put("modelId1", "response");
+        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, modelToLoadStatus, modelWorkerNodeCounts);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         UnloadModelNodeResponse newResponse = new UnloadModelNodeResponse(output.bytes().streamInput());
@@ -54,7 +54,7 @@ public class UnloadModelNodeResponseTest {
 
     @Test
     public void testSerializationDeserialization_NullModelLoadStatus() throws IOException {
-        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, null);
+        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, null, null);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         UnloadModelNodeResponse newResponse = new UnloadModelNodeResponse(output.bytes().streamInput());
@@ -63,7 +63,7 @@ public class UnloadModelNodeResponseTest {
 
     @Test
     public void testReadProfile() throws IOException {
-        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, new HashMap<>());
+        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, new HashMap<>(), new HashMap<>());
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         UnloadModelNodeResponse newResponse = UnloadModelNodeResponse.readStats(output.bytes().streamInput());

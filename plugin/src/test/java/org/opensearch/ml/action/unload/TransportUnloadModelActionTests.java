@@ -9,8 +9,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -18,14 +21,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
+import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -35,6 +42,8 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodeRequest;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodeResponse;
 import org.opensearch.ml.common.transport.unload.UnloadModelNodesRequest;
@@ -130,9 +139,11 @@ public class TransportUnloadModelActionTests extends OpenSearchTestCase {
     }
 
     public void testNewNodeStreamRequest() throws IOException {
-        java.util.Map<String, String> modelToLoadStatus = new HashMap<>();
-        modelToLoadStatus.put("modelName:version", "response");
-        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, modelToLoadStatus);
+        Map<String, String> modelToLoadStatus = new HashMap<>();
+        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
+        modelToLoadStatus.put("modelId1", "response");
+        modelWorkerNodeCounts.put("modelId1", 1);
+        UnloadModelNodeResponse response = new UnloadModelNodeResponse(localNode, modelToLoadStatus, modelWorkerNodeCounts);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         final UnloadModelNodeResponse unLoadResponse = action.newNodeResponse(output.bytes().streamInput());
@@ -156,17 +167,23 @@ public class TransportUnloadModelActionTests extends OpenSearchTestCase {
             new String[] { "modelId1", "modelId2" }
         );
         final List<UnloadModelNodeResponse> responses = new ArrayList<>();
-        java.util.Map<String, String> modelToLoadStatus = new HashMap<>();
-        modelToLoadStatus.put("modelName:version", "unloaded");
-        UnloadModelNodeResponse response1 = new UnloadModelNodeResponse(localNode, modelToLoadStatus);
-        modelToLoadStatus.put("modelName:version", "unloaded");
-        UnloadModelNodeResponse response2 = new UnloadModelNodeResponse(localNode, modelToLoadStatus);
+        Map<String, String> modelToLoadStatus = new HashMap<>();
+        modelToLoadStatus.put("modelId1", "unloaded");
+        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", 1);
+        UnloadModelNodeResponse response1 = new UnloadModelNodeResponse(localNode, modelToLoadStatus, modelWorkerNodeCounts);
+        UnloadModelNodeResponse response2 = new UnloadModelNodeResponse(localNode, modelToLoadStatus, modelWorkerNodeCounts);
         responses.add(response1);
         responses.add(response2);
         final List<FailedNodeException> failures = new ArrayList<>();
         final UnloadModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
         assertNotNull(response);
-
+        ArgumentCaptor<BulkRequest> argumentCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        verify(client, times(1)).bulk(argumentCaptor.capture(), any());
+        UpdateRequest updateRequest = (UpdateRequest) argumentCaptor.getValue().requests().get(0);
+        assertEquals(ML_MODEL_INDEX, updateRequest.index());
+        Map<String, Object> updateContent = updateRequest.doc().sourceAsMap();
+        assertEquals(MLModelState.UNLOADED.name(), updateContent.get(MLModel.MODEL_STATE_FIELD));
     }
 
     public void testNewResponseWithNotFoundModelStatus() {
@@ -175,15 +192,22 @@ public class TransportUnloadModelActionTests extends OpenSearchTestCase {
             new String[] { "modelId1", "modelId2" }
         );
         final List<UnloadModelNodeResponse> responses = new ArrayList<>();
-        java.util.Map<String, String> modelToLoadStatus = new HashMap<>();
-        modelToLoadStatus.put("modelName:version", "not_found");
-        UnloadModelNodeResponse response1 = new UnloadModelNodeResponse(localNode, modelToLoadStatus);
-        modelToLoadStatus.put("modelName:version", "not_found");
-        UnloadModelNodeResponse response2 = new UnloadModelNodeResponse(localNode, modelToLoadStatus);
+        Map<String, String> modelToLoadStatus = new HashMap<>();
+        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
+        modelToLoadStatus.put("modelId1", "not_found");
+        modelWorkerNodeCounts.put("modelId1", 2);
+        UnloadModelNodeResponse response1 = new UnloadModelNodeResponse(localNode, modelToLoadStatus, modelWorkerNodeCounts);
+        UnloadModelNodeResponse response2 = new UnloadModelNodeResponse(localNode, modelToLoadStatus, modelWorkerNodeCounts);
         responses.add(response1);
         responses.add(response2);
         final List<FailedNodeException> failures = new ArrayList<>();
         final UnloadModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
         assertNotNull(response);
+        ArgumentCaptor<BulkRequest> argumentCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        verify(client, times(1)).bulk(argumentCaptor.capture(), any());
+        UpdateRequest updateRequest = (UpdateRequest) argumentCaptor.getValue().requests().get(0);
+        assertEquals(ML_MODEL_INDEX, updateRequest.index());
+        Map<String, Object> updateContent = updateRequest.doc().sourceAsMap();
+        assertEquals(MLModelState.PARTIALLY_LOADED.name(), updateContent.get(MLModel.MODEL_STATE_FIELD));
     }
 }

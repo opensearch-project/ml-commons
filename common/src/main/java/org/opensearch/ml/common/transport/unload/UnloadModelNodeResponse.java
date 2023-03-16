@@ -20,16 +20,23 @@ import java.util.Map;
 public class UnloadModelNodeResponse extends BaseNodeResponse implements ToXContentFragment {
 
     private Map<String, String> modelUnloadStatus;
+    private Map<String, Integer> modelWorkerNodeCounts;
 
-    public UnloadModelNodeResponse(DiscoveryNode node, Map<String, String> modelUnloadStatus) {
+    public UnloadModelNodeResponse(DiscoveryNode node,
+                                   Map<String, String> modelUnloadStatus,
+                                   Map<String, Integer> modelWorkerNodeCounts) {
         super(node);
         this.modelUnloadStatus = modelUnloadStatus;
+        this.modelWorkerNodeCounts = modelWorkerNodeCounts;
     }
 
     public UnloadModelNodeResponse(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
             this.modelUnloadStatus = in.readMap(s -> s.readString(), s-> s.readString());
+        }
+        if (in.readBoolean()) {
+            this.modelWorkerNodeCounts = in.readMap(s -> s.readString(), s-> s.readInt());
         }
     }
 
@@ -44,6 +51,12 @@ public class UnloadModelNodeResponse extends BaseNodeResponse implements ToXCont
         if (modelUnloadStatus != null) {
             out.writeBoolean(true);
             out.writeMap(modelUnloadStatus, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (modelWorkerNodeCounts != null) {
+            out.writeBoolean(true);
+            out.writeMap(modelWorkerNodeCounts, StreamOutput::writeString, StreamOutput::writeInt);
         } else {
             out.writeBoolean(false);
         }
