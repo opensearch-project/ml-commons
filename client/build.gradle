@@ -106,8 +106,21 @@ publishing {
                         url = "https://github.com/opensearch-project/ml-commons"
                     }
                 }
+                withXml {
+                    def dependenciesNode = asNode().appendNode('dependencies')
+                    def reflectionNode = dependenciesNode.appendNode('dependency')
+                    reflectionNode.appendNode('groupId', 'org.reflections')
+                    reflectionNode.appendNode('artifactId', 'reflections')
+                    reflectionNode.appendNode('version', '0.9.12')
+
+                    def commonUtilsNode = dependenciesNode.appendNode('dependency')
+                    commonUtilsNode.appendNode('groupId', 'org.opensearch')
+                    commonUtilsNode.appendNode('artifactId', 'common-utils')
+                    commonUtilsNode.appendNode('version', "${common_utils_version}")
+                }
             }
         }
+
         jars(MavenPublication) { publication ->
             from components.java
 
