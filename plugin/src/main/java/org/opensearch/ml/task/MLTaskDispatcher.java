@@ -74,7 +74,7 @@ public class MLTaskDispatcher {
 
     public void dispatchPredictTask(String[] nodeIds, ActionListener<DiscoveryNode> actionListener) {
         if (nodeIds == null || nodeIds.length == 0) {
-            throw new IllegalArgumentException("Model not loaded yet");
+            throw new IllegalArgumentException("no eligible node to run predict request");
         }
         if (ROUND_ROBIN.equals(dispatchPolicy)) {
             dispatchTaskWithRoundRobin(

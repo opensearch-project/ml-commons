@@ -73,6 +73,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
@@ -148,6 +149,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private MLEngine mlEngine;
     @Mock
     ThresholdCircuitBreaker thresholdCircuitBreaker;
+    @Mock
+    DiscoveryNodeHelper nodeHelper;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -231,7 +234,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 mlIndicesHandler,
                 mlTaskManager,
                 modelCacheHelper,
-                mlEngine
+                mlEngine,
+                nodeHelper
             )
         );
 
@@ -579,6 +583,55 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testClearRoutingTable() {
         modelManager.clearRoutingTable();
         verify(modelCacheHelper).clearWorkerNodes();
+    }
+
+    public void testGetWorkerNodes() {
+        String[] nodes = new String[] { "node1", "node2" };
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId);
+        assertArrayEquals(nodes, workerNodes);
+    }
+
+    public void testGetWorkerNodes_Null() {
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(null);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId);
+        assertNull(workerNodes);
+    }
+
+    public void testGetWorkerNodes_EmptyNodes() {
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(new String[] {});
+        String[] workerNodes = modelManager.getWorkerNodes(modelId);
+        assertEquals(0, workerNodes.length);
+    }
+
+    public void testGetWorkerNodes_FilterEligibleNodes() {
+        String[] nodes = new String[] { "node1", "node2" };
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
+
+        String[] eligibleNodes = new String[] { "node1" };
+        when(nodeHelper.filterEligibleNodes(any())).thenReturn(eligibleNodes);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId, true);
+        assertArrayEquals(eligibleNodes, workerNodes);
+    }
+
+    public void testGetWorkerNodes_FilterEligibleNodes_Null() {
+        expectedEx.expect(IllegalArgumentException.class);
+        expectedEx.expectMessage("No eligible worker node found");
+        String[] nodes = new String[] { "node1", "node2" };
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
+
+        when(nodeHelper.filterEligibleNodes(any())).thenReturn(null);
+        modelManager.getWorkerNodes(modelId, true);
+    }
+
+    public void testGetWorkerNodes_FilterEligibleNodes_Empty() {
+        expectedEx.expect(IllegalArgumentException.class);
+        expectedEx.expectMessage("No eligible worker node found");
+        String[] nodes = new String[] { "node1", "node2" };
+        when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
+
+        when(nodeHelper.filterEligibleNodes(any())).thenReturn(new String[] {});
+        modelManager.getWorkerNodes(modelId, true);
     }
 
     private void testLoadModel_FailedToRetrieveModelChunks(boolean lastChunk) {
