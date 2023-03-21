@@ -75,6 +75,7 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
+import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
@@ -126,6 +127,7 @@ public class MLModelManager {
     private final MLIndicesHandler mlIndicesHandler;
     private final MLTaskManager mlTaskManager;
     private final MLEngine mlEngine;
+    private final DiscoveryNodeHelper nodeHelper;
 
     private volatile Integer maxModelPerNode;
     private volatile Integer maxUploadTasksPerNode;
@@ -153,7 +155,8 @@ public class MLModelManager {
         MLIndicesHandler mlIndicesHandler,
         MLTaskManager mlTaskManager,
         MLModelCacheHelper modelCacheHelper,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        DiscoveryNodeHelper nodeHelper
     ) {
         this.client = client;
         this.threadPool = threadPool;
@@ -166,6 +169,7 @@ public class MLModelManager {
         this.mlIndicesHandler = mlIndicesHandler;
         this.mlTaskManager = mlTaskManager;
         this.mlEngine = mlEngine;
+        this.nodeHelper = nodeHelper;
 
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
@@ -726,13 +730,36 @@ public class MLModelManager {
     }
 
     /**
-     * Get worker nodes of specif model.
+     * Get worker nodes of specific model.
+     *
+     * @param modelId model id
+     * @param onlyEligibleNode return only eligible node
+     * @return list of worker node ids
+     */
+    public String[] getWorkerNodes(String modelId, boolean onlyEligibleNode) {
+        String[] workerNodeIds = modelCacheHelper.getWorkerNodes(modelId);
+        if (!onlyEligibleNode) {
+            return workerNodeIds;
+        }
+        if (workerNodeIds == null || workerNodeIds.length == 0) {
+            return workerNodeIds;
+        }
+
+        String[] eligibleNodeIds = nodeHelper.filterEligibleNodes(workerNodeIds);
+        if (eligibleNodeIds == null || eligibleNodeIds.length == 0) {
+            throw new IllegalArgumentException("No eligible worker node found");
+        }
+        return eligibleNodeIds;
+    }
+
+    /**
+     * Get worker node of specific model without filtering eligible node.
      *
      * @param modelId model id
      * @return list of worker node ids
      */
     public String[] getWorkerNodes(String modelId) {
-        return modelCacheHelper.getWorkerNodes(modelId);
+        return getWorkerNodes(modelId, false);
     }
 
     /**

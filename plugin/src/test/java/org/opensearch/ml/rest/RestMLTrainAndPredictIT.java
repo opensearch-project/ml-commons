@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
@@ -49,6 +51,66 @@ public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
         // train with empty parameters
         trainAndPredictKmeansWithEmptyParam();
         validateStats(FunctionName.KMEANS, ActionName.TRAIN_PREDICT, 0, 0, 2, 2);
+    }
+
+    public void testTrainAndPredictKmeans_ExcludeNodes() throws IOException {
+        Response nodeResponse = TestHelper.makeRequest(client(), "GET", "/_cat/nodes", ImmutableMap.of(), (HttpEntity) null, null);
+        String response = TestHelper.httpEntityToString(nodeResponse.getEntity());
+        String[] nodes = response.split("\n");
+        StringBuilder nodeNames = new StringBuilder();
+        for (String nodeString : nodes) {
+            String[] items = nodeString.split(" ");
+            if (items.length > 0) {
+                String nodeName = items[items.length - 1];
+                nodeNames.append(nodeName).append(",");
+            }
+        }
+        String excludedNames = nodeNames.substring(0, nodeNames.length() - 1);
+
+        Response updateSettingResponse = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.exclude_nodes._name\":\"" + excludedNames + "\"}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, updateSettingResponse.getStatusLine().getStatusCode());
+
+        try {
+            trainAndPredictKmeans();
+
+            // The trainAndPredictKmeans method should throw exception, so should not run this line
+            fail("Exclude nodes setting doesn't work");
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("400 Bad Request"));
+            assertTrue(e.getMessage().contains("\"reason\":\"No eligible node found to execute this request"));
+        }
+    }
+
+    private Response trainAndPredictKmeans() throws IOException {
+        KMeansParams params = KMeansParams.builder().centroids(3).build();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(new MatchAllQueryBuilder());
+        sourceBuilder.size(1000);
+        sourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
+        MLInputDataset inputData = SearchQueryInputDataset
+            .builder()
+            .indices(ImmutableList.of(irisIndex))
+            .searchSourceBuilder(sourceBuilder)
+            .build();
+        MLInput kmeansInput = MLInput.builder().algorithm(FunctionName.KMEANS).parameters(params).inputDataset(inputData).build();
+        Response kmeansResponse = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_plugins/_ml/_train_predict/kmeans",
+                ImmutableMap.of(),
+                TestHelper.toHttpEntity(kmeansInput),
+                null
+            );
+        return kmeansResponse;
     }
 
     private void trainAndPredictKmeansWithCustomParam() throws IOException {
