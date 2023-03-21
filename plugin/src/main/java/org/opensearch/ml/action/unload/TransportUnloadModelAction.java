@@ -198,8 +198,10 @@ public class TransportUnloadModelAction extends
         String[] modelIds = unloadModelNodesRequest.getModelIds();
 
         Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
-        if (modelIds != null) {
-            for (String modelId : modelIds) {
+        boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
+        String[] removedModelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
+        if (removedModelIds != null) {
+            for (String modelId : removedModelIds) {
                 String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
                 modelWorkerNodeCounts.put(modelId, workerNodes == null ? 0 : workerNodes.length);
             }

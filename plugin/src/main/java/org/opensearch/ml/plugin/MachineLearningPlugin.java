@@ -268,7 +268,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             mlIndicesHandler,
             mlTaskManager,
             modelCacheHelper,
-            mlEngine
+            mlEngine,
+            nodeHelper
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
@@ -513,7 +514,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
-                MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD
+                MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
+                MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES
             );
         return settings;
     }
