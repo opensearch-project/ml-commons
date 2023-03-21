@@ -51,6 +51,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.remote.MLRemoteInferenceManager;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -74,6 +75,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLModelManager mlModelManager;
     private final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
+    private final MLRemoteInferenceManager mlRemoteInferenceManager;
 
     public MLPredictTaskRunner(
         ThreadPool threadPool,
@@ -87,7 +89,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
         DiscoveryNodeHelper nodeHelper,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        MLRemoteInferenceManager mlRemoteInferenceManager
     ) {
         super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -98,6 +101,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
+        this.mlRemoteInferenceManager = mlRemoteInferenceManager;
     }
 
     @Override
@@ -152,13 +156,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLInputDataType inputDataType = request.getMlInput().getInputDataset().getInputDataType();
         Instant now = Instant.now();
         String modelId = request.getModelId();
+        FunctionName functionName = request.getMlInput().getFunctionName();
         MLTask mlTask = MLTask
             .builder()
             .taskId(UUID.randomUUID().toString())
             .modelId(modelId)
             .taskType(MLTaskType.PREDICTION)
             .inputType(inputDataType)
-            .functionName(request.getMlInput().getFunctionName())
+            .functionName(functionName)
             .state(MLTaskState.CREATED)
             .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
             .createTime(now)
@@ -166,6 +171,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .async(false)
             .build();
         MLInput mlInput = request.getMlInput();
+        if (functionName == FunctionName.REMOTE) {
+            threadPool.executor(PREDICT_THREAD_POOL).execute(() -> { remoteInference(modelId, mlTask, mlInput, listener); });
+        }
         switch (inputDataType) {
             case SEARCH_QUERY:
                 ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
@@ -183,6 +191,50 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             default:
                 threadPool.executor(PREDICT_THREAD_POOL).execute(() -> { predict(modelId, mlTask, mlInput, listener); });
                 break;
+        }
+    }
+
+    private void remoteInference(String modelId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
+        // search model by model id.
+        try (ThreadContext.StoredContext context = threadPool.getThreadContext().stashContext()) {
+            ActionListener<GetResponse> getModelListener = ActionListener.wrap(r -> {
+                if (r == null || !r.isExists()) {
+                    listener.onFailure(new ResourceNotFoundException("No model found, please check the modelId."));
+                    return;
+                }
+                try (
+                    XContentParser xContentParser = XContentType.JSON
+                        .xContent()
+                        .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, xContentParser.nextToken(), xContentParser);
+                    MLModel mlModel = MLModel.parse(xContentParser);
+                    User resourceUser = mlModel.getUser();
+                    User requestUser = getUserContext(client);
+                    if (!checkUserPermissions(requestUser, resourceUser, modelId)) {
+                        // The backend roles of request user and resource user doesn't have intersection
+                        OpenSearchException e = new OpenSearchException(
+                            "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + modelId
+                        );
+                        handlePredictFailure(mlTask, listener, e, false);
+                        return;
+                    }
+                    // run predict
+                    mlRemoteInferenceManager.inference(mlTask, mlModel, mlInput, listener);
+
+                } catch (Exception e) {
+                    log.error("Failed to predict model " + modelId, e);
+                    listener.onFailure(e);
+                }
+            }, e -> {
+                log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
+                handlePredictFailure(mlTask, listener, e, true);
+            });
+            GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
+            client.get(getRequest, threadedActionListener(ActionListener.runBefore(getModelListener, () -> context.restore())));
+        } catch (Exception e) {
+            log.error("Failed to get model " + mlTask.getModelId(), e);
+            handlePredictFailure(mlTask, listener, e, true);
         }
     }
 

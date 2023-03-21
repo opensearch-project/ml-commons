@@ -18,6 +18,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transformer.DataTransformer;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -65,6 +66,11 @@ public class MLModel implements ToXContentObject {
     public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
     public static final String DEPLOY_TO_ALL_NODES_FIELD = "deploy_to_all_nodes";
 
+    // virtual model only
+    public static final String CONNECTOR_ID_FIELD = "connector_id";
+    public static final String CREDENTIAL_ID_FIELD = "credential_id";
+    public static final String DATA_TRANSFORMER_FIELD = "data_transformer";
+
     private String name;
     private FunctionName algorithm;
     private String version;
@@ -93,6 +99,11 @@ public class MLModel implements ToXContentObject {
 
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
+
+    private String connectorId;
+    private String credentialId;
+    private DataTransformer dataTransformer;
+
     @Builder(toBuilder = true)
     public MLModel(String name,
                    FunctionName algorithm,
@@ -115,7 +126,11 @@ public class MLModel implements ToXContentObject {
                    Integer planningWorkerNodeCount,
                    Integer currentWorkerNodeCount,
                    String[] planningWorkerNodes,
-                   boolean deployToAllNodes) {
+                   boolean deployToAllNodes,
+                   String connectorId,
+                   String credentialId,
+                   DataTransformer dataTransformer
+    ) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -139,9 +154,12 @@ public class MLModel implements ToXContentObject {
         this.currentWorkerNodeCount = currentWorkerNodeCount;
         this.planningWorkerNodes = planningWorkerNodes;
         this.deployToAllNodes = deployToAllNodes;
+        this.connectorId = connectorId;
+        this.credentialId = credentialId;
+        this.dataTransformer = dataTransformer;
     }
 
-    public MLModel(StreamInput input) throws IOException{
+    public MLModel(StreamInput input) throws IOException {
         name = input.readOptionalString();
         algorithm = input.readEnum(FunctionName.class);
         version = input.readString();
@@ -176,6 +194,11 @@ public class MLModel implements ToXContentObject {
             currentWorkerNodeCount = input.readOptionalInt();
             planningWorkerNodes = input.readOptionalStringArray();
             deployToAllNodes = input.readBoolean();
+            connectorId = input.readOptionalString();
+            credentialId = input.readOptionalString();
+            if (input.readBoolean()) {
+                dataTransformer = new DataTransformer(input);
+            }
         }
     }
 
@@ -223,6 +246,14 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInt(currentWorkerNodeCount);
         out.writeOptionalStringArray(planningWorkerNodes);
         out.writeBoolean(deployToAllNodes);
+        out.writeOptionalString(connectorId);
+        out.writeOptionalString(credentialId);
+        if (dataTransformer != null) {
+            out.writeBoolean(true);
+            dataTransformer.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -297,11 +328,20 @@ public class MLModel implements ToXContentObject {
         if (deployToAllNodes) {
             builder.field(DEPLOY_TO_ALL_NODES_FIELD, deployToAllNodes);
         }
+        if (connectorId != null) {
+            builder.field(CONNECTOR_ID_FIELD, connectorId);
+        }
+        if (credentialId != null) {
+            builder.field(CREDENTIAL_ID_FIELD, credentialId);
+        }
+        if (dataTransformer != null) {
+            builder.field(DATA_TRANSFORMER_FIELD, dataTransformer);
+        }
         builder.endObject();
         return builder;
     }
 
-    public static MLModel parse(XContentParser parser) throws IOException {
+    public static MLModel parse (XContentParser parser) throws IOException {
         String name = null;
         FunctionName algorithm = null;
         String version = null;
@@ -310,7 +350,7 @@ public class MLModel implements ToXContentObject {
         String oldContent = null;
         User user = null;
 
-        String description = null;;
+        String description = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
@@ -331,6 +371,9 @@ public class MLModel implements ToXContentObject {
         Integer currentWorkerNodeCount = null;
         List<String> planningWorkerNodes = new ArrayList<>();
         boolean deployToAllNodes = false;
+        String connectorId = null;
+        String credentialId = null;
+        DataTransformer dataTransformer = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -424,6 +467,14 @@ public class MLModel implements ToXContentObject {
                     break;
                 case LAST_UNDEPLOYED_TIME_FIELD:
                     lastUndeployedTime = Instant.ofEpochMilli(parser.longValue());
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.text();
+                    break;
+                case CREDENTIAL_ID_FIELD:
+                    credentialId = parser.text();
+                    break;
+                case DATA_TRANSFORMER_FIELD:
+                    dataTransformer = DataTransformer.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -454,11 +505,13 @@ public class MLModel implements ToXContentObject {
                 .currentWorkerNodeCount(currentWorkerNodeCount)
                 .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
                 .deployToAllNodes(deployToAllNodes)
+                .connectorId(connectorId)
+                .credentialId(credentialId)
+                .dataTransformer(dataTransformer)
                 .build();
     }
 
-    public static MLModel fromStream(StreamInput in) throws IOException {
-        MLModel mlModel = new MLModel(in);
-        return mlModel;
+    public static MLModel fromStream (StreamInput in) throws IOException {
+        return new MLModel(in);
     }
 }

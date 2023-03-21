@@ -56,6 +56,13 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
+    implementation group: 'software.amazon.awssdk', name: 'sagemakerruntime', version: '2.18.21'
+    implementation group: 'software.amazon.awssdk', name: 'auth', version: '2.18.21'
+    implementation group: 'software.amazon.awssdk', name: 'sdk-core', version: '2.18.21'
+    implementation group: 'software.amazon.awssdk', name: 'annotations', version: '2.18.21'
+    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: '2.18.21'
+    implementation group: 'software.amazon.awssdk', name: 'regions', version: '2.18.21'
+    implementation group: 'software.amazon.awssdk', name: 'utils', version: '2.18.21'
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
@@ -271,7 +278,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
         'org.opensearch.ml.rest.RestMLPredictionAction',
-        'org.opensearch.ml.breaker.DiskCircuitBreaker'
+        'org.opensearch.ml.breaker.DiskCircuitBreaker',
+        'org.opensearch.ml.remote.MLRemoteInferenceManager'
 ]
 
 jacocoTestCoverageVerification {

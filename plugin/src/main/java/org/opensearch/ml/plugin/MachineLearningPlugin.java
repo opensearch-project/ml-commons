@@ -100,6 +100,7 @@ import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.remote.MLRemoteInferenceManager;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
@@ -232,6 +233,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlEngine = new MLEngine(environment.dataFiles()[0]);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
+        MLRemoteInferenceManager mlRemoteInferenceManager = new MLRemoteInferenceManager(mlTaskManager);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
@@ -299,7 +301,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             xContentRegistry,
             mlModelManager,
             nodeHelper,
-            mlEngine
+            mlEngine,
+            mlRemoteInferenceManager
         );
         mlTrainAndPredictTaskRunner = new MLTrainAndPredictTaskRunner(
             threadPool,

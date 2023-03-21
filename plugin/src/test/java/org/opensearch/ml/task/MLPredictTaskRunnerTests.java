@@ -55,6 +55,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.remote.MLRemoteInferenceManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -120,6 +121,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     GetResponse getResponse;
     MLInput mlInputWithDataFrame;
     MLEngine mlEngine;
+    MLRemoteInferenceManager mlRemoteInferenceManager;
 
     @Before
     public void setup() throws IOException {
@@ -127,6 +129,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         remoteNode = new DiscoveryNode("remoteNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
+        mlRemoteInferenceManager = new MLRemoteInferenceManager(mlTaskManager);
         when(clusterService.localNode()).thenReturn(localNode);
 
         when(threadPool.executor(anyString())).thenReturn(executorService);
@@ -156,7 +159,8 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
                 xContentRegistry(),
                 mlModelManager,
                 nodeHelper,
-                mlEngine
+                mlEngine,
+                mlRemoteInferenceManager
             )
         );
 
