@@ -83,7 +83,7 @@ public class DiscoveryNodeHelper {
             return nodeIds;
         }
         DiscoveryNode[] nodes = getNodes(nodeIds);
-        final List<String> eligibleNodes = new ArrayList<>();
+        final Set<String> eligibleNodes = new HashSet<>();
         for (DiscoveryNode node : nodes) {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
