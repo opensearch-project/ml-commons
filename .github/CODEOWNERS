@@ -1,11 +1,11 @@
 # This should match the owning team set up in https://github.com/orgs/opensearch-project/teams
 *   @opensearch-project/machine-learning
-@rbhavna
-@jngz-es
 @b4sjoo
-@Zhangxunmt
-@ylwu-amzn
 @dhrubo-os
-@zane-neo
-@wujunshen
+@jngz-es
 @model-collapse
+@rbhavna
+@wujunshen
+@ylwu-amzn
+@zane-neo
+@Zhangxunmt
