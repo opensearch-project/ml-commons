@@ -515,7 +515,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
                 MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
-                MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES
+                MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES,
+                MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN
             );
         return settings;
     }

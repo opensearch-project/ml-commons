@@ -7,17 +7,20 @@ package org.opensearch.ml.action.load;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 
 import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -31,6 +34,7 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -87,13 +91,18 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
     @Mock
     private MLLoadModelRequest mlLoadModelRequest;
 
-    @InjectMocks
     private TransportLoadModelAction transportLoadModelAction;
     @Mock
     private ExecutorService executorService;
 
     @Mock
     MLTask mlTask;
+    @Mock
+    MLTaskDispatcher mlTaskDispatcher;
+    @Mock
+    NamedXContentRegistry namedXContentRegistry;
+    private Settings settings;
+    private ClusterSettings clusterSettings;
     private final String modelId = "mock_model_id";
     private final MLModel mlModel = mock(MLModel.class);
     private final String localNodeId = "mockNodeId";
@@ -102,9 +111,16 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
 
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true).build();
+        clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN)));
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         modelHelper = new ModelHelper(mlEngine);
         when(mlLoadModelRequest.getModelId()).thenReturn("mockModelId");
@@ -125,6 +141,21 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
 
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT))).thenReturn(mlStat);
+        transportLoadModelAction = new TransportLoadModelAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlTaskManager,
+            clusterService,
+            threadPool,
+            client,
+            namedXContentRegistry,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlModelManager,
+            mlStats,
+            settings
+        );
     }
 
     public void testDoExecute_success() {
@@ -149,6 +180,34 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
         verify(loadModelResponseListener).onResponse(any(LoadModelResponse.class));
     }
 
+    public void testDoExecute_DoNotAllowCustomDeploymentPlan() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Don't allow custom deployment plan");
+        Settings settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), false).build();
+        ClusterSettings clusterSettings = new ClusterSettings(
+            settings,
+            new HashSet<>(Arrays.asList(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN))
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        TransportLoadModelAction transportLoadModelAction = new TransportLoadModelAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlTaskManager,
+            clusterService,
+            threadPool,
+            client,
+            namedXContentRegistry,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlModelManager,
+            mlStats,
+            settings
+        );
+
+        transportLoadModelAction.doExecute(mock(Task.class), mlLoadModelRequest, mock(ActionListener.class));
+    }
+
     public void testDoExecute_whenLoadModelRequestNodeIdsEmpty_thenMLResourceNotFoundException() {
         DiscoveryNodeHelper nodeHelper = mock(DiscoveryNodeHelper.class);
         when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[] {});
@@ -161,11 +220,12 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
-                mock(NamedXContentRegistry.class),
+                namedXContentRegistry,
                 nodeHelper,
-                mock(MLTaskDispatcher.class),
+                mlTaskDispatcher,
                 mlModelManager,
-                mlStats
+                mlStats,
+                settings
             )
         );
         MLLoadModelRequest mlLoadModelRequest1 = mock(MLLoadModelRequest.class);
@@ -243,7 +303,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
                 localNodeId,
                 mlTask,
                 Arrays.asList(discoveryNode),
-                FunctionName.ANOMALY_LOCALIZATION
+                true
             );
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
 
@@ -257,15 +317,7 @@ public class TransportLoadModelActionTests extends OpenSearchTestCase {
     public void testUpdateModelLoadStatusAndTriggerOnNodesAction_whenMLTaskManagerThrowException_ListenerOnFailureExecuted() {
         doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(ImmutableMap.class), isA(ActionListener.class));
         transportLoadModelAction
-            .updateModelLoadStatusAndTriggerOnNodesAction(
-                modelId,
-                "mock_task_id",
-                mlModel,
-                localNodeId,
-                mlTask,
-                eligibleNodes,
-                FunctionName.TEXT_EMBEDDING
-            );
+            .updateModelLoadStatusAndTriggerOnNodesAction(modelId, "mock_task_id", mlModel, localNodeId, mlTask, eligibleNodes, false);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
