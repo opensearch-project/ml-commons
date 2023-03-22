@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
@@ -31,6 +32,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -75,6 +77,8 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
     MLModelManager mlModelManager;
     MLStats mlStats;
 
+    private volatile boolean allowCustomDeploymentPlan;
+
     @Inject
     public TransportLoadModelAction(
         TransportService transportService,
@@ -88,7 +92,8 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
         MLModelManager mlModelManager,
-        MLStats mlStats
+        MLStats mlStats,
+        Settings settings
     ) {
         super(MLLoadModelAction.NAME, transportService, actionFilters, MLLoadModelRequest::new);
         this.transportService = transportService;
@@ -102,6 +107,10 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
         this.mlStats = mlStats;
+        allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
     }
 
     @Override
@@ -109,6 +118,11 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         MLLoadModelRequest deployModelRequest = MLLoadModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
+        boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
+        if (!allowCustomDeploymentPlan && !deployToAllNodes) {
+            throw new IllegalArgumentException("Don't allow custom deployment plan");
+        }
+
         // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
         DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes();
@@ -121,7 +135,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
 
         List<DiscoveryNode> eligibleNodes = new ArrayList<>();
         List<String> nodeIds = new ArrayList<>();
-        if (targetNodeIds != null && targetNodeIds.length > 0) {
+        if (!deployToAllNodes) {
             for (String nodeId : targetNodeIds) {
                 if (allEligibleNodeIds.contains(nodeId)) {
                     eligibleNodes.add(nodeMapping.get(nodeId));
@@ -189,7 +203,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                                     localNodeId,
                                     mlTask,
                                     eligibleNodes,
-                                    algorithm
+                                    deployToAllNodes
                                 )
                             );
                     } catch (Exception ex) {
@@ -226,7 +240,7 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
         String localNodeId,
         MLTask mlTask,
         List<DiscoveryNode> eligibleNodes,
-        FunctionName algorithm
+        boolean deployToAllNodes
     ) {
         LoadModelInput loadModelInput = new LoadModelInput(
             modelId,
@@ -264,7 +278,9 @@ public class TransportLoadModelAction extends HandledTransportAction<ActionReque
                         MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
                         eligibleNodes.size(),
                         MLModel.PLANNING_WORKER_NODES_FIELD,
-                        workerNodes
+                        workerNodes,
+                        MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+                        deployToAllNodes
                     ),
                 ActionListener
                     .wrap(

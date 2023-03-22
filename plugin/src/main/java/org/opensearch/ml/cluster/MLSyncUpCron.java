@@ -8,6 +8,7 @@ package org.opensearch.ml.cluster;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -174,6 +176,8 @@ public class MLSyncUpCron implements Runnable {
                 .fetchSource(
                     new String[] {
                         MLModel.MODEL_STATE_FIELD,
+                        MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+                        MLModel.PLANNING_WORKER_NODES_FIELD,
                         MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
                         MLModel.LAST_UPDATED_TIME_FIELD,
                         MLModel.CURRENT_WORKER_NODE_COUNT_FIELD },
@@ -183,6 +187,7 @@ public class MLSyncUpCron implements Runnable {
             client.search(searchRequest, ActionListener.wrap(res -> {
                 SearchHit[] hits = res.getHits().getHits();
                 Map<String, MLModelState> newModelStates = new HashMap<>();
+                Map<String, List<String>> newPlanningWorkerNodes = new HashMap<>();
                 for (SearchHit hit : hits) {
                     String modelId = hit.getId();
                     Map<String, Object> sourceAsMap = hit.getSourceAsMap();
@@ -196,6 +201,24 @@ public class MLSyncUpCron implements Runnable {
                     int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
                         ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
                         : 0;
+                    boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
+                        ? (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
+                        : false;
+                    List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
+                        ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
+                        : new ArrayList<>();
+                    if (deployToAllNodes) {
+                        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+                        planningWorkerNodeCount = eligibleNodes.length;
+                        List<String> eligibleNodeIds = Arrays
+                            .asList(eligibleNodes)
+                            .stream()
+                            .map(n -> n.getId())
+                            .collect(Collectors.toList());
+                        if (eligibleNodeIds.size() != planningWorkNodes.size() || !eligibleNodeIds.containsAll(planningWorkNodes)) {
+                            newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+                        }
+                    }
                     MLModelState mlModelState = getNewModelState(
                         loadingModels,
                         modelWorkerNodes,
@@ -209,7 +232,7 @@ public class MLSyncUpCron implements Runnable {
                         newModelStates.put(modelId, mlModelState);
                     }
                 }
-                bulkUpdateModelState(modelWorkerNodes, newModelStates);
+                bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes);
             }, e -> {
                 updateModelStateSemaphore.release();
                 log.error("Failed to search models", e);
@@ -270,16 +293,29 @@ public class MLSyncUpCron implements Runnable {
         return null;
     }
 
-    private void bulkUpdateModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, MLModelState> newModelStates) {
-        if (newModelStates.size() > 0) {
+    private void bulkUpdateModelState(
+        Map<String, Set<String>> modelWorkerNodes,
+        Map<String, MLModelState> newModelStates,
+        Map<String, List<String>> newPlanningWorkNodes
+    ) {
+        Set<String> updatedModelIds = new HashSet<>();
+        updatedModelIds.addAll(newModelStates.keySet());
+        updatedModelIds.addAll(newPlanningWorkNodes.keySet());
+
+        if (updatedModelIds.size() > 0) {
             BulkRequest bulkUpdateRequest = new BulkRequest();
-            for (String modelId : newModelStates.keySet()) {
+            for (String modelId : updatedModelIds) {
                 UpdateRequest updateRequest = new UpdateRequest();
                 Instant now = Instant.now();
                 ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-                builder
-                    .put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name())
-                    .put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+                if (newModelStates.containsKey(modelId)) {
+                    builder.put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name());
+                }
+                if (newPlanningWorkNodes.containsKey(modelId)) {
+                    builder.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkNodes.get(modelId));
+                    builder.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkNodes.get(modelId).size());
+                }
+                builder.put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
                 Set<String> workerNodes = modelWorkerNodes.get(modelId);
                 int currentWorkNodeCount = workerNodes == null ? 0 : workerNodes.size();
                 builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
