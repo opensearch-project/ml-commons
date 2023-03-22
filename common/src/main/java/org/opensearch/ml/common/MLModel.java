@@ -57,6 +57,7 @@ public class MLModel implements ToXContentObject {
     public static final String PLANNING_WORKER_NODE_COUNT_FIELD = "planning_worker_node_count";
     public static final String CURRENT_WORKER_NODE_COUNT_FIELD = "current_worker_node_count";
     public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
+    public static final String DEPLOY_TO_ALL_NODES_FIELD = "deploy_to_all_nodes";
 
     private String name;
     private FunctionName algorithm;
@@ -85,6 +86,7 @@ public class MLModel implements ToXContentObject {
     private Integer currentWorkerNodeCount; // model is deployed to how many nodes
 
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
+    private boolean deployToAllNodes;
     @Builder(toBuilder = true)
     public MLModel(String name,
                    FunctionName algorithm,
@@ -106,7 +108,8 @@ public class MLModel implements ToXContentObject {
                    Integer totalChunks,
                    Integer planningWorkerNodeCount,
                    Integer currentWorkerNodeCount,
-                   String[] planningWorkerNodes) {
+                   String[] planningWorkerNodes,
+                   boolean deployToAllNodes) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -129,6 +132,7 @@ public class MLModel implements ToXContentObject {
         this.planningWorkerNodeCount = planningWorkerNodeCount;
         this.currentWorkerNodeCount = currentWorkerNodeCount;
         this.planningWorkerNodes = planningWorkerNodes;
+        this.deployToAllNodes = deployToAllNodes;
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -165,6 +169,7 @@ public class MLModel implements ToXContentObject {
             planningWorkerNodeCount = input.readOptionalInt();
             currentWorkerNodeCount = input.readOptionalInt();
             planningWorkerNodes = input.readOptionalStringArray();
+            deployToAllNodes = input.readBoolean();
         }
     }
 
@@ -211,6 +216,7 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInt(planningWorkerNodeCount);
         out.writeOptionalInt(currentWorkerNodeCount);
         out.writeOptionalStringArray(planningWorkerNodes);
+        out.writeBoolean(deployToAllNodes);
     }
 
     @Override
@@ -282,6 +288,9 @@ public class MLModel implements ToXContentObject {
         if (planningWorkerNodes != null && planningWorkerNodes.length > 0) {
             builder.field(PLANNING_WORKER_NODES_FIELD, planningWorkerNodes);
         }
+        if (deployToAllNodes) {
+            builder.field(DEPLOY_TO_ALL_NODES_FIELD, deployToAllNodes);
+        }
         builder.endObject();
         return builder;
     }
@@ -312,6 +321,7 @@ public class MLModel implements ToXContentObject {
         Integer planningWorkerNodeCount = null;
         Integer currentWorkerNodeCount = null;
         List<String> planningWorkerNodes = new ArrayList<>();
+        boolean deployToAllNodes = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -379,6 +389,9 @@ public class MLModel implements ToXContentObject {
                         planningWorkerNodes.add(parser.text());
                     }
                     break;
+                case DEPLOY_TO_ALL_NODES_FIELD:
+                    deployToAllNodes = parser.booleanValue();
+                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
@@ -422,6 +435,7 @@ public class MLModel implements ToXContentObject {
                 .planningWorkerNodeCount(planningWorkerNodeCount)
                 .currentWorkerNodeCount(currentWorkerNodeCount)
                 .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
+                .deployToAllNodes(deployToAllNodes)
                 .build();
     }
 
