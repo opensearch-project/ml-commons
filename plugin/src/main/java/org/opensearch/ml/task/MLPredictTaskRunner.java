@@ -126,7 +126,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
                 }
             }, e -> { listener.onFailure(e); });
-            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, true);
             if (workerNodes == null || workerNodes.length == 0) {
                 if (algorithm == FunctionName.TEXT_EMBEDDING) {
                     listener.onFailure(new IllegalArgumentException("model not loaded"));

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.cluster;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -28,12 +30,17 @@ public class DiscoveryNodeHelper {
     private final ClusterService clusterService;
     private final HotDataNodePredicate eligibleNodeFilter;
     private volatile Boolean onlyRunOnMLNode;
+    private volatile Set<String> excludedNodeNames;
 
     public DiscoveryNodeHelper(ClusterService clusterService, Settings settings) {
         this.clusterService = clusterService;
         eligibleNodeFilter = new HotDataNodePredicate();
         onlyRunOnMLNode = ML_COMMONS_ONLY_RUN_ON_ML_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ONLY_RUN_ON_ML_NODE, it -> onlyRunOnMLNode = it);
+        excludedNodeNames = Strings.commaDelimitedListToSet(ML_COMMONS_EXCLUDE_NODE_NAMES.get(settings));
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_EXCLUDE_NODE_NAMES, it -> excludedNodeNames = Strings.commaDelimitedListToSet(it));
     }
 
     public String[] getEligibleNodeIds() {
@@ -50,6 +57,9 @@ public class DiscoveryNodeHelper {
         final List<DiscoveryNode> eligibleMLNodes = new ArrayList<>();
         final List<DiscoveryNode> eligibleDataNodes = new ArrayList<>();
         for (DiscoveryNode node : state.nodes()) {
+            if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
+                continue;
+            }
             if (MLNodeUtils.isMLNode(node)) {
                 eligibleMLNodes.add(node);
             }
@@ -66,6 +76,26 @@ public class DiscoveryNodeHelper {
             log.debug("Find no dedicated ML nodes. But have {} data nodes: {}", eligibleDataNodes.size(), Arrays.toString(dataNodes));
             return dataNodes;
         }
+    }
+
+    public String[] filterEligibleNodes(String[] nodeIds) {
+        if (nodeIds == null || nodeIds.length == 0) {
+            return nodeIds;
+        }
+        DiscoveryNode[] nodes = getNodes(nodeIds);
+        final Set<String> eligibleNodes = new HashSet<>();
+        for (DiscoveryNode node : nodes) {
+            if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
+                continue;
+            }
+            if (MLNodeUtils.isMLNode(node)) {
+                eligibleNodes.add(node.getId());
+            }
+            if (!onlyRunOnMLNode && node.isDataNode() && isEligibleDataNode(node)) {
+                eligibleNodes.add(node.getId());
+            }
+        }
+        return eligibleNodes.toArray(new String[0]);
     }
 
     public DiscoveryNode[] getAllNodes() {
