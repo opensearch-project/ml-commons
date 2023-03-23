@@ -11,7 +11,6 @@ import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
-import ai.djl.util.ZipUtils;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
@@ -27,9 +26,9 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.utils.ZipUtils;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -185,9 +184,7 @@ public abstract class DLModel implements Predictable {
                     if (pathFile.exists()) {
                         FileUtils.deleteDirectory(pathFile);
                     }
-                    try (FileInputStream fileInputStream = new FileInputStream(modelZipFile)) {
-                        ZipUtils.unzip(fileInputStream, modelPath);
-                    }
+                    ZipUtils.unzip(modelZipFile, modelPath);
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();
