@@ -86,10 +86,15 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         MLModelState mlModelState = mlModel.getModelState();
                         if (mlModelState.equals(MLModelState.LOADED)
                             || mlModelState.equals(MLModelState.LOADING)
-                            || mlModelState.equals(MLModelState.PARTIALLY_LOADED)) {
+                            || mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+                            || mlModelState.equals(MLModelState.DEPLOYED)
+                            || mlModelState.equals(MLModelState.DEPLOYING)
+                            || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
                             actionListener
                                 .onFailure(
-                                    new Exception("Model cannot be deleted in loading or loaded state. Try unloading first and then delete")
+                                    new Exception(
+                                        "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
+                                    )
                                 );
                         } else {
                             DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);

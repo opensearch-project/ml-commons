@@ -26,7 +26,7 @@ public interface Predictable {
     MLOutput predict(MLInput mlInput, MLModel model);
 
     /**
-     * Predict with given input data with loaded model.
+     * Predict with given input data for deployed model.
      * @param mlInput input data
      * @return predicted results
      */
@@ -40,7 +40,7 @@ public interface Predictable {
     void initModel(MLModel model, Map<String, Object> params);
 
     /**
-     * Close resources like loaded model.
+     * Close resources like deployed model.
      */
     void close();
 }

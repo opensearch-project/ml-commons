@@ -22,7 +22,7 @@ import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -43,7 +43,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
 
     private String opensearchBackendRole = "opensearch";
     private SearchSourceBuilder searchSourceBuilder;
-    private MLUploadInput mlUploadInput;
+    private MLRegisterModelInput MLRegisterModelInput;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -97,7 +97,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.size(1000);
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
-        mlUploadInput = createUploadModelInput();
+        MLRegisterModelInput = createRegisterModelInput();
     }
 
     @After
@@ -138,24 +138,24 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         );
     }
 
-    public void testUploadModelWithNoAccess() throws IOException {
+    public void testRegisterModelWithNoAccess() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/upload_model]");
-        uploadModel(mlNoAccessClient, TestHelper.toJsonString(mlUploadInput), null);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/register_model]");
+        registerModel(mlNoAccessClient, TestHelper.toJsonString(MLRegisterModelInput), null);
     }
 
-    public void testUploadModelWithReadOnlyMLAccess() throws IOException {
+    public void testRegisterModelWithReadOnlyMLAccess() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/upload_model]");
-        uploadModel(mlReadOnlyClient, TestHelper.toJsonString(mlUploadInput), null);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/register_model]");
+        registerModel(mlReadOnlyClient, TestHelper.toJsonString(MLRegisterModelInput), null);
     }
 
-    public void testUploadModelWithFullAccess() throws IOException {
-        uploadModel(mlFullAccessClient, TestHelper.toJsonString(mlUploadInput), uploadModelResult -> {
-            assertFalse(uploadModelResult.containsKey("model_id"));
-            String taskId = (String) uploadModelResult.get("task_id");
+    public void testRegisterModelWithFullAccess() throws IOException {
+        registerModel(mlFullAccessClient, TestHelper.toJsonString(MLRegisterModelInput), registerModelResult -> {
+            assertFalse(registerModelResult.containsKey("model_id"));
+            String taskId = (String) registerModelResult.get("task_id");
             assertNotNull(taskId);
-            String status = (String) uploadModelResult.get("status");
+            String status = (String) registerModelResult.get("status");
             assertEquals(MLTaskState.CREATED.name(), status);
             try {
                 getTask(mlFullAccessClient, taskId, task -> {
@@ -168,24 +168,24 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         });
     }
 
-    public void testLoadModelWithNoAccess() throws IOException, InterruptedException {
+    public void testDeployModelWithNoAccess() throws IOException, InterruptedException {
         exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/load_model]");
-        loadModel(mlNoAccessClient, mlUploadInput, null);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/deploy_model]");
+        deployModel(mlNoAccessClient, MLRegisterModelInput, null);
     }
 
-    public void testLoadModelWithReadOnlyMLAccess() throws IOException, InterruptedException {
+    public void testDeployModelWithReadOnlyMLAccess() throws IOException, InterruptedException {
         exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/load_model]");
-        loadModel(mlReadOnlyClient, mlUploadInput, null);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/deploy_model]");
+        deployModel(mlReadOnlyClient, MLRegisterModelInput, null);
     }
 
-    public void testLoadModelWithFullAccess() throws IOException, InterruptedException {
-        loadModel(mlFullAccessClient, mlUploadInput, loadModelResult -> {
-            assertFalse(loadModelResult.containsKey("model_id"));
-            String taskId = (String) loadModelResult.get("task_id");
+    public void testDeployModelWithFullAccess() throws IOException, InterruptedException {
+        deployModel(mlFullAccessClient, MLRegisterModelInput, deployModelResult -> {
+            assertFalse(deployModelResult.containsKey("model_id"));
+            String taskId = (String) deployModelResult.get("task_id");
             assertNotNull(taskId);
-            String status = (String) loadModelResult.get("status");
+            String status = (String) deployModelResult.get("status");
             assertEquals(MLTaskState.CREATED.name(), status);
         });
     }

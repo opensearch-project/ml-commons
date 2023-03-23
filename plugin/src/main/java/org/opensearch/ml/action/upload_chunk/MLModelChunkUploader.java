@@ -44,8 +44,8 @@ public class MLModelChunkUploader {
         this.xContentRegistry = xContentRegistry;
     }
 
-    public void uploadModel(MLUploadModelChunkInput mlUploadInput, ActionListener<MLUploadModelChunkResponse> listener) {
-        final String modelId = mlUploadInput.getModelId();
+    public void uploadModelChunk(MLUploadModelChunkInput uploadModelChunkInput, ActionListener<MLUploadModelChunkResponse> listener) {
+        final String modelId = uploadModelChunkInput.getModelId();
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.wrap(r -> {
@@ -55,10 +55,10 @@ public class MLModelChunkUploader {
                         // Use this model to update the chunk count
                         MLModel existingModel = MLModel.parse(parser);
                         existingModel.setModelId(r.getId());
-                        if (existingModel.getTotalChunks() <= mlUploadInput.getChunkNumber()) {
+                        if (existingModel.getTotalChunks() <= uploadModelChunkInput.getChunkNumber()) {
                             throw new Exception("Chunk number exceeds total chunks");
                         }
-                        byte[] bytes = mlUploadInput.getContent();
+                        byte[] bytes = uploadModelChunkInput.getContent();
                         // Check the size of the content not to exceed 10 mb
                         if (bytes == null || bytes.length == 0) {
                             throw new Exception("Chunk size either 0 or null");
@@ -67,7 +67,7 @@ public class MLModelChunkUploader {
                             throw new Exception("Chunk size exceeds 10MB");
                         }
                         mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
-                            int chunkNum = mlUploadInput.getChunkNumber();
+                            int chunkNum = uploadModelChunkInput.getChunkNumber();
                             MLModel mlModel = MLModel
                                 .builder()
                                 .algorithm(existingModel.getAlgorithm())
@@ -79,13 +79,18 @@ public class MLModelChunkUploader {
                                 .content(Base64.getEncoder().encodeToString(bytes))
                                 .build();
                             IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                            indexRequest.id(mlUploadInput.getModelId() + "_" + mlUploadInput.getChunkNumber());
+                            indexRequest.id(uploadModelChunkInput.getModelId() + "_" + uploadModelChunkInput.getChunkNumber());
                             indexRequest
                                 .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                             client.index(indexRequest, ActionListener.wrap(response -> {
-                                log.info("Index model successful for {} for chunk number {}", mlUploadInput.getModelId(), chunkNum + 1);
-                                if (existingModel.getTotalChunks() == (mlUploadInput.getChunkNumber() + 1)) {
+                                log
+                                    .info(
+                                        "Index model successful for {} for chunk number {}",
+                                        uploadModelChunkInput.getModelId(),
+                                        chunkNum + 1
+                                    );
+                                if (existingModel.getTotalChunks() == (uploadModelChunkInput.getChunkNumber() + 1)) {
                                     Semaphore semaphore = new Semaphore(1);
                                     semaphore.acquire();
                                     MLModel mlModelMeta = MLModel
@@ -94,7 +99,7 @@ public class MLModelChunkUploader {
                                         .algorithm(existingModel.getAlgorithm())
                                         .version(existingModel.getVersion())
                                         .modelFormat(existingModel.getModelFormat())
-                                        .modelState(MLModelState.UPLOADED)
+                                        .modelState(MLModelState.REGISTERED)
                                         .modelConfig(existingModel.getModelConfig())
                                         .totalChunks(existingModel.getTotalChunks())
                                         .modelContentHash(existingModel.getModelContentHash())

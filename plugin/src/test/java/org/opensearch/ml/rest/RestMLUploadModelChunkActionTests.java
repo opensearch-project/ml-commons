@@ -86,7 +86,7 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
         restChunkUploadAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLUploadModelChunkRequest> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelChunkRequest.class);
         verify(client, times(1)).execute(eq(MLUploadModelChunkAction.INSTANCE), argumentCaptor.capture(), any());
-        MLUploadModelChunkInput chunkRequest = argumentCaptor.getValue().getMlUploadInput();
+        MLUploadModelChunkInput chunkRequest = argumentCaptor.getValue().getUploadModelChunkInput();
         assertNotNull(chunkRequest.getContent());
         assertEquals(Integer.valueOf(0), chunkRequest.getChunkNumber());
     }

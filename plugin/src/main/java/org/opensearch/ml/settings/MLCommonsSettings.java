@@ -16,10 +16,17 @@ public final class MLCommonsSettings {
 
     public static final Setting<Integer> ML_COMMONS_MAX_MODELS_PER_NODE = Setting
         .intSetting("plugins.ml_commons.max_model_on_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
-    public static final Setting<Integer> ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE = Setting
-        .intSetting("plugins.ml_commons.max_upload_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
-    public static final Setting<Integer> ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE = Setting
-        .intSetting("plugins.ml_commons.max_load_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Integer> ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE = Setting
+        .intSetting(
+            "plugins.ml_commons.max_register_model_tasks_per_node",
+            10,
+            0,
+            10,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<Integer> ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE = Setting
+        .intSetting("plugins.ml_commons.max_deploy_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_ML_TASK_PER_NODE = Setting
         .intSetting("plugins.ml_commons.max_ml_task_per_node", 10, 0, 10000, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Boolean> ML_COMMONS_ONLY_RUN_ON_ML_NODE = Setting

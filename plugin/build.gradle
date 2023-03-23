@@ -260,7 +260,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.profile.MLModelProfile',
         'org.opensearch.ml.profile.MLPredictRequestStats',
-        'org.opensearch.ml.action.load.TransportLoadModelAction',
+        'org.opensearch.ml.action.deploy.TransportDeployModelAction',
         'org.opensearch.ml.model.MLModelManager',
         'org.opensearch.ml.stats.MLClusterLevelStat',
         'org.opensearch.ml.stats.MLStatLevel',

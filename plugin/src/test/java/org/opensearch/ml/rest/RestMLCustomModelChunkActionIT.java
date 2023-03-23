@@ -68,7 +68,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
     }
 
     public void testCustomModelWorkflow() throws IOException, InterruptedException {
-        // upload chunk
+        // register chunk
         Response customModelResponse = createModelMeta();
         assertNotNull(customModelResponse);
         HttpEntity entity = customModelResponse.getEntity();
@@ -93,7 +93,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         entity = getModelResponse.getEntity();
         entityString = TestHelper.httpEntityToString(entity);
         map = gson.fromJson(entityString, Map.class);
-        assertEquals("UPLOADED", map.get("model_state"));
+        assertEquals("REGISTERED", map.get("model_state"));
 
         exceptionRule.expect(Exception.class);
         exceptionRule.expectMessage("Chunk number exceeds total chunks");
@@ -130,7 +130,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
             .name("test_model")
             .version("1")
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelState(MLModelState.UPLOADING)
+            .modelState(MLModelState.REGISTERING)
             .modelContentHashValue("1234566775")
             .modelContentSizeInBytes(12345L)
             .totalChunks(2)

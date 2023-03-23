@@ -73,7 +73,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.utils.TestData;
@@ -589,14 +589,14 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         }
     }
 
-    public MLUploadInput createUploadModelInput() {
+    public MLRegisterModelInput createRegisterModelInput() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(768)
             .build();
-        return MLUploadInput
+        return MLRegisterModelInput
             .builder()
             .modelName("test_model_name")
             .version("1.0.0")
@@ -604,47 +604,49 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
             .url(SENTENCE_TRANSFORMER_MODEL_URL)
-            .loadModel(false)
+            .deployModel(false)
             .build();
     }
 
-    public void uploadModel(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
-        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/models/_upload", null, input, null);
+    public void registerModel(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/models/_register", null, input, null);
         verifyResponse(function, response);
     }
 
-    public String uploadModel(String input) throws IOException {
-        Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/_upload", null, input, null);
+    public String registerModel(String input) throws IOException {
+        Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/_register", null, input, null);
         return parseTaskIdFromResponse(response);
     }
 
-    public void loadModel(RestClient client, MLUploadInput uploadInput, Consumer<Map<String, Object>> function) throws IOException,
+    public void deployModel(RestClient client, MLRegisterModelInput registerModelInput, Consumer<Map<String, Object>> function)
+        throws IOException,
         InterruptedException {
-        String taskId = uploadModel(TestHelper.toJsonString(uploadInput));
+        String taskId = registerModel(TestHelper.toJsonString(registerModelInput));
         waitForTask(taskId, MLTaskState.COMPLETED);
         getTask(client(), taskId, response -> {
             String algorithm = (String) response.get(FUNCTION_NAME_FIELD);
-            assertEquals(uploadInput.getFunctionName().name(), algorithm);
+            assertEquals(registerModelInput.getFunctionName().name(), algorithm);
             assertNotNull(response.get(MODEL_ID_FIELD));
             assertEquals(MLTaskState.COMPLETED.name(), response.get(STATE_FIELD));
             String modelId = (String) response.get(MODEL_ID_FIELD);
             try {
-                // load model
-                loadModel(client, modelId, function);
+                // deploy model
+                deployModel(client, modelId, function);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         });
     }
 
-    public void loadModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
-        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/models/" + modelId + "/_load", null, (String) null, null);
+    public void deployModel(RestClient client, String modelId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper
+            .makeRequest(client, "POST", "/_plugins/_ml/models/" + modelId + "/_deploy", null, (String) null, null);
         verifyResponse(function, response);
     }
 
-    public String loadModel(String modelId) throws IOException {
+    public String deployModel(String modelId) throws IOException {
         Response response = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_load", null, (String) null, null);
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_deploy", null, (String) null, null);
         return parseTaskIdFromResponse(response);
     }
 
@@ -710,10 +712,10 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         return result;
     }
 
-    public Consumer<Map<String, Object>> verifyTextEmbeddingModelLoaded() {
+    public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
         return (modelProfile) -> {
             if (modelProfile.containsKey("model_state")) {
-                assertEquals(MLModelState.LOADED.name(), modelProfile.get("model_state"));
+                assertEquals(MLModelState.DEPLOYED.name(), modelProfile.get("model_state"));
                 assertTrue(
                     ((String) modelProfile.get("predictor"))
                         .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
@@ -724,9 +726,9 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         };
     }
 
-    public Map unloadModel(String modelId) throws IOException {
+    public Map undeployModel(String modelId) throws IOException {
         Response response = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_unload", null, (String) null, null);
+            .makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_undeploy", null, (String) null, null);
         return parseResponseToMap(response);
     }
 

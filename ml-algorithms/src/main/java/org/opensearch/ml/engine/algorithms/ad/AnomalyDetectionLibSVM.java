@@ -88,7 +88,7 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
         MLInputDataset inputDataset = mlInput.getInputDataset();
         DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
         if (libSVMAnomalyModel == null) {
-            throw new IllegalArgumentException("model not loaded");
+            throw new IllegalArgumentException("model not deployed");
         }
         List<Prediction<Event>> predictions;
         MutableDataset<Event> predictionDataset = TribuoUtil.generateDataset(dataFrame, new AnomalyFactory(),

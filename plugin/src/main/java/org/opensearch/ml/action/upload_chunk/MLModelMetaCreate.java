@@ -56,7 +56,7 @@ public class MLModelMetaCreate {
                         .version(version)
                         .description(mlCreateModelMetaInput.getDescription())
                         .modelFormat(mlCreateModelMetaInput.getModelFormat())
-                        .modelState(MLModelState.UPLOADING)
+                        .modelState(MLModelState.REGISTERING)
                         .modelConfig(mlCreateModelMetaInput.getModelConfig())
                         .totalChunks(mlCreateModelMetaInput.getTotalChunks())
                         .modelContentHash(mlCreateModelMetaInput.getModelContentHashValue())
