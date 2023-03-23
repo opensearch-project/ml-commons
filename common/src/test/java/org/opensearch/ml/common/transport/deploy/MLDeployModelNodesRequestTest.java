@@ -84,37 +84,37 @@ public class MLDeployModelNodesRequestTest {
     @Test
     public void testConstructorSerialization1() throws IOException {
         String [] nodeIds = {"id1", "id2", "id3"};
-        MLDeployModelInput MLDeployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
-                new MLDeployModelNodesRequest(nodeIds, MLDeployModelInput)
+                new MLDeployModelNodesRequest(nodeIds, deployModelInput)
         );
         BytesStreamOutput output = new BytesStreamOutput();
 
         MLDeployModelNodeRequest.writeTo(output);
 
-        assertNotNull(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput());
-        assertEquals("modelId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelId());
-        assertEquals("taskId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getTaskId());
-        assertEquals("modelContentHash", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelContentHash());
-        assertEquals(3, MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getNodeCount().intValue());
-        assertEquals("coordinatingNodeId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getCoordinatingNodeId());
-        assertEquals(mlTask.getTaskId(), MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getMlTask().getTaskId());
+        assertNotNull(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput());
+        assertEquals("modelId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelId());
+        assertEquals("taskId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getTaskId());
+        assertEquals("modelContentHash", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelContentHash());
+        assertEquals(3, MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getNodeCount().intValue());
+        assertEquals("coordinatingNodeId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getCoordinatingNodeId());
+        assertEquals(mlTask.getTaskId(), MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getMlTask().getTaskId());
     }
 
     @Test
     public void testConstructorSerialization2() throws IOException {
         DiscoveryNode [] nodeIds = {localNode1, localNode2, localNode3};
-        MLDeployModelInput MLDeployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
-                new MLDeployModelNodesRequest(nodeIds, MLDeployModelInput)
+                new MLDeployModelNodesRequest(nodeIds, deployModelInput)
         );
-        assertNotNull(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput());
-        assertEquals("modelId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelId());
-        assertEquals("taskId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getTaskId());
-        assertEquals("modelContentHash", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelContentHash());
-        assertEquals(3, MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getNodeCount().intValue());
-        assertEquals("coordinatingNodeId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getCoordinatingNodeId());
-        assertEquals(mlTask.getTaskId(), MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getMlTask().getTaskId());
+        assertNotNull(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput());
+        assertEquals("modelId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelId());
+        assertEquals("taskId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getTaskId());
+        assertEquals("modelContentHash", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelContentHash());
+        assertEquals(3, MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getNodeCount().intValue());
+        assertEquals("coordinatingNodeId", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getCoordinatingNodeId());
+        assertEquals(mlTask.getTaskId(), MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getMlTask().getTaskId());
     }
 
     @Test
@@ -122,36 +122,36 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
                 new MLDeployModelNodesRequest(localNode1, localNode2, localNode3)
         );
-        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().setModelId("modelIdSetDuringTest");
-        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().setTaskId("taskIdSetDuringTest");
-        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().setModelContentHash("modelContentHashSetDuringTest");
-        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().setNodeCount(2);
-        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().setCoordinatingNodeId("coordinatingNodeIdSetDuringTest");
-        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().setMlTask(mlTask);
-        assertNotNull(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput());
-        assertEquals("modelIdSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelId());
-        assertEquals("taskIdSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getTaskId());
-        assertEquals("modelContentHashSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelContentHash());
-        assertEquals(2, MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getNodeCount().intValue());
-        assertEquals("coordinatingNodeIdSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getCoordinatingNodeId());
-        assertEquals(mlTask.getTaskId(), MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getMlTask().getTaskId());
+        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().setModelId("modelIdSetDuringTest");
+        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().setTaskId("taskIdSetDuringTest");
+        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().setModelContentHash("modelContentHashSetDuringTest");
+        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().setNodeCount(2);
+        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().setCoordinatingNodeId("coordinatingNodeIdSetDuringTest");
+        MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().setMlTask(mlTask);
+        assertNotNull(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput());
+        assertEquals("modelIdSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelId());
+        assertEquals("taskIdSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getTaskId());
+        assertEquals("modelContentHashSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelContentHash());
+        assertEquals(2, MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getNodeCount().intValue());
+        assertEquals("coordinatingNodeIdSetDuringTest", MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getCoordinatingNodeId());
+        assertEquals(mlTask.getTaskId(), MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getMlTask().getTaskId());
     }
 
     @Test
     public void testConstructorFromInputStream() throws IOException {
         String [] nodeIds = {"id1", "id2", "id3"};
-        MLDeployModelInput MLDeployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
-                new MLDeployModelNodesRequest(nodeIds, MLDeployModelInput)
+                new MLDeployModelNodesRequest(nodeIds, deployModelInput)
         );
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         MLDeployModelNodeRequest.writeTo(bytesStreamOutput);
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLDeployModelNodeRequest parsedNodeRequest = new MLDeployModelNodeRequest(streamInput);
 
-        assertNotNull(parsedNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput());
-        assertEquals(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelId(),
-                parsedNodeRequest.getMLDeployModelNodesRequest().getMLDeployModelInput().getModelId());
+        assertNotNull(parsedNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput());
+        assertEquals(MLDeployModelNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelId(),
+                parsedNodeRequest.getMLDeployModelNodesRequest().getMlDeployModelInput().getModelId());
     }
 
 }

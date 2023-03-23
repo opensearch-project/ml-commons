@@ -106,10 +106,10 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         restMLRegisterModelAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
         verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
-        MLRegisterModelInput MLRegisterModelInput = argumentCaptor.getValue().getRegisterModelInput();
-        assertEquals("test_model_with_modelId", MLRegisterModelInput.getModelName());
-        assertEquals("1", MLRegisterModelInput.getVersion());
-        assertEquals("TORCH_SCRIPT", MLRegisterModelInput.getModelFormat().toString());
+        MLRegisterModelInput registerModelInput = argumentCaptor.getValue().getRegisterModelInput();
+        assertEquals("test_model_with_modelId", registerModelInput.getModelName());
+        assertEquals("1", registerModelInput.getVersion());
+        assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
     }
 
     public void testRegisterModelRequest_NullModelID() throws Exception {
@@ -117,9 +117,9 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         restMLRegisterModelAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
         verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
-        MLRegisterModelInput MLRegisterModelInput = argumentCaptor.getValue().getRegisterModelInput();
-        assertEquals("test_model", MLRegisterModelInput.getModelName());
-        assertEquals("2", MLRegisterModelInput.getVersion());
+        MLRegisterModelInput registerModelInput = argumentCaptor.getValue().getRegisterModelInput();
+        assertEquals("test_model", registerModelInput.getModelName());
+        assertEquals("2", registerModelInput.getVersion());
     }
 
     private RestRequest getRestRequest() {

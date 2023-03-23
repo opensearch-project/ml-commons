@@ -14,20 +14,20 @@ import java.io.IOException;
 
 public class MLUndeployModelNodeRequest extends BaseNodeRequest {
     @Getter
-    private MLUndeployModelNodesRequest MLUndeployModelNodesRequest;
+    private MLUndeployModelNodesRequest mlUndeployModelNodesRequest;
 
     public MLUndeployModelNodeRequest(StreamInput in) throws IOException {
         super(in);
-        this.MLUndeployModelNodesRequest = new MLUndeployModelNodesRequest(in);
+        this.mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(in);
     }
 
     public MLUndeployModelNodeRequest(MLUndeployModelNodesRequest request) {
-        this.MLUndeployModelNodesRequest = request;
+        this.mlUndeployModelNodesRequest = request;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        MLUndeployModelNodesRequest.writeTo(out);
+        mlUndeployModelNodesRequest.writeTo(out);
     }
 }

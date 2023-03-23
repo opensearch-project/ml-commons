@@ -43,7 +43,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
 
     private String opensearchBackendRole = "opensearch";
     private SearchSourceBuilder searchSourceBuilder;
-    private MLRegisterModelInput MLRegisterModelInput;
+    private MLRegisterModelInput mlRegisterModelInput;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -97,7 +97,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.size(1000);
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
-        MLRegisterModelInput = createRegisterModelInput();
+        mlRegisterModelInput = createRegisterModelInput();
     }
 
     @After
@@ -141,17 +141,17 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public void testRegisterModelWithNoAccess() throws IOException {
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/register_model]");
-        registerModel(mlNoAccessClient, TestHelper.toJsonString(MLRegisterModelInput), null);
+        registerModel(mlNoAccessClient, TestHelper.toJsonString(mlRegisterModelInput), null);
     }
 
     public void testRegisterModelWithReadOnlyMLAccess() throws IOException {
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/register_model]");
-        registerModel(mlReadOnlyClient, TestHelper.toJsonString(MLRegisterModelInput), null);
+        registerModel(mlReadOnlyClient, TestHelper.toJsonString(mlRegisterModelInput), null);
     }
 
     public void testRegisterModelWithFullAccess() throws IOException {
-        registerModel(mlFullAccessClient, TestHelper.toJsonString(MLRegisterModelInput), registerModelResult -> {
+        registerModel(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelInput), registerModelResult -> {
             assertFalse(registerModelResult.containsKey("model_id"));
             String taskId = (String) registerModelResult.get("task_id");
             assertNotNull(taskId);
@@ -171,17 +171,17 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public void testDeployModelWithNoAccess() throws IOException, InterruptedException {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/deploy_model]");
-        deployModel(mlNoAccessClient, MLRegisterModelInput, null);
+        deployModel(mlNoAccessClient, mlRegisterModelInput, null);
     }
 
     public void testDeployModelWithReadOnlyMLAccess() throws IOException, InterruptedException {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/deploy_model]");
-        deployModel(mlReadOnlyClient, MLRegisterModelInput, null);
+        deployModel(mlReadOnlyClient, mlRegisterModelInput, null);
     }
 
     public void testDeployModelWithFullAccess() throws IOException, InterruptedException {
-        deployModel(mlFullAccessClient, MLRegisterModelInput, deployModelResult -> {
+        deployModel(mlFullAccessClient, mlRegisterModelInput, deployModelResult -> {
             assertFalse(deployModelResult.containsKey("model_id"));
             String taskId = (String) deployModelResult.get("task_id");
             assertNotNull(taskId);

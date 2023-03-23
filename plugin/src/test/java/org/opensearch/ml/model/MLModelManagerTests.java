@@ -360,8 +360,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_DownloadModelFile(newChunks, 1000L);
         mock_client_update(client);
 
-        MLRegisterModelInput MLRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
-        modelManager.registerMLModel(MLRegisterModelInput, mlTask);
+        MLRegisterModelInput mlRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
+        modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
@@ -378,8 +378,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_DownloadModelFile(newChunks, 1000L);
         mock_client_update_failure(client);
 
-        MLRegisterModelInput MLRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
-        modelManager.registerMLModel(MLRegisterModelInput, mlTask);
+        MLRegisterModelInput mlRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
+        modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());

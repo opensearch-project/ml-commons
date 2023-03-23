@@ -357,7 +357,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
 
     private MLDeployModelNodesRequest prepareRequest(String coordinatingNodeId) {
         DiscoveryNode[] nodeIds = { localNode1, localNode2, localNode3 };
-        MLDeployModelInput MLDeployModelInput = new MLDeployModelInput(
+        MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
             "modelContentHash",
@@ -365,6 +365,6 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             coordinatingNodeId,
             mlTask
         );
-        return new MLDeployModelNodesRequest(nodeIds, MLDeployModelInput);
+        return new MLDeployModelNodesRequest(nodeIds, deployModelInput);
     }
 }

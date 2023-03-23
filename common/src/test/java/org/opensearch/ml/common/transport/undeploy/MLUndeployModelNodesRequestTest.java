@@ -29,13 +29,13 @@ public class MLUndeployModelNodesRequestTest {
         String[] modelIds = {"modelId1", "modelId2", "modelId3"};
         String[] nodeIds = {"nodeId1", "nodeId2", "nodeId3"};
 
-        MLUndeployModelNodeRequest MLUndeployModelNodeRequest = new MLUndeployModelNodeRequest(
+        MLUndeployModelNodeRequest undeployModelNodeRequest = new MLUndeployModelNodeRequest(
                 new MLUndeployModelNodesRequest(nodeIds, modelIds)
         );
         BytesStreamOutput output = new BytesStreamOutput();
 
-        MLUndeployModelNodeRequest.writeTo(output);
-        assertArrayEquals(new String[] {"modelId1", "modelId2", "modelId3"}, MLUndeployModelNodeRequest.getMLUndeployModelNodesRequest().getModelIds());
+        undeployModelNodeRequest.writeTo(output);
+        assertArrayEquals(new String[] {"modelId1", "modelId2", "modelId3"}, undeployModelNodeRequest.getMlUndeployModelNodesRequest().getModelIds());
 
     }
 
@@ -59,10 +59,10 @@ public class MLUndeployModelNodesRequestTest {
                 Version.CURRENT
         );
 
-        MLUndeployModelNodeRequest MLUndeployModelNodeRequest = new MLUndeployModelNodeRequest(
+        MLUndeployModelNodeRequest undeployModelNodeRequest = new MLUndeployModelNodeRequest(
                 new MLUndeployModelNodesRequest(localNode1,localNode2)
         );
-        assertEquals(2, MLUndeployModelNodeRequest.getMLUndeployModelNodesRequest().concreteNodes().length);
+        assertEquals(2, undeployModelNodeRequest.getMlUndeployModelNodesRequest().concreteNodes().length);
 
     }
 
@@ -72,16 +72,16 @@ public class MLUndeployModelNodesRequestTest {
         String[] modelIds = {"modelId1", "modelId2", "modelId3"};
         String[] nodeIds = {"nodeId1", "nodeId2", "nodeId3"};
 
-        MLUndeployModelNodeRequest MLUndeployModelNodeRequest = new MLUndeployModelNodeRequest(
+        MLUndeployModelNodeRequest undeployModelNodeRequest = new MLUndeployModelNodeRequest(
                 new MLUndeployModelNodesRequest(nodeIds, modelIds)
         );
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-        MLUndeployModelNodeRequest.writeTo(bytesStreamOutput);
+        undeployModelNodeRequest.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLUndeployModelNodeRequest parsedNodeRequest = new MLUndeployModelNodeRequest(streamInput);
 
-        assertArrayEquals(MLUndeployModelNodeRequest.getMLUndeployModelNodesRequest().getModelIds(), parsedNodeRequest.getMLUndeployModelNodesRequest().getModelIds());
+        assertArrayEquals(undeployModelNodeRequest.getMlUndeployModelNodesRequest().getModelIds(), parsedNodeRequest.getMlUndeployModelNodesRequest().getModelIds());
 
     }
 }

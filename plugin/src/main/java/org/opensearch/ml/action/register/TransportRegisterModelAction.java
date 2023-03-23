@@ -106,9 +106,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
-        MLRegisterModelInput MLRegisterModelInput = registerModelRequest.getRegisterModelInput();
+        MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
         Pattern pattern = Pattern.compile(trustedUrlRegex);
-        String url = MLRegisterModelInput.getUrl();
+        String url = registerModelInput.getUrl();
         if (url != null) {
             boolean validUrl = pattern.matcher(url).find();
             if (!validUrl) {
@@ -124,7 +124,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .builder()
             .async(true)
             .taskType(MLTaskType.DEPLOY_MODEL)
-            .functionName(MLRegisterModelInput.getFunctionName())
+            .functionName(registerModelInput.getFunctionName())
             .createTime(Instant.now())
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
@@ -160,7 +160,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     MLForwardInput forwardInput = MLForwardInput
                         .builder()
                         .requestType(MLForwardRequestType.REGISTER_MODEL)
-                        .registerModelInput(MLRegisterModelInput)
+                        .registerModelInput(registerModelInput)
                         .mlTask(mlTask)
                         .build();
                     MLForwardRequest forwardRequest = new MLForwardRequest(forwardInput);

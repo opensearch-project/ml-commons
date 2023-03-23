@@ -18,7 +18,7 @@ import static org.junit.Assert.*;
 
 public class MLRegisterModelRequestTest {
 
-    private MLRegisterModelInput MLRegisterModelInput;
+    private MLRegisterModelInput mlRegisterModelInput;
 
     @Before
     public void setUp(){
@@ -31,7 +31,7 @@ public class MLRegisterModelRequestTest {
                 .build();
 
 
-        MLRegisterModelInput = MLRegisterModelInput.builder()
+        mlRegisterModelInput = mlRegisterModelInput.builder()
                 .functionName(FunctionName.KMEANS)
                 .modelName("modelName")
                 .version("version")
@@ -47,7 +47,7 @@ public class MLRegisterModelRequestTest {
     public void writeTo_Success() throws IOException {
 
         MLRegisterModelRequest request = MLRegisterModelRequest.builder()
-                .registerModelInput(MLRegisterModelInput)
+                .registerModelInput(mlRegisterModelInput)
                 .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
@@ -69,7 +69,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void validate_Success() {
         MLRegisterModelRequest request = MLRegisterModelRequest.builder()
-                .registerModelInput(MLRegisterModelInput)
+                .registerModelInput(mlRegisterModelInput)
                 .build();
 
         assertNull(request.validate());
@@ -86,9 +86,9 @@ public class MLRegisterModelRequestTest {
     @Test
     // MLRegisterModelInput check its parameters when created, so exception is not thrown here
     public void validate_Exception_NullMLModelName() {
-        MLRegisterModelInput.setModelName(null);
+        mlRegisterModelInput.setModelName(null);
         MLRegisterModelRequest request = MLRegisterModelRequest.builder()
-                .registerModelInput(MLRegisterModelInput)
+                .registerModelInput(mlRegisterModelInput)
                 .build();
 
         assertNull(request.validate());
@@ -98,7 +98,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void fromActionRequest_Success_WithMLRegisterModelRequest() {
         MLRegisterModelRequest request = MLRegisterModelRequest.builder()
-                .registerModelInput(MLRegisterModelInput)
+                .registerModelInput(mlRegisterModelInput)
                 .build();
         assertSame(MLRegisterModelRequest.fromActionRequest(request), request);
     }
@@ -106,7 +106,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void fromActionRequest_Success_WithNonMLRegisterModelRequest() {
         MLRegisterModelRequest request = MLRegisterModelRequest.builder()
-                .registerModelInput(MLRegisterModelInput)
+                .registerModelInput(mlRegisterModelInput)
                 .build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override

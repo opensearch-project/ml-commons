@@ -89,7 +89,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     private MLStats mlStats;
 
     @Mock
-    private MLDeployModelRequest MLDeployModelRequest;
+    private MLDeployModelRequest mlDeployModelRequest;
 
     private TransportDeployModelAction transportDeployModelAction;
     @Mock
@@ -123,8 +123,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
 
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         modelHelper = new ModelHelper(mlEngine);
-        when(MLDeployModelRequest.getModelId()).thenReturn("mockModelId");
-        when(MLDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });
+        when(mlDeployModelRequest.getModelId()).thenReturn("mockModelId");
+        when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });
         DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
         DiscoveryNode[] discoveryNodes = new DiscoveryNode[] { discoveryNode };
         when(nodeFilter.getEligibleNodes()).thenReturn(discoveryNodes);
@@ -176,7 +176,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
-        transportDeployModelAction.doExecute(mock(Task.class), MLDeployModelRequest, deployModelResponseListener);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
         verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
     }
 
@@ -205,7 +205,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             settings
         );
 
-        transportDeployModelAction.doExecute(mock(Task.class), MLDeployModelRequest, mock(ActionListener.class));
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, mock(ActionListener.class));
     }
 
     public void testDoExecute_whenDeployModelRequestNodeIdsEmpty_thenMLResourceNotFoundException() {
@@ -241,7 +241,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             .getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
-        transportDeployModelAction.doExecute(mock(Task.class), MLDeployModelRequest, deployModelResponseListener);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
         verify(deployModelResponseListener).onFailure(any(Exception.class));
     }
 
@@ -266,7 +266,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         doThrow(RuntimeException.class).when(threadPool).executor(anyString());
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
-        transportDeployModelAction.doExecute(mock(Task.class), MLDeployModelRequest, deployModelResponseListener);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 

@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verify;
 public class MLDeployModelInputTest {
 
     private MLTask mlTask;
-    private MLDeployModelInput MLDeployModelInput;
+    private MLDeployModelInput mlDeployModelInput;
 
     @Before
     public void setUp() throws Exception {
@@ -46,7 +46,7 @@ public class MLDeployModelInputTest {
                 .lastUpdateTime(time)
                 .build();
 
-        MLDeployModelInput = MLDeployModelInput.builder()
+        mlDeployModelInput = mlDeployModelInput.builder()
                 .modelId("testModelId")
                 .taskId("testTaskId")
                 .modelContentHash("modelContentHash")
@@ -59,10 +59,10 @@ public class MLDeployModelInputTest {
     @Test
     public void readInputStream() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-        MLDeployModelInput.writeTo(bytesStreamOutput);
+        mlDeployModelInput.writeTo(bytesStreamOutput);
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLDeployModelInput parsedInput = new MLDeployModelInput(streamInput);
-        assertEquals(MLDeployModelInput.getModelId(), parsedInput.getModelId());
-        assertEquals(MLDeployModelInput.getTaskId(), parsedInput.getTaskId());
+        assertEquals(mlDeployModelInput.getModelId(), parsedInput.getModelId());
+        assertEquals(mlDeployModelInput.getTaskId(), parsedInput.getTaskId());
     }
 }

@@ -242,7 +242,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         List<DiscoveryNode> eligibleNodes,
         boolean deployToAllNodes
     ) {
-        MLDeployModelInput MLDeployModelInput = new MLDeployModelInput(
+        MLDeployModelInput deployModelInput = new MLDeployModelInput(
             modelId,
             taskId,
             mlModel.getModelContentHash(),
@@ -252,7 +252,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         );
         MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(
             eligibleNodes.toArray(new DiscoveryNode[0]),
-            MLDeployModelInput
+            deployModelInput
         );
         ActionListener<MLDeployModelNodesResponse> actionListener = ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {

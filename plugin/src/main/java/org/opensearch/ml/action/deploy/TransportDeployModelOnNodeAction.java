@@ -127,13 +127,13 @@ public class TransportDeployModelOnNodeAction extends
     }
 
     private MLDeployModelNodeResponse createDeployModelNodeResponse(MLDeployModelNodesRequest MLDeployModelNodesRequest) {
-        MLDeployModelInput MLDeployModelInput = MLDeployModelNodesRequest.getMLDeployModelInput();
-        String modelId = MLDeployModelInput.getModelId();
-        String taskId = MLDeployModelInput.getTaskId();
-        Integer nodeCount = MLDeployModelInput.getNodeCount();
-        String coordinatingNodeId = MLDeployModelInput.getCoordinatingNodeId();
-        MLTask mlTask = MLDeployModelInput.getMlTask();
-        String modelContentHash = MLDeployModelInput.getModelContentHash();
+        MLDeployModelInput deployModelInput = MLDeployModelNodesRequest.getMlDeployModelInput();
+        String modelId = deployModelInput.getModelId();
+        String taskId = deployModelInput.getTaskId();
+        Integer nodeCount = deployModelInput.getNodeCount();
+        String coordinatingNodeId = deployModelInput.getCoordinatingNodeId();
+        MLTask mlTask = deployModelInput.getMlTask();
+        String modelContentHash = deployModelInput.getModelContentHash();
 
         Map<String, String> modelDeployStatus = new HashMap<>();
         modelDeployStatus.put(modelId, "received");

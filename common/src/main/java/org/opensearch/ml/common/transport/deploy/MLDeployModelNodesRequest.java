@@ -16,26 +16,26 @@ import java.io.IOException;
 public class MLDeployModelNodesRequest extends BaseNodesRequest<MLDeployModelNodesRequest> {
 
     @Getter
-    private MLDeployModelInput MLDeployModelInput;
+    private MLDeployModelInput mlDeployModelInput;
 
     public MLDeployModelNodesRequest(StreamInput in) throws IOException {
         super(in);
-        MLDeployModelInput = new MLDeployModelInput(in);
+        mlDeployModelInput = new MLDeployModelInput(in);
     }
 
     /**
      * Constructor
      * @param nodeIds nodeIds of nodes' stats to be retrieved
-     * @param MLDeployModelInput deploy model input
+     * @param mlDeployModelInput deploy model input
      */
-    public MLDeployModelNodesRequest(String[] nodeIds, MLDeployModelInput MLDeployModelInput) {
+    public MLDeployModelNodesRequest(String[] nodeIds, MLDeployModelInput mlDeployModelInput) {
         super(nodeIds);
-        this.MLDeployModelInput = MLDeployModelInput;
+        this.mlDeployModelInput = mlDeployModelInput;
     }
 
-    public MLDeployModelNodesRequest(DiscoveryNode[] nodeIds, MLDeployModelInput MLDeployModelInput) {
+    public MLDeployModelNodesRequest(DiscoveryNode[] nodeIds, MLDeployModelInput mlDeployModelInput) {
         super(nodeIds);
-        this.MLDeployModelInput = MLDeployModelInput;
+        this.mlDeployModelInput = mlDeployModelInput;
     }
 
     /**
@@ -45,13 +45,13 @@ public class MLDeployModelNodesRequest extends BaseNodesRequest<MLDeployModelNod
      */
     public MLDeployModelNodesRequest(DiscoveryNode... nodes) {
         super(nodes);
-        MLDeployModelInput = new MLDeployModelInput();
+        mlDeployModelInput = new MLDeployModelInput();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        MLDeployModelInput.writeTo(out);
+        mlDeployModelInput.writeTo(out);
     }
 
 }

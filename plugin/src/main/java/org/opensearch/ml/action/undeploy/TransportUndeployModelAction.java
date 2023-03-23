@@ -188,7 +188,7 @@ public class TransportUndeployModelAction extends
 
     @Override
     protected MLUndeployModelNodeResponse nodeOperation(MLUndeployModelNodeRequest request) {
-        return createUndeployModelNodeResponse(request.getMLUndeployModelNodesRequest());
+        return createUndeployModelNodeResponse(request.getMlUndeployModelNodesRequest());
     }
 
     private MLUndeployModelNodeResponse createUndeployModelNodeResponse(MLUndeployModelNodesRequest MLUndeployModelNodesRequest) {
