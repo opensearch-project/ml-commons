@@ -37,6 +37,8 @@ public class ZipUtils {
                 ze = en.nextElement();
                 String name = ze.getName();
                 Path f = dest.resolve(name).toAbsolutePath();
+                if (!f.normalize().startsWith(dest))
+                    throw new RuntimeException("Bad zip entry");
                 if (ze.isDirectory()) {
                     Files.createDirectories(f);
                 } else {
