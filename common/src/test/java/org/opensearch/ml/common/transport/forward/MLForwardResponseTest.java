@@ -89,7 +89,7 @@ public class MLForwardResponseTest {
     }
 
     @Test
-    public void fromActionResponse_Success_WithNonMLUploadModelRequest() {
+    public void fromActionResponse_Success_WithNonMLForwardResponse() {
         MLForwardResponse response = new MLForwardResponse(status, predictionOutput);
         ActionResponse actionResponse = new ActionResponse() {
 

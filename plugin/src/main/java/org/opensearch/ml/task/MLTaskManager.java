@@ -388,17 +388,17 @@ public class MLTaskManager {
         return false;
     }
 
-    public List<String[]> getLocalRunningLoadModelTasks() {
-        List<String> runningLoadModelTaskIds = new ArrayList<>();
-        List<String> runningLoadModelIds = new ArrayList<>();
+    public List<String[]> getLocalRunningDeployModelTasks() {
+        List<String> runningDeployModelTaskIds = new ArrayList<>();
+        List<String> runningDeployModelIds = new ArrayList<>();
         for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
             MLTask mlTask = entry.getValue().getMlTask();
-            if (mlTask.getTaskType() == MLTaskType.LOAD_MODEL && mlTask.getState() != MLTaskState.CREATED) {
-                runningLoadModelTaskIds.add(entry.getKey());
-                runningLoadModelIds.add(mlTask.getModelId());
+            if (mlTask.getTaskType() == MLTaskType.DEPLOY_MODEL && mlTask.getState() != MLTaskState.CREATED) {
+                runningDeployModelTaskIds.add(entry.getKey());
+                runningDeployModelIds.add(mlTask.getModelId());
             }
         }
-        return Arrays.asList(runningLoadModelTaskIds.toArray(new String[0]), runningLoadModelIds.toArray(new String[0]));
+        return Arrays.asList(runningDeployModelTaskIds.toArray(new String[0]), runningDeployModelIds.toArray(new String[0]));
     }
 
 }

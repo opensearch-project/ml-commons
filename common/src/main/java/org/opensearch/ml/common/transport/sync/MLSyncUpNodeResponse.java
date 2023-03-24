@@ -13,32 +13,31 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
-import java.util.Map;
 
 @Log4j2
 @Getter
 public class MLSyncUpNodeResponse extends BaseNodeResponse  {
 
     private String modelStatus;
-    private String[] loadedModelIds;
-    private String[] runningLoadModelIds; // model ids which have loading model task running
-    private String[] runningLoadModelTaskIds; // load model task ids which is running
+    private String[] deployedModelIds;
+    private String[] runningDeployModelIds; // model ids which have deploying model task running
+    private String[] runningDeployModelTaskIds; // deploy model task ids which is running
 
-    public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] loadedModelIds, String[] runningLoadModelIds,
-                                String[] runningLoadModelTaskIds) {
+    public MLSyncUpNodeResponse(DiscoveryNode node, String modelStatus, String[] deployedModelIds, String[] runningDeployModelIds,
+                                String[] runningDeployModelTaskIds) {
         super(node);
         this.modelStatus = modelStatus;
-        this.loadedModelIds = loadedModelIds;
-        this.runningLoadModelIds = runningLoadModelIds;
-        this.runningLoadModelTaskIds = runningLoadModelTaskIds;
+        this.deployedModelIds = deployedModelIds;
+        this.runningDeployModelIds = runningDeployModelIds;
+        this.runningDeployModelTaskIds = runningDeployModelTaskIds;
     }
 
     public MLSyncUpNodeResponse(StreamInput in) throws IOException {
         super(in);
         this.modelStatus = in.readOptionalString();
-        this.loadedModelIds = in.readOptionalStringArray();
-        this.runningLoadModelIds = in.readOptionalStringArray();
-        this.runningLoadModelTaskIds = in.readOptionalStringArray();
+        this.deployedModelIds = in.readOptionalStringArray();
+        this.runningDeployModelIds = in.readOptionalStringArray();
+        this.runningDeployModelTaskIds = in.readOptionalStringArray();
     }
 
     public static MLSyncUpNodeResponse readStats(StreamInput in) throws IOException {
@@ -49,9 +48,9 @@ public class MLSyncUpNodeResponse extends BaseNodeResponse  {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeOptionalString(modelStatus);
-        out.writeOptionalStringArray(loadedModelIds);
-        out.writeOptionalStringArray(runningLoadModelIds);
-        out.writeOptionalStringArray(runningLoadModelTaskIds);
+        out.writeOptionalStringArray(deployedModelIds);
+        out.writeOptionalStringArray(runningDeployModelIds);
+        out.writeOptionalStringArray(runningDeployModelTaskIds);
     }
 
 }

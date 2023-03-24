@@ -129,7 +129,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, true);
             if (workerNodes == null || workerNodes.length == 0) {
                 if (algorithm == FunctionName.TEXT_EMBEDDING) {
-                    listener.onFailure(new IllegalArgumentException("model not loaded"));
+                    listener.onFailure(new IllegalArgumentException("model not deployed"));
                     return;
                 } else {
                     workerNodes = nodeHelper.getEligibleNodeIds();
@@ -214,7 +214,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     internalListener.onResponse(response);
                     return;
                 } else if (algorithm == FunctionName.TEXT_EMBEDDING) {
-                    throw new IllegalArgumentException("model not loaded");
+                    throw new IllegalArgumentException("model not deployed");
                 }
             } catch (Exception e) {
                 handlePredictFailure(mlTask, internalListener, e, false);

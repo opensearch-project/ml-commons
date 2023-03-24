@@ -23,25 +23,25 @@ import org.opensearch.transport.TransportService;
 public class TransportUploadModelChunkAction extends HandledTransportAction<ActionRequest, MLUploadModelChunkResponse> {
     TransportService transportService;
     ActionFilters actionFilters;
-    MLModelChunkUploader mlModelUploader;
+    MLModelChunkUploader mlModelChunkUploader;
 
     @Inject
     public TransportUploadModelChunkAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLModelChunkUploader mlModelUploader
+        MLModelChunkUploader mlModelChunkUploader
     ) {
         super(MLUploadModelChunkAction.NAME, transportService, actionFilters, MLUploadModelChunkRequest::new);
         this.transportService = transportService;
         this.actionFilters = actionFilters;
-        this.mlModelUploader = mlModelUploader;
+        this.mlModelChunkUploader = mlModelChunkUploader;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLUploadModelChunkResponse> listener) {
         MLUploadModelChunkRequest uploadModelRequest = MLUploadModelChunkRequest.fromActionRequest(request);
-        MLUploadModelChunkInput mlUploadChunkInput = uploadModelRequest.getMlUploadInput();
+        MLUploadModelChunkInput mlUploadChunkInput = uploadModelRequest.getUploadModelChunkInput();
 
-        mlModelUploader.uploadModel(mlUploadChunkInput, listener);
+        mlModelChunkUploader.uploadModelChunk(mlUploadChunkInput, listener);
     }
 }

@@ -45,7 +45,7 @@ public class MLModelCacheHelper {
      */
     public synchronized void initModelState(String modelId, MLModelState state, FunctionName functionName, List<String> targetWorkerNodes) {
         if (isModelRunningOnNode(modelId)) {
-            throw new MLLimitExceededException("Duplicate load model task");
+            throw new MLLimitExceededException("Duplicate deploy model task");
         }
         log.debug("init model state for model {}, state: {}", modelId, state);
         MLModelCache modelCache = new MLModelCache();
@@ -66,24 +66,24 @@ public class MLModelCacheHelper {
     }
 
     /**
-     * Check if model loaded on node.
+     * Check if model deployed on node.
      * @param modelId model id
-     * @return true if model loaded
+     * @return true if model deployed
      */
-    public synchronized boolean isModelLoaded(String modelId) {
+    public synchronized boolean isModelDeployed(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
-        return modelCache != null && modelCache.getModelState() == MLModelState.LOADED;
+        return modelCache != null && modelCache.getModelState() == MLModelState.DEPLOYED;
     }
 
     /**
-     * Get loaded models on node.
+     * Get deployed models on node.
      * @return array of model id
      */
-    public String[] getLoadedModels() {
+    public String[] getDeployedModels() {
         return modelCaches
             .entrySet()
             .stream()
-            .filter(entry -> entry.getValue().getModelState() == MLModelState.LOADED)
+            .filter(entry -> entry.getValue().getModelState() == MLModelState.DEPLOYED)
             .map(entry -> entry.getKey())
             .collect(Collectors.toList())
             .toArray(new String[0]);

@@ -19,8 +19,8 @@ public class MLModelStateTests {
 
     @Test
     public void from() {
-        MLModelState modelState = MLModelState.from("UPLOADED");
-        assertEquals(MLModelState.UPLOADED, modelState);
+        MLModelState modelState = MLModelState.from("REGISTERED");
+        assertEquals(MLModelState.REGISTERED, modelState);
     }
 
     @Test

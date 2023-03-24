@@ -47,9 +47,15 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+    @Deprecated
     public static final String LAST_UPLOADED_TIME_FIELD = "last_uploaded_time";
+    @Deprecated
     public static final String LAST_LOADED_TIME_FIELD = "last_loaded_time";
+    @Deprecated
     public static final String LAST_UNLOADED_TIME_FIELD = "last_unloaded_time";
+    public static final String LAST_REGISTERED_TIME_FIELD = "last_registered_time";
+    public static final String LAST_DEPLOYED_TIME_FIELD = "last_deployed_time";
+    public static final String LAST_UNDEPLOYED_TIME_FIELD = "last_undeployed_time";
 
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String CHUNK_NUMBER_FIELD = "chunk_number";
@@ -74,9 +80,9 @@ public class MLModel implements ToXContentObject {
     private MLModelConfig modelConfig;
     private Instant createdTime;
     private Instant lastUpdateTime;
-    private Instant lastUploadedTime;
-    private Instant lastLoadedTime;
-    private Instant lastUnloadedTime;
+    private Instant lastRegisteredTime;
+    private Instant lastDeployedTime;
+    private Instant lastUndeployedTime;
 
     @Setter
     private String modelId; // model chunk doc only
@@ -101,9 +107,9 @@ public class MLModel implements ToXContentObject {
                    MLModelConfig modelConfig,
                    Instant createdTime,
                    Instant lastUpdateTime,
-                   Instant lastUploadedTime,
-                   Instant lastLoadedTime,
-                   Instant lastUnloadedTime,
+                   Instant lastRegisteredTime,
+                   Instant lastDeployedTime,
+                   Instant lastUndeployedTime,
                    String modelId, Integer chunkNumber,
                    Integer totalChunks,
                    Integer planningWorkerNodeCount,
@@ -123,9 +129,9 @@ public class MLModel implements ToXContentObject {
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
-        this.lastUploadedTime = lastUploadedTime;
-        this.lastLoadedTime = lastLoadedTime;
-        this.lastUnloadedTime = lastUnloadedTime;
+        this.lastRegisteredTime = lastRegisteredTime;
+        this.lastDeployedTime = lastDeployedTime;
+        this.lastUndeployedTime = lastUndeployedTime;
         this.modelId = modelId;
         this.chunkNumber = chunkNumber;
         this.totalChunks = totalChunks;
@@ -160,9 +166,9 @@ public class MLModel implements ToXContentObject {
             }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();
-            lastUploadedTime = input.readOptionalInstant();
-            lastLoadedTime = input.readOptionalInstant();
-            lastUnloadedTime = input.readOptionalInstant();
+            lastRegisteredTime = input.readOptionalInstant();
+            lastDeployedTime = input.readOptionalInstant();
+            lastUndeployedTime = input.readOptionalInstant();
             modelId = input.readOptionalString();
             chunkNumber = input.readOptionalInt();
             totalChunks = input.readOptionalInt();
@@ -207,9 +213,9 @@ public class MLModel implements ToXContentObject {
         }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
-        out.writeOptionalInstant(lastUploadedTime);
-        out.writeOptionalInstant(lastLoadedTime);
-        out.writeOptionalInstant(lastUnloadedTime);
+        out.writeOptionalInstant(lastRegisteredTime);
+        out.writeOptionalInstant(lastDeployedTime);
+        out.writeOptionalInstant(lastUndeployedTime);
         out.writeOptionalString(modelId);
         out.writeOptionalInt(chunkNumber);
         out.writeOptionalInt(totalChunks);
@@ -261,14 +267,14 @@ public class MLModel implements ToXContentObject {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
-        if (lastUploadedTime != null) {
-            builder.field(LAST_UPLOADED_TIME_FIELD, lastUploadedTime.toEpochMilli());
+        if (lastRegisteredTime != null) {
+            builder.field(LAST_REGISTERED_TIME_FIELD, lastRegisteredTime.toEpochMilli());
         }
-        if (lastLoadedTime != null) {
-            builder.field(LAST_LOADED_TIME_FIELD, lastLoadedTime.toEpochMilli());
+        if (lastDeployedTime != null) {
+            builder.field(LAST_DEPLOYED_TIME_FIELD, lastDeployedTime.toEpochMilli());
         }
-        if (lastUnloadedTime != null) {
-            builder.field(LAST_UNLOADED_TIME_FIELD, lastUnloadedTime.toEpochMilli());
+        if (lastUndeployedTime != null) {
+            builder.field(LAST_UNDEPLOYED_TIME_FIELD, lastUndeployedTime.toEpochMilli());
         }
         if (modelId != null) {
             builder.field(MODEL_ID_FIELD, modelId);
@@ -315,6 +321,9 @@ public class MLModel implements ToXContentObject {
         Instant lastUploadedTime = null;
         Instant lastLoadedTime = null;
         Instant lastUnloadedTime = null;
+        Instant lastRegisteredTime = null;
+        Instant lastDeployedTime = null;
+        Instant lastUndeployedTime = null;
         String modelId = null;
         Integer chunkNumber = null;
         Integer totalChunks = null;
@@ -407,6 +416,15 @@ public class MLModel implements ToXContentObject {
                 case LAST_UNLOADED_TIME_FIELD:
                     lastUnloadedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case LAST_REGISTERED_TIME_FIELD:
+                    lastRegisteredTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case LAST_DEPLOYED_TIME_FIELD:
+                    lastDeployedTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case LAST_UNDEPLOYED_TIME_FIELD:
+                    lastUndeployedTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -426,9 +444,9 @@ public class MLModel implements ToXContentObject {
                 .modelConfig(modelConfig)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
-                .lastUploadedTime(lastUploadedTime)
-                .lastLoadedTime(lastLoadedTime)
-                .lastUnloadedTime(lastUnloadedTime)
+                .lastRegisteredTime(lastRegisteredTime == null? lastUploadedTime : lastRegisteredTime)
+                .lastDeployedTime(lastDeployedTime == null? lastLoadedTime : lastDeployedTime)
+                .lastUndeployedTime(lastUndeployedTime == null? lastUnloadedTime : lastUndeployedTime)
                 .modelId(modelId)
                 .chunkNumber(chunkNumber)
                 .totalChunks(totalChunks)

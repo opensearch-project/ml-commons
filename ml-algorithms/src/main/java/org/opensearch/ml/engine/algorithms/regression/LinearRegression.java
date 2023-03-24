@@ -211,7 +211,7 @@ public class LinearRegression implements Trainable, Predictable {
     @Override
     public MLOutput predict(MLInput mlInput) {
         if (regressionModel == null) {
-            throw new IllegalArgumentException("model not loaded");
+            throw new IllegalArgumentException("model not deployed");
         }
         DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         MutableDataset<Regressor> predictionDataset = TribuoUtil.generateDataset(dataFrame, new RegressionFactory(),

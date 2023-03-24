@@ -6,6 +6,6 @@
 package org.opensearch.ml.common.transport.forward;
 
 public enum MLForwardRequestType {
-    LOAD_MODEL_DONE,
-    UPLOAD_MODEL
+    DEPLOY_MODEL_DONE,
+    REGISTER_MODEL
 }

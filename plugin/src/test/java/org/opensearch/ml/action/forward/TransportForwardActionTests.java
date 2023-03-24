@@ -18,8 +18,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.LOAD_MODEL_DONE;
-import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.UPLOAD_MODEL;
+import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.DEPLOY_MODEL_DONE;
+import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.REGISTER_MODEL;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.util.Arrays;
@@ -47,9 +47,9 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
 import org.opensearch.ml.common.transport.forward.MLForwardResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
@@ -100,14 +100,14 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         when(nodeHelper.getAllNodes()).thenReturn(new DiscoveryNode[] { node1, node2 });
     }
 
-    public void testDoExecute_LoadModelDone_Error() {
+    public void testDoExecute_DeployModelDone_Error() {
         Set<String> workerNodes = new HashSet<>();
         workerNodes.add(nodeId1);
         workerNodes.add(nodeId2);
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
         MLTaskCache mlTaskCache = MLTaskCache
             .builder()
-            .mlTask(createMlTask(MLTaskType.UPLOAD_MODEL))
+            .mlTask(createMlTask(MLTaskType.REGISTER_MODEL))
             .workerNodes(Arrays.asList(nodeId1, nodeId2))
             .build();
         mlTaskCache.addError(nodeId1, error);
@@ -115,7 +115,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()
-            .requestType(LOAD_MODEL_DONE)
+            .requestType(DEPLOY_MODEL_DONE)
             .taskId(taskId)
             .error(error)
             .workerNodeId(nodeId1)
@@ -130,7 +130,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
-    public void testDoExecute_LoadModelDone_NoError() {
+    public void testDoExecute_DeployModelDone_NoError() {
         Set<String> workerNodes = new HashSet<>();
         workerNodes.add(nodeId1);
         workerNodes.add(nodeId2);
@@ -139,7 +139,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()
-            .requestType(LOAD_MODEL_DONE)
+            .requestType(DEPLOY_MODEL_DONE)
             .taskId(taskId)
             .modelId(modelId)
             .workerNodeId(nodeId1)
@@ -153,17 +153,17 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
-    public void testDoExecute_LoadModelDone_Error_NullTaskWorkerNodes() {
+    public void testDoExecute_DeployModelDone_Error_NullTaskWorkerNodes() {
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(null);
         List<String> workerNodes = Arrays.asList(nodeId1, nodeId2);
-        MLTaskCache mlTaskCache = MLTaskCache.builder().mlTask(createMlTask(MLTaskType.UPLOAD_MODEL)).workerNodes(workerNodes).build();
+        MLTaskCache mlTaskCache = MLTaskCache.builder().mlTask(createMlTask(MLTaskType.REGISTER_MODEL)).workerNodes(workerNodes).build();
         mlTaskCache.addError(nodeId1, error);
         doReturn(mlTaskCache).when(mlTaskManager).getMLTaskCache(anyString());
         when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1, nodeId2 });
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()
-            .requestType(LOAD_MODEL_DONE)
+            .requestType(DEPLOY_MODEL_DONE)
             .taskId(taskId)
             .modelId(modelId)
             .error(error)
@@ -181,12 +181,12 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals(2, syncUpRequest.getValue().getSyncUpInput().getAddedWorkerNodes().get(modelId).length);
     }
 
-    public void testDoExecute_LoadModelDone_AllFailed() {
+    public void testDoExecute_DeployModelDone_AllFailed() {
         Set<String> workerNodes = new HashSet<>();
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
         MLTaskCache mlTaskCache = MLTaskCache
             .builder()
-            .mlTask(createMlTask(MLTaskType.UPLOAD_MODEL))
+            .mlTask(createMlTask(MLTaskType.REGISTER_MODEL))
             .workerNodes(Arrays.asList(nodeId1))
             .build();
         mlTaskCache.addError(nodeId1, error);
@@ -195,7 +195,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()
-            .requestType(LOAD_MODEL_DONE)
+            .requestType(DEPLOY_MODEL_DONE)
             .taskId(taskId)
             .modelId(modelId)
             .error(error)
@@ -210,11 +210,11 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals(FAILED, (MLTaskState) updatedFields.getValue().get(MLTask.STATE_FIELD));
     }
 
-    public void testDoExecute_LoadModel_Exception() {
+    public void testDoExecute_DeployModel_Exception() {
         doThrow(new RuntimeException(error)).when(mlTaskManager).getWorkNodes(any());
         MLForwardInput forwardInput = MLForwardInput
             .builder()
-            .requestType(LOAD_MODEL_DONE)
+            .requestType(DEPLOY_MODEL_DONE)
             .taskId(taskId)
             .modelId(modelId)
             .error(error)
@@ -227,13 +227,13 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals(error, exception.getValue().getMessage());
     }
 
-    public void testDoExecute_UploadModel() {
+    public void testDoExecute_RegisterModel() {
         MLForwardInput forwardInput = MLForwardInput
             .builder()
-            .requestType(UPLOAD_MODEL)
-            .mlTask(createMlTask(MLTaskType.UPLOAD_MODEL))
+            .requestType(REGISTER_MODEL)
+            .mlTask(createMlTask(MLTaskType.REGISTER_MODEL))
             .taskId(taskId)
-            .uploadInput(prepareInput())
+            .registerModelInput(prepareInput())
             .build();
         MLForwardRequest forwardRequest = MLForwardRequest.builder().forwardInput(forwardInput).build();
         forwardAction.doExecute(task, forwardRequest, listener);
@@ -241,7 +241,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(listener).onResponse(response.capture());
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
-        verify(mlModelManager).uploadMLModel(any(), any());
+        verify(mlModelManager).registerMLModel(any(), any());
     }
 
     private MLTask createMlTask(MLTaskType mlTaskType) {
@@ -255,11 +255,11 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .build();
     }
 
-    private MLUploadInput prepareInput() {
-        MLUploadInput uploadInput = MLUploadInput
+    private MLRegisterModelInput prepareInput() {
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
             .functionName(FunctionName.BATCH_RCF)
-            .loadModel(true)
+            .deployModel(true)
             .version("1.0")
             .modelName("Test Model")
             .modelConfig(
@@ -276,6 +276,6 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .url("http://test_url")
             .build();
-        return uploadInput;
+        return registerModelInput;
     }
 }
