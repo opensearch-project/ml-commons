@@ -29,22 +29,22 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @ToString
 public class MLUploadModelChunkRequest extends ActionRequest {
 
-    MLUploadModelChunkInput mlUploadInput;
+    MLUploadModelChunkInput uploadModelChunkInput;
 
     @Builder
-    public MLUploadModelChunkRequest(MLUploadModelChunkInput mlUploadInput) {
-        this.mlUploadInput = mlUploadInput;
+    public MLUploadModelChunkRequest(MLUploadModelChunkInput uploadModelChunkInput) {
+        this.uploadModelChunkInput = uploadModelChunkInput;
     }
 
     public MLUploadModelChunkRequest(StreamInput in) throws IOException {
         super(in);
-        this.mlUploadInput = new MLUploadModelChunkInput(in);
+        this.uploadModelChunkInput = new MLUploadModelChunkInput(in);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (mlUploadInput == null) {
+        if (uploadModelChunkInput == null) {
             exception = addValidationError("ML input can't be null", exception);
         }
 
@@ -54,7 +54,7 @@ public class MLUploadModelChunkRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        this.mlUploadInput.writeTo(out);
+        this.uploadModelChunkInput.writeTo(out);
     }
 
     public static MLUploadModelChunkRequest fromActionRequest(ActionRequest actionRequest) {

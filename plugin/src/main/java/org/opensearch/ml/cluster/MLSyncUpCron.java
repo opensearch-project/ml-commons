@@ -45,7 +45,7 @@ import com.google.common.collect.ImmutableMap;
 @Log4j2
 public class MLSyncUpCron implements Runnable {
 
-    public static final int LOAD_MODEL_TASK_GRACE_TIME_IN_MS = 20_000;
+    public static final int DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS = 20_000;
     private Client client;
     private ClusterService clusterService;
     private DiscoveryNodeHelper nodeHelper;
@@ -69,7 +69,7 @@ public class MLSyncUpCron implements Runnable {
         }
         log.debug("ML sync job starts");
         DiscoveryNode[] allNodes = nodeHelper.getAllNodes();
-        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
+        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getDeployedModels(true).build();
         MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
         // gather running model/tasks on nodes
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
@@ -77,30 +77,30 @@ public class MLSyncUpCron implements Runnable {
             // key is model id, value is set of worker node ids
             Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
             // key is task id, value is set of worker node ids
-            Map<String, Set<String>> runningLoadModelTasks = new HashMap<>();
+            Map<String, Set<String>> runningDeployModelTasks = new HashMap<>();
             // key is model id, value is set of worker node ids
-            Map<String, Set<String>> loadingModels = new HashMap<>();
+            Map<String, Set<String>> deployingModels = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
-                String[] loadedModelIds = response.getLoadedModelIds();
-                if (loadedModelIds != null && loadedModelIds.length > 0) {
-                    for (String modelId : loadedModelIds) {
+                String[] deployedModelIds = response.getDeployedModelIds();
+                if (deployedModelIds != null && deployedModelIds.length > 0) {
+                    for (String modelId : deployedModelIds) {
                         Set<String> workerNodes = modelWorkerNodes.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
                 }
-                String[] runningModelIds = response.getRunningLoadModelIds();
+                String[] runningModelIds = response.getRunningDeployModelIds();
                 if (runningModelIds != null && runningModelIds.length > 0) {
                     for (String modelId : runningModelIds) {
-                        Set<String> workerNodes = loadingModels.computeIfAbsent(modelId, it -> new HashSet<>());
+                        Set<String> workerNodes = deployingModels.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
                 }
 
-                String[] runningLoadModelTaskIds = response.getRunningLoadModelTaskIds();
-                if (runningLoadModelTaskIds != null && runningLoadModelTaskIds.length > 0) {
-                    for (String taskId : runningLoadModelTaskIds) {
-                        Set<String> workerNodes = runningLoadModelTasks.computeIfAbsent(taskId, it -> new HashSet<>());
+                String[] runningDeployModelTaskIds = response.getRunningDeployModelTaskIds();
+                if (runningDeployModelTaskIds != null && runningDeployModelTaskIds.length > 0) {
+                    for (String taskId : runningDeployModelTaskIds) {
+                        Set<String> workerNodes = runningDeployModelTasks.computeIfAbsent(taskId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
                 }
@@ -109,15 +109,15 @@ public class MLSyncUpCron implements Runnable {
                 String modelId = entry.getKey();
                 log.debug("will sync model worker nodes for model: {}: {}", modelId, entry.getValue().toArray(new String[0]));
             }
-            for (Map.Entry<String, Set<String>> entry : runningLoadModelTasks.entrySet()) {
+            for (Map.Entry<String, Set<String>> entry : runningDeployModelTasks.entrySet()) {
                 log.debug("will sync running task: {}: {}", entry.getKey(), entry.getValue().toArray(new String[0]));
             }
             MLSyncUpInput.MLSyncUpInputBuilder inputBuilder = MLSyncUpInput
                 .builder()
-                .syncRunningLoadModelTasks(true)
-                .runningLoadModelTasks(runningLoadModelTasks);
+                .syncRunningDeployModelTasks(true)
+                .runningDeployModelTasks(runningDeployModelTasks);
             if (modelWorkerNodes.size() == 0) {
-                log.debug("No loaded model found. Will clear model routing on all nodes");
+                log.debug("No deployed model found. Will clear model routing on all nodes");
                 inputBuilder.clearRoutingTable(true);
             } else {
                 inputBuilder.modelRoutingTable(modelWorkerNodes);
@@ -141,7 +141,7 @@ public class MLSyncUpCron implements Runnable {
                 .initModelIndexIfAbsent(
                     ActionListener
                         .wrap(
-                            res -> { refreshModelState(modelWorkerNodes, loadingModels); },
+                            res -> { refreshModelState(modelWorkerNodes, deployingModels); },
                             e -> { log.error("Failed to init model index", e); }
                         )
                 );
@@ -149,7 +149,7 @@ public class MLSyncUpCron implements Runnable {
     }
 
     @VisibleForTesting
-    void refreshModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, Set<String>> loadingModels) {
+    void refreshModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, Set<String>> deployingModels) {
         if (!updateModelStateSemaphore.tryAcquire()) {
             return;
         }
@@ -165,7 +165,11 @@ public class MLSyncUpCron implements Runnable {
                                 MLModelState.LOADING.name(),
                                 MLModelState.PARTIALLY_LOADED.name(),
                                 MLModelState.LOADED.name(),
-                                MLModelState.LOAD_FAILED.name()
+                                MLModelState.LOAD_FAILED.name(),
+                                MLModelState.DEPLOYING.name(),
+                                MLModelState.PARTIALLY_DEPLOYED.name(),
+                                MLModelState.DEPLOYED.name(),
+                                MLModelState.DEPLOY_FAILED.name()
                             )
                     )
                 );
@@ -220,7 +224,7 @@ public class MLSyncUpCron implements Runnable {
                         }
                     }
                     MLModelState mlModelState = getNewModelState(
-                        loadingModels,
+                        deployingModels,
                         modelWorkerNodes,
                         modelId,
                         state,
@@ -244,50 +248,49 @@ public class MLSyncUpCron implements Runnable {
     }
 
     private MLModelState getNewModelState(
-        Map<String, Set<String>> loadingModels,
+        Map<String, Set<String>> deployingModels,
         Map<String, Set<String>> modelWorkerNodes,
-
         String modelId,
         MLModelState state,
         Long lastUpdateTime,
         int planningWorkerNodeCount,
         int currentWorkerNodeCountInIndex
     ) {
-        Set<String> loadTaskNodes = loadingModels.get(modelId);
-        if (loadTaskNodes != null && loadTaskNodes.size() > 0 && state != MLModelState.LOADING) {
-            // If some node/nodes are loading the model and model state is not LOADING, then set model state as LOADING.
-            return MLModelState.LOADING;
+        Set<String> deployModelTaskNodes = deployingModels.get(modelId);
+        if (deployModelTaskNodes != null && deployModelTaskNodes.size() > 0 && state != MLModelState.DEPLOYING) {
+            // If some node/nodes are deploying the model and model state is not DEPLOYING, then set model state as DEPLOYING.
+            return MLModelState.DEPLOYING;
         }
         int currentWorkerNodeCount = modelWorkerNodes.containsKey(modelId) ? modelWorkerNodes.get(modelId).size() : 0;
         if (currentWorkerNodeCount == 0
-            && state != MLModelState.LOAD_FAILED
-            && !(state == MLModelState.LOADING
+            && state != MLModelState.DEPLOY_FAILED
+            && !(state == MLModelState.DEPLOYING
                 && lastUpdateTime != null
-                && lastUpdateTime + LOAD_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
-            // If model not deployed to any node and no node is loading the model, then set model state as LOAD_FAILED
-            return MLModelState.LOAD_FAILED;
+                && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
+            // If model not deployed to any node and no node is deploying the model, then set model state as DEPLOY_FAILED
+            return MLModelState.DEPLOY_FAILED;
         }
         if (currentWorkerNodeCount > 0) {
             if (currentWorkerNodeCount < planningWorkerNodeCount
-                && (state != MLModelState.PARTIALLY_LOADED || currentWorkerNodeCountInIndex != currentWorkerNodeCount)) {
+                && (state != MLModelState.PARTIALLY_DEPLOYED || currentWorkerNodeCountInIndex != currentWorkerNodeCount)) {
                 // If model deployed to some node/nodes, but not deployed to all nodes planned by user,
-                // then set model state as PARTIALLY_LOADED.
-                return MLModelState.PARTIALLY_LOADED;
-            } else if (planningWorkerNodeCount > 0 && currentWorkerNodeCount >= planningWorkerNodeCount && state != MLModelState.LOADED) {
+                // then set model state as PARTIALLY_DEPLOYED.
+                return MLModelState.PARTIALLY_DEPLOYED;
+            } else if (planningWorkerNodeCount > 0 && currentWorkerNodeCount >= planningWorkerNodeCount && state != MLModelState.DEPLOYED) {
                 if (currentWorkerNodeCount > planningWorkerNodeCount) {
-                    // This case should not happen that model loaded to more nodes than planned. So log this as warning if
+                    // This case should not happen that model deployed to more nodes than planned. So log this as warning if
                     // it happens.
                     log
                         .warn(
-                            "Model {} loaded on more nodes [{}] than planning worker node [{}]",
+                            "Model {} deployed on more nodes [{}] than planning worker node [{}]",
                             modelId,
                             currentWorkerNodeCount,
                             planningWorkerNodeCount
                         );
                 }
 
-                // If model deployed to all nodes planned by user, then set model state as LOADED.
-                return MLModelState.LOADED;
+                // If model deployed to all nodes planned by user, then set model state as DEPLOYED.
+                return MLModelState.DEPLOYED;
             }
         }
         return null;

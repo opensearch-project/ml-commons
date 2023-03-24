@@ -21,8 +21,8 @@ public class MLTaskCache {
     MLTask mlTask;
     Semaphore updateTaskIndexSemaphore;
     // List of worker nodes.
-    // For example when load model on ML nodes, these ML nodes are worker nodes. When model
-    // loaded/failed on some node, the node will be removed from worker nodes.
+    // For example when deploy model on ML nodes, these ML nodes are worker nodes. When model
+    // deployed/failed on some node, the node will be removed from worker nodes.
     Set<String> workerNodes;
     Map<String, String> errors;
     // This is the original worker node count. It may not equal to size of workerNodes as

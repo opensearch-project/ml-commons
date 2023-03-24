@@ -34,7 +34,7 @@ public class MLUploadModelChunkRequestTest {
 		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
 		request.writeTo(bytesStreamOutput);
         MLUploadModelChunkRequest newRequest = new MLUploadModelChunkRequest(bytesStreamOutput.bytes().streamInput());
-		assertEquals(request.getMlUploadInput(), newRequest.getMlUploadInput()); 
+		assertEquals(request.getUploadModelChunkInput(), newRequest.getUploadModelChunkInput());
 	}
 
     @Test
@@ -61,7 +61,7 @@ public class MLUploadModelChunkRequestTest {
         };
         MLUploadModelChunkRequest result = MLUploadModelChunkRequest.fromActionRequest(actionRequest);
         assertNotSame(request, result);
-        assertEquals(request.getMlUploadInput(), result.getMlUploadInput());
+        assertEquals(request.getUploadModelChunkInput(), result.getUploadModelChunkInput());
     }
 
 

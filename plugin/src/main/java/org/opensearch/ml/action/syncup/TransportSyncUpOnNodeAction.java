@@ -126,12 +126,12 @@ public class TransportSyncUpOnNodeAction extends
         return createSyncUpNodeResponse(request.getSyncUpNodesRequest());
     }
 
-    private MLSyncUpNodeResponse createSyncUpNodeResponse(MLSyncUpNodesRequest loadModelNodesRequest) {
-        MLSyncUpInput syncUpInput = loadModelNodesRequest.getSyncUpInput();
+    private MLSyncUpNodeResponse createSyncUpNodeResponse(MLSyncUpNodesRequest syncUpNodesRequest) {
+        MLSyncUpInput syncUpInput = syncUpNodesRequest.getSyncUpInput();
         Map<String, String[]> addedWorkerNodes = syncUpInput.getAddedWorkerNodes();
         Map<String, String[]> removedWorkerNodes = syncUpInput.getRemovedWorkerNodes();
         Map<String, Set<String>> modelRoutingTable = syncUpInput.getModelRoutingTable();
-        Map<String, Set<String>> runningLoadModelTasks = syncUpInput.getRunningLoadModelTasks();
+        Map<String, Set<String>> runningDeployModelTasks = syncUpInput.getRunningDeployModelTasks();
 
         if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
             for (Map.Entry<String, String[]> entry : addedWorkerNodes.entrySet()) {
@@ -144,14 +144,14 @@ public class TransportSyncUpOnNodeAction extends
             }
         }
 
-        String[] loadedModelIds = null;
-        String[] runningLoadModelTaskIds = null;
-        String[] runningLoadModelIds = null;
-        if (syncUpInput.isGetLoadedModels()) {
-            loadedModelIds = mlModelManager.getLocalLoadedModels();
-            List<String[]> localRunningLoadModel = mlTaskManager.getLocalRunningLoadModelTasks();
-            runningLoadModelTaskIds = localRunningLoadModel.get(0);
-            runningLoadModelIds = localRunningLoadModel.get(1);
+        String[] deployedModelIds = null;
+        String[] runningDeployModelTaskIds = null;
+        String[] runningDeployModelIds = null;
+        if (syncUpInput.isGetDeployedModels()) {
+            deployedModelIds = mlModelManager.getLocalDeployedModels();
+            List<String[]> localRunningDeployModel = mlTaskManager.getLocalRunningDeployModelTasks();
+            runningDeployModelTaskIds = localRunningDeployModel.get(0);
+            runningDeployModelIds = localRunningDeployModel.get(1);
         }
 
         if (syncUpInput.isClearRoutingTable()) {
@@ -163,14 +163,20 @@ public class TransportSyncUpOnNodeAction extends
             mlModelManager.syncModelWorkerNodes(modelRoutingTable);
         }
 
-        cleanUpLocalCache(runningLoadModelTasks);
+        cleanUpLocalCache(runningDeployModelTasks);
         cleanUpLocalCacheFiles();
 
-        return new MLSyncUpNodeResponse(clusterService.localNode(), "ok", loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds);
+        return new MLSyncUpNodeResponse(
+            clusterService.localNode(),
+            "ok",
+            deployedModelIds,
+            runningDeployModelIds,
+            runningDeployModelTaskIds
+        );
     }
 
     @VisibleForTesting
-    void cleanUpLocalCache(Map<String, Set<String>> runningLoadModelTasks) {
+    void cleanUpLocalCache(Map<String, Set<String>> runningDeployModelTasks) {
         String[] allTaskIds = mlTaskManager.getAllTaskIds();
         if (allTaskIds == null) {
             return;
@@ -182,10 +188,10 @@ public class TransportSyncUpOnNodeAction extends
             Instant now = Instant.now();
             if (now.isAfter(lastUpdateTime.plusSeconds(mlTaskTimeout))) {
                 log.info("ML task timeout. task id: {}, task type: {}", taskId, mlTask.getTaskType());
-                if (mlTask.getTaskType() == MLTaskType.LOAD_MODEL
+                if (mlTask.getTaskType() == MLTaskType.DEPLOY_MODEL
                     && mlTask.getState() == MLTaskState.CREATED
-                    && runningLoadModelTasks != null
-                    && runningLoadModelTasks.containsKey(taskId)) {
+                    && runningDeployModelTasks != null
+                    && runningDeployModelTasks.containsKey(taskId)) {
                     continue;
                 }
                 mlTaskManager
@@ -201,10 +207,10 @@ public class TransportSyncUpOnNodeAction extends
     }
 
     private void cleanUpLocalCacheFiles() {
-        Path uploadModelRootPath = mlEngine.getUploadModelRootPath();
-        Path loadModelRootPath = mlEngine.getLoadModelRootPath();
+        Path registerModelRootPath = mlEngine.getRegisterModelRootPath();
+        Path deployModelRootPath = mlEngine.getDeployModelRootPath();
         Path modelCacheRootPath = mlEngine.getModelCacheRootPath();
-        Set<String> modelsInCacheFolder = FileUtils.getFileNames(uploadModelRootPath, loadModelRootPath, modelCacheRootPath);
+        Set<String> modelsInCacheFolder = FileUtils.getFileNames(registerModelRootPath, deployModelRootPath, modelCacheRootPath);
         if (modelsInCacheFolder.size() > 0) {
             log
                 .debug(
@@ -225,7 +231,7 @@ public class TransportSyncUpOnNodeAction extends
 
     private void deleteFileCache(String modelId) {
         deleteFileQuietly(mlEngine.getModelCachePath(modelId));
-        deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
-        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getDeployModelPath(modelId));
+        deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
     }
 }

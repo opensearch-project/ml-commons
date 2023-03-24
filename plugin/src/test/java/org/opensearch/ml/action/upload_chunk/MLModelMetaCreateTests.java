@@ -90,28 +90,28 @@ public class MLModelMetaCreateTests extends OpenSearchTestCase {
         assertNotNull(mlModelChunkCreate);
     }
 
-    public void testUploadModel() {
+    public void testCreateModelMeta() {
         MLModelMetaCreate mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
-        MLCreateModelMetaInput mlUploadInput = prepareRequest();
-        mlModelMetaCreate.createModelMeta(mlUploadInput, actionListener);
+        MLCreateModelMetaInput createModelMetaInput = prepareRequest();
+        mlModelMetaCreate.createModelMeta(createModelMetaInput, actionListener);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void testUploadModelFiledIndex() {
+    public void testCreateModelMeta_FailedToInitIndex() {
         doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
             listener.onFailure(new Exception("Init Index Failed"));
             return null;
         }).when(client).index(any(), any());
         MLModelMetaCreate mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
-        MLCreateModelMetaInput mlUploadInput = prepareRequest();
-        mlModelMetaCreate.createModelMeta(mlUploadInput, actionListener);
+        MLCreateModelMetaInput createModelMetaInput = prepareRequest();
+        mlModelMetaCreate.createModelMeta(createModelMetaInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
-    public void testUploadModelFiledInitIndexIfPresent() {
+    public void testCreateModelMeta_FailedToInitIndexIfPresent() {
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = invocation.getArgument(0);
             actionListener.onFailure(new Exception("initModelIndexIfAbsent Failed"));

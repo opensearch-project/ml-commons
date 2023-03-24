@@ -89,9 +89,9 @@ public class MLEngineTest {
 
 
     @Test
-    public void loadLinearRegressionModel() {
+    public void deployLinearRegressionModel() {
         MLModel model = trainLinearRegressionModel();
-        Predictable predictor = mlEngine.load(model, null);
+        Predictable predictor = mlEngine.deploy(model, null);
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();
         MLPredictionOutput output = (MLPredictionOutput)predictor.predict(MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(inputDataset).build());
@@ -100,9 +100,9 @@ public class MLEngineTest {
     }
 
     @Test
-    public void loadLinearRegressionModel_NullModel() {
+    public void deployLinearRegressionModel_NullModel() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model not loaded");
+        exceptionRule.expectMessage("model not deployed");
         Predictable predictor = new LinearRegression();
         DataFrame predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         MLInputDataset inputDataset = DataFrameInputDataset.builder().dataFrame(predictionDataFrame).build();

@@ -16,48 +16,48 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLCustomModelActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    private MLUploadInput uploadInput;
+    private MLRegisterModelInput registerModelInput;
 
     @Before
     public void setup() {
-        uploadInput = createUploadModelInput();
+        registerModelInput = createRegisterModelInput();
     }
 
     public void testCustomModelWorkflow() throws IOException, InterruptedException {
-        // upload model
-        String taskId = uploadModel(TestHelper.toJsonString(uploadInput));
+        // register model
+        String taskId = registerModel(TestHelper.toJsonString(registerModelInput));
         waitForTask(taskId, MLTaskState.COMPLETED);
         getTask(client(), taskId, response -> {
             String algorithm = (String) response.get(FUNCTION_NAME_FIELD);
-            assertEquals(uploadInput.getFunctionName().name(), algorithm);
+            assertEquals(registerModelInput.getFunctionName().name(), algorithm);
             assertNotNull(response.get(MODEL_ID_FIELD));
             assertEquals(MLTaskState.COMPLETED.name(), response.get(STATE_FIELD));
             String modelId = (String) response.get(MODEL_ID_FIELD);
             try {
-                // load model
-                String loadTaskId = loadModel(modelId);
-                waitForTask(loadTaskId, MLTaskState.COMPLETED);
-                getTask(client(), loadTaskId, loadTaskResponse -> {
-                    assertEquals(modelId, loadTaskResponse.get(MODEL_ID_FIELD));
+                // deploy model
+                String deployTaskId = deployModel(modelId);
+                waitForTask(deployTaskId, MLTaskState.COMPLETED);
+                getTask(client(), deployTaskId, deployTaskResponse -> {
+                    assertEquals(modelId, deployTaskResponse.get(MODEL_ID_FIELD));
                     assertEquals(MLTaskState.COMPLETED.name(), response.get(STATE_FIELD));
                 });
                 Thread.sleep(300);
                 // profile
-                getModelProfile(modelId, verifyTextEmbeddingModelLoaded());
+                getModelProfile(modelId, verifyTextEmbeddingModelDeployed());
                 // predict
                 predictTextEmbedding(modelId);
-                // unload model
-                Map<String, Object> result = unloadModel(modelId);
+                // undeploy model
+                Map<String, Object> result = undeployModel(modelId);
                 for (Map.Entry<String, Object> entry : result.entrySet()) {
                     Map stats = (Map) ((Map) entry.getValue()).get("stats");
-                    assertEquals("unloaded", stats.get(modelId));
+                    assertEquals("undeployed", stats.get(modelId));
                 }
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);

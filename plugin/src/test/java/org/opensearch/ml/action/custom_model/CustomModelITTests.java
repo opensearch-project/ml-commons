@@ -40,8 +40,8 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
-import org.opensearch.ml.common.transport.unload.UnloadModelNodeResponse;
-import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
@@ -90,8 +90,8 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         int dimension = 768;
         String allConfig = null;
 
-        // upload model
-        String taskId = uploadModel(
+        // register model
+        String taskId = registerModel(
             functionName,
             modelName,
             version,
@@ -106,12 +106,12 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         assertNotNull(taskId);
 
         // profile all
-        MLProfileResponse allProfileAfterUploading = getAllProfile();
+        MLProfileResponse allProfileAfterRegistering = getAllProfile();
         verifyRunningTask(
             taskId,
-            MLTaskType.UPLOAD_MODEL,
+            MLTaskType.REGISTER_MODEL,
             ImmutableSet.of(MLTaskState.RUNNING),
-            allProfileAfterUploading,
+            allProfileAfterRegistering,
             modelWorkerNodes
         );
 
@@ -150,27 +150,27 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             return modelChunksReady.get();
         }, 20, TimeUnit.SECONDS);
 
-        // load model
-        String loadTaskId = loadModel(modelId.get(), modelWorkerNodes.toArray(new String[0]));
+        // deploy model
+        String deployTaskId = deployModel(modelId.get(), modelWorkerNodes.toArray(new String[0]));
 
         // profile all
-        MLProfileResponse allProfileAfterLoading = getAllProfile();
+        MLProfileResponse allProfileAfterDeploying = getAllProfile();
         // Thread.sleep(10);
         verifyRunningTask(
-            loadTaskId,
-            MLTaskType.LOAD_MODEL,
+            deployTaskId,
+            MLTaskType.DEPLOY_MODEL,
             ImmutableSet.of(MLTaskState.CREATED, MLTaskState.RUNNING),
-            allProfileAfterLoading,
+            allProfileAfterDeploying,
             modelWorkerNodes
         );
 
-        waitUntilLoaded(loadTaskId);
+        waitUntilDeployed(deployTaskId);
 
         Thread.sleep(300);
         // profile model
         MLProfileResponse modelProfile = getModelProfile(modelId.get());
         verifyNoRunningTask(modelProfile);
-        verifyLoadedModel(modelId.get(), 0, modelProfile, modelWorkerNodes);
+        verifyDEPLOYEDModel(modelId.get(), 0, modelProfile, modelWorkerNodes);
 
         // predict
         MLTaskResponse response = predict(
@@ -187,29 +187,29 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
 
         // sync up running tasks/models
         MLSyncUpNodesResponse syncUpResponse = syncUp_RunningModelAndTask();
-        verifyLoadedModelOfSyncupResponse(modelWorkerNodes, modelId.get(), syncUpResponse);
+        verifyDEPLOYEDModelOfSyncupResponse(modelWorkerNodes, modelId.get(), syncUpResponse);
 
         MLProfileResponse allProfile = getAllProfile();
-        verifyLoadedModel(modelId.get(), 1, allProfile, modelWorkerNodes);
+        verifyDEPLOYEDModel(modelId.get(), 1, allProfile, modelWorkerNodes);
 
-        // unload model
-        UnloadModelNodesResponse unloadModelResponse = unloadModel(modelId.get());
+        // undeploy model
+        MLUndeployModelNodesResponse undeployModelResponse = undeployModel(modelId.get());
         int nodeNumber = clusterService().state().getNodes().getSize();
-        assertEquals(nodeNumber, unloadModelResponse.getNodes().size());
-        for (UnloadModelNodeResponse node : unloadModelResponse.getNodes()) {
-            if (!node.getModelUnloadStatus().isEmpty()) {
-                Map<String, String> unloadStatus = node.getModelUnloadStatus();
-                assertEquals(1, unloadStatus.size());
-                assertEquals("unloaded", unloadStatus.get(modelId.get()));
+        assertEquals(nodeNumber, undeployModelResponse.getNodes().size());
+        for (MLUndeployModelNodeResponse node : undeployModelResponse.getNodes()) {
+            if (!node.getModelUndeployStatus().isEmpty()) {
+                Map<String, String> undeployStatus = node.getModelUndeployStatus();
+                assertEquals(1, undeployStatus.size());
+                assertEquals("unDEPLOYED", undeployStatus.get(modelId.get()));
             }
         }
 
         // sync up running tasks/models
-        MLSyncUpNodesResponse syncUpResponseAfterUnload = syncUp_RunningModelAndTask();
-        for (MLSyncUpNodeResponse nodeResponse : syncUpResponseAfterUnload.getNodes()) {
+        MLSyncUpNodesResponse syncUpResponseAfterUndeploy = syncUp_RunningModelAndTask();
+        for (MLSyncUpNodeResponse nodeResponse : syncUpResponseAfterUndeploy.getNodes()) {
             if (nodeResponse.getNode().isDataNode()) {
-                assertEquals(0, nodeResponse.getRunningLoadModelTaskIds().length);
-                assertEquals(0, nodeResponse.getLoadedModelIds().length);
+                assertEquals(0, nodeResponse.getRunningDeployModelTaskIds().length);
+                assertEquals(0, nodeResponse.getDeployedModelIds().length);
             }
         }
 
@@ -218,59 +218,59 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
 
         MLSyncUpNodesResponse syncUpClearResponse = syncUp_Clear();
         for (MLSyncUpNodeResponse nodeResponse : syncUpClearResponse.getNodes()) {
-            assertNull(nodeResponse.getLoadedModelIds());
-            assertNull(nodeResponse.getRunningLoadModelTaskIds());
+            assertNull(nodeResponse.getDeployedModelIds());
+            assertNull(nodeResponse.getRunningDeployModelTaskIds());
         }
     }
 
-    private void verifyLoadedModelOfSyncupResponse(Set<String> modelWorkerNodes, String modelId, MLSyncUpNodesResponse syncUpResponse) {
-        boolean hasLoadedModel = false;
+    private void verifyDEPLOYEDModelOfSyncupResponse(Set<String> modelWorkerNodes, String modelId, MLSyncUpNodesResponse syncUpResponse) {
+        boolean hasDEPLOYEDModel = false;
         for (MLSyncUpNodeResponse nodeResponse : syncUpResponse.getNodes()) {
             DiscoveryNode node = nodeResponse.getNode();
             if (modelWorkerNodes.size() > 0 && !modelWorkerNodes.contains(node.getId())) {
                 continue;
             }
             if (node.isDataNode()) {
-                assertEquals(0, nodeResponse.getRunningLoadModelTaskIds().length);
-                assertArrayEquals(new String[] { modelId }, nodeResponse.getLoadedModelIds());
-                hasLoadedModel = true;
+                assertEquals(0, nodeResponse.getRunningDeployModelTaskIds().length);
+                assertArrayEquals(new String[] { modelId }, nodeResponse.getDeployedModelIds());
+                hasDEPLOYEDModel = true;
             }
         }
-        assertTrue(hasLoadedModel);
+        assertTrue(hasDEPLOYEDModel);
     }
 
-    private void waitUntilLoaded(String loadTaskId) throws InterruptedException {
-        AtomicBoolean loaded = new AtomicBoolean(false);
+    private void waitUntilDeployed(String deployTaskId) throws InterruptedException {
+        AtomicBoolean DEPLOYED = new AtomicBoolean(false);
         waitUntil(() -> {
-            MLProfileResponse modelProfile = getModelProfile(loadTaskId);
+            MLProfileResponse modelProfile = getModelProfile(deployTaskId);
             if (modelProfile != null) {
                 List<MLProfileNodeResponse> nodes = modelProfile.getNodes();
                 if (nodes != null) {
                     nodes.forEach(node -> {
                         node.getMlNodeModels().entrySet().forEach(e -> {
-                            if (e.getValue().getModelState() == MLModelState.LOADED) {
-                                loaded.set(true);
+                            if (e.getValue().getModelState() == MLModelState.DEPLOYED) {
+                                DEPLOYED.set(true);
                             }
                         });
                     });
                 }
             }
-            return loaded.get();
+            return DEPLOYED.get();
         }, 20, TimeUnit.SECONDS);
-        assertTrue(loaded.get());
+        assertTrue(DEPLOYED.get());
     }
 
     protected void testKMeans(Set<String> modelWorkerNodes) throws InterruptedException {
         String modelId = trainKmeansWithIrisData(irisIndexName, false);
-        // load model
-        String loadTaskId = loadModel(modelId, modelWorkerNodes.toArray(new String[0]));
-        waitUntilLoaded(loadTaskId);
+        // deploy model
+        String deployTaskId = deployModel(modelId, modelWorkerNodes.toArray(new String[0]));
+        waitUntilDeployed(deployTaskId);
 
         Thread.sleep(300);
         // profile model
         MLProfileResponse modelProfile = getModelProfile(modelId);
         verifyNoRunningTask(modelProfile);
-        verifyLoadedModel(modelId, 0, modelProfile, modelWorkerNodes);
+        verifyDEPLOYEDModel(modelId, 0, modelProfile, modelWorkerNodes);
 
         // predict
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
@@ -280,17 +280,17 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         // profile model
         MLProfileResponse modelProfileAfterPredict = getModelProfile(modelId);
         verifyNoRunningTask(modelProfileAfterPredict);
-        verifyLoadedModel(modelId, 1, modelProfileAfterPredict, modelWorkerNodes);
+        verifyDEPLOYEDModel(modelId, 1, modelProfileAfterPredict, modelWorkerNodes);
     }
 
     private void verifyRunningTask(
         String taskId,
         MLTaskType taskType,
         Set<MLTaskState> states,
-        MLProfileResponse allProfileAfterUploading,
+        MLProfileResponse allProfileAfterRegistering,
         Set<String> modelWorkerNodes
     ) {
-        for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
+        for (MLProfileNodeResponse nodeResponse : allProfileAfterRegistering.getNodes()) {
             DiscoveryNode node = nodeResponse.getNode();
             if (modelWorkerNodes.size() > 0 && !modelWorkerNodes.contains(node.getId())) {
                 continue;
@@ -304,22 +304,22 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         }
     }
 
-    private void verifyNoRunningTask(MLProfileResponse allProfileAfterUploading) {
-        for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
+    private void verifyNoRunningTask(MLProfileResponse allProfileAfterRegistering) {
+        for (MLProfileNodeResponse nodeResponse : allProfileAfterRegistering.getNodes()) {
             if (nodeResponse.getNode().isDataNode()) {
                 assertEquals(0, nodeResponse.getMlNodeTasks().size());
             }
         }
     }
 
-    private void verifyLoadedModel(
+    private void verifyDEPLOYEDModel(
         String modelId,
         long predictCounts,
-        MLProfileResponse allProfileAfterUploading,
+        MLProfileResponse allProfileAfterRegistering,
         Set<String> modelWorkerNodes
     ) {
-        boolean hasLoadedModel = false;
-        for (MLProfileNodeResponse nodeResponse : allProfileAfterUploading.getNodes()) {
+        boolean hasDEPLOYEDModel = false;
+        for (MLProfileNodeResponse nodeResponse : allProfileAfterRegistering.getNodes()) {
             MLModelProfile mlModelProfile = nodeResponse.getMlNodeModels().get(modelId);
             DiscoveryNode node = nodeResponse.getNode();
             String[] workerNodes = mlModelProfile.getWorkerNodes();
@@ -335,8 +335,8 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             }
             if (node.isDataNode() && mlModelProfile != null && mlModelProfile.getModelState() != null) {
                 assertTrue(nodeResponse.getMlNodeModels().containsKey(modelId));
-                assertEquals(MLModelState.LOADED, mlModelProfile.getModelState());
-                hasLoadedModel = true;
+                assertEquals(MLModelState.DEPLOYED, mlModelProfile.getModelState());
+                hasDEPLOYEDModel = true;
                 if (predictCounts == 0) {
                     assertNull(mlModelProfile.getModelInferenceStats());
                 } else {
@@ -344,6 +344,6 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
                 }
             }
         }
-        assertTrue(hasLoadedModel);
+        assertTrue(hasDEPLOYEDModel);
     }
 }

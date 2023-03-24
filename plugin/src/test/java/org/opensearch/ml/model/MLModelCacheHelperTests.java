@@ -70,19 +70,19 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     }
 
     public void testModelState() {
-        assertFalse(cacheHelper.isModelLoaded(modelId));
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
-        assertFalse(cacheHelper.isModelLoaded(modelId));
-        cacheHelper.setModelState(modelId, MLModelState.LOADED);
-        assertTrue(cacheHelper.isModelLoaded(modelId));
+        assertFalse(cacheHelper.isModelDeployed(modelId));
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        assertFalse(cacheHelper.isModelDeployed(modelId));
+        cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+        assertTrue(cacheHelper.isModelDeployed(modelId));
         assertEquals(FunctionName.TEXT_EMBEDDING, cacheHelper.getFunctionName(modelId));
     }
 
     public void testModelState_DuplicateError() {
         expectedEx.expect(MLLimitExceededException.class);
-        expectedEx.expectMessage("Duplicate load model task");
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        expectedEx.expectMessage("Duplicate deploy model task");
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
     }
 
     public void testPredictor_NotFoundException() {
@@ -92,7 +92,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     }
 
     public void testPredictor() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
         assertNull(cacheHelper.getPredictor(modelId));
         cacheHelper.setPredictor(modelId, predictor);
         assertEquals(predictor, cacheHelper.getPredictor(modelId));
@@ -100,31 +100,31 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
     public void testGetAndRemoveModel() {
         assertFalse(cacheHelper.isModelRunningOnNode(modelId));
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
-        String[] loadedModels = cacheHelper.getLoadedModels();
-        assertEquals(0, loadedModels.length);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        String[] deployedModels = cacheHelper.getDeployedModels();
+        assertEquals(0, deployedModels.length);
 
         assertTrue(cacheHelper.isModelRunningOnNode(modelId));
 
-        cacheHelper.setModelState(modelId, MLModelState.LOADED);
-        loadedModels = cacheHelper.getLoadedModels();
-        assertArrayEquals(new String[] { modelId }, loadedModels);
+        cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+        deployedModels = cacheHelper.getDeployedModels();
+        assertArrayEquals(new String[] { modelId }, deployedModels);
 
         cacheHelper.removeModel(modelId);
-        loadedModels = cacheHelper.getLoadedModels();
-        assertEquals(0, loadedModels.length);
+        deployedModels = cacheHelper.getDeployedModels();
+        assertEquals(0, deployedModels.length);
     }
 
     public void testRemoveModel_WrongModelId() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
         cacheHelper.removeModel("wrong_model_id");
         assertArrayEquals(new String[] { modelId }, cacheHelper.getAllModels());
     }
 
-    public void testModelLoaded() {
+    public void testModelDeployed() {
         cacheHelper.addWorkerNode(modelId, nodeId);
-        String[] loadedModels = cacheHelper.getLoadedModels();
-        assertEquals(0, loadedModels.length);
+        String[] deployedModels = cacheHelper.getDeployedModels();
+        assertEquals(0, deployedModels.length);
 
         String[] allModels = cacheHelper.getAllModels();
         assertArrayEquals(new String[] { modelId }, allModels);
@@ -159,7 +159,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
     public void testRemoveWorkerNode_ModelState() {
         cacheHelper.addWorkerNode(modelId, nodeId);
-        cacheHelper.setModelState(modelId, MLModelState.LOADING);
+        cacheHelper.setModelState(modelId, MLModelState.DEPLOYING);
         cacheHelper.removeWorkerNodes(ImmutableSet.of(nodeId));
         assertEquals(0, cacheHelper.getWorkerNodes(modelId).length);
         assertTrue(cacheHelper.isModelRunningOnNode(modelId));
@@ -168,9 +168,9 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertFalse(cacheHelper.isModelRunningOnNode(modelId));
     }
 
-    public void testRemoveModel_Loaded() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
-        cacheHelper.setModelState(modelId, MLModelState.LOADED);
+    public void testRemoveModel_Deployed() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
         cacheHelper.setPredictor(modelId, predictor);
         cacheHelper.removeModel(modelId);
         verify(predictor, times(1)).close();
@@ -185,7 +185,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     }
 
     public void testClearWorkerNodes_ModelState() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADED, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYED, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
         cacheHelper.addWorkerNode(modelId, nodeId);
         cacheHelper.clearWorkerNodes();
         assertArrayEquals(new String[] { modelId }, cacheHelper.getAllModels());
@@ -212,7 +212,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
     public void testSyncWorkerNodes_ModelState() {
         String modelId2 = "model_id2";
-        cacheHelper.initModelState(modelId2, MLModelState.LOADED, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId2, MLModelState.DEPLOYED, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
         cacheHelper.addWorkerNode(modelId, nodeId);
         cacheHelper.addWorkerNode(modelId2, nodeId);
 
@@ -225,7 +225,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertArrayEquals(new String[] { newNodeId }, cacheHelper.getWorkerNodes(modelId));
     }
 
-    public void testSyncWorkerNodes_ModelState_NoModelLoaded() {
+    public void testSyncWorkerNodes_ModelState_NoModelDeployed() {
         cacheHelper.addWorkerNode(modelId, nodeId);
 
         String newModelId = "new_model_id";
@@ -249,14 +249,14 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     }
 
     public void testGetModelProfile() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
-        cacheHelper.setModelState(modelId, MLModelState.LOADED);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
         cacheHelper.setPredictor(modelId, predictor);
         cacheHelper.addWorkerNode(modelId, nodeId);
         MLModelProfile modelProfile = cacheHelper.getModelProfile(modelId);
         assertNotNull(modelProfile);
         assertTrue(modelProfile.getPredictor().contains("TextEmbeddingModel"));
-        assertEquals(MLModelState.LOADED, modelProfile.getModelState());
+        assertEquals(MLModelState.DEPLOYED, modelProfile.getModelState());
         assertArrayEquals(new String[] { nodeId }, modelProfile.getWorkerNodes());
         assertNull(modelProfile.getModelInferenceStats());
 
@@ -271,18 +271,18 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         assertEquals(maxMonitoringRequests, predictStats.getCount().longValue());
     }
 
-    public void testGetModelProfile_Loading() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+    public void testGetModelProfile_Deploying() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
         MLModelProfile modelProfile = cacheHelper.getModelProfile(modelId);
         assertNotNull(modelProfile);
-        assertEquals(MLModelState.LOADING, modelProfile.getModelState());
+        assertEquals(MLModelState.DEPLOYING, modelProfile.getModelState());
         assertNull(modelProfile.getPredictor());
         assertNull(modelProfile.getWorkerNodes());
         assertNull(modelProfile.getModelInferenceStats());
     }
 
     public void testGetFunctionName() {
-        cacheHelper.initModelState(modelId, MLModelState.LOADING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
         assertEquals(FunctionName.TEXT_EMBEDDING, cacheHelper.getFunctionName(modelId));
         assertEquals(FunctionName.TEXT_EMBEDDING, cacheHelper.getOptionalFunctionName(modelId).get());
         assertFalse(cacheHelper.getOptionalFunctionName(randomAlphaOfLength(10)).isPresent());

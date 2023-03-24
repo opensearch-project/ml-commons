@@ -17,7 +17,7 @@ import java.util.Set;
 
 @Data
 public class MLSyncUpInput implements Writeable {
-    private boolean getLoadedModels;
+    private boolean getDeployedModels;
     // key is model id, value is set of added worker node ids
     private Map<String, String[]> addedWorkerNodes;
     // key is model id, value is set of removed worker node ids
@@ -25,33 +25,33 @@ public class MLSyncUpInput implements Writeable {
     // key is model id, value is set of worker node ids
     private Map<String, Set<String>> modelRoutingTable;
     // key is task id, value is set of worker node ids
-    private Map<String, Set<String>> runningLoadModelTasks;
+    private Map<String, Set<String>> runningDeployModelTasks;
     // clear model routing table if no running model in cluster
     private boolean clearRoutingTable;
-    // sync running load model tasks
-    private boolean syncRunningLoadModelTasks;
+    // sync running deploy model tasks
+    private boolean syncRunningDeployModelTasks;
 
     @Builder
-    public MLSyncUpInput(boolean getLoadedModels,
+    public MLSyncUpInput(boolean getDeployedModels,
                          Map<String, String[]> addedWorkerNodes,
                          Map<String, String[]> removedWorkerNodes,
                          Map<String, Set<String>> modelRoutingTable,
-                         Map<String, Set<String>> runningLoadModelTasks,
+                         Map<String, Set<String>> runningDeployModelTasks,
                          boolean clearRoutingTable,
-                         boolean syncRunningLoadModelTasks) {
-        this.getLoadedModels = getLoadedModels;
+                         boolean syncRunningDeployModelTasks) {
+        this.getDeployedModels = getDeployedModels;
         this.addedWorkerNodes = addedWorkerNodes;
         this.removedWorkerNodes = removedWorkerNodes;
         this.modelRoutingTable = modelRoutingTable;
-        this.runningLoadModelTasks = runningLoadModelTasks;
+        this.runningDeployModelTasks = runningDeployModelTasks;
         this.clearRoutingTable = clearRoutingTable;
-        this.syncRunningLoadModelTasks = syncRunningLoadModelTasks;
+        this.syncRunningDeployModelTasks = syncRunningDeployModelTasks;
     }
 
     public MLSyncUpInput(){}
 
     public MLSyncUpInput(StreamInput in) throws IOException {
-        this.getLoadedModels = in.readBoolean();
+        this.getDeployedModels = in.readBoolean();
         if (in.readBoolean()) {
             this.addedWorkerNodes = in.readMap(StreamInput::readString, StreamInput::readStringArray);
         }
@@ -62,15 +62,15 @@ public class MLSyncUpInput implements Writeable {
             modelRoutingTable = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
         }
         if (in.readBoolean()) {
-            runningLoadModelTasks = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
+            runningDeployModelTasks = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
         }
         this.clearRoutingTable = in.readBoolean();
-        this.syncRunningLoadModelTasks = in.readBoolean();
+        this.syncRunningDeployModelTasks = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeBoolean(getLoadedModels);
+        out.writeBoolean(getDeployedModels);
         if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
             out.writeBoolean(true);
             out.writeMap(addedWorkerNodes, StreamOutput::writeString, StreamOutput::writeStringArray);
@@ -89,14 +89,14 @@ public class MLSyncUpInput implements Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (runningLoadModelTasks != null && runningLoadModelTasks.size() > 0) {
+        if (runningDeployModelTasks != null && runningDeployModelTasks.size() > 0) {
             out.writeBoolean(true);
-            out.writeMap(runningLoadModelTasks, StreamOutput::writeString, StreamOutput::writeStringCollection);
+            out.writeMap(runningDeployModelTasks, StreamOutput::writeString, StreamOutput::writeStringCollection);
         } else {
             out.writeBoolean(false);
         }
         out.writeBoolean(clearRoutingTable);
-        out.writeBoolean(syncRunningLoadModelTasks);
+        out.writeBoolean(syncRunningDeployModelTasks);
     }
 
 }

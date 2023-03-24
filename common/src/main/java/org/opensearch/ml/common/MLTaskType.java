@@ -10,6 +10,10 @@ public enum MLTaskType {
     PREDICTION,
     TRAINING_AND_PREDICTION,
     EXECUTION,
+    @Deprecated
     UPLOAD_MODEL,
-    LOAD_MODEL
+    @Deprecated
+    LOAD_MODEL,
+    REGISTER_MODEL,
+    DEPLOY_MODEL
 }

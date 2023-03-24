@@ -19,7 +19,7 @@ public class CommonValue {
     public static final String USER = "user";
     public static final String META = "_meta";
     public static final String SCHEMA_VERSION_FIELD = "schema_version";
-    public static final String UNLOADED = "unloaded";
+    public static final String UNDEPLOYED = "undeployed";
     public static final String NOT_FOUND = "not_found";
 
     public static final String BOX_TYPE_KEY = "box_type";
@@ -116,13 +116,13 @@ public class CommonValue {
             + MLModel.LAST_UPDATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LAST_UPLOADED_TIME_FIELD
+            + MLModel.LAST_REGISTERED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LAST_LOADED_TIME_FIELD
+            + MLModel.LAST_DEPLOYED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + MLModel.LAST_UNLOADED_TIME_FIELD
+            + MLModel.LAST_UNDEPLOYED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + USER_FIELD_MAPPING
             + "    }\n"

@@ -110,7 +110,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.UPLOADED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -122,7 +122,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_CheckModelState() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.LOADING);
+        GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -133,7 +133,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Model cannot be deleted in loading or loaded state. Try unloading first and then delete",
+            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -165,7 +165,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.UPLOADED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -191,7 +191,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_RuntimeException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.UPLOADED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);

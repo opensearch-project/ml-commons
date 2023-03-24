@@ -15,7 +15,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 
@@ -43,7 +43,7 @@ public class ModelHelperTest {
     ActionListener<Map<String, Object>> actionListener;
 
     @Mock
-    ActionListener<MLUploadInput> uploadInputListener;
+    ActionListener<MLRegisterModelInput> registerModelListener;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -113,32 +113,32 @@ public class ModelHelperTest {
     @Test
     public void testDownloadPrebuiltModelConfig_WrongModelName() {
         String taskId = "test_task_id";
-        MLUploadInput unloadInput = MLUploadInput.builder()
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
                 .modelName("test_model_name")
                 .version("1.0.1")
                 .modelFormat(modelFormat)
-                .loadModel(false)
+                .deployModel(false)
                 .modelNodeIds(new String[]{"node_id1"})
                 .build();
-        modelHelper.downloadPrebuiltModelConfig(taskId, unloadInput, uploadInputListener);
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(uploadInputListener).onFailure(argumentCaptor.capture());
+        verify(registerModelListener).onFailure(argumentCaptor.capture());
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
     }
 
     @Test
     public void testDownloadPrebuiltModelConfig() {
         String taskId = "test_task_id";
-        MLUploadInput unloadInput = MLUploadInput.builder()
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
                 .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
                 .version("1.0.1")
                 .modelFormat(modelFormat)
-                .loadModel(false)
+                .deployModel(false)
                 .modelNodeIds(new String[]{"node_id1"})
                 .build();
-        modelHelper.downloadPrebuiltModelConfig(taskId, unloadInput, uploadInputListener);
-        ArgumentCaptor<MLUploadInput> argumentCaptor = ArgumentCaptor.forClass(MLUploadInput.class);
-        verify(uploadInputListener).onResponse(argumentCaptor.capture());
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
+        ArgumentCaptor<MLRegisterModelInput> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelInput.class);
+        verify(registerModelListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
         MLModelConfig modelConfig = argumentCaptor.getValue().getModelConfig();
         assertNotNull(modelConfig);

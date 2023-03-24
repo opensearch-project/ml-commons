@@ -62,16 +62,16 @@ public class MLSyncUpNodeRequestTest {
         Map<String, String[]> addedWorkerNodes = new HashMap<>();
         Map<String, String[]> removedWorkerNodes = new HashMap<>();
         Map<String, Set<String>> modelRoutingTable = new HashMap<>();
-        Map<String, Set<String>> runningLoadModelTasks = new HashMap<>();
+        Map<String, Set<String>> runningDeployModelTasks = new HashMap<>();
 
         syncUpInput = MLSyncUpInput.builder()
-                .getLoadedModels(true)
+                .getDeployedModels(true)
                 .addedWorkerNodes(addedWorkerNodes)
                 .removedWorkerNodes(removedWorkerNodes)
                 .modelRoutingTable(modelRoutingTable)
-                .runningLoadModelTasks(runningLoadModelTasks)
+                .runningDeployModelTasks(runningDeployModelTasks)
                 .clearRoutingTable(true)
-                .syncRunningLoadModelTasks(true)
+                .syncRunningDeployModelTasks(true)
                 .build();
     }
 
@@ -87,7 +87,7 @@ public class MLSyncUpNodeRequestTest {
 
         assertEquals(3, syncUpNodeRequest.getSyncUpNodesRequest().nodesIds().length);
         assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
-        assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningLoadModelTasks());
+        assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningDeployModelTasks());
         assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
 
     }
@@ -101,7 +101,7 @@ public class MLSyncUpNodeRequestTest {
 
         assertEquals(3, syncUpNodeRequest.getSyncUpNodesRequest().concreteNodes().length);
         assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
-        assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningLoadModelTasks());
+        assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningDeployModelTasks());
         assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
     }
 
@@ -111,12 +111,12 @@ public class MLSyncUpNodeRequestTest {
                 new MLSyncUpNodesRequest(localNode1, localNode2, localNode3)
         );
         syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().setClearRoutingTable(true);
-        syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().setSyncRunningLoadModelTasks(true);
+        syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().setSyncRunningDeployModelTasks(true);
         syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().setClearRoutingTable(true);
 
         assertEquals(3, syncUpNodeRequest.getSyncUpNodesRequest().concreteNodes().length);
         assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
-        assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningLoadModelTasks());
+        assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningDeployModelTasks());
         assertTrue(syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
     }
 
@@ -133,7 +133,7 @@ public class MLSyncUpNodeRequestTest {
 
         assertEquals(3, parsedNodeRequest.getSyncUpNodesRequest().nodesIds().length);
         assertEquals(parsedNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable(), syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
-        assertEquals(parsedNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable(), syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningLoadModelTasks());
+        assertEquals(parsedNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable(), syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isSyncRunningDeployModelTasks());
         assertEquals(parsedNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable(), syncUpNodeRequest.getSyncUpNodesRequest().getSyncUpInput().isClearRoutingTable());
     }
 

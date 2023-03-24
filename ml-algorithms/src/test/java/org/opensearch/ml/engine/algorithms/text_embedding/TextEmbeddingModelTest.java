@@ -286,14 +286,14 @@ public class TextEmbeddingModelTest {
     @Test
     public void predict_NullModelHelper() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model not loaded");
+        exceptionRule.expectMessage("model not deployed");
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void predict_NullModelId() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model not loaded");
+        exceptionRule.expectMessage("model not deployed");
         model.setModelId(null);
         try {
             textEmbeddingModel.initModel(model, params);
@@ -322,7 +322,7 @@ public class TextEmbeddingModelTest {
     @Test
     public void predict_BeforeInitingModel() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model not loaded");
+        exceptionRule.expectMessage("model not deployed");
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
     }
 

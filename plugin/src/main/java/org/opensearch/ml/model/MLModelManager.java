@@ -10,7 +10,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
-import static org.opensearch.ml.common.CommonValue.UNLOADED;
+import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
@@ -24,12 +24,12 @@ import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingMo
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.UPLOAD_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
-import static org.opensearch.ml.stats.ActionName.UPLOAD;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
@@ -82,10 +82,10 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.transport.load.LoadModelResponse;
-import org.opensearch.ml.common.transport.load.MLLoadModelAction;
-import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
@@ -107,7 +107,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 
 /**
- * Manager class for ML models. It contains ML model related operations like upload, load model etc.
+ * Manager class for ML models. It contains ML model related operations like register, deploy model etc.
  */
 @Log4j2
 public class MLModelManager {
@@ -130,17 +130,17 @@ public class MLModelManager {
     private final DiscoveryNodeHelper nodeHelper;
 
     private volatile Integer maxModelPerNode;
-    private volatile Integer maxUploadTasksPerNode;
-    private volatile Integer maxLoadTasksPerNode;
+    private volatile Integer maxRegisterTasksPerNode;
+    private volatile Integer maxDeployTasksPerNode;
 
     public static final ImmutableSet MODEL_DONE_STATES = ImmutableSet
         .of(
             MLModelState.TRAINED,
-            MLModelState.UPLOADED,
-            MLModelState.LOADED,
-            MLModelState.PARTIALLY_LOADED,
-            MLModelState.LOAD_FAILED,
-            MLModelState.UNLOADED
+            MLModelState.REGISTERED,
+            MLModelState.DEPLOYED,
+            MLModelState.PARTIALLY_DEPLOYED,
+            MLModelState.DEPLOY_FAILED,
+            MLModelState.UNDEPLOYED
         );
 
     public MLModelManager(
@@ -174,52 +174,52 @@ public class MLModelManager {
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
 
-        maxUploadTasksPerNode = ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE.get(settings);
+        maxRegisterTasksPerNode = ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.get(settings);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE, it -> maxUploadTasksPerNode = it);
+            .addSettingsUpdateConsumer(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE, it -> maxRegisterTasksPerNode = it);
 
-        maxLoadTasksPerNode = ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE.get(settings);
+        maxDeployTasksPerNode = ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE.get(settings);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE, it -> maxLoadTasksPerNode = it);
+            .addSettingsUpdateConsumer(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE, it -> maxDeployTasksPerNode = it);
     }
 
     /**
-     * Upload model. Basically download model file, split into chunks and save into model index.
+     * Register model. Basically download model file, split into chunks and save into model index.
      *
-     * @param uploadInput upload input
+     * @param registerModelInput register model input
      * @param mlTask      ML task
      */
-    public void uploadMLModel(MLUploadInput uploadInput, MLTask mlTask) {
+    public void registerMLModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-        checkAndAddRunningTask(mlTask, maxUploadTasksPerNode);
+        checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
         try {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), UPLOAD, ML_ACTION_REQUEST_COUNT).increment();
-            if (uploadInput.getUrl() != null) {
-                uploadModelFromUrl(uploadInput, mlTask);
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
+            if (registerModelInput.getUrl() != null) {
+                registerModelFromUrl(registerModelInput, mlTask);
             } else {
-                uploadPrebuiltModel(uploadInput, mlTask);
+                registerPrebuiltModel(registerModelInput, mlTask);
             }
         } catch (Exception e) {
-            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), UPLOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-            handleException(uploadInput.getFunctionName(), mlTask.getTaskId(), e);
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+            handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         }
     }
 
-    private void uploadModelFromUrl(MLUploadInput uploadInput, MLTask mlTask) {
+    private void registerModelFromUrl(MLRegisterModelInput registerModelInput, MLTask mlTask) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
 
-            mlStats.createCounterStatIfAbsent(functionName, UPLOAD, ML_ACTION_REQUEST_COUNT).increment();
+            mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-            String modelName = uploadInput.getModelName();
-            String version = uploadInput.getVersion();
+            String modelName = registerModelInput.getModelName();
+            String version = registerModelInput.getVersion();
             Instant now = Instant.now();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel
@@ -227,10 +227,10 @@ public class MLModelManager {
                     .name(modelName)
                     .algorithm(functionName)
                     .version(version)
-                    .description(uploadInput.getDescription())
-                    .modelFormat(uploadInput.getModelFormat())
-                    .modelState(MLModelState.UPLOADING)
-                    .modelConfig(uploadInput.getModelConfig())
+                    .description(registerModelInput.getDescription())
+                    .modelFormat(registerModelInput.getModelFormat())
+                    .modelState(MLModelState.REGISTERING)
+                    .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
                     .build();
@@ -241,29 +241,29 @@ public class MLModelManager {
                 ActionListener<IndexResponse> listener = ActionListener.wrap(modelMetaRes -> {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
-                    log.info("create new model meta doc {} for upload task {}", modelId, taskId);
+                    log.info("create new model meta doc {} for register model task {}", modelId, taskId);
 
-                    uploadModel(uploadInput, taskId, functionName, modelName, version, modelId);
+                    registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
                 });
 
-                client.index(indexModelMetaRequest, threadedActionListener(UPLOAD_THREAD_POOL, listener));
+                client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, listener));
             }, e -> {
                 log.error("Failed to init model index", e);
                 handleException(functionName, taskId, e);
             }));
         } catch (Exception e) {
-            logException("Failed to upload model", e, log);
+            logException("Failed to register model", e, log);
             handleException(functionName, taskId, e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         }
     }
 
-    private void uploadModel(
-        MLUploadInput uploadInput,
+    private void registerModel(
+        MLRegisterModelInput registerModelInput,
         String taskId,
         FunctionName functionName,
         String modelName,
@@ -272,11 +272,11 @@ public class MLModelManager {
     ) {
         modelHelper
             .downloadAndSplit(
-                uploadInput.getModelFormat(),
+                registerModelInput.getModelFormat(),
                 modelId,
                 modelName,
                 version,
-                uploadInput.getUrl(),
+                registerModelInput.getUrl(),
                 ActionListener.wrap(result -> {
                     Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
                     if (modelSizeInBytes >= MODEL_FILE_SIZE_LIMIT) {
@@ -303,7 +303,7 @@ public class MLModelManager {
                             .name(modelName)
                             .algorithm(functionName)
                             .version(version)
-                            .modelFormat(uploadInput.getModelFormat())
+                            .modelFormat(registerModelInput.getModelFormat())
                             .chunkNumber(chunkNum)
                             .totalChunks(chunkFiles.size())
                             .content(Base64.getEncoder().encodeToString(bytes))
@@ -318,7 +318,14 @@ public class MLModelManager {
                         client.index(indexRequest, ActionListener.wrap(r -> {
                             uploaded.getAndIncrement();
                             if (uploaded.get() == chunkFiles.size()) {
-                                updateModelUploadStateAsDone(uploadInput, taskId, modelId, modelSizeInBytes, chunkFiles, hashValue);
+                                updateModelRegisterStateAsDone(
+                                    registerModelInput,
+                                    taskId,
+                                    modelId,
+                                    modelSizeInBytes,
+                                    chunkFiles,
+                                    hashValue
+                                );
                             } else {
                                 deleteFileQuietly(file);
                             }
@@ -331,27 +338,27 @@ public class MLModelManager {
                             // remove model doc as failed to upload model
                             deleteModel(modelId);
                             semaphore.release();
-                            deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+                            deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                         }));
                     }
                 }, e -> {
                     log.error("Failed to index chunk file", e);
-                    deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+                    deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                     deleteModel(modelId);
                     handleException(functionName, taskId, e);
                 })
             );
     }
 
-    private void uploadPrebuiltModel(MLUploadInput uploadInput, MLTask mlTask) {
+    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
         String taskId = mlTask.getTaskId();
         modelHelper
             .downloadPrebuiltModelConfig(
                 taskId,
-                uploadInput,
-                ActionListener.wrap(mlUploadInput -> { uploadModelFromUrl(mlUploadInput, mlTask); }, e -> {
-                    log.error("Failed to upload prebuilt model", e);
-                    handleException(uploadInput.getFunctionName(), taskId, e);
+                registerModelInput,
+                ActionListener.wrap(mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask); }, e -> {
+                    log.error("Failed to register prebuilt model", e);
+                    handleException(registerModelInput.getFunctionName(), taskId, e);
                 })
             );
     }
@@ -370,21 +377,21 @@ public class MLModelManager {
         mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
     }
 
-    private void updateModelUploadStateAsDone(
-        MLUploadInput uploadInput,
+    private void updateModelRegisterStateAsDone(
+        MLRegisterModelInput registerModelInput,
         String taskId,
         String modelId,
         Long modelSizeInBytes,
         List<String> chunkFiles,
         String hashValue
     ) {
-        FunctionName functionName = uploadInput.getFunctionName();
-        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+        FunctionName functionName = registerModelInput.getFunctionName();
+        deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
         Map<String, Object> updatedFields = ImmutableMap
             .of(
                 MLModel.MODEL_STATE_FIELD,
-                MLModelState.UPLOADED,
-                MLModel.LAST_UPLOADED_TIME_FIELD,
+                MLModelState.REGISTERED,
+                MLModel.LAST_REGISTERED_TIME_FIELD,
                 Instant.now().toEpochMilli(),
                 MLModel.TOTAL_CHUNKS_FIELD,
                 chunkFiles.size(),
@@ -393,11 +400,11 @@ public class MLModelManager {
                 MLModel.MODEL_CONTENT_SIZE_IN_BYTES_FIELD,
                 modelSizeInBytes
             );
-        log.info("Model uploaded successfully, model id: {}, task id: {}", modelId, taskId);
+        log.info("Model registered successfully, model id: {}, task id: {}", modelId, taskId);
         updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
             mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
-            if (uploadInput.isLoadModel()) {
-                loadModelAfterUploading(uploadInput, modelId);
+            if (registerModelInput.isDeployModel()) {
+                deployModelAfterRegistering(registerModelInput, modelId);
             }
         }, e -> {
             log.error("Failed to update model", e);
@@ -406,13 +413,13 @@ public class MLModelManager {
         }));
     }
 
-    private void loadModelAfterUploading(MLUploadInput uploadInput, String modelId) {
-        String[] modelNodeIds = uploadInput.getModelNodeIds();
-        log.debug("start loading model after uploading {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
-        MLLoadModelRequest request = new MLLoadModelRequest(modelId, modelNodeIds, false, true);
-        ActionListener<LoadModelResponse> listener = ActionListener
-            .wrap(r -> log.debug("model loaded, response {}", r), e -> log.error("Failed to load model", e));
-        client.execute(MLLoadModelAction.INSTANCE, request, listener);
+    private void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
+        String[] modelNodeIds = registerModelInput.getModelNodeIds();
+        log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
+        MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true);
+        ActionListener<MLDeployModelResponse> listener = ActionListener
+            .wrap(r -> log.debug("model deployed, response {}", r), e -> log.error("Failed to deploy model", e));
+        client.execute(MLDeployModelAction.INSTANCE, request, listener);
     }
 
     private void deleteModel(String modelId) {
@@ -427,7 +434,7 @@ public class MLModelManager {
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
-        mlStats.createCounterStatIfAbsent(functionName, UPLOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+        mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
         Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
@@ -442,16 +449,16 @@ public class MLModelManager {
      * @param mlTask           ML task
      * @param listener         action listener
      */
-    public void loadModel(
+    public void deployModel(
         String modelId,
         String modelContentHash,
         FunctionName functionName,
         MLTask mlTask,
         ActionListener<String> listener
     ) {
-        mlStats.createCounterStatIfAbsent(functionName, ActionName.LOAD, ML_ACTION_REQUEST_COUNT).increment();
+        mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
-        if (modelCacheHelper.isModelLoaded(modelId)) {
+        if (modelCacheHelper.isModelDeployed(modelId)) {
             if (workerNodes != null && workerNodes.size() > 0) {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
@@ -459,25 +466,25 @@ public class MLModelManager {
             listener.onResponse("successful");
             return;
         }
-        if (modelCacheHelper.getLoadedModels().length >= maxModelPerNode) {
+        if (modelCacheHelper.getDeployedModels().length >= maxModelPerNode) {
             listener.onFailure(new IllegalArgumentException("Exceed max model per node limit"));
             return;
         }
-        modelCacheHelper.initModelState(modelId, MLModelState.LOADING, functionName, workerNodes);
+        modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            checkAndAddRunningTask(mlTask, maxLoadTasksPerNode);
-            this.getModel(modelId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                if (!FunctionName.isDLModel(mlModel.getAlgorithm())) {// load model trained by built-in algorithm like kmeans
-                    Predictable predictable = mlEngine.load(mlModel, null);
+            checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
+            this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
+                if (!FunctionName.isDLModel(mlModel.getAlgorithm())) {// deploy model trained by built-in algorithm like kmeans
+                    Predictable predictable = mlEngine.deploy(mlModel, null);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
-                    modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
+                    modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                     listener.onResponse("successful");
                     return;
                 }
-                // check circuit breaker before loading custom model chunks
+                // check circuit breaker before deploying custom model chunks
                 checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
-                retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// load model trunks
+                retrieveModelChunks(mlModel, ActionListener.wrap(modelZipFile -> {// read model chunks
                     String hash = calculateFileHash(modelZipFile);
                     if (modelContentHash != null && !modelContentHash.equals(hash)) {
                         log.error("Model content hash can't match original hash value");
@@ -485,14 +492,14 @@ public class MLModelManager {
                         listener.onFailure(new IllegalArgumentException("model content changed"));
                         return;
                     }
-                    log.debug("Model content matches original hash value, continue loading");
+                    log.debug("Model content matches original hash value, continue deploying");
                     Map<String, Object> params = ImmutableMap
                         .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
-                    Predictable predictable = mlEngine.load(mlModel, params);
+                    Predictable predictable = mlEngine.deploy(mlModel, params);
                     try {
                         modelCacheHelper.setPredictor(modelId, predictable);
                         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
-                        modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
+                        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                         listener.onResponse("successful");
                     } catch (Exception e) {
                         log.error("Failed to add predictor to cache", e);
@@ -501,19 +508,19 @@ public class MLModelManager {
                     }
                 }, e -> {
                     log.error("Failed to retrieve model " + modelId, e);
-                    handleLoadModelException(modelId, functionName, listener, e);
+                    handleDeployModelException(modelId, functionName, listener, e);
                 }));
             }, e -> {
-                log.error("Failed to load model " + modelId, e);
-                handleLoadModelException(modelId, functionName, listener, e);
+                log.error("Failed to deploy model " + modelId, e);
+                handleDeployModelException(modelId, functionName, listener, e);
             })));
         } catch (Exception e) {
-            handleLoadModelException(modelId, functionName, listener, e);
+            handleDeployModelException(modelId, functionName, listener, e);
         }
     }
 
-    private void handleLoadModelException(String modelId, FunctionName functionName, ActionListener<String> listener, Exception e) {
-        mlStats.createCounterStatIfAbsent(functionName, ActionName.LOAD, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+    private void handleDeployModelException(String modelId, FunctionName functionName, ActionListener<String> listener, Exception e) {
+        mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
         removeModel(modelId);
         listener.onFailure(e);
     }
@@ -566,18 +573,18 @@ public class MLModelManager {
         getRequest.id();
         Semaphore semaphore = new Semaphore(1);
         AtomicBoolean stopNow = new AtomicBoolean(false);
-        String modelZip = mlEngine.getLoadModelZipPath(modelId, modelName);
+        String modelZip = mlEngine.getDeployModelZipPath(modelId, modelName);
         ConcurrentLinkedDeque<File> chunkFiles = new ConcurrentLinkedDeque();
         AtomicInteger retrievedChunks = new AtomicInteger(0);
         for (int i = 0; i < totalChunks; i++) {
             semaphore.tryAcquire(10, TimeUnit.SECONDS);
             if (stopNow.get()) {
-                throw new MLException("Failed to load model");
+                throw new MLException("Failed to deploy model");
             }
             String modelChunkId = this.getModelChunkId(modelId, i);
             int currentChunk = i;
-            this.getModel(modelChunkId, threadedActionListener(LOAD_THREAD_POOL, ActionListener.wrap(model -> {
-                Path chunkPath = mlEngine.getLoadModelChunkPath(modelId, currentChunk);
+            this.getModel(modelChunkId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(model -> {
+                Path chunkPath = mlEngine.getDeployModelChunkPath(modelId, currentChunk);
                 FileUtils.write(Base64.getDecoder().decode(model.getContent()), chunkPath.toString());
                 chunkFiles.add(new File(chunkPath.toUri()));
                 retrievedChunks.getAndIncrement();
@@ -691,37 +698,37 @@ public class MLModelManager {
     }
 
     /**
-     * Unload model from memory.
+     * Undeploy model from memory.
      *
      * @param modelIds model ids
-     * @return model unload status
+     * @return model undeploy status
      */
-    public synchronized Map<String, String> unloadModel(String[] modelIds) {
-        Map<String, String> modelUnloadStatus = new HashMap<>();
+    public synchronized Map<String, String> undeployModel(String[] modelIds) {
+        Map<String, String> modelUndeployStatus = new HashMap<>();
         if (modelIds != null && modelIds.length > 0) {
-            log.debug("unload models {}", Arrays.toString(modelIds));
+            log.debug("undeploy models {}", Arrays.toString(modelIds));
             for (String modelId : modelIds) {
-                if (modelCacheHelper.isModelLoaded(modelId)) {
-                    modelUnloadStatus.put(modelId, UNLOADED);
+                if (modelCacheHelper.isModelDeployed(modelId)) {
+                    modelUndeployStatus.put(modelId, UNDEPLOYED);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
                     mlStats
-                        .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNLOAD, ML_ACTION_REQUEST_COUNT)
+                        .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT)
                         .increment();
                 } else {
-                    modelUnloadStatus.put(modelId, NOT_FOUND);
+                    modelUndeployStatus.put(modelId, NOT_FOUND);
                 }
                 removeModel(modelId);
             }
         } else {
-            log.debug("unload all models {}", Arrays.toString(getLocalLoadedModels()));
-            for (String modelId : getLocalLoadedModels()) {
-                modelUnloadStatus.put(modelId, UNLOADED);
+            log.debug("undeploy all models {}", Arrays.toString(getLocalDeployedModels()));
+            for (String modelId : getLocalDeployedModels()) {
+                modelUndeployStatus.put(modelId, UNDEPLOYED);
                 mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
-                mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNLOAD, ML_ACTION_REQUEST_COUNT).increment();
+                mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 removeModel(modelId);
             }
         }
-        return modelUnloadStatus;
+        return modelUndeployStatus;
     }
 
     private void removeModel(String modelId) {
@@ -784,10 +791,10 @@ public class MLModelManager {
     /**
      * Get all local model ids.
      *
-     * @return array of local loaded models
+     * @return array of local deployed models
      */
-    public String[] getLocalLoadedModels() {
-        return modelCacheHelper.getLoadedModels();
+    public String[] getLocalDeployedModels() {
+        return modelCacheHelper.getDeployedModels();
     }
 
     /**

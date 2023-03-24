@@ -32,8 +32,8 @@ public class MLCreateModelMetaRequest extends ActionRequest {
     MLCreateModelMetaInput mlCreateModelMetaInput;
 
     @Builder
-    public MLCreateModelMetaRequest(MLCreateModelMetaInput mlUploadInput) {
-        this.mlCreateModelMetaInput = mlUploadInput;
+    public MLCreateModelMetaRequest(MLCreateModelMetaInput mlCreateModelMetaInput) {
+        this.mlCreateModelMetaInput = mlCreateModelMetaInput;
     }
 
     public MLCreateModelMetaRequest(StreamInput in) throws IOException {

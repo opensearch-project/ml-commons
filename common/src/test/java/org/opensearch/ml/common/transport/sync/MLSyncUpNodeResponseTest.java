@@ -12,8 +12,6 @@ import org.opensearch.common.transport.TransportAddress;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 import static org.junit.Assert.*;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
@@ -47,8 +45,8 @@ public class MLSyncUpNodeResponseTest {
         assertNotEquals(newResponse, response);
         assertEquals(newResponse.getNode().getName(), response.getNode().getName());
         assertEquals(newResponse.getModelStatus(), response.getModelStatus());
-        assertArrayEquals(newResponse.getLoadedModelIds(), response.getLoadedModelIds());
-        assertArrayEquals(newResponse.getRunningLoadModelTaskIds(), response.getRunningLoadModelTaskIds());
+        assertArrayEquals(newResponse.getDeployedModelIds(), response.getDeployedModelIds());
+        assertArrayEquals(newResponse.getRunningDeployModelTaskIds(), response.getRunningDeployModelTaskIds());
     }
 
     @Test
@@ -60,8 +58,8 @@ public class MLSyncUpNodeResponseTest {
         assertNotEquals(newResponse, response);
         assertEquals(newResponse.getNode().getName(), response.getNode().getName());
         assertEquals(newResponse.getModelStatus(), response.getModelStatus());
-        assertArrayEquals(newResponse.getLoadedModelIds(), response.getLoadedModelIds());
-        assertArrayEquals(newResponse.getRunningLoadModelTaskIds(), response.getRunningLoadModelTaskIds());
+        assertArrayEquals(newResponse.getDeployedModelIds(), response.getDeployedModelIds());
+        assertArrayEquals(newResponse.getRunningDeployModelTaskIds(), response.getRunningDeployModelTaskIds());
 
     }
 }

@@ -111,7 +111,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
 
     private TransportSyncUpOnNodeAction action;
 
-    private Map<String, Set<String>> runningLoadModelTasks;
+    private Map<String, Set<String>> runningDeployModelTasks;
 
     @Before
     public void setup() throws IOException {
@@ -131,10 +131,10 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             xContentRegistry,
             mlEngine
         );
-        runningLoadModelTasks = new HashMap<>();
-        runningLoadModelTasks.put("model1", ImmutableSet.of("node1"));
-        when(mlTaskManager.getLocalRunningLoadModelTasks())
-            .thenReturn(Arrays.asList(new String[] { "load_task_id1" }, new String[] { "model_id1" }));
+        runningDeployModelTasks = new HashMap<>();
+        runningDeployModelTasks.put("model1", ImmutableSet.of("node1"));
+        when(mlTaskManager.getLocalRunningDeployModelTasks())
+            .thenReturn(Arrays.asList(new String[] { "deploy_task_id1" }, new String[] { "model_id1" }));
     }
 
     public void testConstructor() {
@@ -162,15 +162,15 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             ImmutableSet.of(ML_ROLE),
             Version.CURRENT
         );
-        String[] loadedModelIds = new String[] { "123" };
-        String[] runningLoadModelIds = new String[] { "model1" };
-        String[] runningLoadModelTaskIds = new String[] { "1" };
+        String[] deployedModelIds = new String[] { "123" };
+        String[] runningDeployModelIds = new String[] { "model1" };
+        String[] runningDeployModelTaskIds = new String[] { "1" };
         MLSyncUpNodeResponse response = new MLSyncUpNodeResponse(
             mlNode1,
-            "LOADED",
-            loadedModelIds,
-            runningLoadModelIds,
-            runningLoadModelTaskIds
+            "DEPLOYED",
+            deployedModelIds,
+            runningDeployModelIds,
+            runningDeployModelTaskIds
         );
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
@@ -189,8 +189,8 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             File.createTempFile("Hello" + i, "1.txt", file3);
         }
         when(mlEngine.getModelCachePath(any())).thenReturn(Paths.get(file3.getCanonicalPath()));
-        when(mlEngine.getLoadModelPath(any())).thenReturn(Paths.get(file2.getCanonicalPath()));
-        when(mlEngine.getUploadModelPath(any())).thenReturn(Paths.get(file1.getCanonicalPath()));
+        when(mlEngine.getDeployModelPath(any())).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getRegisterModelPath(any())).thenReturn(Paths.get(file1.getCanonicalPath()));
         DiscoveryNode localNode = new DiscoveryNode(
             "foo0",
             "foo0",
@@ -200,8 +200,8 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             Version.CURRENT
         );
         when(clusterService.localNode()).thenReturn(localNode);
-        when(mlEngine.getUploadModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
-        when(mlEngine.getLoadModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getRegisterModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
+        when(mlEngine.getDeployModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
         when(mlEngine.getModelCacheRootPath()).thenReturn(Paths.get(file3.getCanonicalPath()));
         final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest()));
         final MLSyncUpNodeResponse response = action.nodeOperation(request);
@@ -223,8 +223,8 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             File.createTempFile("Hello" + i, "1.txt", file3);
         }
         when(mlEngine.getModelCachePath(any())).thenReturn(Paths.get(file3.getCanonicalPath()));
-        when(mlEngine.getLoadModelPath(any())).thenReturn(Paths.get(file2.getCanonicalPath()));
-        when(mlEngine.getUploadModelPath(any())).thenReturn(Paths.get(file1.getCanonicalPath()));
+        when(mlEngine.getDeployModelPath(any())).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getRegisterModelPath(any())).thenReturn(Paths.get(file1.getCanonicalPath()));
         DiscoveryNode localNode = new DiscoveryNode(
             "foo0",
             "foo0",
@@ -234,8 +234,8 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             Version.CURRENT
         );
         when(clusterService.localNode()).thenReturn(localNode);
-        when(mlEngine.getUploadModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
-        when(mlEngine.getLoadModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getRegisterModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
+        when(mlEngine.getDeployModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
         when(mlEngine.getModelCacheRootPath()).thenReturn(Paths.get(file3.getCanonicalPath()));
         when(mlTaskManager.contains(any())).thenReturn(true);
         when(mlTaskManager.containsModel(any())).thenReturn(true);
@@ -251,13 +251,13 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
 
     public void testCleanUpLocalCache_NoTasks() {
         when(mlTaskManager.getAllTaskIds()).thenReturn(null);
-        action.cleanUpLocalCache(runningLoadModelTasks);
+        action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
     public void testCleanUpLocalCache_EmptyTasks() {
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] {});
-        action.cleanUpLocalCache(runningLoadModelTasks);
+        action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
@@ -267,55 +267,55 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         MLTask mlTask = MLTask.builder().lastUpdateTime(Instant.now()).build();
         MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
-        action.cleanUpLocalCache(runningLoadModelTasks);
+        action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
-    public void testCleanUpLocalCache_ExpiredMLTask_Upload() {
+    public void testCleanUpLocalCache_ExpiredMLTask_Register() {
         String taskId = randomAlphaOfLength(5);
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
-        MLTask mlTask = MLTask.builder().taskType(MLTaskType.UPLOAD_MODEL).lastUpdateTime(Instant.now().minusSeconds(86400)).build();
+        MLTask mlTask = MLTask.builder().taskType(MLTaskType.REGISTER_MODEL).lastUpdateTime(Instant.now().minusSeconds(86400)).build();
         MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
-        action.cleanUpLocalCache(runningLoadModelTasks);
+        action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
         verify(mlModelManager, never()).updateModel(anyString(), any());
     }
 
-    public void testCleanUpLocalCache_ExpiredMLTask_Load_NullWorkerNode() {
-        testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState.LOAD_FAILED);
+    public void testCleanUpLocalCache_ExpiredMLTask_Deploy_NullWorkerNode() {
+        testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.DEPLOY_FAILED);
     }
 
-    public void testCleanUpLocalCache_ExpiredMLTask_Load_PartiallyLoaded() {
-        testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState.PARTIALLY_LOADED);
+    public void testCleanUpLocalCache_ExpiredMLTask_Deploy_PartiallyDEPLOYED() {
+        testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.PARTIALLY_DEPLOYED);
     }
 
-    public void testCleanUpLocalCache_ExpiredMLTask_Load_Loaded() {
-        testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState.LOADED);
+    public void testCleanUpLocalCache_ExpiredMLTask_Deploy_DEPLOYED() {
+        testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.DEPLOYED);
     }
 
-    private void testCleanUpLocalCache_ExpiredMLTask_LoadStatus(MLModelState modelState) {
+    private void testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState modelState) {
         String taskId = randomAlphaOfLength(5);
         String modelId = randomAlphaOfLength(5);
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
         MLTask.MLTaskBuilder mlTaskBuilder = MLTask
             .builder()
             .modelId(modelId)
-            .taskType(MLTaskType.LOAD_MODEL)
+            .taskType(MLTaskType.DEPLOY_MODEL)
             .lastUpdateTime(Instant.now().minusSeconds(86400));
-        if (MLModelState.PARTIALLY_LOADED == modelState) {
+        if (MLModelState.PARTIALLY_DEPLOYED == modelState) {
             mlTaskBuilder.workerNodes(ImmutableList.of("node1", "node2"));
-        } else if (MLModelState.LOADED == modelState) {
+        } else if (MLModelState.DEPLOYED == modelState) {
             mlTaskBuilder.workerNodes(ImmutableList.of("node1"));
         }
 
         MLTask mlTask = mlTaskBuilder.build();
         MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
-        if (MLModelState.LOAD_FAILED != modelState) {
+        if (MLModelState.DEPLOY_FAILED != modelState) {
             when(mlModelManager.getWorkerNodes(modelId)).thenReturn(new String[] { "node1" });
         }
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
-        action.cleanUpLocalCache(runningLoadModelTasks);
+        action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(mlModelManager, never()).updateModel(eq(modelId), argumentCaptor.capture());
@@ -325,18 +325,18 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         Map<String, String[]> addedWorkerNodes = new HashMap<>();
         addedWorkerNodes.put("modelId1", new String[] { "nodeId1", "nodeId2", "nodeId3" });
         Map<String, Set<String>> modelRoutingTable = new HashMap<>();
-        Map<String, Set<String>> runningLoadModelTasks = new HashMap<>();
+        Map<String, Set<String>> runningDeployModelTasks = new HashMap<>();
         final HashSet<String> set = new HashSet<>();
         set.addAll(Arrays.asList(new String[] { "nodeId3", "nodeId4", "nodeId5" }));
         modelRoutingTable.put("modelId2", set);
         MLSyncUpInput syncUpInput = MLSyncUpInput
             .builder()
-            .getLoadedModels(true)
+            .getDeployedModels(true)
             .addedWorkerNodes(addedWorkerNodes)
             .modelRoutingTable(modelRoutingTable)
-            .runningLoadModelTasks(runningLoadModelTasks)
+            .runningDeployModelTasks(runningDeployModelTasks)
             .clearRoutingTable(true)
-            .syncRunningLoadModelTasks(true)
+            .syncRunningDeployModelTasks(true)
             .build();
         return syncUpInput;
     }
@@ -345,18 +345,18 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         Map<String, String[]> removedWorkerNodes = new HashMap<>();
         removedWorkerNodes.put("modelId2", new String[] { "nodeId3", "nodeId4", "nodeId5" });
         Map<String, Set<String>> modelRoutingTable = new HashMap<>();
-        Map<String, Set<String>> runningLoadModelTasks = new HashMap<>();
+        Map<String, Set<String>> runningDeployModelTasks = new HashMap<>();
         final HashSet<String> set = new HashSet<>();
         set.addAll(Arrays.asList(new String[] { "nodeId3", "nodeId4", "nodeId5" }));
         modelRoutingTable.put("modelId2", set);
         MLSyncUpInput syncUpInput = MLSyncUpInput
             .builder()
-            .getLoadedModels(true)
+            .getDeployedModels(true)
             .removedWorkerNodes(removedWorkerNodes)
             .modelRoutingTable(modelRoutingTable)
-            .runningLoadModelTasks(runningLoadModelTasks)
+            .runningDeployModelTasks(runningDeployModelTasks)
             .clearRoutingTable(false)
-            .syncRunningLoadModelTasks(true)
+            .syncRunningDeployModelTasks(true)
             .build();
         return syncUpInput;
     }

@@ -136,8 +136,8 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testUploadModelChunk() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-        MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<MLUploadModelChunkResponse> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelChunkResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -150,9 +150,9 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testUploadModelChunkNumberEqualsChunkCount() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-        MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlUploadInput.setChunkNumber(1);
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        uploadModelChunkInput.setChunkNumber(1);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<MLUploadModelChunkResponse> argumentCaptor = ArgumentCaptor.forClass(MLUploadModelChunkResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
@@ -160,13 +160,13 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
     public void testUploadModelChunkWithNullContent() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
         final byte[] content = new byte[] {};
-        MLUploadModelChunkInput mlUploadInput = MLUploadModelChunkInput
+        MLUploadModelChunkInput uploadModelChunkInput = MLUploadModelChunkInput
             .builder()
             .chunkNumber(0)
             .modelId("someModelId")
             .content(content)
             .build();
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Chunk size either 0 or null", argumentCaptor.getValue().getMessage());
@@ -174,9 +174,9 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testUploadModelChunkNumberGreaterThanTotalCount() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-        MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlUploadInput.setChunkNumber(5);
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        uploadModelChunkInput.setChunkNumber(5);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Chunk number exceeds total chunks", argumentCaptor.getValue().getMessage());
@@ -188,7 +188,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         MLModelChunkUploader spy = Mockito.spy(mlModelChunkUploader);
         when(spy.validateChunkSize(content.length)).thenReturn(true);
         MLUploadModelChunkInput input = MLUploadModelChunkInput.builder().chunkNumber(0).modelId("someModelId").content(content).build();
-        spy.uploadModel(input, actionListener);
+        spy.uploadModelChunk(input, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Chunk size exceeds 10MB", argumentCaptor.getValue().getMessage());
@@ -196,14 +196,14 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testUploadModelChunkModelNotFound() throws IOException {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-        MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlUploadInput.setChunkNumber(5);
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        uploadModelChunkInput.setChunkNumber(5);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<MLResourceNotFoundException> argumentCaptor = ArgumentCaptor.forClass(MLResourceNotFoundException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
@@ -211,14 +211,14 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testUploadModelChunkModelIndexNotFound() throws IOException {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-        MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlUploadInput.setChunkNumber(5);
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        uploadModelChunkInput.setChunkNumber(5);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new IndexNotFoundException("Index Not Found"));
             return null;
         }).when(client).get(any(), any());
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<MLResourceNotFoundException> argumentCaptor = ArgumentCaptor.forClass(MLResourceNotFoundException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
@@ -226,14 +226,14 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     public void testUploadModelChunkIndexNotFound() throws IOException {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
-        MLUploadModelChunkInput mlUploadInput = prepareRequest();
-        mlUploadInput.setChunkNumber(5);
+        MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
+        uploadModelChunkInput.setChunkNumber(5);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new Exception("Index Not Found"));
             return null;
         }).when(client).get(any(), any());
-        mlModelChunkUploader.uploadModel(mlUploadInput, actionListener);
+        mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());

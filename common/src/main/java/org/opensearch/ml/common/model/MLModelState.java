@@ -7,13 +7,28 @@ package org.opensearch.ml.common.model;
 
 public enum MLModelState {
     TRAINED,
+    @Deprecated
     UPLOADING,
+    @Deprecated
     UPLOADED,
+    @Deprecated
     LOADING,
+    @Deprecated
     LOADED,
+    @Deprecated
     PARTIALLY_LOADED,
+    @Deprecated
     UNLOADED,
-    LOAD_FAILED;
+    @Deprecated
+    LOAD_FAILED,
+
+    REGISTERING,
+    REGISTERED,
+    DEPLOYING,
+    DEPLOYED,
+    PARTIALLY_DEPLOYED,
+    UNDEPLOYED,
+    DEPLOY_FAILED;
 
     public static MLModelState from(String value) {
         try {
