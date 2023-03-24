@@ -1,5 +1,6 @@
 package org.opensearch.ml.engine.utils;
 
+import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -32,5 +33,7 @@ public class ZipUtilsTest {
         Path output = Paths.get("build/output");
         Files.createDirectories(output);
         ZipUtils.unzip(testZipFile, output);
+        Path testOutputPath = Paths.get("build/output/foo");
+        Assert.assertTrue(Files.exists(testOutputPath));
     }
 }

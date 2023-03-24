@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.engine.utils;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -16,10 +18,16 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * A util class contains file related operations.
+ * A util class contains zip file related operations.
  */
 @Log4j2
 public class ZipUtils {
+
+    /**
+     * Uncompressed a zip file.
+     * @param zipFile zip file to be uncompressed
+     * @param dest the destination path of this uncompress
+     */
     public static void unzip(File zipFile, Path dest) {
         try {
             ZipFile file = new ZipFile(zipFile);
@@ -28,9 +36,6 @@ public class ZipUtils {
             while (en.hasMoreElements()) {
                 ze = en.nextElement();
                 String name = ze.getName();
-                if (name.contains("..")) {
-                    throw new IOException("Malicious zip entry: " + name);
-                }
                 Path f = dest.resolve(name).toAbsolutePath();
                 if (ze.isDirectory()) {
                     Files.createDirectories(f);
@@ -47,7 +52,7 @@ public class ZipUtils {
                 }
             }
         } catch (IOException e) {
-            throw new RuntimeException(e.getMessage(), e);
+            throw new IllegalArgumentException("Input file should never be null", e);
         }
     }
 }
