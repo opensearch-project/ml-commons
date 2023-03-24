@@ -13,7 +13,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.IOException;
 
@@ -29,12 +29,12 @@ public class MLForwardInput implements Writeable {
     MLInput modelInput;
     private String error;
     private String[] workerNodes;
-    private MLUploadInput uploadInput;
+    private MLRegisterModelInput registerModelInput;
 
     @Builder(toBuilder = true)
     public MLForwardInput(String taskId, String modelId, String workerNodeId, MLForwardRequestType requestType,
                           MLTask mlTask, MLInput modelInput,
-                          String error, String[] workerNodes, MLUploadInput uploadInput) {
+                          String error, String[] workerNodes, MLRegisterModelInput registerModelInput) {
         this.taskId = taskId;
         this.modelId = modelId;
         this.workerNodeId = workerNodeId;
@@ -43,7 +43,7 @@ public class MLForwardInput implements Writeable {
         this.modelInput = modelInput;
         this.error = error;
         this.workerNodes = workerNodes;
-        this.uploadInput = uploadInput;
+        this.registerModelInput = registerModelInput;
     }
 
     public MLForwardInput(StreamInput in) throws IOException {
@@ -60,7 +60,7 @@ public class MLForwardInput implements Writeable {
         this.error = in.readOptionalString();
         this.workerNodes = in.readOptionalStringArray();
         if (in.readBoolean()) {
-            this.uploadInput = new MLUploadInput(in);
+            this.registerModelInput = new MLRegisterModelInput(in);
         }
     }
 
@@ -84,9 +84,9 @@ public class MLForwardInput implements Writeable {
         }
         out.writeOptionalString(error);
         out.writeOptionalStringArray(workerNodes);
-        if (uploadInput != null) {
+        if (registerModelInput != null) {
             out.writeBoolean(true);
-            uploadInput.writeTo(out);
+            registerModelInput.writeTo(out);
         } else {
             out.writeBoolean(false);
         }

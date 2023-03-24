@@ -58,15 +58,19 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.load.LoadModelResponse;
-import org.opensearch.ml.common.transport.load.MLLoadModelAction;
-import org.opensearch.ml.common.transport.load.MLLoadModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
@@ -77,13 +81,9 @@ import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
-import org.opensearch.ml.common.transport.unload.MLUnloadModelAction;
-import org.opensearch.ml.common.transport.unload.UnloadModelNodesRequest;
-import org.opensearch.ml.common.transport.unload.UnloadModelNodesResponse;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
-import org.opensearch.ml.common.transport.upload.MLUploadModelAction;
-import org.opensearch.ml.common.transport.upload.MLUploadModelRequest;
-import org.opensearch.ml.common.transport.upload.UploadModelResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.utils.TestData;
@@ -265,7 +265,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return id;
     }
 
-    public String uploadModel(
+    public String registerModel(
         FunctionName functionName,
         String modelName,
         String version,
@@ -275,7 +275,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         int dimension,
         String allConfig,
         String url,
-        boolean loadModel
+        boolean deployModel
     ) {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
@@ -284,7 +284,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
             .embeddingDimension(dimension)
             .allConfig(allConfig)
             .build();
-        MLUploadInput input = MLUploadInput
+        MLRegisterModelInput input = MLRegisterModelInput
             .builder()
             .functionName(functionName)
             .modelName(modelName)
@@ -292,28 +292,28 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
             .modelFormat(modelFormat)
             .modelConfig(modelConfig)
             .url(url)
-            .loadModel(loadModel)
+            .deployModel(deployModel)
             .build();
-        MLUploadModelRequest uploadRequest = MLUploadModelRequest.builder().mlUploadInput(input).build();
-        ActionFuture<UploadModelResponse> actionFuture = client().execute(MLUploadModelAction.INSTANCE, uploadRequest);
-        UploadModelResponse uploadModelResponse = actionFuture.actionGet();
-        String taskId = uploadModelResponse.getTaskId();
+        MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.builder().registerModelInput(input).build();
+        ActionFuture<MLRegisterModelResponse> actionFuture = client().execute(MLRegisterModelAction.INSTANCE, registerModelRequest);
+        MLRegisterModelResponse MLRegisterModelResponse = actionFuture.actionGet();
+        String taskId = MLRegisterModelResponse.getTaskId();
         assertNotNull(taskId);
         assertFalse(taskId.isEmpty());
         return taskId;
     }
 
-    public String loadModel(String modelId, String[] modelNodeIds) {
-        MLLoadModelRequest loadRequest = MLLoadModelRequest
+    public String deployModel(String modelId, String[] modelNodeIds) {
+        MLDeployModelRequest deployModelRequest = MLDeployModelRequest
             .builder()
             .modelId(modelId)
             .modelNodeIds(modelNodeIds)
             .async(true)
             .dispatchTask(true)
             .build();
-        ActionFuture<LoadModelResponse> actionFuture = client().execute(MLLoadModelAction.INSTANCE, loadRequest);
-        LoadModelResponse loadModelResponse = actionFuture.actionGet();
-        String taskId = loadModelResponse.getTaskId();
+        ActionFuture<MLDeployModelResponse> actionFuture = client().execute(MLDeployModelAction.INSTANCE, deployModelRequest);
+        MLDeployModelResponse MLDeployModelResponse = actionFuture.actionGet();
+        String taskId = MLDeployModelResponse.getTaskId();
         assertNotNull(taskId);
         assertFalse(taskId.isEmpty());
         return taskId;
@@ -367,10 +367,10 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         return predictionResponse;
     }
 
-    public UnloadModelNodesResponse unloadModel(String modelId) {
+    public MLUndeployModelNodesResponse undeployModel(String modelId) {
         String[] allNodes = getAllNodes(clusterService());
-        UnloadModelNodesRequest unloadRequest = new UnloadModelNodesRequest(allNodes, new String[] { modelId });
-        UnloadModelNodesResponse response = client().execute(MLUnloadModelAction.INSTANCE, unloadRequest).actionGet();
+        MLUndeployModelNodesRequest undeployRequest = new MLUndeployModelNodesRequest(allNodes, new String[] { modelId });
+        MLUndeployModelNodesResponse response = client().execute(MLUndeployModelAction.INSTANCE, undeployRequest).actionGet();
         return response;
     }
 
@@ -398,7 +398,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     public MLSyncUpNodesResponse syncUp_RunningModelAndTask() {
         String[] allNodes = getAllNodes(clusterService());
-        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getLoadedModels(true).build();
+        MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getDeployedModels(true).build();
         MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
         // gather running model/tasks on nodes
         MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, gatherInfoRequest).actionGet(5000);
@@ -407,7 +407,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     public MLSyncUpNodesResponse syncUp_Clear() {
         String[] allNodes = getAllNodes(clusterService());
-        MLSyncUpInput syncUpInput = MLSyncUpInput.builder().syncRunningLoadModelTasks(true).clearRoutingTable(true).build();
+        MLSyncUpInput syncUpInput = MLSyncUpInput.builder().syncRunningDeployModelTasks(true).clearRoutingTable(true).build();
         MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
         MLSyncUpNodesResponse syncUpResponse = client().execute(MLSyncUpAction.INSTANCE, syncUpRequest).actionGet(5000);
         return syncUpResponse;

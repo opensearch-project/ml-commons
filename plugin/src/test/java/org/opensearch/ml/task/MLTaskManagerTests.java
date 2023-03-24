@@ -281,8 +281,8 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     }
 
     public void testCheckLimitAndAddRunningTask() {
-        MLTask task1 = MLTask.builder().taskId("1").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
-        MLTask task2 = MLTask.builder().taskId("2").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
+        MLTask task1 = MLTask.builder().taskId("1").taskType(MLTaskType.REGISTER_MODEL).state(MLTaskState.CREATED).build();
+        MLTask task2 = MLTask.builder().taskId("2").taskType(MLTaskType.REGISTER_MODEL).state(MLTaskState.CREATED).build();
         int limit = 1;
         mlTaskManager.checkLimitAndAddRunningTask(task1, limit);
         MLTask mlTask = mlTaskManager.getMLTask("1");
@@ -300,7 +300,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     }
 
     public void testMLTaskCache() {
-        MLTask task = MLTask.builder().taskId("1").taskType(MLTaskType.UPLOAD_MODEL).state(MLTaskState.CREATED).build();
+        MLTask task = MLTask.builder().taskId("1").taskType(MLTaskType.REGISTER_MODEL).state(MLTaskState.CREATED).build();
         String node1 = "node1_id";
         String node2 = "node2_id";
         mlTaskManager.add(task, Arrays.asList(node1, node2));

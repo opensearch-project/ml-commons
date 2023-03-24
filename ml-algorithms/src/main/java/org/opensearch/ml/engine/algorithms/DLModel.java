@@ -61,19 +61,19 @@ public abstract class DLModel implements Predictable {
 
     @Override
     public MLOutput predict(MLInput mlInput, MLModel model) {
-        throw new IllegalArgumentException("model not loaded");
+        throw new IllegalArgumentException("model not deployed");
     }
 
     @Override
     public MLOutput predict(MLInput mlInput) {
         if (modelHelper == null || modelId == null) {
-            throw new IllegalArgumentException("model not loaded");
+            throw new IllegalArgumentException("model not deployed");
         }
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {
                 Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
                 if (predictors == null) {
-                    throw new MLException("model not loaded.");
+                    throw new MLException("model not deployed.");
                 }
                 return predict(modelId, mlInput.getInputDataset());
             });
@@ -173,10 +173,10 @@ public abstract class DLModel implements Predictable {
                 ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
                 try {
                     System.setProperty("PYTORCH_PRECXX11", "true");
-                    System.setProperty("DJL_CACHE_DIR", mlEngine.getDjlCachePath().toAbsolutePath().toString());
+                    System.setProperty("DJL_CACHE_DIR", mlEngine.getMlCachePath().toAbsolutePath().toString());
                     // DJL will read "/usr/java/packages/lib" if don't set "java.library.path". That will throw
                     // access denied exception
-                    System.setProperty("java.library.path", mlEngine.getDjlCachePath().toAbsolutePath().toString());
+                    System.setProperty("java.library.path", mlEngine.getMlCachePath().toAbsolutePath().toString());
                     System.setProperty("ai.djl.pytorch.num_interop_threads", "1");
                     System.setProperty("ai.djl.pytorch.num_threads", "1");
                     Thread.currentThread().setContextClassLoader(ai.djl.Model.class.getClassLoader());
@@ -206,7 +206,7 @@ public abstract class DLModel implements Predictable {
                     }
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
-                        log.debug("load model {} on device {}: {}", modelId, i, devices[i]);
+                        log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
                         Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
                                 .setTypes(Input.class, Output.class)
                                 .optApplication(Application.UNDEFINED)
@@ -245,10 +245,10 @@ public abstract class DLModel implements Predictable {
                         this.models = modelList.toArray(new ZooModel[0]);
                         modelList.clear();
                     }
-                    log.info("Model {} is successfully loaded on {} devices", modelId, devices.length);
+                    log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
                     return null;
                 } catch (Throwable e) {
-                    String errorMessage = "Failed to load model " + modelId;
+                    String errorMessage = "Failed to deploy model " + modelId;
                     log.error(errorMessage, e);
                     close();
                     if (predictorList.size() > 0) {
@@ -261,12 +261,12 @@ public abstract class DLModel implements Predictable {
                     }
                     throw new MLException(errorMessage, e);
                 } finally {
-                    deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
+                    deleteFileQuietly(mlEngine.getDeployModelPath(modelId));
                     Thread.currentThread().setContextClassLoader(contextClassLoader);
                 }
             });
         } catch (PrivilegedActionException e) {
-            String errorMsg = "Failed to load model " + modelId;
+            String errorMsg = "Failed to deploy model " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);
         }

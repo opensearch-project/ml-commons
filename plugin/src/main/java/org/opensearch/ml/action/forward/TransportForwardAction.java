@@ -34,10 +34,10 @@ import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
 import org.opensearch.ml.common.transport.forward.MLForwardRequestType;
 import org.opensearch.ml.common.transport.forward.MLForwardResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
@@ -76,7 +76,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLForwardInput forwardInput = mlForwardRequest.getForwardInput();
         String modelId = forwardInput.getModelId();
         String taskId = forwardInput.getTaskId();
-        MLUploadInput uploadInput = forwardInput.getUploadInput();
+        MLRegisterModelInput registerModelInput = forwardInput.getRegisterModelInput();
         MLTask mlTask = forwardInput.getMlTask();
         String workerNodeId = forwardInput.getWorkerNodeId();
         MLForwardRequestType requestType = forwardInput.getRequestType();
@@ -85,7 +85,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         log.debug("receive forward request: {}", forwardInput.getRequestType());
         try {
             switch (requestType) {
-                case LOAD_MODEL_DONE:
+                case DEPLOY_MODEL_DONE:
                     Set<String> workNodes = mlTaskManager.getWorkNodes(taskId);
                     if (workNodes != null) {
                         workNodes.remove(workerNodeId);
@@ -118,12 +118,12 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
 
                         MLModelState modelState;
                         if (!mlTaskCache.allNodeFailed()) {
-                            modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_LOADED : MLModelState.LOADED;
+                            modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_DEPLOYED : MLModelState.DEPLOYED;
                         } else {
-                            modelState = MLModelState.LOAD_FAILED;
-                            log.error("load model failed on all nodes, model id: {}", modelId);
+                            modelState = MLModelState.DEPLOY_FAILED;
+                            log.error("deploy model failed on all nodes, model id: {}", modelId);
                         }
-                        log.info("load model done with state: {}, model id: {}", modelState, modelId);
+                        log.info("deploy model done with state: {}, model id: {}", modelState, modelId);
                         mlModelManager
                             .updateModel(
                                 modelId,
@@ -131,7 +131,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                                     .of(
                                         MLModel.MODEL_STATE_FIELD,
                                         modelState,
-                                        MLModel.LAST_LOADED_TIME_FIELD,
+                                        MLModel.LAST_DEPLOYED_TIME_FIELD,
                                         Instant.now().toEpochMilli(),
                                         MLModel.CURRENT_WORKER_NODE_COUNT_FIELD,
                                         currentWorkerNodeCount
@@ -140,8 +140,8 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                     }
                     listener.onResponse(new MLForwardResponse("ok", null));
                     break;
-                case UPLOAD_MODEL:
-                    mlModelManager.uploadMLModel(uploadInput, mlTask);
+                case REGISTER_MODEL:
+                    mlModelManager.registerMLModel(registerModelInput, mlTask);
                     listener.onResponse(new MLForwardResponse("ok", null));
                     break;
                 default:

@@ -23,11 +23,11 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.LOAD_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.UPLOAD_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex_failure;
@@ -86,8 +86,8 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.load.MLLoadModelAction;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -130,7 +130,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private MLModelFormat modelFormat;
     private String modelName;
     private String version;
-    private MLUploadInput uploadInput;
+    private MLRegisterModelInput registerModelInput;
     private MLTask mlTask;
     @Mock
     private ExecutorService taskExecutorService;
@@ -157,15 +157,15 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
-        settings = Settings.builder().put(ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
-        settings = Settings.builder().put(ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
-            ML_COMMONS_MAX_UPLOAD_TASKS_PER_NODE,
+            ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE,
             ML_COMMONS_MONITORING_REQUEST_COUNT,
-            ML_COMMONS_MAX_LOAD_MODEL_TASKS_PER_NODE
+            ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;
@@ -182,7 +182,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .embeddingDimension(384)
             .build();
         modelFormat = MLModelFormat.TORCH_SCRIPT;
-        uploadInput = MLUploadInput
+        registerModelInput = MLRegisterModelInput
             .builder()
             .modelName(modelName)
             .version(version)
@@ -205,7 +205,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .builder()
             .taskId("taskId1")
             .modelId("modelId1")
-            .taskType(MLTaskType.UPLOAD_MODEL)
+            .taskType(MLTaskType.REGISTER_MODEL)
             .functionName(FunctionName.TEXT_EMBEDDING)
             .state(MLTaskState.CREATED)
             .inputType(MLInputDataType.TEXT_DOCS)
@@ -246,7 +246,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         model = MLModel
             .builder()
             .modelId(modelId)
-            .modelState(MLModelState.UPLOADED)
+            .modelState(MLModelState.REGISTERED)
             .algorithm(FunctionName.TEXT_EMBEDDING)
             .name(modelName)
             .version(version)
@@ -260,293 +260,317 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelChunk1 = model.toBuilder().content(Base64.getEncoder().encodeToString("test chunk2".getBytes(StandardCharsets.UTF_8))).build();
     }
 
-    public void testUploadMLModel_ExceedMaxRunningTask() {
+    public void testRegisterMLModel_ExceedMaxRunningTask() {
         String error = "exceed max running task limit";
         doThrow(new MLLimitExceededException(error)).when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage(error);
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testUploadMLModel_CircuitBreakerOpen() {
+    public void testRegisterMLModel_CircuitBreakerOpen() {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
         when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testUploadMLModel_InitModelIndexFailure() {
+    public void testRegisterMLModel_InitModelIndexFailure() {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex_failure(mlIndicesHandler);
 
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any());
         verify(client, never()).index(any(), any());
     }
 
-    public void testUploadMLModel_IndexModelMetaFailure() {
+    public void testRegisterMLModel_IndexModelMetaFailure() {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index_failure(client);
 
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any());
     }
 
-    public void testUploadMLModel_IndexModelChunkFailure() throws IOException {
+    public void testRegisterMLModel_IndexModelChunkFailure() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index_ModelChunkFailure(client, modelId);
         setUpMock_DownloadModelFile(createTempChunkFiles(), 1000L);
 
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(2)).index(any(), any());
         verify(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any());
     }
 
-    public void testUploadMLModel_DownloadModelFileFailure() {
+    public void testRegisterMLModel_DownloadModelFileFailure() {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
         setUpMock_DownloadModelFileFailure();
 
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
     }
 
-    public void testUploadMLModel_DownloadModelFile() throws IOException {
+    public void testRegisterMLModel_DownloadModelFile() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
         String[] newChunks = createTempChunkFiles();
         setUpMock_DownloadModelFile(newChunks, 1000L);
 
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
     }
 
-    public void testUploadMLModel_LoadModel() throws IOException {
+    public void testRegisterMLModel_DeployModel() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
         String[] newChunks = createTempChunkFiles();
         setUpMock_DownloadModelFile(newChunks, 1000L);
         mock_client_update(client);
 
-        MLUploadInput mlUploadInput = uploadInput.toBuilder().loadModel(true).build();
-        modelManager.uploadMLModel(mlUploadInput, mlTask);
+        MLRegisterModelInput mlRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
+        modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
-        verify(client).execute(eq(MLLoadModelAction.INSTANCE), any(), any());
+        verify(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
     }
 
-    public void testUploadMLModel_LoadModel_failure() throws IOException {
+    public void testRegisterMLModel_DeployModel_failure() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
         String[] newChunks = createTempChunkFiles();
         setUpMock_DownloadModelFile(newChunks, 1000L);
         mock_client_update_failure(client);
 
-        MLUploadInput mlUploadInput = uploadInput.toBuilder().loadModel(true).build();
-        modelManager.uploadMLModel(mlUploadInput, mlTask);
+        MLRegisterModelInput mlRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
+        modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
-        verify(client, never()).execute(eq(MLLoadModelAction.INSTANCE), any(), any());
+        verify(client, never()).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
     }
 
-    public void testUploadMLModel_DownloadModelFile_ModelFileSizeExceedLimit() throws IOException {
+    public void testRegisterMLModel_DownloadModelFile_ModelFileSizeExceedLimit() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
-        when(threadPool.executor(UPLOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index(client, modelId);
         String[] newChunks = createTempChunkFiles();
         setUpMock_DownloadModelFile(newChunks, 10 * 1024 * 1024 * 1024L);
 
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(1)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
     }
 
-    public void testUploadModel_ClientFailedToGetThreadPool() {
+    public void testRegisterModel_ClientFailedToGetThreadPool() {
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
-        modelManager.uploadMLModel(uploadInput, mlTask);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler, never()).initModelIndexIfAbsent(any());
     }
 
-    public void testLoadModel_FailedToGetModel() {
+    public void testDeployModel_FailedToGetModel() {
         ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
         mock_client_ThreadContext(client, threadPool, threadContext);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("get doc failure", exception.getValue().getMessage());
         verify(mlStats)
-            .createCounterStatIfAbsent(eq(FunctionName.TEXT_EMBEDDING), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+            .createCounterStatIfAbsent(
+                eq(FunctionName.TEXT_EMBEDDING),
+                eq(ActionName.DEPLOY),
+                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+            );
     }
 
-    public void testLoadModel_NullGetModelResponse() {
+    public void testDeployModel_NullGetModelResponse() {
         ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("Fail to find model", exception.getValue().getMessage());
         verify(mlStats)
-            .createCounterStatIfAbsent(eq(FunctionName.TEXT_EMBEDDING), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+            .createCounterStatIfAbsent(
+                eq(FunctionName.TEXT_EMBEDDING),
+                eq(ActionName.DEPLOY),
+                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+            );
     }
 
-    public void testLoadModel_GetModelResponse_NotExist() {
+    public void testDeployModel_GetModelResponse_NotExist() {
         ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NotExist(client);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("Fail to find model", exception.getValue().getMessage());
         verify(mlStats)
-            .createCounterStatIfAbsent(eq(FunctionName.TEXT_EMBEDDING), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+            .createCounterStatIfAbsent(
+                eq(FunctionName.TEXT_EMBEDDING),
+                eq(ActionName.DEPLOY),
+                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+            );
     }
 
-    public void testLoadModel_GetModelResponse_wrong_hash_value() {
+    public void testDeployModel_GetModelResponse_wrong_hash_value() {
         ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_threadpool(threadPool, taskExecutorService);
         setUpMock_GetModel(model);
         setUpMock_GetModel(modelChunk0);
         setUpMock_GetModel(modelChunk0);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("model content changed", exception.getValue().getMessage());
         verify(mlStats)
-            .createCounterStatIfAbsent(eq(FunctionName.TEXT_EMBEDDING), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
+            .createCounterStatIfAbsent(
+                eq(FunctionName.TEXT_EMBEDDING),
+                eq(ActionName.DEPLOY),
+                eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
+            );
         verify(mlStats, never())
-            .createCounterStatIfAbsent(eq(FunctionName.TEXT_EMBEDDING), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+            .createCounterStatIfAbsent(
+                eq(FunctionName.TEXT_EMBEDDING),
+                eq(ActionName.DEPLOY),
+                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+            );
     }
 
-    public void testLoadModel_GetModelResponse_FailedToLoad() {
+    public void testDeployModel_GetModelResponse_FailedToDeploy() {
         ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_threadpool(threadPool, taskExecutorService);
         setUpMock_GetModelChunks(model);
         // setUpMock_GetModel(modelChunk0);
         // setUpMock_GetModel(modelChunk1);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
-        assertEquals("Failed to load model " + modelId, exception.getValue().getMessage());
+        assertEquals("Failed to deploy model " + modelId, exception.getValue().getMessage());
         verify(mlStats)
-            .createCounterStatIfAbsent(eq(FunctionName.TEXT_EMBEDDING), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+            .createCounterStatIfAbsent(
+                eq(FunctionName.TEXT_EMBEDDING),
+                eq(ActionName.DEPLOY),
+                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
+            );
     }
 
-    public void testLoadModel_ModelAlreadyLoaded() {
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(true);
+    public void testDeployModel_ModelAlreadyDeployed() {
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         ArgumentCaptor<String> response = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(response.capture());
         assertEquals("successful", response.getValue());
     }
 
-    public void testLoadModel_ExceedMaxLoadedModel() {
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
+    public void testDeployModel_ExceedMaxDeployedModel() {
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         String[] models = new String[100];
         for (int i = 0; i < 100; i++) {
             models[i] = "model" + i;
         }
-        when(modelCacheHelper.getLoadedModels()).thenReturn(models);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.loadModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Exceed max model per node limit", failure.getValue().getMessage());
     }
 
-    public void testLoadModel_ThreadPoolException() {
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
+    public void testDeployModel_ThreadPoolException() {
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.loadModel(modelId, modelContentHashValue, functionName, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
-        verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+        verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
 
-    public void testLoadModel_FailedToRetrieveFirstModelChunks() {
-        testLoadModel_FailedToRetrieveModelChunks(false);
+    public void testDeployModel_FailedToRetrieveFirstModelChunks() {
+        testDeployModel_FailedToRetrieveModelChunks(false);
     }
 
-    public void testLoadModel_FailedToRetrieveLastModelChunks() {
-        testLoadModel_FailedToRetrieveModelChunks(true);
+    public void testDeployModel_FailedToRetrieveLastModelChunks() {
+        testDeployModel_FailedToRetrieveModelChunks(true);
     }
 
-    public void testUnloadModel_NullModelIds_NoLoadedModel() {
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
-        Map<String, String> unloadModelStatus = modelManager.unloadModel(null);
-        assertEquals(0, unloadModelStatus.size());
+    public void testUndeployModel_NullModelIds_NoDeployedModel() {
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        Map<String, String> undeployModelStatus = modelManager.undeployModel(null);
+        assertEquals(0, undeployModelStatus.size());
     }
 
-    public void testUnloadModel_EmptyModelIds_LoadedModel() {
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] { modelId });
+    public void testUndeployModel_EmptyModelIds_DeployedModel() {
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] { modelId });
         when(modelCacheHelper.getFunctionName(modelId)).thenReturn(FunctionName.TEXT_EMBEDDING);
-        Map<String, String> unloadModelStatus = modelManager.unloadModel(new String[] {});
-        assertEquals(1, unloadModelStatus.size());
-        assertTrue(unloadModelStatus.containsKey(modelId));
-        assertEquals("unloaded", unloadModelStatus.get(modelId));
+        Map<String, String> undeployModelStatus = modelManager.undeployModel(new String[] {});
+        assertEquals(1, undeployModelStatus.size());
+        assertTrue(undeployModelStatus.containsKey(modelId));
+        assertEquals("undeployed", undeployModelStatus.get(modelId));
     }
 
     public void testUpdateModel_NullUpdatedFields() {
@@ -568,7 +592,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testUpdateModel_ThreadPoolException() {
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        modelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.LOADED), listener);
+        modelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOYED), listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("failed to stashContext", failure.getValue().getMessage());
@@ -634,10 +658,10 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.getWorkerNodes(modelId, true);
     }
 
-    private void testLoadModel_FailedToRetrieveModelChunks(boolean lastChunk) {
-        when(modelCacheHelper.isModelLoaded(modelId)).thenReturn(false);
-        when(modelCacheHelper.getLoadedModels()).thenReturn(new String[] {});
-        when(threadPool.executor(LOAD_THREAD_POOL)).thenReturn(taskExecutorService);
+    private void testDeployModel_FailedToRetrieveModelChunks(boolean lastChunk) {
+        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
+        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(threadPool.executor(DEPLOY_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_client_ThreadContext(client, threadPool, threadContext);
         if (lastChunk) {
             setUpMock_GetModelMeta_FailedToGetLastChunk(model);
@@ -648,9 +672,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.loadModel(modelId, modelContentHashValue, functionName, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
-        verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.LOAD), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+        verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
 
     private void mock_client_index_ModelChunkFailure(Client client, String modelId) {

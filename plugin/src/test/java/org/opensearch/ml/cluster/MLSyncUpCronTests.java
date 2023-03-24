@@ -136,7 +136,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         verify(client, times(2)).execute(eq(MLSyncUpAction.INSTANCE), any(), any());
     }
 
-    public void testRun_NoLoadedModel() {
+    public void testRun_NoDeployedModel() {
         DiscoveryNode[] allNodes = new DiscoveryNode[] {};
         when(nodeHelper.getAllNodes()).thenReturn(allNodes);
         mockSyncUp_GatherRunningTasks();
@@ -214,15 +214,15 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         syncUpCron.updateModelStateSemaphore.release();
     }
 
-    public void testRefreshModelState_ResetAsLoadFailed() {
+    public void testRefreshModelState_ResetAsDeployFailed() {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
-        Map<String, Set<String>> loadingModels = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.LOADED, 2, null, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, null, Instant.now().toEpochMilli()));
             return null;
         }).when(client).search(any(), any());
-        syncUpCron.refreshModelState(modelWorkerNodes, loadingModels);
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
@@ -231,21 +231,21 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         assertEquals(1, bulkRequest.requests().size());
         UpdateRequest updateRequest = (UpdateRequest) bulkRequest.requests().get(0);
         String updateContent = updateRequest.toString();
-        assertTrue(updateContent.contains("\"model_state\":\"LOAD_FAILED\""));
+        assertTrue(updateContent.contains("\"model_state\":\"DEPLOY_FAILED\""));
         assertTrue(updateContent.contains("\"current_worker_node_count\":0"));
         assertEquals(ML_MODEL_INDEX, updateRequest.index());
     }
 
-    public void testRefreshModelState_ResetAsPartiallyLoaded() {
+    public void testRefreshModelState_ResetAsPartiallyDeployed() {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         modelWorkerNodes.put("modelId", ImmutableSet.of("node1"));
-        Map<String, Set<String>> loadingModels = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.LOADED, 2, 0, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, 0, Instant.now().toEpochMilli()));
             return null;
         }).when(client).search(any(), any());
-        syncUpCron.refreshModelState(modelWorkerNodes, loadingModels);
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
@@ -254,22 +254,22 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         assertEquals(1, bulkRequest.requests().size());
         UpdateRequest updateRequest = (UpdateRequest) bulkRequest.requests().get(0);
         String updateContent = updateRequest.toString();
-        assertTrue(updateContent.contains("\"model_state\":\"PARTIALLY_LOADED\""));
+        assertTrue(updateContent.contains("\"model_state\":\"PARTIALLY_DEPLOYED\""));
         assertTrue(updateContent.contains("\"current_worker_node_count\":1"));
         assertEquals(ML_MODEL_INDEX, updateRequest.index());
     }
 
-    public void testRefreshModelState_ResetCurrentWorkerNodeCountForPartiallyLoaded() {
+    public void testRefreshModelState_ResetCurrentWorkerNodeCountForPartiallyDeployed() {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         modelWorkerNodes.put("modelId", ImmutableSet.of("node1"));
-        Map<String, Set<String>> loadingModels = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
             actionListener
-                .onResponse(createSearchModelResponse("modelId", MLModelState.PARTIALLY_LOADED, 3, 2, Instant.now().toEpochMilli()));
+                .onResponse(createSearchModelResponse("modelId", MLModelState.PARTIALLY_DEPLOYED, 3, 2, Instant.now().toEpochMilli()));
             return null;
         }).when(client).search(any(), any());
-        syncUpCron.refreshModelState(modelWorkerNodes, loadingModels);
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
@@ -278,22 +278,22 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         assertEquals(1, bulkRequest.requests().size());
         UpdateRequest updateRequest = (UpdateRequest) bulkRequest.requests().get(0);
         String updateContent = updateRequest.toString();
-        assertTrue(updateContent.contains("\"model_state\":\"PARTIALLY_LOADED\""));
+        assertTrue(updateContent.contains("\"model_state\":\"PARTIALLY_DEPLOYED\""));
         assertTrue(updateContent.contains("\"current_worker_node_count\":1"));
         assertEquals(ML_MODEL_INDEX, updateRequest.index());
     }
 
-    public void testRefreshModelState_ResetAsLoading() {
+    public void testRefreshModelState_ResetAsDeploying() {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         modelWorkerNodes.put("modelId", ImmutableSet.of("node1"));
-        Map<String, Set<String>> loadingModels = new HashMap<>();
-        loadingModels.put("modelId", ImmutableSet.of("node2"));
+        Map<String, Set<String>> deployingModels = new HashMap<>();
+        deployingModels.put("modelId", ImmutableSet.of("node2"));
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.LOAD_FAILED, 2, 0, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOY_FAILED, 2, 0, Instant.now().toEpochMilli()));
             return null;
         }).when(client).search(any(), any());
-        syncUpCron.refreshModelState(modelWorkerNodes, loadingModels);
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, times(1)).bulk(bulkRequestCaptor.capture(), any());
@@ -302,34 +302,34 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         assertEquals(1, bulkRequest.requests().size());
         UpdateRequest updateRequest = (UpdateRequest) bulkRequest.requests().get(0);
         String updateContent = updateRequest.toString();
-        assertTrue(updateContent.contains("\"model_state\":\"LOADING\""));
+        assertTrue(updateContent.contains("\"model_state\":\"DEPLOYING\""));
         assertTrue(updateContent.contains("\"current_worker_node_count\":1"));
         assertEquals(ML_MODEL_INDEX, updateRequest.index());
     }
 
-    public void testRefreshModelState_NotResetState_LoadingModelTaskRunning() {
+    public void testRefreshModelState_NotResetState_DeployingModelTaskRunning() {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
-        Map<String, Set<String>> loadingModels = new HashMap<>();
-        loadingModels.put("modelId", ImmutableSet.of("node2"));
+        Map<String, Set<String>> deployingModels = new HashMap<>();
+        deployingModels.put("modelId", ImmutableSet.of("node2"));
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.LOADING, 2, null, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
             return null;
         }).when(client).search(any(), any());
-        syncUpCron.refreshModelState(modelWorkerNodes, loadingModels);
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         verify(client, never()).bulk(any(), any());
     }
 
-    public void testRefreshModelState_NotResetState_LoadingInGraceTime() {
+    public void testRefreshModelState_NotResetState_DeployingInGraceTime() {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
-        Map<String, Set<String>> loadingModels = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.LOADING, 2, null, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
             return null;
         }).when(client).search(any(), any());
-        syncUpCron.refreshModelState(modelWorkerNodes, loadingModels);
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         verify(client, never()).bulk(any(), any());
     }
@@ -338,10 +338,10 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
             List<MLSyncUpNodeResponse> nodeResponses = new ArrayList<>();
-            String[] loadedModelIds = new String[] { randomAlphaOfLength(10) };
-            String[] runningLoadModelIds = new String[] { randomAlphaOfLength(10) };
-            String[] runningLoadModelTaskIds = new String[] { randomAlphaOfLength(10) };
-            nodeResponses.add(new MLSyncUpNodeResponse(mlNode1, "ok", loadedModelIds, runningLoadModelIds, runningLoadModelTaskIds));
+            String[] deployedModelIds = new String[] { randomAlphaOfLength(10) };
+            String[] runningDeployModelIds = new String[] { randomAlphaOfLength(10) };
+            String[] runningDeployModelTaskIds = new String[] { randomAlphaOfLength(10) };
+            nodeResponses.add(new MLSyncUpNodeResponse(mlNode1, "ok", deployedModelIds, runningDeployModelIds, runningDeployModelTaskIds));
             MLSyncUpNodesResponse response = new MLSyncUpNodesResponse(ClusterName.DEFAULT, nodeResponses, Arrays.asList());
             listener.onResponse(response);
             return null;

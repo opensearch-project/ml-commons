@@ -19,7 +19,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -66,19 +66,19 @@ public class MLForwardInputTest {
                 .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
                 .build();
         MLModelConfig config = TextEmbeddingModelConfig.builder()
-                .modelType("uploadInputModelType")
+                .modelType("testModelType")
                 .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
                 .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
                 .embeddingDimension(100)
                 .build();
-        MLUploadInput uploadInput = MLUploadInput.builder()
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
                 .functionName(functionName)
-                .modelName("uploadInputModelName")
-                .version("uploadInputVersion")
+                .modelName("testModelName")
+                .version("testModelVersion")
                 .url("url")
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
-                .loadModel(true)
+                .deployModel(true)
                 .modelNodeIds(new String[]{"modelNodeIds"})
                 .build();
 
@@ -86,12 +86,12 @@ public class MLForwardInputTest {
                 .taskId("forwardInputTaskId")
                 .modelId("forwardInputModelId")
                 .workerNodeId("forwardInputWorkerNodeId")
-                .requestType(MLForwardRequestType.LOAD_MODEL_DONE)
+                .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
                 .mlTask(mlTask)
                 .modelInput(modelInput)
                 .error("forwardInputError")
                 .workerNodes(new String [] {"forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3"})
-                .uploadInput(uploadInput)
+                .registerModelInput(registerModelInput)
                 .build();
     }
 
@@ -108,11 +108,11 @@ public class MLForwardInputTest {
     public void readInputStream_SuccessWithNullFields() throws IOException {
         forwardInput.setMlTask(null);
         forwardInput.setModelInput(null);
-        forwardInput.setUploadInput(null);
+        forwardInput.setRegisterModelInput(null);
         readInputStream(forwardInput, parsedInput -> {
             assertNull(parsedInput.getMlTask());
             assertNull(parsedInput.getModelInput());
-            assertNull(parsedInput.getUploadInput());
+            assertNull(parsedInput.getRegisterModelInput());
         });
     }
 

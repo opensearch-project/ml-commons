@@ -26,15 +26,17 @@ import java.util.Map;
  */
 public class MLEngine {
 
+    public static final String REGISTER_MODEL_FOLDER = "register";
+    public static final String DEPLOY_MODEL_FOLDER = "deploy";
     private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
 
     @Getter
-    private final Path djlCachePath;
-    private final Path djlModelsCachePath;
+    private final Path mlCachePath;
+    private final Path mlModelsCachePath;
 
     public MLEngine(Path opensearchDataFolder) {
-        djlCachePath = opensearchDataFolder.resolve("djl");
-        djlModelsCachePath = djlCachePath.resolve("models_cache");
+        mlCachePath = opensearchDataFolder.resolve("ml_cache");
+        mlModelsCachePath = mlCachePath.resolve("models_cache");
     }
 
     public String getPrebuiltModelConfigPath(String modelName, String version, MLModelFormat modelFormat) {
@@ -51,32 +53,32 @@ public class MLEngine {
         return String.format("%s/%s/%s/%s/%s.zip", MODEL_REPO, modelName, version, format, modelZipFileName, Locale.ROOT);
     }
 
-    public Path getUploadModelPath(String modelId, String modelName, String version) {
-        return getUploadModelPath(modelId).resolve(version).resolve(modelName);
+    public Path getRegisterModelPath(String modelId, String modelName, String version) {
+        return getRegisterModelPath(modelId).resolve(version).resolve(modelName);
     }
 
-    public Path getUploadModelPath(String modelId) {
-        return getUploadModelRootPath().resolve(modelId);
+    public Path getRegisterModelPath(String modelId) {
+        return getRegisterModelRootPath().resolve(modelId);
     }
 
-    public Path getUploadModelRootPath() {
-        return djlModelsCachePath.resolve("upload");
+    public Path getRegisterModelRootPath() {
+        return mlModelsCachePath.resolve(REGISTER_MODEL_FOLDER);
     }
 
-    public Path getLoadModelPath(String modelId) {
-        return getLoadModelRootPath().resolve(modelId);
+    public Path getDeployModelPath(String modelId) {
+        return getDeployModelRootPath().resolve(modelId);
     }
 
-    public String getLoadModelZipPath(String modelId, String modelName) {
-        return djlModelsCachePath.resolve("load").resolve(modelId).resolve(modelName) + ".zip";
+    public String getDeployModelZipPath(String modelId, String modelName) {
+        return mlModelsCachePath.resolve(DEPLOY_MODEL_FOLDER).resolve(modelId).resolve(modelName) + ".zip";
     }
 
-    public Path getLoadModelRootPath() {
-        return djlModelsCachePath.resolve("load");
+    public Path getDeployModelRootPath() {
+        return mlModelsCachePath.resolve(DEPLOY_MODEL_FOLDER);
     }
 
-    public Path getLoadModelChunkPath(String modelId, Integer chunkNumber) {
-        return djlModelsCachePath.resolve("load")
+    public Path getDeployModelChunkPath(String modelId, Integer chunkNumber) {
+        return mlModelsCachePath.resolve(DEPLOY_MODEL_FOLDER)
                 .resolve(modelId)
                 .resolve("chunks")
                 .resolve(chunkNumber + "");
@@ -91,7 +93,7 @@ public class MLEngine {
     }
 
     public Path getModelCacheRootPath() {
-        return djlModelsCachePath.resolve("models");
+        return mlModelsCachePath.resolve("models");
     }
 
     public MLModel train(Input input) {
@@ -104,7 +106,7 @@ public class MLEngine {
         return trainable.train(mlInput);
     }
 
-    public Predictable load(MLModel mlModel, Map<String, Object> params) {
+    public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
         predictable.initModel(mlModel, params);
         return predictable;

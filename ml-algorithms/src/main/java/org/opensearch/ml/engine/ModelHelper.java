@@ -7,16 +7,14 @@ package org.opensearch.ml.engine;
 
 import ai.djl.training.util.DownloadUtils;
 import ai.djl.training.util.ProgressBar;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.upload.MLUploadInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import java.io.File;
 import java.io.FileReader;
@@ -55,17 +53,17 @@ public class ModelHelper {
         gson = new Gson();
     }
 
-    public void downloadPrebuiltModelConfig(String taskId, MLUploadInput uploadInput, ActionListener<MLUploadInput> listener) {
-        String modelName = uploadInput.getModelName();
-        String version = uploadInput.getVersion();
-        MLModelFormat modelFormat = uploadInput.getModelFormat();
-        boolean loadModel = uploadInput.isLoadModel();
-        String[] modelNodeIds = uploadInput.getModelNodeIds();
+    public void downloadPrebuiltModelConfig(String taskId, MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelInput> listener) {
+        String modelName = registerModelInput.getModelName();
+        String version = registerModelInput.getVersion();
+        MLModelFormat modelFormat = registerModelInput.getModelFormat();
+        boolean deployModel = registerModelInput.isDeployModel();
+        String[] modelNodeIds = registerModelInput.getModelNodeIds();
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
 
-                Path modelUploadPath = mlEngine.getUploadModelPath(taskId, modelName, version);
-                String configCacheFilePath = modelUploadPath.resolve("config.json").toString();
+                Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
+                String configCacheFilePath = registerModelPath.resolve("config.json").toString();
 
                 String configFileUrl = mlEngine.getPrebuiltModelConfigPath(modelName, version, modelFormat);
                 String modelZipFileUrl = mlEngine.getPrebuiltModelPath(modelName, version, modelFormat);
@@ -81,15 +79,15 @@ public class ModelHelper {
                     return null;
                 }
 
-                MLUploadInput.MLUploadInputBuilder builder = MLUploadInput.builder();
+                MLRegisterModelInput.MLRegisterModelInputBuilder builder = MLRegisterModelInput.builder();
 
-                builder.modelName(modelName).version(version).url(modelZipFileUrl).loadModel(loadModel).modelNodeIds(modelNodeIds);
+                builder.modelName(modelName).version(version).url(modelZipFileUrl).deployModel(deployModel).modelNodeIds(modelNodeIds);
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
-                        case MLUploadInput.MODEL_FORMAT_FIELD:
+                        case MLRegisterModelInput.MODEL_FORMAT_FIELD:
                             builder.modelFormat(MLModelFormat.from(entry.getValue().toString()));
                             break;
-                        case MLUploadInput.MODEL_CONFIG_FIELD:
+                        case MLRegisterModelInput.MODEL_CONFIG_FIELD:
                             TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
                             Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
                             for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
@@ -125,14 +123,13 @@ public class ModelHelper {
                             break;
                     }
                 });
-                MLUploadInput mlUploadInput = builder.build();
-                listener.onResponse(mlUploadInput);
+                listener.onResponse(builder.build());
                 return null;
             });
         } catch (Exception e) {
             listener.onFailure(e);
         } finally {
-            deleteFileQuietly(mlEngine.getUploadModelPath(taskId));
+            deleteFileQuietly(mlEngine.getRegisterModelPath(taskId));
         }
     }
 
@@ -148,9 +145,9 @@ public class ModelHelper {
     public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, ActionListener<Map<String, Object>> listener) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                Path modelUploadPath = mlEngine.getUploadModelPath(taskId, modelName, version);
-                String modelPath = modelUploadPath +".zip";
-                Path modelPartsPath = modelUploadPath.resolve("chunks");
+                Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
+                String modelPath = registerModelPath +".zip";
+                Path modelPartsPath = registerModelPath.resolve("chunks");
                 File modelZipFile = new File(modelPath);
                 log.debug("download model to file {}", modelZipFile.getAbsolutePath());
                 DownloadUtils.download(url, modelPath, new ProgressBar());
@@ -209,8 +206,8 @@ public class ModelHelper {
 
     public void deleteFileCache(String modelId) {
         deleteFileQuietly(mlEngine.getModelCachePath(modelId));
-        deleteFileQuietly(mlEngine.getLoadModelPath(modelId));
-        deleteFileQuietly(mlEngine.getUploadModelPath(modelId));
+        deleteFileQuietly(mlEngine.getDeployModelPath(modelId));
+        deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
     }
 
 }
