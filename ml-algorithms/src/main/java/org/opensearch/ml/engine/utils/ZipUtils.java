@@ -52,7 +52,7 @@ public class ZipUtils {
                 }
             }
         } catch (IOException e) {
-            throw new IllegalArgumentException("Input file should never be null", e);
+            throw new IllegalArgumentException("Wrong input file", e);
         }
     }
 }
