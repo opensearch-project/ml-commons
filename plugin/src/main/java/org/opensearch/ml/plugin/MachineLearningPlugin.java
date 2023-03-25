@@ -55,8 +55,7 @@ import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
-import org.opensearch.ml.action.upload_chunk.MLModelMetaCreate;
-import org.opensearch.ml.action.upload_chunk.TransportCreateModelMetaAction;
+import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -90,7 +89,7 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
@@ -101,7 +100,6 @@ import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.rest.RestMLCreateModelMetaAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteTaskAction;
 import org.opensearch.ml.rest.RestMLDeployModelAction;
@@ -111,6 +109,7 @@ import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
+import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
 import org.opensearch.ml.rest.RestMLSearchModelAction;
 import org.opensearch.ml.rest.RestMLSearchTaskAction;
 import org.opensearch.ml.rest.RestMLStatsAction;
@@ -171,7 +170,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private ModelHelper modelHelper;
     private DiscoveryNodeHelper nodeHelper;
 
-    private MLModelMetaCreate mlModelMetaCreate;
     private MLModelChunkUploader mlModelChunkUploader;
     private MLEngine mlEngine;
 
@@ -203,7 +201,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLDeployModelAction.INSTANCE, TransportDeployModelAction.class),
                 new ActionHandler<>(MLDeployModelOnNodeAction.INSTANCE, TransportDeployModelOnNodeAction.class),
                 new ActionHandler<>(MLUndeployModelAction.INSTANCE, TransportUndeployModelAction.class),
-                new ActionHandler<>(MLCreateModelMetaAction.INSTANCE, TransportCreateModelMetaAction.class),
+                new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class)
@@ -273,7 +271,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
-        mlModelMetaCreate = new MLModelMetaCreate(mlIndicesHandler, threadPool, client);
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
@@ -369,7 +366,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlExecuteTaskRunner,
                 mlSearchHandler,
                 mlTaskDispatcher,
-                mlModelMetaCreate,
                 mlModelChunkUploader,
                 modelHelper,
                 mlCommonsClusterEventListener,
@@ -403,7 +399,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction();
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService);
-        RestMLCreateModelMetaAction restMLCreateModelMetaAction = new RestMLCreateModelMetaAction();
+        RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction();
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction();
 
         return ImmutableList
@@ -423,7 +419,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLRegisterModelAction,
                 restMLDeployModelAction,
                 restMLUndeployModelAction,
-                restMLCreateModelMetaAction,
+                restMLRegisterModelMetaAction,
                 restMLUploadModelChunkAction
             );
     }

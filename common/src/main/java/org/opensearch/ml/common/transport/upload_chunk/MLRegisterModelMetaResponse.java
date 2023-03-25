@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
+import lombok.Getter;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -13,21 +14,23 @@ import org.opensearch.common.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
-public class MLCreateModelMetaResponse extends ActionResponse implements ToXContentObject {
+public class MLRegisterModelMetaResponse extends ActionResponse implements ToXContentObject {
 
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String STATUS_FIELD = "status";
 
+    @Getter
     private String modelId;
+    @Getter
     private String status;
 
-    public MLCreateModelMetaResponse(StreamInput in) throws IOException {
+    public MLRegisterModelMetaResponse(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
         this.status = in.readString();
     }
 
-    public MLCreateModelMetaResponse(String modelId, String status) {
+    public MLRegisterModelMetaResponse(String modelId, String status) {
         this.modelId = modelId;
         this.status= status;
     }

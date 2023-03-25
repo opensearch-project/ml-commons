@@ -57,9 +57,6 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
     private Client client;
 
     @Mock
-    private ActionListener<GetResponse> getModelListener;
-
-    @Mock
     private ActionListener<MLUploadModelChunkResponse> actionListener;
 
     private ThreadContext threadContext;
@@ -72,9 +69,6 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
     @Mock
     private NamedXContentRegistry xContentRegistry;
-
-    @Mock
-    private MLModel mlModel;
 
     @Before
     public void setup() throws IOException {
@@ -194,7 +188,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         assertEquals("Chunk size exceeds 10MB", argumentCaptor.getValue().getMessage());
     }
 
-    public void testUploadModelChunkModelNotFound() throws IOException {
+    public void testUploadModelChunkModelNotFound() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
         MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
         uploadModelChunkInput.setChunkNumber(5);
@@ -209,7 +203,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testUploadModelChunkModelIndexNotFound() throws IOException {
+    public void testUploadModelChunkModelIndexNotFound() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
         MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
         uploadModelChunkInput.setChunkNumber(5);
@@ -224,7 +218,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testUploadModelChunkIndexNotFound() throws IOException {
+    public void testUploadModelChunkIndexNotFound() {
         MLModelChunkUploader mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
         MLUploadModelChunkInput uploadModelChunkInput = prepareRequest();
         uploadModelChunkInput.setChunkNumber(5);

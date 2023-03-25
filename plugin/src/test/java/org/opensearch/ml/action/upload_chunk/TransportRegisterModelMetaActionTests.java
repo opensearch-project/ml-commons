@@ -19,14 +19,15 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaRequest;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaResponse;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaResponse;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 
-public class TransportCreateModelMetaActionTests extends OpenSearchTestCase {
+public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
 
     @Mock
     private TransportService transportService;
@@ -35,10 +36,10 @@ public class TransportCreateModelMetaActionTests extends OpenSearchTestCase {
     private ActionFilters actionFilters;
 
     @Mock
-    private MLModelMetaCreate mlModelMetaCreate;
+    private MLModelManager mlModelManager;
 
     @Mock
-    private ActionListener<MLCreateModelMetaResponse> actionListener;
+    private ActionListener<MLRegisterModelMetaResponse> actionListener;
 
     @Mock
     private Task task;
@@ -50,24 +51,24 @@ public class TransportCreateModelMetaActionTests extends OpenSearchTestCase {
             ActionListener<String> listener = invocation.getArgument(1);
             listener.onResponse("customModelId");
             return null;
-        }).when(mlModelMetaCreate).createModelMeta(any(), any());
+        }).when(mlModelManager).registerModelMeta(any(), any());
     }
 
-    public void testTransportUCreateModelMetaActionConstructor() {
-        TransportCreateModelMetaAction action = new TransportCreateModelMetaAction(transportService, actionFilters, mlModelMetaCreate);
+    public void testTransportRegisterModelMetaActionConstructor() {
+        TransportRegisterModelMetaAction action = new TransportRegisterModelMetaAction(transportService, actionFilters, mlModelManager);
         assertNotNull(action);
     }
 
-    public void testTransportCreateModelMetaActionDoExecute() {
-        TransportCreateModelMetaAction action = new TransportCreateModelMetaAction(transportService, actionFilters, mlModelMetaCreate);
-        MLCreateModelMetaRequest actionRequest = prepareRequest();
+    public void testTransportRegisterModelMetaActionDoExecute() {
+        TransportRegisterModelMetaAction action = new TransportRegisterModelMetaAction(transportService, actionFilters, mlModelManager);
+        MLRegisterModelMetaRequest actionRequest = prepareRequest();
         action.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<MLCreateModelMetaResponse> argumentCaptor = ArgumentCaptor.forClass(MLCreateModelMetaResponse.class);
+        ArgumentCaptor<MLRegisterModelMetaResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelMetaResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    private MLCreateModelMetaRequest prepareRequest() {
-        MLCreateModelMetaInput input = MLCreateModelMetaInput
+    private MLRegisterModelMetaRequest prepareRequest() {
+        MLRegisterModelMetaInput input = MLRegisterModelMetaInput
             .builder()
             .name("Model Name")
             .version("1")
@@ -89,7 +90,7 @@ public class TransportCreateModelMetaActionTests extends OpenSearchTestCase {
             )
             .totalChunks(2)
             .build();
-        return new MLCreateModelMetaRequest(input);
+        return new MLRegisterModelMetaRequest(input);
     }
 
 }
