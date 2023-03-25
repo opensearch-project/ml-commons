@@ -30,27 +30,27 @@ public class ZipUtils {
      */
     public static void unzip(File zipFile, Path dest) {
         try {
-            ZipFile file = new ZipFile(zipFile);
-            Enumeration<ZipArchiveEntry> en = file.getEntries();
-            ZipArchiveEntry ze;
+            ZipFile unzipFile = new ZipFile(zipFile);
+            Enumeration<ZipArchiveEntry> en = unzipFile.getEntries();
+            ZipArchiveEntry zipEntry;
             while (en.hasMoreElements()) {
-                ze = en.nextElement();
-                String name = ze.getName();
-                Path f = dest.resolve(name).toAbsolutePath();
-                if (!f.normalize().startsWith(dest))
+                zipEntry = en.nextElement();
+                String name = zipEntry.getName();
+                Path file = dest.resolve(name).toAbsolutePath();
+                if (!file.normalize().startsWith(dest.toAbsolutePath()))
                     throw new RuntimeException("Bad zip entry");
-                if (ze.isDirectory()) {
-                    Files.createDirectories(f);
+                if (zipEntry.isDirectory()) {
+                    Files.createDirectories(file);
                 } else {
-                    Path parentFile = f.getParent();
+                    Path parentFile = file.getParent();
                     if (parentFile == null) {
                         throw new AssertionError(
-                                "Parent path should never be null: " + f);
+                                "Parent path should never be null: " + file);
                     }
                     Files.createDirectories(parentFile);
-                    InputStream is = file.getInputStream(ze);
-                    Files.copy(is, f, StandardCopyOption.REPLACE_EXISTING);
-                    is.close();
+                    InputStream inputStream = unzipFile.getInputStream(zipEntry);
+                    Files.copy(inputStream, file, StandardCopyOption.REPLACE_EXISTING);
+                    inputStream.close();
                 }
             }
         } catch (IOException e) {

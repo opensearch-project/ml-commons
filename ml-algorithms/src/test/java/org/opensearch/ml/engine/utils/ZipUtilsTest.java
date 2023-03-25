@@ -19,7 +19,7 @@ public class ZipUtilsTest {
 
     @Test
     public void testEmptyZipFile() throws IOException {
-        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expect(IllegalArgumentException.class);
         Path path = Paths.get("build/empty.zip");
         File file = new File(path.toUri());
         Path output = Paths.get("build/output");
