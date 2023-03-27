@@ -24,7 +24,7 @@ import java.io.IOException;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
-public class MLCreateModelMetaInput implements ToXContentObject, Writeable{
+public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String MODEL_NAME_FIELD = "name"; //mandatory
@@ -52,7 +52,7 @@ public class MLCreateModelMetaInput implements ToXContentObject, Writeable{
     private Integer totalChunks;
 
     @Builder(toBuilder = true)
-    public MLCreateModelMetaInput(String name, FunctionName functionName, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks) {
+    public MLRegisterModelMetaInput(String name, FunctionName functionName, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -87,7 +87,7 @@ public class MLCreateModelMetaInput implements ToXContentObject, Writeable{
         this.totalChunks = totalChunks;
     }
 
-    public MLCreateModelMetaInput(StreamInput in) throws IOException{
+    public MLRegisterModelMetaInput(StreamInput in) throws IOException{
         this.name = in.readString();
         this.functionName = in.readEnum(FunctionName.class);
         this.version = in.readString();
@@ -158,7 +158,7 @@ public class MLCreateModelMetaInput implements ToXContentObject, Writeable{
         return builder;
     }
 
-    public static MLCreateModelMetaInput parse(XContentParser parser) throws IOException {
+    public static MLRegisterModelMetaInput parse(XContentParser parser) throws IOException {
         String name = null;
         FunctionName functionName = null;
         String version = null;
@@ -210,7 +210,7 @@ public class MLCreateModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLCreateModelMetaInput(name, functionName, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks);
+        return new MLRegisterModelMetaInput(name, functionName, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks);
     }
 
 }

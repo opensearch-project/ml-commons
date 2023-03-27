@@ -18,27 +18,27 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
-public class MLCreateModelMetaResponseTest {
-
-	MLCreateModelMetaResponse mlCreateModelMetaResponse;
+public class MLRegisterModelMetaResponseTest {
+	MLRegisterModelMetaResponse mlRegisterModelMetaResponse;
 
 	@Before
 	public void setup() {
-		mlCreateModelMetaResponse = new MLCreateModelMetaResponse("Model Id", "Status");
+		mlRegisterModelMetaResponse = new MLRegisterModelMetaResponse("Model Id", "Status");
 	}
 
 
 	@Test
 	public void writeTo_Success() throws IOException {
 		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-		mlCreateModelMetaResponse.writeTo(bytesStreamOutput);
-		MLCreateModelMetaResponse newResponse = new MLCreateModelMetaResponse(bytesStreamOutput.bytes().streamInput());
-//		assertEquals(mlCreateModelMetaResponse, newResponse);
+		mlRegisterModelMetaResponse.writeTo(bytesStreamOutput);
+		MLRegisterModelMetaResponse newResponse = new MLRegisterModelMetaResponse(bytesStreamOutput.bytes().streamInput());
+		assertEquals(mlRegisterModelMetaResponse.getModelId(), newResponse.getModelId());
+		assertEquals(mlRegisterModelMetaResponse.getStatus(), newResponse.getStatus());
 	}
 
 	@Test
 	public void testToXContent() throws IOException {
-		MLCreateModelMetaResponse response = new MLCreateModelMetaResponse("Model Id", "Status");
+		MLRegisterModelMetaResponse response = new MLRegisterModelMetaResponse("Model Id", "Status");
 		XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
 		response.toXContent(builder, EMPTY_PARAMS);
 		assertNotNull(builder);

@@ -88,6 +88,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -151,6 +152,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     ThresholdCircuitBreaker thresholdCircuitBreaker;
     @Mock
     DiscoveryNodeHelper nodeHelper;
+    @Mock
+    private ActionListener<String> actionListener;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -763,6 +766,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any());
     }
 
+    @Mock
+    private IndexResponse indexResponse;
+
     private String[] createTempChunkFiles() throws IOException {
         String tmpFolder = randomAlphaOfLength(10);
         String newChunk0 = chunk0.substring(0, chunk0.length() - 2) + "/" + tmpFolder + "/0";
@@ -770,5 +776,85 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         copyFile(chunk0, newChunk0);
         copyFile(chunk1, newChunk1);
         return new String[] { newChunk0, newChunk1 };
+    }
+
+    public void testRegisterModelMeta() {
+        setupForModelMeta();
+        MLRegisterModelMetaInput registerModelMetaInput = prepareRequest();
+        modelManager.registerModelMeta(registerModelMetaInput, actionListener);
+        ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void testRegisterModelMeta_FailedToInitIndex() {
+        setupForModelMeta();
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("Init Index Failed"));
+            return null;
+        }).when(client).index(any(), any());
+        MLRegisterModelMetaInput registerModelMetaInput = prepareRequest();
+        modelManager.registerModelMeta(registerModelMetaInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    public void testRegisterModelMeta_FailedToInitIndexIfPresent() {
+        setupForModelMeta();
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onFailure(new Exception("initModelIndexIfAbsent Failed"));
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+        MLRegisterModelMetaInput mlUploadInput = prepareRequest();
+        modelManager.registerModelMeta(mlUploadInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    private void setupForModelMeta() {
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+    }
+
+    private MLRegisterModelMetaInput prepareRequest() {
+        MLRegisterModelMetaInput input = MLRegisterModelMetaInput
+            .builder()
+            .name("Model Name")
+            .version("1")
+            .description("Custom Model Test")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .functionName(FunctionName.BATCH_RCF)
+            .modelContentHashValue("14555")
+            .modelContentSizeInBytes(1000L)
+            .modelConfig(
+                new TextEmbeddingModelConfig(
+                    "CUSTOM",
+                    123,
+                    TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+                    "all config",
+                    TextEmbeddingModelConfig.PoolingMode.MEAN,
+                    true,
+                    512
+                )
+            )
+            .totalChunks(2)
+            .build();
+        return input;
     }
 }

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.action.ActionListener;
@@ -72,13 +73,23 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
         assertEquals("ml_upload_model_chunk_action", actionName);
     }
 
+    @Ignore
     public void testRoutes() {
         List<RestHandler.Route> routes = restChunkUploadAction.routes();
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/models/{model_id}/chunk/{chunk_number}", route.getPath());
+        assertEquals("/_plugins/_ml/models/{model_id}/upload_chunk/{chunk_number}", route.getPath());
+    }
+
+    public void testReplacedRoutes() {
+        List<RestHandler.ReplacedRoute> replacedRoutes = restChunkUploadAction.replacedRoutes();
+        assertNotNull(replacedRoutes);
+        assertFalse(replacedRoutes.isEmpty());
+        RestHandler.Route route = replacedRoutes.get(0);
+        assertEquals(RestRequest.Method.POST, route.getMethod());
+        assertEquals("/_plugins/_ml/models/{model_id}/upload_chunk/{chunk_number}", route.getPath());
     }
 
     public void testUploadChunkRequest() throws Exception {

@@ -18,7 +18,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestStatus;
@@ -33,14 +33,14 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
 
     }
 
-    protected Response createModelMeta() throws IOException {
+    protected Response registerModelMeta() throws IOException {
         Response uploadCustomModelMetaResponse = TestHelper
             .makeRequest(client(), "POST", "_plugins/_ml/models/meta", null, TestHelper.toHttpEntity(prepareModelMeta()), null);
         return uploadCustomModelMetaResponse;
     }
 
-    public void testCreateCustomMetaModel_Success() throws IOException {
-        Response customModelResponse = createModelMeta();
+    public void testRegisterCustomMetaModel_Success() throws IOException {
+        Response customModelResponse = registerModelMeta();
         assertNotNull(customModelResponse);
         HttpEntity entity = customModelResponse.getEntity();
         assertNotNull(entity);
@@ -54,8 +54,8 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         assertEquals("CREATED", getModelMap.get("status"));
     }
 
-    public void testCreateCustomMetaModel_PredictException() throws IOException {
-        Response customModelResponse = createModelMeta();
+    public void testRegisterCustomMetaModel_PredictException() throws IOException {
+        Response customModelResponse = registerModelMeta();
         assertNotNull(customModelResponse);
         HttpEntity entity = customModelResponse.getEntity();
         String entityString = TestHelper.httpEntityToString(entity);
@@ -69,7 +69,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
 
     public void testCustomModelWorkflow() throws IOException, InterruptedException {
         // register chunk
-        Response customModelResponse = createModelMeta();
+        Response customModelResponse = registerModelMeta();
         assertNotNull(customModelResponse);
         HttpEntity entity = customModelResponse.getEntity();
         String entityString = TestHelper.httpEntityToString(entity);
@@ -102,19 +102,19 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
     }
 
     protected Response uploadModelChunk(final String modelId, final int chunkNumber) throws IOException {
-        Response createChunkUploadResponse = TestHelper
+        Response uploadChunkResponse = TestHelper
             .makeRequest(
                 client(),
                 "POST",
-                "_plugins/_ml/models/" + modelId + "/chunk/" + chunkNumber,
+                "_plugins/_ml/models/" + modelId + "/upload_chunk/" + chunkNumber,
                 null,
                 TestHelper.toHttpEntity(prepareChunkUploadInput(modelId, chunkNumber)),
                 null
             );
-        assertNotNull(createChunkUploadResponse);
-        HttpEntity entity = createChunkUploadResponse.getEntity();
+        assertNotNull(uploadChunkResponse);
+        HttpEntity entity = uploadChunkResponse.getEntity();
         assertNotNull(entity);
-        return createChunkUploadResponse;
+        return uploadChunkResponse;
     }
 
     private String prepareModelMeta() throws IOException {
@@ -125,7 +125,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
             .frameworkType(FrameworkType.SENTENCE_TRANSFORMERS)
             .modelType("bert")
             .build();
-        MLCreateModelMetaInput input = MLCreateModelMetaInput
+        MLRegisterModelMetaInput input = MLRegisterModelMetaInput
             .builder()
             .name("test_model")
             .version("1")
