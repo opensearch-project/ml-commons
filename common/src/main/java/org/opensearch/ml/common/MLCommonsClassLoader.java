@@ -11,6 +11,7 @@ import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
+import org.opensearch.ml.common.annotation.MLInput;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.MLOutputType;
@@ -30,6 +31,7 @@ public class MLCommonsClassLoader {
     private static Map<Enum<?>, Class<?>> parameterClassMap = new HashMap<>();
     private static Map<Enum<?>, Class<?>> executeInputClassMap = new HashMap<>();
     private static Map<Enum<?>, Class<?>> executeOutputClassMap = new HashMap<>();
+    private static Map<Enum<?>, Class<?>> mlInputClassMap = new HashMap<>();
 
     static {
         try {
@@ -51,6 +53,7 @@ public class MLCommonsClassLoader {
             loadMLInputDataSetClassMapping();
             loadExecuteInputClassMapping();
             loadExecuteOutputClassMapping();
+            loadMLInputClassMapping();
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
@@ -160,6 +163,22 @@ public class MLCommonsClassLoader {
         }
     }
 
+    private static void loadMLInputClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.common.input");
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(MLInput.class);
+        for (Class<?> clazz : classes) {
+            MLInput mlInput = clazz.getAnnotation(MLInput.class);
+            if (mlInput != null) {
+                FunctionName[] algorithms = mlInput.functionNames();
+                if (algorithms != null && algorithms.length > 0) {
+                    for(FunctionName name : algorithms){
+                        mlInputClassMap.put(name, clazz);
+                    }
+                }
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public static <T extends Enum<T>, S, I extends Object> S initMLInstance(T type, I in, Class<?> constructorParamClass) {
         return init(parameterClassMap, type, in, constructorParamClass);
@@ -195,4 +214,33 @@ public class MLCommonsClassLoader {
         }
     }
 
+    public static boolean canInitMLInput(FunctionName functionName) {
+        return mlInputClassMap.containsKey(functionName);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Enum<T>, S> S initMLInput(T type, Object[] initArgs,
+                                                       Class<?>... constructorParameterTypes) {
+        return init(mlInputClassMap, type, initArgs, constructorParameterTypes);
+    }
+
+    private static <T extends Enum<T>, S> S init(Map<Enum<?>, Class<?>> map, T type,
+                                                 Object[] initArgs, Class<?>... constructorParameterTypes) {
+        Class<?> clazz = map.get(type);
+        if (clazz == null) {
+            throw new IllegalArgumentException("Can't find class for type " + type);
+        }
+        try {
+            Constructor<?> constructor = clazz.getConstructor(constructorParameterTypes);
+            return (S) constructor.newInstance(initArgs);
+        } catch (Exception e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof MLException) {
+                throw (MLException)cause;
+            } else {
+                log.error("Failed to init instance for type " + type, e);
+                return null;
+            }
+        }
+    }
 }
