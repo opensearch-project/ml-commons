@@ -23,46 +23,46 @@ import java.io.UncheckedIOException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 
-public class MLCreateModelMetaRequestTest {
+public class MLRegisterModelMetaRequestTest {
 
 	TextEmbeddingModelConfig config;
-	MLCreateModelMetaInput mlCreateModelMetaInput;
+	MLRegisterModelMetaInput mlRegisterModelMetaInput;
 
 	@Before
 	public void setUp() {
 		config = new TextEmbeddingModelConfig("Model Type", 123, FrameworkType.SENTENCE_TRANSFORMERS, "All Config",
 				TextEmbeddingModelConfig.PoolingMode.MEAN, true, 512);
-		mlCreateModelMetaInput = new MLCreateModelMetaInput("Model Name", FunctionName.BATCH_RCF, "1.0",
+		mlRegisterModelMetaInput = new MLRegisterModelMetaInput("Model Name", FunctionName.BATCH_RCF, "1.0",
 				"Model Description", MLModelFormat.TORCH_SCRIPT, MLModelState.DEPLOYING, 200L, "123", config, 2);
 	}
 
 	@Test
 	public void writeTo_Succeess() throws IOException {
-		MLCreateModelMetaRequest request = new MLCreateModelMetaRequest(mlCreateModelMetaInput);
+		MLRegisterModelMetaRequest request = new MLRegisterModelMetaRequest(mlRegisterModelMetaInput);
 		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
 		request.writeTo(bytesStreamOutput);
-		MLCreateModelMetaRequest newRequest = new MLCreateModelMetaRequest(bytesStreamOutput.bytes().streamInput());
-		assertEquals(request.getMlCreateModelMetaInput().getName(), newRequest.getMlCreateModelMetaInput().getName());
-		assertEquals(request.getMlCreateModelMetaInput().getDescription(),
-				newRequest.getMlCreateModelMetaInput().getDescription());
-		assertEquals(request.getMlCreateModelMetaInput().getFunctionName(),
-				newRequest.getMlCreateModelMetaInput().getFunctionName());
-		assertEquals(request.getMlCreateModelMetaInput().getModelConfig().getAllConfig(),
-				newRequest.getMlCreateModelMetaInput().getModelConfig().getAllConfig());
-		assertEquals(request.getMlCreateModelMetaInput().getVersion(),
-				newRequest.getMlCreateModelMetaInput().getVersion());
+		MLRegisterModelMetaRequest newRequest = new MLRegisterModelMetaRequest(bytesStreamOutput.bytes().streamInput());
+		assertEquals(request.getMlRegisterModelMetaInput().getName(), newRequest.getMlRegisterModelMetaInput().getName());
+		assertEquals(request.getMlRegisterModelMetaInput().getDescription(),
+				newRequest.getMlRegisterModelMetaInput().getDescription());
+		assertEquals(request.getMlRegisterModelMetaInput().getFunctionName(),
+				newRequest.getMlRegisterModelMetaInput().getFunctionName());
+		assertEquals(request.getMlRegisterModelMetaInput().getModelConfig().getAllConfig(),
+				newRequest.getMlRegisterModelMetaInput().getModelConfig().getAllConfig());
+		assertEquals(request.getMlRegisterModelMetaInput().getVersion(),
+				newRequest.getMlRegisterModelMetaInput().getVersion());
 	}
 
 	@Test
 	public void validate_Exception_NullModelId() {
-		MLCreateModelMetaRequest mlCreateModelMetaRequest = MLCreateModelMetaRequest.builder().build();
-		ActionRequestValidationException exception = mlCreateModelMetaRequest.validate();
+		MLRegisterModelMetaRequest mlRegisterModelMetaRequest = MLRegisterModelMetaRequest.builder().build();
+		ActionRequestValidationException exception = mlRegisterModelMetaRequest.validate();
 		assertEquals("Validation Failed: 1: Model meta input can't be null;", exception.getMessage());
 	}
 
 	@Test
 	public void fromActionRequest_Success() {
-		MLCreateModelMetaRequest request = new MLCreateModelMetaRequest(mlCreateModelMetaInput);
+		MLRegisterModelMetaRequest request = new MLRegisterModelMetaRequest(mlRegisterModelMetaInput);
 		ActionRequest actionRequest = new ActionRequest() {
 			@Override
 			public ActionRequestValidationException validate() {
@@ -74,17 +74,17 @@ public class MLCreateModelMetaRequestTest {
 				request.writeTo(out);
 			}
 		};
-		MLCreateModelMetaRequest newRequest = MLCreateModelMetaRequest.fromActionRequest(actionRequest);
+		MLRegisterModelMetaRequest newRequest = MLRegisterModelMetaRequest.fromActionRequest(actionRequest);
 		assertNotSame(request, newRequest);
-		assertEquals(request.getMlCreateModelMetaInput().getName(), newRequest.getMlCreateModelMetaInput().getName());
-		assertEquals(request.getMlCreateModelMetaInput().getDescription(),
-				newRequest.getMlCreateModelMetaInput().getDescription());
-		assertEquals(request.getMlCreateModelMetaInput().getFunctionName(),
-				newRequest.getMlCreateModelMetaInput().getFunctionName());
-		assertEquals(request.getMlCreateModelMetaInput().getModelConfig().getAllConfig(),
-				newRequest.getMlCreateModelMetaInput().getModelConfig().getAllConfig());
-		assertEquals(request.getMlCreateModelMetaInput().getVersion(),
-				newRequest.getMlCreateModelMetaInput().getVersion());
+		assertEquals(request.getMlRegisterModelMetaInput().getName(), newRequest.getMlRegisterModelMetaInput().getName());
+		assertEquals(request.getMlRegisterModelMetaInput().getDescription(),
+				newRequest.getMlRegisterModelMetaInput().getDescription());
+		assertEquals(request.getMlRegisterModelMetaInput().getFunctionName(),
+				newRequest.getMlRegisterModelMetaInput().getFunctionName());
+		assertEquals(request.getMlRegisterModelMetaInput().getModelConfig().getAllConfig(),
+				newRequest.getMlRegisterModelMetaInput().getModelConfig().getAllConfig());
+		assertEquals(request.getMlRegisterModelMetaInput().getVersion(),
+				newRequest.getMlRegisterModelMetaInput().getVersion());
 	}
 
 	@Test(expected = UncheckedIOException.class)
@@ -100,6 +100,6 @@ public class MLCreateModelMetaRequestTest {
 				throw new IOException("test");
 			}
 		};
-		MLCreateModelMetaRequest.fromActionRequest(actionRequest);
+		MLRegisterModelMetaRequest.fromActionRequest(actionRequest);
 	}
 }

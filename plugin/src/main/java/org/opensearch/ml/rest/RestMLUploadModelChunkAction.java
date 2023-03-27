@@ -36,12 +36,14 @@ public class RestMLUploadModelChunkAction extends BaseRestHandler {
     }
 
     @Override
-    public List<Route> routes() {
+    public List<ReplacedRoute> replacedRoutes() {
         return ImmutableList
             .of(
-                new Route(
+                new ReplacedRoute(
                     RestRequest.Method.POST,
-                    String.format(Locale.ROOT, "%s/models/{%s}/chunk/{%s}", ML_BASE_URI, "model_id", "chunk_number")
+                    String.format(Locale.ROOT, "%s/models/{%s}/upload_chunk/{%s}", ML_BASE_URI, "model_id", "chunk_number"),// new url
+                    RestRequest.Method.POST,
+                    String.format(Locale.ROOT, "%s/models/{%s}/chunk/{%s}", ML_BASE_URI, "model_id", "chunk_number")// old url
                 )
             );
     }

@@ -27,13 +27,12 @@ public class MLUploadModelChunkResponseTest {
 		mlUploadModelChunkResponse = new MLUploadModelChunkResponse("Status");
 	}
 
-
 	@Test
 	public void writeTo_Success() throws IOException {
 		BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
 		mlUploadModelChunkResponse.writeTo(bytesStreamOutput);
 		MLUploadModelChunkResponse newResponse = new MLUploadModelChunkResponse(bytesStreamOutput.bytes().streamInput());
-//		assertEquals(response.getStatus(), newResponse.getStatus());
+		assertEquals(mlUploadModelChunkResponse.getStatus(), newResponse.getStatus());
 	}
 
 	@Test
