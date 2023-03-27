@@ -7,10 +7,13 @@ import lombok.experimental.FieldDefaults;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.common.xcontent.XContentParser;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
  * This class is to filter model results.
@@ -18,6 +21,14 @@ import java.util.List;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class ModelResultFilter implements Writeable {
+
+    public static final String RETURN_BYTES_FIELD = "return_bytes";
+    // Return bytes in model output. This can be used together with return_bytes.
+    public static final String RETURN_NUMBER_FIELD = "return_number";
+    // Filter target response with name in model output
+    public static final String TARGET_RESPONSE_FIELD = "target_response";
+    // Filter target response with position in model output
+    public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
 
     // Return model output as bytes. This could be useful if client side prefer
     // to parse the model output in its own way.
@@ -76,5 +87,42 @@ public class ModelResultFilter implements Writeable {
         } else {
             streamOutput.writeBoolean(false);
         }
+    }
+
+    public static ModelResultFilter parse(XContentParser parser) throws IOException {
+        boolean returnBytes = false;
+        boolean returnNumber = true;
+        List<String> targetResponse = new ArrayList<>();
+        List<Integer> targetResponsePositions = new ArrayList<>();
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case RETURN_BYTES_FIELD:
+                    returnBytes = parser.booleanValue();
+                    break;
+                case RETURN_NUMBER_FIELD:
+                    returnNumber = parser.booleanValue();
+                    break;
+                case TARGET_RESPONSE_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        targetResponse.add(parser.text());
+                    }
+                    break;
+                case TARGET_RESPONSE_POSITIONS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        targetResponsePositions.add(parser.intValue());
+                    }
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
     }
 }

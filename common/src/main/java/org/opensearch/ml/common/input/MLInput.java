@@ -7,6 +7,7 @@ package org.opensearch.ml.common.input;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentBuilder;
@@ -32,9 +33,10 @@ import java.util.Locale;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
- * ML input data: algirithm name, parameters and input data set.
+ * ML input data: algorithm name, parameters and input data set.
  */
 @Data
+@NoArgsConstructor
 public class MLInput implements Input {
 
     public static final String ALGORITHM_FIELD = "algorithm";
@@ -56,11 +58,11 @@ public class MLInput implements Input {
     public static final String TEXT_DOCS_FIELD = "text_docs";
 
     // Algorithm name
-    private FunctionName algorithm;
+    protected FunctionName algorithm;
     // ML algorithm parameters
-    private MLAlgoParams parameters;
+    protected MLAlgoParams parameters;
     // Input data to train model, run trained model to predict or run ML algorithms(no-model-based) directly.
-    private MLInputDataset inputDataset;
+    protected MLInputDataset inputDataset;
 
     private int version = 1;
 
@@ -169,6 +171,13 @@ public class MLInput implements Input {
     public static MLInput parse(XContentParser parser, String inputAlgoName) throws IOException {
         String algorithmName = inputAlgoName.toUpperCase(Locale.ROOT);
         FunctionName algorithm = FunctionName.from(algorithmName);
+
+        if (MLCommonsClassLoader.canInitMLInput(algorithm)) {
+            MLInput mlInput = MLCommonsClassLoader.initMLInput(algorithm, new Object[]{parser, algorithm}, XContentParser.class, FunctionName.class);
+            mlInput.setAlgorithm(algorithm);
+            return mlInput;
+        }
+
         MLAlgoParams mlParameters = null;
         SearchSourceBuilder searchSourceBuilder = null;
         List<String> sourceIndices = new ArrayList<>();
