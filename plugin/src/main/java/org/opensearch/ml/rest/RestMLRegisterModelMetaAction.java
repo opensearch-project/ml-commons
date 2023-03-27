@@ -14,9 +14,9 @@ import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaAction;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaRequest;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -24,28 +24,37 @@ import org.opensearch.rest.action.RestToXContentListener;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLCreateModelMetaAction extends BaseRestHandler {
-    private static final String ML_CREATE_MODEL_META_ACTION = "ml_create_model_meta_action";
+public class RestMLRegisterModelMetaAction extends BaseRestHandler {
+    private static final String ML_REGISTER_MODEL_META_ACTION = "ml_register_model_meta_action";
 
     /**
      * Constructor
      */
-    public RestMLCreateModelMetaAction() {}
+    public RestMLRegisterModelMetaAction() {}
 
     @Override
     public String getName() {
-        return ML_CREATE_MODEL_META_ACTION;
+        return ML_REGISTER_MODEL_META_ACTION;
     }
 
     @Override
-    public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/meta", ML_BASE_URI)));
+    public List<ReplacedRoute> replacedRoutes() {
+        return ImmutableList
+            .of(
+                new ReplacedRoute(
+                    RestRequest.Method.POST,
+                    String.format(Locale.ROOT, "%s/models/_register_meta", ML_BASE_URI),// new url
+                    RestRequest.Method.POST,
+                    String.format(Locale.ROOT, "%s/models/meta", ML_BASE_URI)// old url
+                )
+            );
     }
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLCreateModelMetaRequest mlCreateModelMetaRequest = getRequest(request);
-        return channel -> client.execute(MLCreateModelMetaAction.INSTANCE, mlCreateModelMetaRequest, new RestToXContentListener<>(channel));
+        MLRegisterModelMetaRequest mlRegisterModelMetaRequest = getRequest(request);
+        return channel -> client
+            .execute(MLRegisterModelMetaAction.INSTANCE, mlRegisterModelMetaRequest, new RestToXContentListener<>(channel));
     }
 
     /**
@@ -55,14 +64,14 @@ public class RestMLCreateModelMetaAction extends BaseRestHandler {
      * @return MLUploadModelMetaRequest
      */
     @VisibleForTesting
-    MLCreateModelMetaRequest getRequest(RestRequest request) throws IOException {
+    MLRegisterModelMetaRequest getRequest(RestRequest request) throws IOException {
         boolean hasContent = request.hasContent();
         if (!hasContent) {
             throw new IOException("Model meta request has empty body");
         }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLCreateModelMetaInput mlInput = MLCreateModelMetaInput.parse(parser);
-        return new MLCreateModelMetaRequest(mlInput);
+        MLRegisterModelMetaInput mlInput = MLRegisterModelMetaInput.parse(parser);
+        return new MLRegisterModelMetaRequest(mlInput);
     }
 }
