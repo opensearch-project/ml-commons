@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -27,9 +28,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaAction;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaInput;
-import org.opensearch.ml.common.transport.upload_chunk.MLCreateModelMetaRequest;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -40,9 +41,9 @@ import org.opensearch.threadpool.ThreadPool;
 
 import com.google.gson.Gson;
 
-public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
+public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
 
-    private RestMLCreateModelMetaAction restMLCreateModelMetaAction;
+    private RestMLRegisterModelMetaAction restMLRegisterModelMetaAction;
     private NodeClient client;
     private ThreadPool threadPool;
 
@@ -54,13 +55,13 @@ public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        restMLCreateModelMetaAction = new RestMLCreateModelMetaAction();
+        restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction();
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
             ActionListener<MLModelGetResponse> actionListener = invocation.getArgument(2);
             return null;
-        }).when(client).execute(eq(MLCreateModelMetaAction.INSTANCE), any(), any());
+        }).when(client).execute(eq(MLRegisterModelMetaAction.INSTANCE), any(), any());
     }
 
     @Override
@@ -71,43 +72,53 @@ public class RestMLCreateModelMetaActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLCreateModelMetaAction mlUploadModel = new RestMLCreateModelMetaAction();
+        RestMLRegisterModelMetaAction mlUploadModel = new RestMLRegisterModelMetaAction();
         assertNotNull(mlUploadModel);
     }
 
     public void testGetName() {
-        String actionName = restMLCreateModelMetaAction.getName();
+        String actionName = restMLRegisterModelMetaAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_create_model_meta_action", actionName);
+        assertEquals("ml_register_model_meta_action", actionName);
     }
 
+    @Ignore
     public void testRoutes() {
-        List<RestHandler.Route> routes = restMLCreateModelMetaAction.routes();
+        List<RestHandler.Route> routes = restMLRegisterModelMetaAction.routes();
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/models/meta", route.getPath());
+        assertEquals("/_plugins/_ml/models/_register_meta", route.getPath());
     }
 
-    public void testCreateModelMetaRequest() throws Exception {
+    public void testReplacedRoutes() {
+        List<RestHandler.ReplacedRoute> replacedRoutes = restMLRegisterModelMetaAction.replacedRoutes();
+        assertNotNull(replacedRoutes);
+        assertFalse(replacedRoutes.isEmpty());
+        RestHandler.Route route = replacedRoutes.get(0);
+        assertEquals(RestRequest.Method.POST, route.getMethod());
+        assertEquals("/_plugins/_ml/models/_register_meta", route.getPath());
+    }
+
+    public void testRegisterModelMetaRequest() throws Exception {
         RestRequest request = getRestRequest();
-        restMLCreateModelMetaAction.handleRequest(request, channel, client);
-        ArgumentCaptor<MLCreateModelMetaRequest> argumentCaptor = ArgumentCaptor.forClass(MLCreateModelMetaRequest.class);
-        verify(client, times(1)).execute(eq(MLCreateModelMetaAction.INSTANCE), argumentCaptor.capture(), any());
-        MLCreateModelMetaInput metaModelRequest = argumentCaptor.getValue().getMlCreateModelMetaInput();
+        restMLRegisterModelMetaAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLRegisterModelMetaRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelMetaRequest.class);
+        verify(client, times(1)).execute(eq(MLRegisterModelMetaAction.INSTANCE), argumentCaptor.capture(), any());
+        MLRegisterModelMetaInput metaModelRequest = argumentCaptor.getValue().getMlRegisterModelMetaInput();
         assertEquals("all-MiniLM-L6-v3", metaModelRequest.getName());
         assertEquals("1", metaModelRequest.getVersion());
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
     }
 
-    public void testCreateModelMeta_NoContent() throws Exception {
+    public void testRegisterModelMeta_NoContent() throws Exception {
         RestRequest.Method method = RestRequest.Method.POST;
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withMethod(method).withParams(params).build();
         expectedEx.expect(IOException.class);
         expectedEx.expectMessage("Model meta request has empty body");
-        restMLCreateModelMetaAction.handleRequest(request, channel, client);
+        restMLRegisterModelMetaAction.handleRequest(request, channel, client);
     }
 
     private RestRequest getRestRequest() {

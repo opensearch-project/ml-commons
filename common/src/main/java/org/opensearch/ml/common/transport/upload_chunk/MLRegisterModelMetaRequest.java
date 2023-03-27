@@ -27,24 +27,24 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLCreateModelMetaRequest extends ActionRequest {
+public class MLRegisterModelMetaRequest extends ActionRequest {
 
-    MLCreateModelMetaInput mlCreateModelMetaInput;
+    MLRegisterModelMetaInput mlRegisterModelMetaInput;
 
     @Builder
-    public MLCreateModelMetaRequest(MLCreateModelMetaInput mlCreateModelMetaInput) {
-        this.mlCreateModelMetaInput = mlCreateModelMetaInput;
+    public MLRegisterModelMetaRequest(MLRegisterModelMetaInput mlRegisterModelMetaInput) {
+        this.mlRegisterModelMetaInput = mlRegisterModelMetaInput;
     }
 
-    public MLCreateModelMetaRequest(StreamInput in) throws IOException {
+    public MLRegisterModelMetaRequest(StreamInput in) throws IOException {
         super(in);
-        this.mlCreateModelMetaInput = new MLCreateModelMetaInput(in);
+        this.mlRegisterModelMetaInput = new MLRegisterModelMetaInput(in);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (mlCreateModelMetaInput == null) {
+        if (mlRegisterModelMetaInput == null) {
             exception = addValidationError("Model meta input can't be null", exception);
         }
 
@@ -54,22 +54,22 @@ public class MLCreateModelMetaRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        this.mlCreateModelMetaInput.writeTo(out);
+        this.mlRegisterModelMetaInput.writeTo(out);
     }
 
-    public static MLCreateModelMetaRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLCreateModelMetaRequest) {
-            return (MLCreateModelMetaRequest) actionRequest;
+    public static MLRegisterModelMetaRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLRegisterModelMetaRequest) {
+            return (MLRegisterModelMetaRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLCreateModelMetaRequest(input);
+                return new MLRegisterModelMetaRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLCreateModelMetaRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLRegisterModelMetaRequest", e);
         }
 
     }
