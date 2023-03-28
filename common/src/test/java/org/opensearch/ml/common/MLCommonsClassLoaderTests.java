@@ -11,17 +11,26 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.input.nlp.TextDocsMLInput;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
+import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class MLCommonsClassLoaderTests {
@@ -88,6 +97,21 @@ public class MLCommonsClassLoaderTests {
     public void testClassLoader_ExecuteOutput() {
         LocalSampleCalculatorOutput calculatorOutput = MLCommonsClassLoader.initExecuteOutputInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, streamInputForOutput, StreamInput.class);
         assertEquals(this.output, calculatorOutput);
+    }
+
+    @Test
+    public void testClassLoader_MLInput() throws IOException {
+        assertTrue(MLCommonsClassLoader.canInitMLInput(FunctionName.TEXT_EMBEDDING));
+
+        String jsonStr = "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}}";
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
+
+        TextDocsMLInput mlInput = MLCommonsClassLoader.initMLInput(FunctionName.TEXT_EMBEDDING, new Object[]{parser, FunctionName.TEXT_EMBEDDING}, XContentParser.class, FunctionName.class);
+        assertNotNull(mlInput);
+        assertEquals(FunctionName.TEXT_EMBEDDING, mlInput.getFunctionName());
+        assertEquals(2, ((TextDocsInputDataSet)mlInput.getInputDataset()).getDocs().size());
     }
 
     public enum TestEnum {

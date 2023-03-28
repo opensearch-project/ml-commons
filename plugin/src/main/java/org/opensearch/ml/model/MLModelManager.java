@@ -69,8 +69,10 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.common.xcontent.ToXContent;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
@@ -86,6 +88,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
@@ -183,6 +186,55 @@ public class MLModelManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE, it -> maxDeployTasksPerNode = it);
+    }
+
+    public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
+        try {
+            String modelName = mlRegisterModelMetaInput.getName();
+            String version = mlRegisterModelMetaInput.getVersion();
+            FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                    Instant now = Instant.now();
+                    MLModel mlModelMeta = MLModel
+                        .builder()
+                        .name(modelName)
+                        .algorithm(functionName)
+                        .version(version)
+                        .description(mlRegisterModelMetaInput.getDescription())
+                        .modelFormat(mlRegisterModelMetaInput.getModelFormat())
+                        .modelState(MLModelState.REGISTERING)
+                        .modelConfig(mlRegisterModelMetaInput.getModelConfig())
+                        .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
+                        .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
+                        .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                        .createdTime(now)
+                        .lastUpdateTime(now)
+                        .build();
+                    IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                    indexRequest
+                        .source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+                    indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+                    client.index(indexRequest, ActionListener.wrap(r -> {
+                        log.debug("Index model meta doc successfully {}", modelName);
+                        listener.onResponse(r.getId());
+                    }, e -> {
+                        log.error("Failed to index model meta doc", e);
+                        listener.onFailure(e);
+                    }));
+                }, ex -> {
+                    log.error("Failed to init model index", ex);
+                    listener.onFailure(ex);
+                }));
+            } catch (Exception e) {
+                log.error("Failed to register model meta doc", e);
+                listener.onFailure(e);
+            }
+        } catch (final Exception e) {
+            log.error("Failed to init model index", e);
+            listener.onFailure(e);
+        }
     }
 
     /**

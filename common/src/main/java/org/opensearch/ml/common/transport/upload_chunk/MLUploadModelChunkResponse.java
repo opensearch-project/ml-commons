@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
+import lombok.Getter;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -15,6 +16,7 @@ import java.io.IOException;
 
 public class MLUploadModelChunkResponse extends ActionResponse implements ToXContentObject {
     public static final String STATUS_FIELD = "status";
+    @Getter
     private String status;
 
     public MLUploadModelChunkResponse (StreamInput in) throws IOException {
