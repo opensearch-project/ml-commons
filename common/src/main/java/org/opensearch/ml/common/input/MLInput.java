@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -119,7 +120,7 @@ public class MLInput implements Input {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
         builder.field(ALGORITHM_FIELD, algorithm.name());
         if (parameters != null) {
