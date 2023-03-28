@@ -126,6 +126,7 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
     }
 
+
     public void testRegisterModelFileUploadNotAllowed() throws Exception {
         settings = Settings.builder().put(ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD.getKey(), false).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD);
@@ -139,6 +140,7 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
         RestRequest request = getRestRequest();
         restMLRegisterModelMetaAction.handleRequest(request, channel, client);
     }
+
 
     public void testRegisterModelMeta_NoContent() throws Exception {
         RestRequest.Method method = RestRequest.Method.POST;
