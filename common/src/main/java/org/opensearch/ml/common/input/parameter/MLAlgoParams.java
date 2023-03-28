@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.input.parameter;
 
 import org.opensearch.common.io.stream.NamedWriteable;
-import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.ToXContentObject;
 
 /**
  * Machine learning algorithms parameter interface.

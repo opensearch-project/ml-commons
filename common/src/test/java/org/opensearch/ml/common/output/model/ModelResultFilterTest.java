@@ -1,19 +1,15 @@
 package org.opensearch.ml.common.output.model;
 
-import lombok.Setter;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.input.MLInput;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 

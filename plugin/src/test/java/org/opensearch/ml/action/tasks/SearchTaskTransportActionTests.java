@@ -16,7 +16,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;

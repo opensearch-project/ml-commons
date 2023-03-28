@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.ToXContentObject;
 
 /**
  * This is data interface used for data exchange between client plugins and ml plugins. Currently, only row based interface are provided,

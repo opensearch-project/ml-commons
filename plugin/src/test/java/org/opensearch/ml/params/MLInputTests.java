@@ -11,7 +11,7 @@ import java.io.IOException;
 
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
