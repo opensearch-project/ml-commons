@@ -7,9 +7,9 @@ package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
 import org.opensearch.common.Strings;
-import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
 

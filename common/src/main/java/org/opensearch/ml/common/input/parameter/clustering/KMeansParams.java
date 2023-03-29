@@ -7,12 +7,13 @@ package org.opensearch.ml.common.input.parameter.clustering;
 
 import lombok.Builder;
 import lombok.Data;
-import org.opensearch.common.ParseField;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
-import org.opensearch.common.xcontent.XContentBuilder;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.ParseField;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.MLAlgoParameter;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
@@ -105,7 +106,7 @@ public class KMeansParams implements MLAlgoParams {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
         if (centroids != null) {
             builder.field(CENTROIDS_FIELD, centroids);
