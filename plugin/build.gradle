@@ -277,7 +277,10 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
         'org.opensearch.ml.rest.RestMLPredictionAction',
-        'org.opensearch.ml.breaker.DiskCircuitBreaker'
+        'org.opensearch.ml.breaker.DiskCircuitBreaker',
+
+        'org.opensearch.ml.action.model_group.TransportCreateModelGroupAction',
+        'org.opensearch.ml.rest.RestMLCreateModelGroupAction',
 ]
 
 jacocoTestCoverageVerification {
