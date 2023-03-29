@@ -21,7 +21,7 @@ import java.util.List;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
-public class MLCreateModelGroupInput implements ToXContentObject, Writeable{
+public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
 
     public static final String NAME_FIELD = "name"; //mandatory
     public static final String DESCRIPTION_FIELD = "description";
@@ -34,14 +34,14 @@ public class MLCreateModelGroupInput implements ToXContentObject, Writeable{
     private List<String> models;
 
     @Builder(toBuilder = true)
-    public MLCreateModelGroupInput(String name, String description, List<String> tags, List<String> models) {
+    public MLRegisterModelGroupInput(String name, String description, List<String> tags, List<String> models) {
         this.name = name;
         this.description = description;
         this.tags = tags;
         this.models = models;
     }
 
-    public MLCreateModelGroupInput(StreamInput in) throws IOException{
+    public MLRegisterModelGroupInput(StreamInput in) throws IOException{
         this.name = in.readString();
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
@@ -87,7 +87,7 @@ public class MLCreateModelGroupInput implements ToXContentObject, Writeable{
         return builder;
     }
 
-    public static MLCreateModelGroupInput parse(XContentParser parser) throws IOException {
+    public static MLRegisterModelGroupInput parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
         List<String> tags = null;
@@ -123,7 +123,7 @@ public class MLCreateModelGroupInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLCreateModelGroupInput(name, description, tags, models);
+        return new MLRegisterModelGroupInput(name, description, tags, models);
     }
 
 }

@@ -14,9 +14,9 @@ import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupAction;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupInput;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupRequest;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -24,28 +24,29 @@ import org.opensearch.rest.action.RestToXContentListener;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
-public class RestMLCreateModelGroupAction extends BaseRestHandler {
-    private static final String ML_CREATE_MODEL_GROUP_ACTION = "ml_create_model_group_action";
+public class RestMLRegisterModelGroupAction extends BaseRestHandler {
+    private static final String ML_REGISTER_MODEL_GROUP_ACTION = "ml_register_model_group_action";
 
     /**
      * Constructor
      */
-    public RestMLCreateModelGroupAction() {}
+    public RestMLRegisterModelGroupAction() {}
 
     @Override
     public String getName() {
-        return ML_CREATE_MODEL_GROUP_ACTION;
+        return ML_REGISTER_MODEL_GROUP_ACTION;
     }
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/model_groups", ML_BASE_URI)));
+        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/model_groups/_register", ML_BASE_URI)));
     }
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLCreateModelGroupRequest createModelGroupRequest = getRequest(request);
-        return channel -> client.execute(MLCreateModelGroupAction.INSTANCE, createModelGroupRequest, new RestToXContentListener<>(channel));
+        MLRegisterModelGroupRequest createModelGroupRequest = getRequest(request);
+        return channel -> client
+            .execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest, new RestToXContentListener<>(channel));
     }
 
     /**
@@ -55,14 +56,14 @@ public class RestMLCreateModelGroupAction extends BaseRestHandler {
      * @return MLUploadModelMetaRequest
      */
     @VisibleForTesting
-    MLCreateModelGroupRequest getRequest(RestRequest request) throws IOException {
+    MLRegisterModelGroupRequest getRequest(RestRequest request) throws IOException {
         boolean hasContent = request.hasContent();
         if (!hasContent) {
             throw new IOException("Model group request has empty body");
         }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLCreateModelGroupInput input = MLCreateModelGroupInput.parse(parser);
-        return new MLCreateModelGroupRequest(input);
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput.parse(parser);
+        return new MLRegisterModelGroupRequest(input);
     }
 }

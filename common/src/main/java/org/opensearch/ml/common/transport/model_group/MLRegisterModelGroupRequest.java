@@ -27,24 +27,24 @@ import static org.opensearch.action.ValidateActions.addValidationError;
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
-public class MLCreateModelGroupRequest extends ActionRequest {
+public class MLRegisterModelGroupRequest extends ActionRequest {
 
-    MLCreateModelGroupInput createModelGroupInput;
+    MLRegisterModelGroupInput registerModelGroupInput;
 
     @Builder
-    public MLCreateModelGroupRequest(MLCreateModelGroupInput createModelGroupInput) {
-        this.createModelGroupInput = createModelGroupInput;
+    public MLRegisterModelGroupRequest(MLRegisterModelGroupInput registerModelGroupInput) {
+        this.registerModelGroupInput = registerModelGroupInput;
     }
 
-    public MLCreateModelGroupRequest(StreamInput in) throws IOException {
+    public MLRegisterModelGroupRequest(StreamInput in) throws IOException {
         super(in);
-        this.createModelGroupInput = new MLCreateModelGroupInput(in);
+        this.registerModelGroupInput = new MLRegisterModelGroupInput(in);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (createModelGroupInput == null) {
+        if (registerModelGroupInput == null) {
             exception = addValidationError("Model meta input can't be null", exception);
         }
 
@@ -54,19 +54,19 @@ public class MLCreateModelGroupRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        this.createModelGroupInput.writeTo(out);
+        this.registerModelGroupInput.writeTo(out);
     }
 
-    public static MLCreateModelGroupRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLCreateModelGroupRequest) {
-            return (MLCreateModelGroupRequest) actionRequest;
+    public static MLRegisterModelGroupRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLRegisterModelGroupRequest) {
+            return (MLRegisterModelGroupRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLCreateModelGroupRequest(input);
+                return new MLRegisterModelGroupRequest(input);
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to parse ActionRequest into MLCreateModelMetaRequest", e);

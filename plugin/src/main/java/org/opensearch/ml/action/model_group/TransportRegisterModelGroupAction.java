@@ -23,17 +23,17 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupAction;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupInput;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupRequest;
-import org.opensearch.ml.common.transport.model_group.MLCreateModelGroupResponse;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
-public class TransportCreateModelGroupAction extends HandledTransportAction<ActionRequest, MLCreateModelGroupResponse> {
+public class TransportRegisterModelGroupAction extends HandledTransportAction<ActionRequest, MLRegisterModelGroupResponse> {
 
     private final TransportService transportService;
     private final ActionFilters actionFilters;
@@ -42,14 +42,14 @@ public class TransportCreateModelGroupAction extends HandledTransportAction<Acti
     private final Client client;
 
     @Inject
-    public TransportCreateModelGroupAction(
+    public TransportRegisterModelGroupAction(
         TransportService transportService,
         ActionFilters actionFilters,
         MLIndicesHandler mlIndicesHandler,
         ThreadPool threadPool,
         Client client
     ) {
-        super(MLCreateModelGroupAction.NAME, transportService, actionFilters, MLCreateModelGroupRequest::new);
+        super(MLRegisterModelGroupAction.NAME, transportService, actionFilters, MLRegisterModelGroupRequest::new);
         this.transportService = transportService;
         this.actionFilters = actionFilters;
         this.mlIndicesHandler = mlIndicesHandler;
@@ -58,14 +58,14 @@ public class TransportCreateModelGroupAction extends HandledTransportAction<Acti
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateModelGroupResponse> listener) {
-        MLCreateModelGroupRequest createModelGroupRequest = MLCreateModelGroupRequest.fromActionRequest(request);
-        MLCreateModelGroupInput createModelGroupInput = createModelGroupRequest.getCreateModelGroupInput();
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelGroupResponse> listener) {
+        MLRegisterModelGroupRequest createModelGroupRequest = MLRegisterModelGroupRequest.fromActionRequest(request);
+        MLRegisterModelGroupInput createModelGroupInput = createModelGroupRequest.getRegisterModelGroupInput();
         createModelGroup(
             createModelGroupInput,
             ActionListener
                 .wrap(
-                    modelGroupId -> { listener.onResponse(new MLCreateModelGroupResponse(modelGroupId, MLTaskState.CREATED.name())); },
+                    modelGroupId -> { listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name())); },
                     ex -> {
                         log.error("Failed to init model index", ex);
                         listener.onFailure(ex);
@@ -74,7 +74,7 @@ public class TransportCreateModelGroupAction extends HandledTransportAction<Acti
         );
     }
 
-    public void createModelGroup(MLCreateModelGroupInput input, ActionListener<String> listener) {
+    public void createModelGroup(MLRegisterModelGroupInput input, ActionListener<String> listener) {
         try {
             String modelName = input.getName();
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
