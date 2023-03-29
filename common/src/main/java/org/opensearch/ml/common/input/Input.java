@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.input;
 
 import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.ml.common.FunctionName;
 
 public interface Input extends ToXContentObject, Writeable {
