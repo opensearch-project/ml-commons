@@ -279,8 +279,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.breaker.DiskCircuitBreaker',
 
-        'org.opensearch.ml.action.model_group.TransportCreateModelGroupAction',
-        'org.opensearch.ml.rest.RestMLCreateModelGroupAction',
+        'org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction',
+        'org.opensearch.ml.rest.RestMLRegisterModelGroupAction',
 ]
 
 jacocoTestCoverageVerification {
