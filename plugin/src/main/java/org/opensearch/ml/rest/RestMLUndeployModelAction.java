@@ -19,7 +19,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelInput;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;

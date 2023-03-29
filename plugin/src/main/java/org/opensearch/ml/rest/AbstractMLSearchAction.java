@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.common.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.utils.RestActionUtils.getSourceContext;
 
 import java.io.IOException;
@@ -16,7 +16,7 @@ import org.opensearch.action.ActionType;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.common.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;

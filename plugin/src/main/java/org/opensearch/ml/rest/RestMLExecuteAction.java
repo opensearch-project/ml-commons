@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
