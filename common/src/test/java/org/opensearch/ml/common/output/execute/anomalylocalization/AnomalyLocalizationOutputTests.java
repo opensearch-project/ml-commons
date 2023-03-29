@@ -5,17 +5,17 @@
 
 package org.opensearch.ml.common.output.execute.anomalylocalization;
 
+import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.core.common.Strings;
+import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-
-import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 
@@ -51,7 +51,7 @@ public class AnomalyLocalizationOutputTests {
         builder.startObject();
         builder = output.toXContent(builder, null);
         builder.endObject();
-        String json = org.opensearch.common.Strings.toString(builder);
+        String json = Strings.toString(builder);
         XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
         AnomalyLocalizationOutput newOutput = AnomalyLocalizationOutput.parse(parser);
 

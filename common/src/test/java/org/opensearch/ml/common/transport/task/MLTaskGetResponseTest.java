@@ -2,24 +2,25 @@ package org.opensearch.ml.common.transport.task;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.core.common.Strings;
+import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.dataset.MLInputDataType;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 
 import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class MLTaskGetResponseTest {
     MLTask mlTask;
@@ -71,7 +72,7 @@ public class MLTaskGetResponseTest {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         mlTaskGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = Strings.toString(builder);
         assertEquals("{\"task_id\":\"id\"," +
                 "\"model_id\":\"model id\"," +
                 "\"task_type\":\"EXECUTION\"," +
@@ -84,8 +85,7 @@ public class MLTaskGetResponseTest {
                 "\"create_time\":123," +
                 "\"last_update_time\":123," +
                 "\"error\":\"error\"," +
-                "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
-                +
+                "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}," +
                 "\"is_async\":true}", jsonStr);
     }
 }
