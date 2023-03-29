@@ -10,9 +10,9 @@ import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.xcontent.ToXContentObject;
-import org.opensearch.common.xcontent.XContentBuilder;
-import org.opensearch.common.xcontent.XContentParser;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+
 
 /**
  * ML input data: algirithm name, parameters and input data set.

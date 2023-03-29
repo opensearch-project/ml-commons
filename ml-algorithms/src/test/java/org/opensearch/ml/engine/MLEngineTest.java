@@ -13,7 +13,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.DataFrame;

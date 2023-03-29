@@ -23,7 +23,7 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.rest.RestChannel;

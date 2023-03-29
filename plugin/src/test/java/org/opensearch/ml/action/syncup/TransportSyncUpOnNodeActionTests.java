@@ -52,7 +52,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
-import org.opensearch.common.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.model.MLModelState;
