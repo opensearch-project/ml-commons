@@ -167,29 +167,12 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
-    public void parse_WithModel() throws Exception {
-        testParseFromJsonString("modelNameInsideTest", "versionInsideTest", true, expectedInputStr, parsedInput -> {
-            assertEquals(FunctionName.LINEAR_REGRESSION, parsedInput.getFunctionName());
-            assertEquals("modelNameInsideTest", parsedInput.getModelName());
-            assertEquals("versionInsideTest", parsedInput.getVersion());
-        });
-    }
-
-    @Test
     public void parse_WithoutModel() throws Exception {
         testParseFromJsonString( false, expectedInputStr, parsedInput -> {
             assertFalse(parsedInput.isDeployModel());
             assertEquals("modelName", parsedInput.getModelName());
             assertEquals("version", parsedInput.getVersion());
         });
-    }
-
-    private void testParseFromJsonString(String modelName, String version, Boolean deployModel, String expectedInputStr, Consumer<MLRegisterModelInput> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
-        parser.nextToken();
-        MLRegisterModelInput parsedInput = MLRegisterModelInput.parse(parser, modelName, version, deployModel);
-        verify.accept(parsedInput);
     }
 
     private void testParseFromJsonString(Boolean deployModel,String expectedInputStr, Consumer<MLRegisterModelInput> verify) throws Exception {

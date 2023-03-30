@@ -45,6 +45,10 @@ public class MLIndicesHandler {
         indexMappingUpdated.put(ML_TASK_INDEX, new AtomicBoolean(false));
     }
 
+    public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MODEL_GROUP, listener);
+    }
+
     public void initModelIndexIfAbsent(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.MODEL, listener);
     }
