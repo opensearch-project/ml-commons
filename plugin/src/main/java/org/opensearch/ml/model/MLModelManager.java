@@ -191,9 +191,11 @@ public class MLModelManager {
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
         try {
+            FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+            mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             String modelName = mlRegisterModelMetaInput.getName();
             String version = mlRegisterModelMetaInput.getVersion();
-            FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                     Instant now = Instant.now();
@@ -253,39 +255,47 @@ public class MLModelManager {
             String modelGroupId = registerModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
             if (modelGroupId != null) {
-                client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
-                    if (modelGroup.isExists()) {
-                        Map<String, Object> source = modelGroup.getSourceAsMap();
-                        int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
-                        int newVersion = latestVersion + 1;
-                        source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
-                        UpdateRequest updateModelGroupRequest = new UpdateRequest();
-                        long seqNo = modelGroup.getSeqNo();
-                        long primaryTerm = modelGroup.getPrimaryTerm();
-                        updateModelGroupRequest
-                            .index(ML_MODEL_GROUP_INDEX)
-                            .id(modelGroupId)
-                            .setIfSeqNo(seqNo)
-                            .setIfPrimaryTerm(primaryTerm)
-                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                            .doc(source);
-                        client
-                            .update(
-                                updateModelGroupRequest,
-                                ActionListener
-                                    .wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + "", seqNo + 1, primaryTerm); }, e -> {
-                                        log.error("Failed to update model group", e);
-                                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
-                                    })
-                            );
-                    } else {
-                        log.error("Model group not found");
-                        uploadModel(registerModelInput, mlTask, null, -1, -1);
-                    }
-                }, e -> {
-                    log.error("Failed to get model group", e);
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
+                        if (modelGroup.isExists()) {
+                            Map<String, Object> source = modelGroup.getSourceAsMap();
+                            int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
+                            int newVersion = latestVersion + 1;
+                            source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
+                            UpdateRequest updateModelGroupRequest = new UpdateRequest();
+                            long seqNo = modelGroup.getSeqNo();
+                            long primaryTerm = modelGroup.getPrimaryTerm();
+                            updateModelGroupRequest
+                                .index(ML_MODEL_GROUP_INDEX)
+                                .id(modelGroupId)
+                                .setIfSeqNo(seqNo)
+                                .setIfPrimaryTerm(primaryTerm)
+                                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+                                .doc(source);
+                            client
+                                .update(
+                                    updateModelGroupRequest,
+                                    ActionListener
+                                        .wrap(
+                                            r -> { uploadModel(registerModelInput, mlTask, newVersion + "", seqNo + 1, primaryTerm); },
+                                            e -> {
+                                                log.error("Failed to update model group", e);
+                                                handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                                            }
+                                        )
+                                );
+                        } else {
+                            log.error("Model group not found");
+                            uploadModel(registerModelInput, mlTask, null, -1, -1);
+                        }
+                    }, e -> {
+                        log.error("Failed to get model group", e);
+                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                    }));
+                } catch (Exception e) {
+                    log.error("Failed to register model", e);
                     handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
-                }));
+                }
             } else {
                 uploadModel(registerModelInput, mlTask, null, -1, -1);
             }

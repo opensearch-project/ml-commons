@@ -49,14 +49,6 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
                     String.format(Locale.ROOT, "%s/models/_register", ML_BASE_URI),// new url
                     RestRequest.Method.POST,
                     String.format(Locale.ROOT, "%s/models/_upload", ML_BASE_URI)// old url
-                ),
-                new ReplacedRoute(
-                    RestRequest.Method.POST,
-                    // new url
-                    String.format(Locale.ROOT, "%s/models/{%s}/{%s}/_register", ML_BASE_URI, PARAMETER_MODEL_ID, PARAMETER_VERSION),
-                    RestRequest.Method.POST,
-                    // old url
-                    String.format(Locale.ROOT, "%s/models/{%s}/{%s}/_upload", ML_BASE_URI, PARAMETER_MODEL_ID, PARAMETER_VERSION)
                 )
             );
     }
@@ -90,9 +82,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLRegisterModelInput mlInput = modelName == null
-            ? MLRegisterModelInput.parse(parser, loadModel)
-            : MLRegisterModelInput.parse(parser, modelName, version, loadModel);
+        MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         return new MLRegisterModelRequest(mlInput);
     }
 }
