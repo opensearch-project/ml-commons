@@ -281,7 +281,8 @@ List<String> jacocoExclusions = [
 
         'org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction',
         'org.opensearch.ml.rest.RestMLRegisterModelGroupAction',
-        'org.opensearch.ml.rest.RestMLRegisterModelAction'
+        'org.opensearch.ml.rest.RestMLRegisterModelAction',
+        'org.opensearch.ml.cluster.MLSyncUpCron'
 ]
 
 jacocoTestCoverageVerification {
