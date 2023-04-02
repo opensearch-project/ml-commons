@@ -64,7 +64,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         MLTask mlTask = MLTask.parse(parser);
                         actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
                     } catch (Exception e) {
-                        log.error("Failed to parse ml task" + r.getId(), e);
+                        log.error("Failed to parse ml task " + r.getId(), e);
                         actionListener.onFailure(e);
                     }
                 } else {

@@ -11,6 +11,7 @@ import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -151,7 +152,7 @@ public class ModelHelper {
                 File modelZipFile = new File(modelPath);
                 log.debug("download model to file {}", modelZipFile.getAbsolutePath());
                 DownloadUtils.download(url, modelPath, new ProgressBar());
-                verifyModelZipFile(modelFormat, modelPath);
+                verifyModelZipFile(modelFormat, modelPath, modelName);
 
                 List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
                 Map<String, Object> result = new HashMap<>();
@@ -168,7 +169,7 @@ public class ModelHelper {
         }
     }
 
-    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath) throws IOException {
+    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath, String modelName) throws IOException {
         boolean hasPtFile = false;
         boolean hasOnnxFile = false;
         boolean hasTokenizerFile = false;
@@ -178,6 +179,11 @@ public class ModelHelper {
                 String fileName = ((ZipEntry) zipEntries.nextElement()).getName();
                 hasPtFile = hasModelFile(modelFormat, MLModelFormat.TORCH_SCRIPT, PYTORCH_FILE_EXTENSION, hasPtFile, fileName);
                 hasOnnxFile = hasModelFile(modelFormat, MLModelFormat.ONNX, ONNX_FILE_EXTENSION, hasOnnxFile, fileName);
+
+                if (modelName == FunctionName.METRICS_CORRELATION.toString()){
+                    //for metrics correlation algorithm we don't need any tokenizer file
+                    hasTokenizerFile = true;
+                }
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
                     hasTokenizerFile = true;
                 }
@@ -187,7 +193,9 @@ public class ModelHelper {
             throw new IllegalArgumentException("Can't find model file");
         }
         if (!hasTokenizerFile) {
-            throw new IllegalArgumentException("No tokenizer file");
+            if (modelName != FunctionName.METRICS_CORRELATION.toString()) {
+                throw new IllegalArgumentException("No tokenizer file");
+            }
         }
     }
 

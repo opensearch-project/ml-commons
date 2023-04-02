@@ -62,7 +62,7 @@ public class MLModelTests {
                 .build();
         function = parser -> {
             try {
-                return MLModel.parse(parser);
+                return MLModel.parse(parser, algorithm.name());
             } catch (IOException e) {
                 throw new RuntimeException("Failed to parse TextEmbeddingModelConfig", e);
             }

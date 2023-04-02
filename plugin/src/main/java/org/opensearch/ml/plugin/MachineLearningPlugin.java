@@ -63,6 +63,7 @@ import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
 import org.opensearch.ml.cluster.MLCommonsClusterManagerEventListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
+import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -95,6 +96,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
+import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -333,6 +335,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
+        MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings);
+        MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
+
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
 
         MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(
@@ -490,6 +495,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 FitRCFParams.XCONTENT_REGISTRY,
                 BatchRCFParams.XCONTENT_REGISTRY,
                 LocalSampleCalculatorInput.XCONTENT_REGISTRY,
+                MetricsCorrelationInput.XCONTENT_REGISTRY,
                 AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY,
                 RCFSummarizeParams.XCONTENT_REGISTRY,
                 LogisticRegressionParams.XCONTENT_REGISTRY,

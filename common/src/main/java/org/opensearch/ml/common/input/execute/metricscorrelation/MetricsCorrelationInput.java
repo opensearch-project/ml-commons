@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.input.execute.samplecalculator;
+package org.opensearch.ml.common.input.execute.metricscorrelation;
 
 import lombok.Builder;
 import lombok.Data;
@@ -16,6 +16,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.input.MLInput;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,22 +24,22 @@ import java.util.List;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
-@ExecuteInput(algorithms={FunctionName.LOCAL_SAMPLE_CALCULATOR})
+//@ExecuteInput(algorithms={FunctionName.METRICS_CORRELATION})
+@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.METRICS_CORRELATION})
 @Data
-public class LocalSampleCalculatorInput implements Input {
-    public static final String PARSE_FIELD_NAME = FunctionName.LOCAL_SAMPLE_CALCULATOR.name();
+//public class MetricsCorrelationInput implements Input {
+public class MetricsCorrelationInput extends MLInput {
+    public static final String PARSE_FIELD_NAME = FunctionName.METRICS_CORRELATION.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             Input.class,
             new ParseField(PARSE_FIELD_NAME),
             it -> parse(it)
     );
 
-    public static final String OPERATION_FIELD = "operation";
-    public static final String INPUT_DATA_FIELD = "input_data";
+    public static final String METRICS_FIELD = "metrics";
 
-    public static LocalSampleCalculatorInput parse(XContentParser parser) throws IOException {
-        String operation = null;
-        List<Double> inputData = new ArrayList<>();
+    public static MetricsCorrelationInput parse(XContentParser parser) throws IOException {
+        List<float[]> inputData = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -46,14 +47,21 @@ public class LocalSampleCalculatorInput implements Input {
             parser.nextToken();
 
             switch (fieldName) {
-                case OPERATION_FIELD:
-                    operation = parser.text();
-                    break;
-                case INPUT_DATA_FIELD:
+                case METRICS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                        List<Float> inputItem = new ArrayList<>();
+                        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                            inputItem.add(parser.floatValue());
+                        }
+                        float[] floatArray = new float[inputItem.size()];
+                        int i = 0;
 
-                        inputData.add(parser.doubleValue(false));
+                        for (Float f : inputItem) {
+                            floatArray[i++] = (f != null ? f : Float.NaN); // Or whatever default you want.
+                        }
+                        inputData.add(floatArray);
                     }
                     break;
                 default:
@@ -61,52 +69,37 @@ public class LocalSampleCalculatorInput implements Input {
                     break;
             }
         }
-        return new LocalSampleCalculatorInput(operation, inputData);
+        return new MetricsCorrelationInput(inputData);
     }
 
-    String operation;
-    List<Double> inputData;
+    List<float[]> inputData;
 
-    @Builder
-    public LocalSampleCalculatorInput(String operation, List<Double> inputData) {
-        if (operation == null) {
-            throw new IllegalArgumentException("wrong operation");
-        }
+//    @Builder
+    public MetricsCorrelationInput(List<float[]> inputData) {
         if (inputData == null || inputData.size() == 0) {
             throw new IllegalArgumentException("empty input data");
         }
-        this.operation = operation;
         this.inputData = inputData;
     }
 
     @Override
     public FunctionName getFunctionName() {
-        return FunctionName.LOCAL_SAMPLE_CALCULATOR;
+        return FunctionName.METRICS_CORRELATION;
     }
 
-    public LocalSampleCalculatorInput(StreamInput in) throws IOException {
-        this.operation = in.readString();
-        int size = in.readInt();
-        this.inputData = new ArrayList<>();
-        for (int i = 0; i<size; i++) {
-            inputData.add(in.readDouble());
-        }
+    public MetricsCorrelationInput(StreamInput in) throws IOException {
+        this.inputData = in.readList(StreamInput::readFloatArray);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(operation);
-        out.writeInt(inputData.size());
-        for (Double d : inputData) {
-            out.writeDouble(d.doubleValue());
-        }
+        out.writeCollection(this.inputData, StreamOutput::writeFloatArray);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(OPERATION_FIELD, operation);
-        builder.field(INPUT_DATA_FIELD, inputData);
+        builder.field(METRICS_FIELD, inputData);
         builder.endObject();
         return builder;
     }

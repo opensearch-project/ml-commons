@@ -14,10 +14,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.model.*;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -301,7 +298,7 @@ public class MLModel implements ToXContentObject {
         return builder;
     }
 
-    public static MLModel parse(XContentParser parser) throws IOException {
+    public static MLModel parse(XContentParser parser, String algorithmName) throws IOException {
         String name = null;
         FunctionName algorithm = null;
         String version = null;
@@ -384,7 +381,11 @@ public class MLModel implements ToXContentObject {
                     modelContentHash = parser.text();
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    if (algorithmName.equals(FunctionName.METRICS_CORRELATION.name())) {
+                        modelConfig = MetricsCorrelationModelConfig.parse(parser);
+                    } else {
+                        modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    }
                     break;
                 case PLANNING_WORKER_NODE_COUNT_FIELD:
                     planningWorkerNodeCount = parser.intValue();
