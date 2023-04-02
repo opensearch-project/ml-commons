@@ -241,14 +241,14 @@ public class MLEngineTest {
     }
 
     @Test
-    public void executeLocalSampleCalculator() {
+    public void executeLocalSampleCalculator() throws Exception {
         Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
         LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) mlEngine.execute(input);
         assertEquals(3.0, output.getResult(), 1e-5);
     }
 
     @Test
-    public void executeWithInvalidInput() {
+    public void executeWithInvalidInput() throws Exception {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Function name should not be null");
         Input input = new Input() {

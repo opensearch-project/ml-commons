@@ -256,6 +256,17 @@ public class TestHelper {
         return request;
     }
 
+    public static RestRequest getMetricsCorrelationRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.METRICS_CORRELATION.name());
+        final String requestContent = "{\"input_data\":[1.0, 2.0, 3.0]}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static RestRequest getSearchAllRestRequest() {
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
             .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)

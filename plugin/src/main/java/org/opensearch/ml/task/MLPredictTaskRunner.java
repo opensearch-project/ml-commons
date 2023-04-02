@@ -7,6 +7,7 @@ package org.opensearch.ml.task;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
 import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
@@ -233,7 +234,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getSourceAsString())
                     ) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, xContentParser.nextToken(), xContentParser);
-                        MLModel mlModel = MLModel.parse(xContentParser);
+                        GetResponse getResponse = r;
+                        String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
+                        MLModel mlModel = MLModel.parse(xContentParser, algorithmName);
                         User resourceUser = mlModel.getUser();
                         User requestUser = getUserContext(client);
                         if (!checkUserPermissions(requestUser, resourceUser, modelId)) {
