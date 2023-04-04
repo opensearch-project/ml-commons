@@ -39,37 +39,26 @@ public class MetricsCorrelationTranslator implements Translator<float[][], Outpu
 
     @Override
     public NDList processInput(TranslatorContext ctx, float[][] input) {
-        System.out.println("processInput.length: " + input.length);
-        System.out.println("processInput[0].length: " + input[0].length);
-
         FloatBuffer buffer = FloatBuffer.allocate(input.length * input[0].length);
         for (float[] d : input) {
             buffer.put(d);
         }
         buffer.rewind();
-
         NDArray array = ctx.getNDManager().create(buffer, new Shape(input.length, input[0].length));
         NDList inputNDList = new NDList(array);
-
         inputNDList.attach(ctx.getNDManager());
-
-        for(float[] x: input)
-            System.out.println(Arrays.toString(x));
-
         return inputNDList;
     }
 
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
-        System.out.println("Checking if it came here already.");
-
         Output output = new Output(200, "OK");
         List<MCorrModelTensor> outputs = new ArrayList<>();
 
         Iterator<NDArray> iterator = list.iterator();
         int i = 0;
         float[] range = null;
-        float[] event = null;
+        long[] event = null;
         float[] metrics = null;
         while (iterator.hasNext()) {
             i += 1;
@@ -77,7 +66,7 @@ public class MetricsCorrelationTranslator implements Translator<float[][], Outpu
             if (i % 3 == 1) {
                 range = ndArray.toFloatArray();
             } else if (i % 3 == 2) {
-                event = ndArray.toFloatArray();
+                event = ndArray.toLongArray();
             } else {
                 metrics = ndArray.toFloatArray();
             }
@@ -89,7 +78,6 @@ public class MetricsCorrelationTranslator implements Translator<float[][], Outpu
             }
 
         }
-
         MCorrModelTensors modelTensorOutput = new MCorrModelTensors(outputs);
         output.add(modelTensorOutput.toBytes());
 

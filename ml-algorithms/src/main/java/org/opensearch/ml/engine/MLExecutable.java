@@ -25,14 +25,14 @@ public interface MLExecutable {
     MLOutput execute(Input input) throws Exception;
 
     /**
-     * Init model (load model into memory) with ML model content and params.
+     * Init model (deploy model into memory) with ML model content and params.
      * @param model ML model
      * @param params other parameters
      */
     void initModel(MLModel model, Map<String, Object> params);
 
     /**
-     * Close resources like loaded model.
+     * Close resources like deployed model.
      */
     void close();
 }

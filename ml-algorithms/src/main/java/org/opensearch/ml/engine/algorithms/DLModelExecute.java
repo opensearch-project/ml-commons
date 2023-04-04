@@ -4,13 +4,10 @@ import ai.djl.Application;
 import ai.djl.Device;
 import ai.djl.engine.Engine;
 import ai.djl.inference.Predictor;
-import ai.djl.ndarray.NDList;
-import ai.djl.pytorch.jni.IValue;
 import ai.djl.repository.zoo.Criteria;
 import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
-import ai.djl.util.ZipUtils;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
@@ -20,18 +17,13 @@ import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.common.output.Output;
-import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
-import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelationTranslator;
+import org.opensearch.ml.engine.utils.ZipUtils;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -67,7 +59,6 @@ public abstract class DLModelExecute implements MLExecutable {
             currentDevice = currentDevice % devices.length;
             nextDevice.set(currentDevice + 1);
         }
-        System.out.println(predictors[currentDevice]);
         return predictors[currentDevice];
     }
 
@@ -150,9 +141,7 @@ public abstract class DLModelExecute implements MLExecutable {
                     if (pathFile.exists()) {
                         FileUtils.deleteDirectory(pathFile);
                     }
-                    try (FileInputStream fileInputStream = new FileInputStream(modelZipFile)) {
-                        ZipUtils.unzip(fileInputStream, modelPath);
-                    }
+                    ZipUtils.unzip(modelZipFile, modelPath);
                     boolean findModelFile = false;
                     for (File file : pathFile.listFiles()) {
                         String name = file.getName();
@@ -171,7 +160,7 @@ public abstract class DLModelExecute implements MLExecutable {
                     }
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
-                        log.debug("load model {} on device {}: {}", modelId, i, devices[i]);
+                        log.debug("Deploy model {} on device {}: {}", modelId, i, devices[i]);
                         Criteria.Builder<ai.djl.modality.Input, ai.djl.modality.Output> criteriaBuilder = Criteria.builder()
                                 .setTypes(ai.djl.modality.Input.class, ai.djl.modality.Output.class)
                                 .optApplication(Application.UNDEFINED)
@@ -200,10 +189,10 @@ public abstract class DLModelExecute implements MLExecutable {
                         this.models = modelList.toArray(new ZooModel[0]);
                         modelList.clear();
                     }
-                    log.info("Model {} is successfully loaded on {} devices", modelId, devices.length);
+                    log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
                     return null;
                 } catch (Throwable e) {
-                    String errorMessage = "Failed to load model " + modelId;
+                    String errorMessage = "Failed to deploy model " + modelId;
                     log.error(errorMessage, e);
                     close();
                     if (predictorList.size() > 0) {
@@ -221,7 +210,7 @@ public abstract class DLModelExecute implements MLExecutable {
                 }
             });
         } catch (PrivilegedActionException e) {
-            String errorMsg = "Failed to load model " + modelId;
+            String errorMsg = "Failed to deploy model " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);
         }
@@ -239,28 +228,5 @@ public abstract class DLModelExecute implements MLExecutable {
         for (ZooModel model : models) {
             model.close();
         }
-    }
-
-    /**
-     * Parse model output to model tensor output and apply result filter.
-     * @param output model output
-     * @param resultFilter result filter
-     * @return model tensor output
-     */
-    public MCorrModelTensors parseModelTensorOutput(ai.djl.modality.Output output, ModelResultFilter resultFilter) {
-
-        //This is where we are making the pause. We need find out what will be the best way
-        // to represent the model output.
-
-
-        if (output == null) {
-            throw new MLException("No output generated");
-        }
-        byte[] bytes = output.getData().getAsBytes();
-        MCorrModelTensors tensorOutput = MCorrModelTensors.fromBytes(bytes);
-        if (resultFilter != null) {
-            tensorOutput.filter(resultFilter);
-        }
-        return tensorOutput;
     }
 }

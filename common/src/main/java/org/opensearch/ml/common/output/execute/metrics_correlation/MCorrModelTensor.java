@@ -19,11 +19,11 @@ import java.nio.ByteOrder;
 @Data
 public class MCorrModelTensor implements Writeable, ToXContentObject {
     private float[] range;
-    private float[] event;
+    private long[] event;
     private float[] metrics;
 
     @Builder
-    public MCorrModelTensor(float[] range, float[] event, float[] metrics) {
+    public MCorrModelTensor(float[] range, long[] event, float[] metrics) {
         this.range = range;
         this.event = event;
         this.metrics = metrics;
@@ -50,7 +50,7 @@ public class MCorrModelTensor implements Writeable, ToXContentObject {
             this.range = in.readFloatArray();
         }
         if (in.readBoolean()) {
-            this.event = in.readFloatArray();
+            this.event = in.readLongArray();
         }
         if (in.readBoolean()) {
             this.metrics = in.readFloatArray();
@@ -68,7 +68,7 @@ public class MCorrModelTensor implements Writeable, ToXContentObject {
 
         if (event != null) {
             out.writeBoolean(true);
-            out.writeFloatArray(event);
+            out.writeLongArray(event);
         } else {
             out.writeBoolean(false);
         }

@@ -556,7 +556,7 @@ public class MLModelManager {
                         try {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
                             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
-                            modelCacheHelper.setModelState(modelId, MLModelState.LOADED);
+                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             listener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);

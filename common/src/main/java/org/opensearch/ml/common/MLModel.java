@@ -14,7 +14,11 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.model.*;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 
 import java.io.IOException;
 import java.time.Instant;
