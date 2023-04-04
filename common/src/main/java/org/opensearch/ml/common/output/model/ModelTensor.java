@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.output.model;
 
+import com.google.gson.Gson;
 import lombok.Builder;
 import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
@@ -16,6 +17,10 @@ import org.opensearch.common.xcontent.XContentBuilder;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Map;
 
 @Data
 public class ModelTensor implements Writeable, ToXContentObject {
@@ -23,10 +28,13 @@ public class ModelTensor implements Writeable, ToXContentObject {
     private Number[] data;
     private long[] shape;
     private MLResultDataType dataType;
-    private ByteBuffer byteBuffer;
+    private ByteBuffer byteBuffer;// whole result in bytes
+    private String result;// whole result in string
+    private Map<String, ?> dataAsMap;// whole result in Map
+    private Gson gson = new Gson();
 
     @Builder
-    public ModelTensor(String name, Number[] data, long[] shape, MLResultDataType dataType, ByteBuffer byteBuffer) {
+    public ModelTensor(String name, Number[] data, long[] shape, MLResultDataType dataType, ByteBuffer byteBuffer, String result, Map<String, ?> dataAsMap) {
         if (data != null && (dataType == null || dataType == MLResultDataType.UNKNOWN)) {
             throw new IllegalArgumentException("data type is null");
         }
@@ -35,6 +43,8 @@ public class ModelTensor implements Writeable, ToXContentObject {
         this.shape = shape;
         this.dataType = dataType;
         this.byteBuffer = byteBuffer;
+        this.result = result;
+        this.dataAsMap = dataAsMap;
     }
 
     @Override
@@ -57,6 +67,12 @@ public class ModelTensor implements Writeable, ToXContentObject {
             builder.field("array", byteBuffer.array());
             builder.field("order", byteBuffer.order().toString());
             builder.endObject();
+        }
+        if (result != null) {
+            builder.field("result", result);
+        }
+        if (dataAsMap != null) {
+            builder.field("dataAsMap", dataAsMap);
         }
         builder.endObject();
         return builder;
@@ -99,7 +115,11 @@ public class ModelTensor implements Writeable, ToXContentObject {
             this.byteBuffer = ByteBuffer.wrap(bytes);
             this.byteBuffer.order(byteOrder);
         }
-
+        this.result = in.readOptionalString();
+        if (in.readBoolean()) {
+            String mapStr = in.readString();
+            this.dataAsMap = gson.fromJson(mapStr, Map.class);
+        }
     }
 
     @Override
@@ -136,6 +156,20 @@ public class ModelTensor implements Writeable, ToXContentObject {
             out.writeBoolean(true);
             out.writeString(byteBuffer.order().toString());
             out.writeByteArray(byteBuffer.array());
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalString(result);
+        if (dataAsMap != null) {
+            out.writeBoolean(true);
+            try {
+                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                    out.writeString(gson.toJson(dataAsMap));
+                    return null;
+                });
+            } catch (PrivilegedActionException e) {
+                throw new RuntimeException(e);
+            }
         } else {
             out.writeBoolean(false);
         }

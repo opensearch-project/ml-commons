@@ -16,7 +16,8 @@ public enum FunctionName {
     ANOMALY_LOCALIZATION,
     RCF_SUMMARIZE,
     LOGISTIC_REGRESSION,
-    TEXT_EMBEDDING;
+    TEXT_EMBEDDING,
+    REMOTE;
 
     public static FunctionName from(String value) {
         try {

@@ -14,6 +14,7 @@ import org.opensearch.common.xcontent.ToXContentObject;
 import org.opensearch.common.xcontent.XContentBuilder;
 import org.opensearch.common.xcontent.XContentParser;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -23,13 +24,16 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
 
 @Getter
 public class MLModel implements ToXContentObject {
+    @Deprecated
     public static final String ALGORITHM_FIELD = "algorithm";
+    public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String MODEL_NAME_FIELD = "name";
     // We use int type for version in first release 1.3. In 2.4, we changed to
     // use String type for version. Keep this old version field for old models.
@@ -64,6 +68,7 @@ public class MLModel implements ToXContentObject {
     public static final String CURRENT_WORKER_NODE_COUNT_FIELD = "current_worker_node_count";
     public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
     public static final String DEPLOY_TO_ALL_NODES_FIELD = "deploy_to_all_nodes";
+    public static final String CONNECTOR_FIELD = "connector";
 
     private String name;
     private FunctionName algorithm;
@@ -93,6 +98,9 @@ public class MLModel implements ToXContentObject {
 
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
+
+    private Connector connector;
+
     @Builder(toBuilder = true)
     public MLModel(String name,
                    FunctionName algorithm,
@@ -115,7 +123,8 @@ public class MLModel implements ToXContentObject {
                    Integer planningWorkerNodeCount,
                    Integer currentWorkerNodeCount,
                    String[] planningWorkerNodes,
-                   boolean deployToAllNodes) {
+                   boolean deployToAllNodes,
+                   Connector connector) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -139,6 +148,7 @@ public class MLModel implements ToXContentObject {
         this.currentWorkerNodeCount = currentWorkerNodeCount;
         this.planningWorkerNodes = planningWorkerNodes;
         this.deployToAllNodes = deployToAllNodes;
+        this.connector = connector;
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -176,6 +186,10 @@ public class MLModel implements ToXContentObject {
             currentWorkerNodeCount = input.readOptionalInt();
             planningWorkerNodes = input.readOptionalStringArray();
             deployToAllNodes = input.readBoolean();
+            if (input.readBoolean()) {
+                String connectorName = input.readString();
+                connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, input}, String.class, StreamInput.class);
+            }
         }
     }
 
@@ -223,6 +237,13 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInt(currentWorkerNodeCount);
         out.writeOptionalStringArray(planningWorkerNodes);
         out.writeBoolean(deployToAllNodes);
+        if (connector != null) {
+            out.writeBoolean(true);
+            out.writeString(connector.getName());
+            connector.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -297,6 +318,9 @@ public class MLModel implements ToXContentObject {
         if (deployToAllNodes) {
             builder.field(DEPLOY_TO_ALL_NODES_FIELD, deployToAllNodes);
         }
+        if (connector != null) {
+            builder.field(CONNECTOR_FIELD, connector);
+        }
         builder.endObject();
         return builder;
     }
@@ -331,6 +355,7 @@ public class MLModel implements ToXContentObject {
         Integer currentWorkerNodeCount = null;
         List<String> planningWorkerNodes = new ArrayList<>();
         boolean deployToAllNodes = false;
+        Connector connector = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -363,7 +388,8 @@ public class MLModel implements ToXContentObject {
                     user = User.parse(parser);
                     break;
                 case ALGORITHM_FIELD:
-                    algorithm = FunctionName.from(parser.text());
+                case FUNCTION_NAME_FIELD:
+                    algorithm = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case MODEL_ID_FIELD:
                     modelId = parser.text();
@@ -400,6 +426,13 @@ public class MLModel implements ToXContentObject {
                     break;
                 case DEPLOY_TO_ALL_NODES_FIELD:
                     deployToAllNodes = parser.booleanValue();
+                    break;
+                case CONNECTOR_FIELD:
+                    parser.nextToken();
+                    String connectorName = parser.currentName();
+                    parser.nextToken();
+                    connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
+                    parser.nextToken();
                     break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
@@ -454,6 +487,7 @@ public class MLModel implements ToXContentObject {
                 .currentWorkerNodeCount(currentWorkerNodeCount)
                 .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
                 .deployToAllNodes(deployToAllNodes)
+                .connector(connector)
                 .build();
     }
 

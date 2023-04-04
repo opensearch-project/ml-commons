@@ -50,7 +50,7 @@ public class ModelHelperTest {
         MockitoAnnotations.openMocks(this);
         modelFormat = MLModelFormat.TORCH_SCRIPT;
         modelId = "model_id";
-        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId));
+        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), null);
         modelHelper = new ModelHelper(mlEngine);
     }
 

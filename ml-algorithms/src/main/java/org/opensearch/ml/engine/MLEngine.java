@@ -16,6 +16,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 
 import java.nio.file.Path;
 import java.util.Locale;
@@ -34,9 +35,12 @@ public class MLEngine {
     private final Path mlCachePath;
     private final Path mlModelsCachePath;
 
-    public MLEngine(Path opensearchDataFolder) {
+    private final Encryptor encryptor;
+
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
         mlCachePath = opensearchDataFolder.resolve("ml_cache");
         mlModelsCachePath = mlCachePath.resolve("models_cache");
+        this.encryptor = encryptor;
     }
 
     public String getPrebuiltModelConfigPath(String modelName, String version, MLModelFormat modelFormat) {
@@ -108,7 +112,7 @@ public class MLEngine {
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
-        predictable.initModel(mlModel, params);
+        predictable.initModel(mlModel, params, encryptor);
         return predictable;
     }
 
@@ -166,5 +170,9 @@ public class MLEngine {
         if (input.getFunctionName() == null) {
             throw new IllegalArgumentException("Function name should not be null");
         }
+    }
+
+    public String encrypt(String credential) {
+        return encryptor.encrypt(credential);
     }
 }

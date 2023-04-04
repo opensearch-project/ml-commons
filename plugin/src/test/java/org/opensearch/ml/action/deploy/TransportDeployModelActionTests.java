@@ -47,6 +47,8 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -107,6 +109,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     private final MLModel mlModel = mock(MLModel.class);
     private final String localNodeId = "mockNodeId";
     private MLEngine mlEngine;
+    private Encryptor encryptor;
     private ModelHelper modelHelper;
 
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
@@ -121,7 +124,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN)));
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
+        encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         modelHelper = new ModelHelper(mlEngine);
         when(mlDeployModelRequest.getModelId()).thenReturn("mockModelId");
         when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });

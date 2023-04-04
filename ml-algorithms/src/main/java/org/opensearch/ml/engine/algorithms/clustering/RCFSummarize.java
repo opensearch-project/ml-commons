@@ -20,6 +20,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.MathUtil;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
@@ -136,7 +137,7 @@ public class RCFSummarize implements TrainAndPredictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         this.summary = ((SerializableSummary)ModelSerDeSer.deserialize(model)).getSummary();
     }
 

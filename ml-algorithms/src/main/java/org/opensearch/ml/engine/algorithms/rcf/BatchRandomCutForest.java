@@ -26,6 +26,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.TrainAndPredictable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -72,7 +73,7 @@ public class BatchRandomCutForest implements TrainAndPredictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         RandomCutForestState state = RCFModelSerDeSer.deserializeRCF(model);
         forest = rcfMapper.toModel(state);
     }
