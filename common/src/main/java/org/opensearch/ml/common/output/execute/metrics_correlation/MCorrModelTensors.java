@@ -16,7 +16,6 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.output.model.ModelTensor;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -35,15 +34,11 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
         if (mCorrModelTensors != null && mCorrModelTensors.size() > 0) {
-            builder.startArray(OUTPUT_FIELD);
             for (MCorrModelTensor output : mCorrModelTensors) {
                 output.toXContent(builder, params);
             }
-            builder.endArray();
         }
-        builder.endObject();
         return builder;
     }
 
@@ -107,8 +102,7 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
             this.writeTo(bytesStreamOutput);
             bytesStreamOutput.flush();
-            byte[] bytes = bytesStreamOutput.bytes().toBytesRef().bytes;
-            return bytes;
+            return bytesStreamOutput.bytes().toBytesRef().bytes;
         } catch (Exception e) {
             throw new MLException("Failed to parse result", e);
         }
@@ -117,8 +111,7 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
     public static MCorrModelTensors fromBytes(byte[] bytes) {
         ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
         try (StreamInput streamInput = BytesReference.fromByteBuffer(byteBuffer).streamInput()) {
-            MCorrModelTensors tensorOutput = new MCorrModelTensors(streamInput);
-            return tensorOutput;
+            return new MCorrModelTensors(streamInput);
         } catch (Exception e) {
             String errorMsg = "Failed to parse output";
             throw new MLException(errorMsg, e);

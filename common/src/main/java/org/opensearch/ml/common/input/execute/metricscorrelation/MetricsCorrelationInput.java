@@ -16,7 +16,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.input.MLInput;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,11 +23,9 @@ import java.util.List;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
-//@ExecuteInput(algorithms={FunctionName.METRICS_CORRELATION})
-@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.METRICS_CORRELATION})
+@ExecuteInput(algorithms={FunctionName.METRICS_CORRELATION})
 @Data
-//public class MetricsCorrelationInput implements Input {
-public class MetricsCorrelationInput extends MLInput {
+public class MetricsCorrelationInput implements Input {
     public static final String PARSE_FIELD_NAME = FunctionName.METRICS_CORRELATION.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
             Input.class,
@@ -59,7 +56,7 @@ public class MetricsCorrelationInput extends MLInput {
                         int i = 0;
 
                         for (Float f : inputItem) {
-                            floatArray[i++] = (f != null ? f : Float.NaN); // Or whatever default you want.
+                            floatArray[i++] = (f != null ? f : Float.NaN);
                         }
                         inputData.add(floatArray);
                     }
@@ -74,7 +71,7 @@ public class MetricsCorrelationInput extends MLInput {
 
     List<float[]> inputData;
 
-//    @Builder
+    @Builder
     public MetricsCorrelationInput(List<float[]> inputData) {
         if (inputData == null || inputData.size() == 0) {
             throw new IllegalArgumentException("empty input data");

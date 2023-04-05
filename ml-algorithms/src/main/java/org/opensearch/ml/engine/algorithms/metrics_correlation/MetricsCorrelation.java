@@ -68,6 +68,8 @@ public class MetricsCorrelation extends DLModelExecute {
     private static final String MODEL_NAME = "METRICS_CORRELATION";
     public static final String MCORR_ML_VERSION = "1.0.0";
 
+    //TODO: Model didn't publish yet to the release repo, so using this for the development.
+    // But before merging this code, we will have the release artifact url here for the model.
     public static final String MCORR_MODEL_URL =
             "https://github.com/dhrubo-os/semantic-os/raw/main/mcorr.zip";
 
@@ -95,9 +97,8 @@ public class MetricsCorrelation extends DLModelExecute {
                 registerModel(ActionListener.wrap(registerModelResponse -> {
                     String id = getTask(registerModelResponse.getTaskId()).getModelId();
                     loadedModelId.set(id);
-                }, e -> log.error("Final problem")));
+                }, e -> log.error("Metrics correlation model didn't register to the index successfully", e)));
             } else {
-                //TODO deploy model done with state: DEPLOY_FAILED all the time but I'm getting the output
                 if (modelInfo.get(MLModel.MODEL_STATE_FIELD) != MLModelState.DEPLOYED ||
                         modelInfo.get(MLModel.MODEL_STATE_FIELD) != MLModelState.PARTIALLY_DEPLOYED) {
                     MLDeployModelRequest loadRequest = MLDeployModelRequest
@@ -109,7 +110,7 @@ public class MetricsCorrelation extends DLModelExecute {
                     deployModel(loadRequest, ActionListener.wrap(deployModelResponse -> {
                         String id = getTask(deployModelResponse.getTaskId()).getModelId();
                         loadedModelId.set(id);
-                    }, e -> log.error("Another problem")));
+                    }, e -> log.error("Metrics correlation model didn't deploy to the index successfully")));
 
                 }
             }
@@ -128,8 +129,7 @@ public class MetricsCorrelation extends DLModelExecute {
         waitUntil(() -> {
             if (loadedModelId.get() != null) {
                 MLModelState modelState = getModel(loadedModelId.get()).getModelState();
-                return modelState != MLModelState.DEPLOYED || modelState != MLModelState.PARTIALLY_DEPLOYED
-                        || modelState != MLModelState.DEPLOY_FAILED;
+                return modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED;
             }
             return loadedModelId.get() != null;
         }, 20, TimeUnit.SECONDS);
@@ -171,18 +171,14 @@ public class MetricsCorrelation extends DLModelExecute {
                 .build();
         MLRegisterModelRequest registerRequest = MLRegisterModelRequest.builder().registerModelInput(input).build();
 
-        client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(mlDeployModelResponse -> {
-            listener.onResponse(mlDeployModelResponse);
-        }, e -> {
+        client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
             log.error("Failed to Register Model", e);
             listener.onFailure(e);
         }));
     }
 
     private void deployModel(MLDeployModelRequest mlDeployModelRequest, ActionListener<MLDeployModelResponse> listener) {
-        client.execute(MLDeployModelAction.INSTANCE, mlDeployModelRequest, ActionListener.wrap(mlDeployModelResponse -> {
-            listener.onResponse(mlDeployModelResponse);
-        }, e -> {
+        client.execute(MLDeployModelAction.INSTANCE, mlDeployModelRequest, ActionListener.wrap(listener::onResponse, e -> {
             log.error("Failed to deploy Model", e);
             listener.onFailure(e);
         }));
@@ -206,16 +202,15 @@ public class MetricsCorrelation extends DLModelExecute {
     public SearchRequest getSearchRequest() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MLModel.MODEL_ID_FIELD,
-                        MLModel.MODEL_NAME_FIELD, MLModel.MODEL_STATE_FIELD, MLModel.MODEL_VERSION_FIELD },
-                new String[] { MLModel.OLD_MODEL_CONTENT_FIELD, MLModel.MODEL_CONTENT_FIELD });
+                        MLModel.MODEL_NAME_FIELD, MLModel.MODEL_STATE_FIELD, MLModel.MODEL_VERSION_FIELD, MLModel.MODEL_CONTENT_FIELD },
+                new String[] { MLModel.MODEL_CONTENT_FIELD });
 
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery()
                 .should(termQuery(MLModel.MODEL_NAME_FIELD, MODEL_NAME))
                 .should(termQuery(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION));
         searchSourceBuilder.query(boolQueryBuilder);
-        SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder)
+        return new SearchRequest().source(searchSourceBuilder)
                 .indices(CommonValue.ML_MODEL_INDEX);
-        return searchRequest;
     }
 
     public static boolean waitUntil(BooleanSupplier breakSupplier, long maxWaitTime, TimeUnit unit) throws InterruptedException {

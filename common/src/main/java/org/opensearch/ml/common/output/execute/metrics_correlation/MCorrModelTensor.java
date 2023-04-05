@@ -14,16 +14,15 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
-import java.nio.ByteOrder;
 
 @Data
 public class MCorrModelTensor implements Writeable, ToXContentObject {
     private float[] range;
-    private long[] event;
-    private float[] metrics;
+    private float[] event;
+    private long[] metrics;
 
     @Builder
-    public MCorrModelTensor(float[] range, long[] event, float[] metrics) {
+    public MCorrModelTensor(float[] range, float[] event, long[] metrics) {
         this.range = range;
         this.event = event;
         this.metrics = metrics;
@@ -50,10 +49,10 @@ public class MCorrModelTensor implements Writeable, ToXContentObject {
             this.range = in.readFloatArray();
         }
         if (in.readBoolean()) {
-            this.event = in.readLongArray();
+            this.event = in.readFloatArray();
         }
         if (in.readBoolean()) {
-            this.metrics = in.readFloatArray();
+            this.metrics = in.readLongArray();
         }
     }
 
@@ -68,13 +67,13 @@ public class MCorrModelTensor implements Writeable, ToXContentObject {
 
         if (event != null) {
             out.writeBoolean(true);
-            out.writeLongArray(event);
+            out.writeFloatArray(event);
         } else {
             out.writeBoolean(false);
         }
         if (metrics != null) {
             out.writeBoolean(true);
-            out.writeFloatArray(metrics);
+            out.writeLongArray(metrics);
         } else {
             out.writeBoolean(false);
         }

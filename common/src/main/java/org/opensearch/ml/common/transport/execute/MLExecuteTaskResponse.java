@@ -80,6 +80,7 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
         builder.startObject("output");
         output.toXContent(builder, params);
         builder.endObject();
+        builder.endObject();
         return builder;
     }
 }

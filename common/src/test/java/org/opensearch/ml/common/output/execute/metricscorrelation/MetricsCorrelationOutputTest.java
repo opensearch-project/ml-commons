@@ -37,15 +37,13 @@ public class MetricsCorrelationOutputTest {
 
     MetricsCorrelationOutput output;
 
-    long[] value;
     @Before
     public void setUp() {
-        value = new long[]{1, 2, 3};
         List<MCorrModelTensors> outputs = new ArrayList<>();
         MCorrModelTensor mCorrModelTensor = MCorrModelTensor.builder()
-                .event(new long[]{1, 2, 3})
+                .event(new float[]{1.0f, 2.0f, 3.0f})
                 .range(new float[]{4.0f, 5.0f, 6.0f})
-                .metrics(new float[]{1.0f, 2.0f})
+                .metrics(new long[]{1, 2})
                 .build();
         List<MCorrModelTensor> mlModelTensors = Arrays.asList(mCorrModelTensor);
         MCorrModelTensors modelTensors = MCorrModelTensors.builder().mCorrModelTensors(mlModelTensors).build();
@@ -60,10 +58,10 @@ public class MetricsCorrelationOutputTest {
             MCorrModelTensors modelTensors = parsedTensorOutput.getModelOutput().get(0);
             assertEquals(1, modelTensors.getMCorrModelTensors().size());
             MCorrModelTensor modelTensor = modelTensors.getMCorrModelTensors().get(0);
-            long[] events = modelTensor.getEvent();
-            float[] metrics = modelTensor.getMetrics();
-            assertArrayEquals(value, events);
-            assertArrayEquals(new float[]{1.0f, 2.0f}, metrics, 0.001f);
+            float[] events = modelTensor.getEvent();
+            long[] metrics = modelTensor.getMetrics();
+            assertArrayEquals(new float[]{1.0f, 2.0f, 3.0f}, events, 0.001f);
+            assertArrayEquals(new long[]{1, 2}, metrics);
 
         });
     }

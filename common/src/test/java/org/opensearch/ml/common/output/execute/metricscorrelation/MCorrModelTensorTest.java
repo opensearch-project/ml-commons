@@ -34,9 +34,9 @@ public class MCorrModelTensorTest {
     @Before
     public void setUp() {
         mCorrModelTensor = MCorrModelTensor.builder()
-                .event(new long[]{1, 2, 3})
+                .event(new float[]{1.0f, 2.0f, 3.0f})
                 .range(new float[]{4.0f, 5.0f, 6.0f})
-                .metrics(new float[]{1.0f, 2.0f})
+                .metrics(new long[]{1, 2})
                 .build();
     }
 
@@ -55,7 +55,7 @@ public class MCorrModelTensorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mCorrModelTensor.toXContent(builder, EMPTY_PARAMS);
         String modelTensorContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"range\":[4.0,5.0,6.0],\"event\":[1,2,3],\"metrics\":[1.0,2.0]}", modelTensorContent);
+        assertEquals("{\"range\":[4.0,5.0,6.0],\"event\":[1.0,2.0,3.0],\"metrics\":[1,2]}", modelTensorContent);
     }
 
     @Test

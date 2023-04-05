@@ -8,6 +8,5 @@ package org.opensearch.ml.common.dataset;
 public enum MLInputDataType {
     SEARCH_QUERY,
     DATA_FRAME,
-    TEXT_DOCS,
-    METRICS
+    TEXT_DOCS
 }

@@ -8,8 +8,10 @@ package org.opensearch.ml.common.output.execute.metrics_correlation;
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.SneakyThrows;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.output.MLOutput;
@@ -68,9 +70,8 @@ public class MetricsCorrelationOutput extends MLOutput {
         return OUTPUT_TYPE;
     }
 
-    @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-//        builder.startObject();  --> This line is causing : com.fasterxml.jackson.core.JsonGenerationException: Can not start an object, expecting field name (context: Object)
+    @SneakyThrows
+    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         if (modelOutput != null && modelOutput.size() > 0) {
             builder.startArray(INFERENCE_RESULT_FIELD);
             for (MCorrModelTensors output : modelOutput) {
@@ -78,7 +79,6 @@ public class MetricsCorrelationOutput extends MLOutput {
             }
             builder.endArray();
         }
-        builder.endObject();
         return builder;
     }
 }
