@@ -53,6 +53,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.TASK, listener);
     }
 
+    public void initMLConnectorIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.CONNECTOR, listener);
+    }
+
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();

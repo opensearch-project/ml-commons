@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.connector;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.opensearch.common.io.stream.NamedWriteable;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -16,7 +18,9 @@ import java.io.IOException;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
-public class PredictSchema implements ToXContentObject, NamedWriteable {
+@Getter
+@Setter
+public class APISchema implements ToXContentObject, NamedWriteable {
     public static final String PARSE_FIELD_NAME = "Predict_API_Schema";
 
     public static final String METHOD_FIELD = "Method";
@@ -26,26 +30,26 @@ public class PredictSchema implements ToXContentObject, NamedWriteable {
 
     private String method;
     private String url;
-    private Headers headers;
-    private RequestBody requestBody;
+    private String headers;
+    private String requestBody;
 
-    public PredictSchema(String method, String url, Headers headers, RequestBody requestBody) {
+    public APISchema(String method, String url, String headers, String requestBody) {
         this.method = method;
         this.url = url;
         this.headers = headers;
         this.requestBody = requestBody;
     }
 
-    public static PredictSchema parse(XContentParser parser) throws IOException {
+    public static APISchema parse(XContentParser parser) throws IOException {
         String method = null;
         String url = null;
-        Headers headers = null;
-        RequestBody requestBody = null;
+        String headers = null;
+        String requestBody = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) { // Method
             String fieldName = parser.currentName();
-            parser.nextToken();
+            parser.nextToken(); // Post
 
             switch (fieldName) {
                 case METHOD_FIELD:
@@ -55,17 +59,17 @@ public class PredictSchema implements ToXContentObject, NamedWriteable {
                     url = parser.text();
                     break;
                 case HEADERS_FIELD:
-                    headers = Headers.parse(parser);
+                    headers = parser.text();
                     break;
                 case REQUEST_BODY_FIELD:
-                    requestBody = RequestBody.parse(parser);
+                    requestBody = parser.text();
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new PredictSchema(method, url, headers, requestBody);
+        return new APISchema(method, url, headers, requestBody);
     }
 
     @Override
@@ -96,28 +100,14 @@ public class PredictSchema implements ToXContentObject, NamedWriteable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(method);
         out.writeOptionalString(url);
-        if (headers != null) {
-            out.writeBoolean(true);
-            headers.writeTo(out);
-        } else {
-            out.writeBoolean(false);
-        }
-        if (requestBody != null) {
-            out.writeBoolean(true);
-            requestBody.writeTo(out);
-        } else {
-            out.writeBoolean(false);
-        }
+        out.writeOptionalString(headers);
+        out.writeOptionalString(requestBody);
     }
 
-    public PredictSchema(StreamInput input) throws IOException {
+    public APISchema(StreamInput input) throws IOException {
         method = input.readOptionalString();
         url = input.readOptionalString();
-        if (input.readBoolean()) {
-            headers = new Headers(input);
-        }
-        if (input.readBoolean()) {
-            requestBody = new RequestBody(input);
-        }
+        headers = input.readOptionalString();
+        requestBody = input.readOptionalString();
     }
 }

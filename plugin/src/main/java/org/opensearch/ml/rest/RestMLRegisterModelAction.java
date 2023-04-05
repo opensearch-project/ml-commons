@@ -68,7 +68,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
     }
 
     /**
-     * Creates a MLTrainingTaskRequest from a RestRequest
+     * Creates a MLRegisterModelRequest from a RestRequest
      *
      * @param request RestRequest
      * @return MLTrainingTaskRequest

@@ -6,13 +6,13 @@
 package org.opensearch.ml.common.transport.connector;
 
 import lombok.Builder;
+import lombok.Getter;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.InputStreamStreamInput;
 import org.opensearch.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -21,6 +21,7 @@ import java.io.UncheckedIOException;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
 
+@Getter
 public class MLCreateConnectorRequest extends ActionRequest {
 
     private MLCreateConnectorInput mlCreateConnectorInput;

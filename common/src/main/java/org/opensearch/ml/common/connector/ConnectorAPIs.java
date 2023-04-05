@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import lombok.Getter;
 import org.opensearch.common.io.stream.NamedWriteable;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -16,17 +17,19 @@ import java.io.IOException;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
+@Getter
 public class ConnectorAPIs implements ToXContentObject, NamedWriteable {
-    public static final String PARSE_FIELD_NAME = "Open_AI_APIs";
+    public static final String PARSE_FIELD_NAME = "Connector_APIs";
 
     public static final String PREDICT_FIELD = "Predict";
     public static final String META_DARA_FIELD = "Metadata";
 
-    private PredictSchema predictSchema;
+    private APISchema predictSchema;
+    private APISchema metadataSchema;
 
-    public ConnectorAPIs(PredictSchema predictSchema) {
+    public ConnectorAPIs(APISchema predictSchema, APISchema metadataSchema) {
         this.predictSchema = predictSchema;
-
+        this.metadataSchema = metadataSchema;
     }
 
     @Override
@@ -35,23 +38,30 @@ public class ConnectorAPIs implements ToXContentObject, NamedWriteable {
     }
 
     public static ConnectorAPIs parse(XContentParser parser) throws IOException {
-        PredictSchema predictSchema = null;
+        APISchema predictSchema = null;
+        APISchema metadataSchema = null;
 
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
-        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
-            String fieldName = parser.currentName();
-            parser.nextToken();
+        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+            while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                String fieldName = parser.currentName();
+                parser.nextToken();
 
-            switch (fieldName) {
-                case PREDICT_FIELD:
-                    predictSchema = PredictSchema.parse(parser);
-                    break;
-                default:
-                    parser.skipChildren();
-                    break;
+                switch (fieldName) {
+                    case PREDICT_FIELD:
+                        predictSchema = APISchema.parse(parser);
+                        break;
+                    case META_DARA_FIELD:
+                        metadataSchema = APISchema.parse(parser);
+                    // Todo: add more APIs here
+                    default:
+                        parser.skipChildren();
+                        break;
+                }
             }
         }
-        return new ConnectorAPIs(predictSchema);
+        return new ConnectorAPIs(predictSchema, metadataSchema);
     }
 
     @Override
@@ -59,6 +69,9 @@ public class ConnectorAPIs implements ToXContentObject, NamedWriteable {
         builder.startObject();
         if (predictSchema != null) {
             builder.field(PREDICT_FIELD, predictSchema);
+        }
+        if (metadataSchema != null) {
+            builder.field(META_DARA_FIELD, metadataSchema);
         }
         builder.endObject();
         return builder;
@@ -72,11 +85,20 @@ public class ConnectorAPIs implements ToXContentObject, NamedWriteable {
         } else {
             output.writeBoolean(false);
         }
+        if (metadataSchema != null) {
+            output.writeBoolean(true);
+            metadataSchema.writeTo(output);
+        } else {
+            output.writeBoolean(false);
+        }
     }
 
     public ConnectorAPIs(StreamInput input) throws IOException {
         if (input.readBoolean()) {
-            this.predictSchema = new PredictSchema(input);
+            this.predictSchema = new APISchema(input);
+        }
+        if (input.readBoolean()) {
+            this.metadataSchema = new APISchema(input);
         }
     }
 }

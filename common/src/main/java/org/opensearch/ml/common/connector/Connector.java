@@ -28,12 +28,9 @@ public class Connector implements ToXContentObject, Writeable {
     public static final String CONNECTOR_NAME_FIELD = "name";
     public static final String CONNECTOR_VERSION_FIELD = "version";
     public static final String DESCRIPTION_FIELD = "description";
-
-    public static final String ENDPOINT_FIELD = "endpoint";
-    public static final String PROTOCOL_FIELD = "protocol";
-    public static final String AUTHENTICATION_FIELD = "authentication";
+    public static final String PREDICT_API_SCHEMA_FIELD = "predict_API_schema";
+    public static final String METADATA_API_SCHEMA_FIELD = "metadata_API_schema";
     public static final String CONNECTOR_STATE_FIELD = "connector_state";
-
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String CREDENTIAL_ID_FIELD = "credential_id";
@@ -42,12 +39,9 @@ public class Connector implements ToXContentObject, Writeable {
     private String name;
     private String version;
     private String description;
-
-    private String endpoint;
-    private Protocol protocol;
-    private Auth auth;
+    private APISchema predictSchema;
+    private APISchema metadataSchema;
     private ConnectorState connectorState;
-
     private Instant createdTime;
     private Instant lastUpdateTime;
     private String credentialId;
@@ -57,20 +51,19 @@ public class Connector implements ToXContentObject, Writeable {
                      String name,
                      String version,
                      String description,
-                     String endpoint,
-                     Protocol protocol,
-                     Auth auth,
+                     APISchema predictSchema,
+                     APISchema metadataSchema,
                      ConnectorState connectorState,
                      Instant createdTime,
                      Instant lastUpdateTime,
-                     String credentialId) {
+                     String credentialId
+                     ) {
         this.connectorId = connectorId;
         this.name = name;
         this.version = version;
         this.description = description;
-        this.endpoint = endpoint;
-        this.protocol = protocol;
-        this.auth = auth;
+        this.predictSchema = predictSchema;
+        this.metadataSchema = metadataSchema;
         this.connectorState = connectorState;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -82,13 +75,11 @@ public class Connector implements ToXContentObject, Writeable {
         name = input.readOptionalString();
         version = input.readString();
         description = input.readOptionalString();
-        endpoint = input.readOptionalString();
-
         if (input.readBoolean()) {
-            protocol = input.readEnum(Protocol.class);
+            this.predictSchema = new APISchema(input);
         }
         if (input.readBoolean()) {
-            auth = input.readEnum(Auth.class);
+            this.metadataSchema = new APISchema(input);
         }
         if (input.readBoolean()) {
             connectorState = input.readEnum(ConnectorState.class);
@@ -103,17 +94,15 @@ public class Connector implements ToXContentObject, Writeable {
         out.writeOptionalString(name);
         out.writeString(version);
         out.writeOptionalString(description);
-        out.writeOptionalString(endpoint);
-
-        if (protocol != null) {
+        if (predictSchema != null) {
             out.writeBoolean(true);
-            out.writeEnum(protocol);
+            predictSchema.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
-        if (auth != null) {
+        if (metadataSchema != null) {
             out.writeBoolean(true);
-            out.writeEnum(auth);
+            metadataSchema.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -143,14 +132,11 @@ public class Connector implements ToXContentObject, Writeable {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (endpoint != null) {
-            builder.field(ENDPOINT_FIELD, endpoint);
+        if (predictSchema != null) {
+            builder.field(PREDICT_API_SCHEMA_FIELD, predictSchema);
         }
-        if (protocol != null) {
-            builder.field(PROTOCOL_FIELD, protocol);
-        }
-        if (auth != null) {
-            builder.field(AUTHENTICATION_FIELD, auth);
+        if (metadataSchema != null) {
+            builder.field(METADATA_API_SCHEMA_FIELD, metadataSchema);
         }
         if (connectorState != null) {
             builder.field(CONNECTOR_STATE_FIELD, connectorState);
@@ -173,10 +159,8 @@ public class Connector implements ToXContentObject, Writeable {
         String name = null;
         String version = null;
         String description = null;
-        String endpoint = null;
-
-        Protocol protocol = null;
-        Auth auth = null;
+        APISchema predictSchema = null;
+        APISchema metadataSchema = null;
         ConnectorState connectorState = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
@@ -201,14 +185,11 @@ public class Connector implements ToXContentObject, Writeable {
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
-                case ENDPOINT_FIELD:
-                    endpoint = parser.text();
+                case PREDICT_API_SCHEMA_FIELD:
+                    predictSchema = APISchema.parse(parser);
                     break;
-                case PROTOCOL_FIELD:
-                    protocol = Protocol.from(parser.text());
-                    break;
-                case AUTHENTICATION_FIELD:
-                    auth = Auth.from(parser.text());
+                case METADATA_API_SCHEMA_FIELD:
+                    metadataSchema = APISchema.parse(parser);
                     break;
                 case CONNECTOR_STATE_FIELD:
                     connectorState = ConnectorState.from(parser.text());
@@ -232,9 +213,8 @@ public class Connector implements ToXContentObject, Writeable {
                 .name(name)
                 .version(version)
                 .description(description)
-                .endpoint(endpoint)
-                .protocol(protocol)
-                .auth(auth)
+                .predictSchema(predictSchema)
+                .metadataSchema(metadataSchema)
                 .connectorState(connectorState)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
