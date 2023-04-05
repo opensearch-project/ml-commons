@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
 import ai.djl.modality.Output;
+import ai.djl.translate.TranslateException;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
@@ -42,6 +43,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.ml.engine.ExecuteException;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.SearchHit;
@@ -69,7 +71,7 @@ public class MetricsCorrelation extends DLModelExecute {
     public static final String MCORR_ML_VERSION = "1.0.0";
 
     //TODO: Model didn't publish yet to the release repo, so using this for the development.
-    // But before merging this code, we will have the release artifact url here for the model.
+    // But before merging this code, we will have the release artifact url here for
     public static final String MCORR_MODEL_URL =
             "https://github.com/dhrubo-os/semantic-os/raw/main/mcorr.zip";
 
@@ -79,7 +81,7 @@ public class MetricsCorrelation extends DLModelExecute {
     }
 
     @Override
-    public MetricsCorrelationOutput execute(Input input) throws Exception {
+    public MetricsCorrelationOutput execute(Input input) throws ExecuteException {
         if (!(input instanceof MetricsCorrelationInput)) {
             throw new IllegalArgumentException("wrong input");
         }
@@ -133,7 +135,14 @@ public class MetricsCorrelation extends DLModelExecute {
             }
             return loadedModelId.get() != null;
         }, 20, TimeUnit.SECONDS);
-        Output djlOutput = getPredictor().predict(processedInputData);
+
+        Output djlOutput;
+        try {
+            djlOutput = getPredictor().predict(processedInputData);
+        } catch (TranslateException translateException) {
+            throw new ExecuteException(translateException);
+        }
+
         tensorOutputs.add(parseModelTensorOutput(djlOutput, null));
         return new MetricsCorrelationOutput(tensorOutputs);
     }
@@ -213,7 +222,7 @@ public class MetricsCorrelation extends DLModelExecute {
                 .indices(CommonValue.ML_MODEL_INDEX);
     }
 
-    public static boolean waitUntil(BooleanSupplier breakSupplier, long maxWaitTime, TimeUnit unit) throws InterruptedException {
+    public static boolean waitUntil(BooleanSupplier breakSupplier, long maxWaitTime, TimeUnit unit) throws ExecuteException {
         long maxTimeInMillis = TimeUnit.MILLISECONDS.convert(maxWaitTime, unit);
         long timeInMillis = 1;
         long sum = 0;
@@ -221,12 +230,20 @@ public class MetricsCorrelation extends DLModelExecute {
             if (breakSupplier.getAsBoolean()) {
                 return true;
             }
-            Thread.sleep(timeInMillis);
+            try {
+                Thread.sleep(timeInMillis);
+            } catch (InterruptedException interruptedException) {
+                throw new ExecuteException(interruptedException);
+            }
             sum += timeInMillis;
             timeInMillis = Math.min(AWAIT_BUSY_THRESHOLD, timeInMillis * 2);
         }
         timeInMillis = maxTimeInMillis - sum;
-        Thread.sleep(Math.max(timeInMillis, 0));
+        try {
+            Thread.sleep(Math.max(timeInMillis, 0));
+        } catch (InterruptedException interruptedException) {
+            throw new ExecuteException(interruptedException);
+        }
         return breakSupplier.getAsBoolean();
     }
 

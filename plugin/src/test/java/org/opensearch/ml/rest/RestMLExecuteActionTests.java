@@ -97,14 +97,14 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         assertEquals(FunctionName.LOCAL_SAMPLE_CALCULATOR, input.getFunctionName());
     }
 
-     public void testGetRequestMCorr() throws IOException {
-         RestRequest request = getMetricsCorrelationRestRequest();
-         MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
+    public void testGetRequestMCorr() throws IOException {
+        RestRequest request = getMetricsCorrelationRestRequest();
+        MLExecuteTaskRequest executeTaskRequest = restMLExecuteAction.getRequest(request);
 
-         Input input = executeTaskRequest.getInput();
-         assertNotNull(input);
-         assertEquals(FunctionName.METRICS_CORRELATION, input.getFunctionName());
-     }
+        Input input = executeTaskRequest.getInput();
+        assertNotNull(input);
+        assertEquals(FunctionName.METRICS_CORRELATION, input.getFunctionName());
+    }
 
     public void testPrepareRequest() throws Exception {
         RestRequest request = getLocalSampleCalculatorRestRequest();

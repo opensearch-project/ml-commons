@@ -17,5 +17,5 @@ public interface Executable {
      * @param input input data
      * @return execution result
      */
-    Output execute(Input input) throws Exception;
+    Output execute(Input input) throws ExecuteException;
 }

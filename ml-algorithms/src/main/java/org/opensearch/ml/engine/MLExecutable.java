@@ -11,17 +11,9 @@ import org.opensearch.ml.common.output.MLOutput;
 
 import java.util.Map;
 
-public interface MLExecutable {
+public interface MLExecutable extends Executable {
 
-    /**
-     * Execute python based ml algorithm with given input data.
-     * This interface mostly targeting for those state less algorithm which are built in python and
-     * being loaded using DJL to execute with given input data
-     * @param input input data
-     * @return execution result
-     */
-
-    MLOutput execute(Input input) throws Exception;
+    MLOutput execute(Input input) throws ExecuteException;
 
     /**
      * Init model (deploy model into memory) with ML model content and params.

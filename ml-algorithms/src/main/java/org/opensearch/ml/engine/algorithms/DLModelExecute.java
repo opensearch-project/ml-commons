@@ -16,7 +16,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
+import org.opensearch.ml.engine.ExecuteException;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
@@ -51,7 +52,7 @@ public abstract class DLModelExecute implements MLExecutable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
-    public abstract MLOutput execute(Input input) throws Exception;
+    public abstract MetricsCorrelationOutput execute(Input input) throws ExecuteException;
 
     protected Predictor<float[][], ai.djl.modality.Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();
