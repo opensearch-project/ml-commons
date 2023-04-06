@@ -10,6 +10,7 @@ import com.jayway.jsonpath.JsonPath;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
@@ -204,6 +205,11 @@ public class HttpConnector implements Connector {
             }
             StringSubstitutor substitutor = new StringSubstitutor(values);
             payload = substitutor.replace(payload);
+            for (Map.Entry<String, ?> entry : values.entrySet()) {
+                values.put(entry.getKey(), StringEscapeUtils.escapeJson(gson.fromJson((String)entry.getValue(), String.class)));
+            }
+            StringSubstitutor innerSubstitutor = new StringSubstitutor(values, "%(", ")");
+            payload = innerSubstitutor.replace(payload);
             return (T) payload;
         }
         return (T) parameters.get("http_body");
