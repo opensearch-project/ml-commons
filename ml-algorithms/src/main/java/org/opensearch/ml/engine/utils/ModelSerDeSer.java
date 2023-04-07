@@ -10,10 +10,7 @@ import org.apache.commons.io.serialization.ValidatingObjectInputStream;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.util.Base64;
 
 @UtilityClass
@@ -23,12 +20,29 @@ public class ModelSerDeSer {
             "java.lang.*",
             "java.util.*",
             "java.time.*",
-            "org.opensearch.ml.*",
-            "*org.tribuo.*",
-            "libsvm.*",
-            "com.oracle.labs.*",
+            "org.tribuo.*",
+            "com.oracle.labs.mlrg.olcut.provenance.*",
+            "com.oracle.labs.mlrg.olcut.util.*",
             "[*",
-            "com.amazon.randomcutforest.*"
+            "org.opensearch.ml.*",
+            "libsvm.*",
+    };
+
+    public static final String[] REJECT_CLASS_PATTERNS = {
+            "java.util.logging.*",
+            "java.util.zip.*",
+            "java.util.jar.*",
+            "java.util.random.*",
+            "java.util.spi.*",
+            "java.util.stream.*",
+            "java.util.regex.*",
+            "java.util.concurrent.*",
+            "java.util.function.*",
+            "java.util.prefs.*",
+            "java.time.zone.*",
+            "java.time.format.*",
+            "java.time.temporal.*",
+            "java.time.chrono.*",
     };
 
     public static String serializeToBase64(Object model) {
@@ -51,7 +65,10 @@ public class ModelSerDeSer {
         try (ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
              ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream)){
             // Validate the model class type to avoid deserialization attack.
-            validatingObjectInputStream.accept(ACCEPT_CLASS_PATTERNS);
+            validatingObjectInputStream
+                    .accept(ACCEPT_CLASS_PATTERNS)
+                    .reject(REJECT_CLASS_PATTERNS)
+                    .setObjectInputFilter(ObjectInputFilter.Config.createFilter("maxdepth=20;maxrefs=5000;maxbytes=10000000;maxarray=100000"));
             return validatingObjectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
