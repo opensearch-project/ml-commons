@@ -1,4 +1,4 @@
-package org.opensearch.ml.engine;
+package org.opensearch.ml.common.exception;
 
 public class ExecuteException extends Exception{
     public ExecuteException() {}

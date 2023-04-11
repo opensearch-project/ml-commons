@@ -179,11 +179,6 @@ public class ModelHelper {
                 String fileName = ((ZipEntry) zipEntries.nextElement()).getName();
                 hasPtFile = hasModelFile(modelFormat, MLModelFormat.TORCH_SCRIPT, PYTORCH_FILE_EXTENSION, hasPtFile, fileName);
                 hasOnnxFile = hasModelFile(modelFormat, MLModelFormat.ONNX, ONNX_FILE_EXTENSION, hasOnnxFile, fileName);
-
-                if (modelName == FunctionName.METRICS_CORRELATION.toString()){
-                    //for metrics correlation algorithm we don't need any tokenizer file
-                    hasTokenizerFile = true;
-                }
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
                     hasTokenizerFile = true;
                 }

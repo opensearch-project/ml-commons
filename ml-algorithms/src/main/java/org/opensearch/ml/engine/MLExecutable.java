@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.output.MLOutput;
 

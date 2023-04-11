@@ -549,7 +549,7 @@ public class MLModelManager {
                     log.debug("Model content matches original hash value, continue deploying");
                     Map<String, Object> params = ImmutableMap
                         .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
-                    if (mlModel.getAlgorithm() == FunctionName.METRICS_CORRELATION) {
+                    if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);

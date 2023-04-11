@@ -386,7 +386,7 @@ public class MLModel implements ToXContentObject {
                     modelContentHash = parser.text();
                     break;
                 case MODEL_CONFIG_FIELD:
-                    if (algorithmName.equals(FunctionName.METRICS_CORRELATION.name())) {
+                    if (FunctionName.METRICS_CORRELATION.name().equals(algorithmName)) {
                         modelConfig = MetricsCorrelationModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);

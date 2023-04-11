@@ -16,12 +16,11 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
-import org.opensearch.ml.engine.ExecuteException;
+import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelationTranslator;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
 import java.io.File;
@@ -35,7 +34,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.opensearch.ml.engine.ModelHelper.*;
+import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 @Log4j2
@@ -52,7 +53,7 @@ public abstract class DLModelExecute implements MLExecutable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
-    public abstract MetricsCorrelationOutput execute(Input input) throws ExecuteException;
+    public abstract MLOutput execute(Input input) throws ExecuteException;
 
     protected Predictor<float[][], ai.djl.modality.Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();
@@ -116,7 +117,7 @@ public abstract class DLModelExecute implements MLExecutable {
         }
     }
 
-    public abstract MetricsCorrelationTranslator getTranslator();
+    public abstract Translator getTranslator();
 
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
 

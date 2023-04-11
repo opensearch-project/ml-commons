@@ -7,12 +7,13 @@ package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
 import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
+import com.google.common.annotations.VisibleForTesting;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.Client;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
@@ -43,7 +44,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
-import org.opensearch.ml.engine.ExecuteException;
+import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.SearchHit;
@@ -53,7 +54,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 import static org.opensearch.index.query.QueryBuilders.termQuery;
@@ -65,9 +65,6 @@ public class MetricsCorrelation extends DLModelExecute {
 
     private static final int AWAIT_BUSY_THRESHOLD = 1000;
     private Client client;
-    private Settings settings;
-
-    private static final String MODEL_NAME = "METRICS_CORRELATION";
     public static final String MCORR_ML_VERSION = "1.0.0";
 
     //TODO: Model didn't publish yet to the release repo, so using this for the development.
@@ -75,69 +72,67 @@ public class MetricsCorrelation extends DLModelExecute {
     public static final String MCORR_MODEL_URL =
             "https://github.com/dhrubo-os/semantic-os/raw/main/mcorr.zip";
 
-    public MetricsCorrelation(Client client, Settings settings) {
+    public MetricsCorrelation(Client client) {
         this.client = client;
-        this.settings = settings;
     }
 
     @Override
     public MetricsCorrelationOutput execute(Input input) throws ExecuteException {
         if (!(input instanceof MetricsCorrelationInput)) {
-            throw new IllegalArgumentException("wrong input");
+            throw new ExecuteException("wrong input");
         }
         List<MCorrModelTensors> tensorOutputs = new ArrayList<>();
         MetricsCorrelationInput metricsCorrelation = (MetricsCorrelationInput) input;
         List<float[]> inputData = metricsCorrelation.getInputData();
 
+        // converting List of float array to 2 dimensional float array for DJL input
         float[][] processedInputData = processedInput(inputData);
 
-        AtomicReference<String> loadedModelId = new AtomicReference<>();
-
         SearchRequest modelSearchRequest = getSearchRequest();
-        searchModel(modelSearchRequest, ActionListener.wrap(modelInfo -> {
-            if (modelInfo.isEmpty()) {
-                registerModel(ActionListener.wrap(registerModelResponse -> {
-                    String id = getTask(registerModelResponse.getTaskId()).getModelId();
-                    loadedModelId.set(id);
-                }, e -> log.error("Metrics correlation model didn't register to the index successfully", e)));
-            } else {
-                if (modelInfo.get(MLModel.MODEL_STATE_FIELD) != MLModelState.DEPLOYED ||
-                        modelInfo.get(MLModel.MODEL_STATE_FIELD) != MLModelState.PARTIALLY_DEPLOYED) {
-                    MLDeployModelRequest loadRequest = MLDeployModelRequest
-                            .builder()
-                            .modelId(modelId)
-                            .async(false)
-                            .dispatchTask(false)
-                            .build();
-                    deployModel(loadRequest, ActionListener.wrap(deployModelResponse -> {
-                        String id = getTask(deployModelResponse.getTaskId()).getModelId();
-                        loadedModelId.set(id);
-                    }, e -> log.error("Metrics correlation model didn't deploy to the index successfully")));
-
+        // Searching in the model index to see if there's any model in the index already or not.
+        if (modelId == null) {
+            searchModel(modelSearchRequest, ActionListener.wrap(modelInfo -> {
+                if (modelInfo.isEmpty()) {
+                    // if we don't find any model in the index then we will register a model in the index
+                    registerModel(ActionListener.wrap(registerModelResponse ->
+                                    modelId = getTask(registerModelResponse.getTaskId()).getModelId(),
+                            e -> log.error("Metrics correlation model didn't get registered to the index successfully", e)));
+                } else {
+                    MLModel model = getModel(modelInfo.get(MLModel.MODEL_ID_FIELD).toString());
+                    if (model.getModelState() != MLModelState.DEPLOYED &&
+                            model.getModelState() != MLModelState.PARTIALLY_DEPLOYED) {
+                        // if we find a model in the index but the model is not loaded into memory then we will
+                        // load the model in memory
+                        deployModel(ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
+                    }
                 }
-            }
-        }, e -> {
-            log.error("Model Index Not found", e);
-            try {
-                registerModel(ActionListener.wrap(registerModelResponse -> {
-                    String id = getTask(registerModelResponse.getTaskId()).getModelId();
-                    loadedModelId.set(id);
-                }, ex -> log.error("Exception during registering the Metrics correlation model", ex)));
-            } catch (InterruptedException ex) {
-                throw new RuntimeException(ex);
-            }
-        }));
+            }, e -> {
+                //If the model index didn't get created before this request then we can face model index not found exception
+                log.error("Model Index Not found", e);
+                try {
+                    registerModel(ActionListener.wrap(registerModelResponse ->
+                                    modelId = getTask(registerModelResponse.getTaskId()).getModelId(),
+                            ex -> log.error("Exception during registering the Metrics correlation model", ex)));
+                } catch (InterruptedException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }));
+        }
 
+        //We will be waiting here until actionListeners set the model id to the loadedModelId.
         waitUntil(() -> {
-            if (loadedModelId.get() != null) {
-                MLModelState modelState = getModel(loadedModelId.get()).getModelState();
+            if (modelId != null) {
+                MLModelState modelState = getModel(modelId).getModelState();
                 return modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED;
             }
-            return loadedModelId.get() != null;
-        }, 20, TimeUnit.SECONDS);
+            return false;
+        }, 120, TimeUnit.SECONDS);
 
         Output djlOutput;
         try {
+            if (modelId == null) {
+                throw new ExecuteException("Model is not loaded yet. Please try again.");
+            }
             djlOutput = getPredictor().predict(processedInputData);
         } catch (TranslateException translateException) {
             throw new ExecuteException(translateException);
@@ -147,7 +142,8 @@ public class MetricsCorrelation extends DLModelExecute {
         return new MetricsCorrelationOutput(tensorOutputs);
     }
 
-    private void searchModel(SearchRequest modelSearchRequest, ActionListener<Map<String, Object>> listener) {
+    @VisibleForTesting
+    void searchModel(SearchRequest modelSearchRequest, ActionListener<Map<String, Object>> listener) {
         client.execute(MLModelSearchAction.INSTANCE, modelSearchRequest, ActionListener.wrap(searchModelResponse -> {
             if (searchModelResponse != null) {
                 SearchHit[] searchHits = searchModelResponse.getHits().getHits();
@@ -160,7 +156,8 @@ public class MetricsCorrelation extends DLModelExecute {
         }));
     }
 
-    public void registerModel(ActionListener<MLRegisterModelResponse> listener) throws InterruptedException {
+    @VisibleForTesting
+    void registerModel(ActionListener<MLRegisterModelResponse> listener) throws InterruptedException {
 
         FunctionName functionName = FunctionName.METRICS_CORRELATION;
         MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
@@ -171,7 +168,7 @@ public class MetricsCorrelation extends DLModelExecute {
         MLRegisterModelInput input = MLRegisterModelInput
                 .builder()
                 .functionName(functionName)
-                .modelName(MODEL_NAME)
+                .modelName(FunctionName.METRICS_CORRELATION.name())
                 .version(MCORR_ML_VERSION)
                 .modelFormat(modelFormat)
                 .modelConfig(modelConfig)
@@ -186,14 +183,22 @@ public class MetricsCorrelation extends DLModelExecute {
         }));
     }
 
-    private void deployModel(MLDeployModelRequest mlDeployModelRequest, ActionListener<MLDeployModelResponse> listener) {
-        client.execute(MLDeployModelAction.INSTANCE, mlDeployModelRequest, ActionListener.wrap(listener::onResponse, e -> {
+    @VisibleForTesting
+    void deployModel(ActionListener<MLDeployModelResponse> listener) {
+        MLDeployModelRequest loadRequest = MLDeployModelRequest
+                .builder()
+                .modelId(modelId)
+                .async(false)
+                .dispatchTask(false)
+                .build();
+        client.execute(MLDeployModelAction.INSTANCE, loadRequest, ActionListener.wrap(listener::onResponse, e -> {
             log.error("Failed to deploy Model", e);
             listener.onFailure(e);
         }));
     }
 
-    public float[][] processedInput(List<float[]> input) {
+    @VisibleForTesting
+    float[][] processedInput(List<float[]> input) {
         float[][] processInput = new float[input.size()][];
         for (int i = 0; i < input.size(); i++) {
             float[] innerList = input.get(i);
@@ -208,14 +213,15 @@ public class MetricsCorrelation extends DLModelExecute {
         return new MetricsCorrelationTranslator();
     }
 
-    public SearchRequest getSearchRequest() {
+    @VisibleForTesting
+    SearchRequest getSearchRequest() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(new String[] { MLModel.MODEL_ID_FIELD,
                         MLModel.MODEL_NAME_FIELD, MLModel.MODEL_STATE_FIELD, MLModel.MODEL_VERSION_FIELD, MLModel.MODEL_CONTENT_FIELD },
                 new String[] { MLModel.MODEL_CONTENT_FIELD });
 
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery()
-                .should(termQuery(MLModel.MODEL_NAME_FIELD, MODEL_NAME))
+                .should(termQuery(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name()))
                 .should(termQuery(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION));
         searchSourceBuilder.query(boolQueryBuilder);
         return new SearchRequest().source(searchSourceBuilder)
@@ -255,7 +261,8 @@ public class MetricsCorrelation extends DLModelExecute {
 
     public MLModel getModel(String modelId) {
         MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false);
-        MLModelGetResponse response = client.execute(MLModelGetAction.INSTANCE, getRequest).actionGet(10000);
+        ActionFuture<MLModelGetResponse> future = client.execute(MLModelGetAction.INSTANCE, getRequest);
+        MLModelGetResponse response = future.actionGet(10000);
         return response.getMlModel();
     }
 
@@ -269,8 +276,6 @@ public class MetricsCorrelation extends DLModelExecute {
 
         //This is where we are making the pause. We need find out what will be the best way
         // to represent the model output.
-
-
         if (output == null) {
             throw new MLException("No output generated");
         }

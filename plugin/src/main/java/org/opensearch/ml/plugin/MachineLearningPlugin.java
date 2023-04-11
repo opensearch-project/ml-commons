@@ -335,7 +335,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
-        MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings);
+        MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
 
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
