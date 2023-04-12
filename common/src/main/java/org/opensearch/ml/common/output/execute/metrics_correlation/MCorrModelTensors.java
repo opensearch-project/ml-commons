@@ -78,7 +78,7 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
         if (mCorrModelTensors != null) {
             for (int i = 0 ; i<mCorrModelTensors.size(); i++) {
                 MCorrModelTensor output = mCorrModelTensors.get(i);
-                if (targetResponse != null && targetResponse.contains(output.getRange())) {
+                if (targetResponse != null && targetResponse.contains(output.getEvent_window())) {
                     filter(output,  returnNumber);
                     targetOutput.add(output);
                 } else if (targetResponsePositions != null && targetResponsePositions.contains(i)) {
@@ -92,9 +92,9 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
 
     private void filter(MCorrModelTensor output, boolean returnNUmber) {
         if (!returnNUmber) {
-            output.setEvent(null);
-            output.setMetrics(null);
-            output.setRange(null);
+            output.setEvent_pattern(null);
+            output.setSuspected_metrics(null);
+            output.setEvent_window(null);
         }
     }
 

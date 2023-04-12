@@ -14,6 +14,7 @@ import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.Client;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
@@ -59,21 +60,22 @@ import java.util.function.BooleanSupplier;
 import static org.opensearch.index.query.QueryBuilders.termQuery;
 
 @Log4j2
-@NoArgsConstructor
 @Function(FunctionName.METRICS_CORRELATION)
 public class MetricsCorrelation extends DLModelExecute {
 
     private static final int AWAIT_BUSY_THRESHOLD = 1000;
     private Client client;
-    public static final String MCORR_ML_VERSION = "1.0.0";
+    private final Settings settings;
+    public static final String MCORR_ML_VERSION = "1.0.0b1";
 
     //TODO: Model didn't publish yet to the release repo, so using this for the development.
     // But before merging this code, we will have the release artifact url here for
     public static final String MCORR_MODEL_URL =
-            "https://github.com/dhrubo-os/semantic-os/raw/main/mcorr.zip";
+            "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b1/torch_script/metrics_correlation-1.0.0b1-torch_script.zip";
 
-    public MetricsCorrelation(Client client) {
+    public MetricsCorrelation(Client client, Settings settings) {
         this.client = client;
+        this.settings = settings;
     }
 
     @Override

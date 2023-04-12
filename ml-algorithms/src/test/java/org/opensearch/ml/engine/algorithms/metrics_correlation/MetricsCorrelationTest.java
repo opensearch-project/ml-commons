@@ -139,13 +139,13 @@ public class MetricsCorrelationTest {
                 .build();
         modelHelper = new ModelHelper(mlEngine);
 
-        MLTask mlTask = MLTask.builder()
+        mlTask = MLTask.builder()
                 .taskId("task_id")
                 .modelId(modelId)
                 .build();
 
         MockitoAnnotations.openMocks(this);
-        metricsCorrelation = new MetricsCorrelation(client);
+        metricsCorrelation = new MetricsCorrelation(client, settings);
         List<float[]> inputData = new ArrayList<>();
         inputData.add(new float[]{-1.0f, 2.0f, 3.0f});
         inputData.add(new float[]{-1.0f, 2.0f, 3.0f});
@@ -366,8 +366,8 @@ public class MetricsCorrelationTest {
     ) throws IOException {
         XContentBuilder content = builder();
         content.startObject();
-        content.field(MLModel.MODEL_NAME_FIELD, "METRICS_CORRELATION");
-        content.field(MLModel.MODEL_VERSION_FIELD, "1.0.0");
+        content.field(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name());
+        content.field(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION);
         content.field(MLModel.MODEL_ID_FIELD, modelId);
         content.endObject();
 

@@ -39,9 +39,9 @@ public class MetricsCorrelationInputTest {
     @Before
     public void setUp() {
         List<float[]> inputData = new ArrayList<>();
-        inputData.add(new float[]{1.0f, 2.0f, 3.0f});
-        inputData.add(new float[]{1.0f, 2.0f, 3.0f});
-        inputData.add(new float[]{1.0f, 2.0f, 3.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
         input = MetricsCorrelationInput.builder().inputData(inputData).build();
     }
 
@@ -50,6 +50,18 @@ public class MetricsCorrelationInputTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("empty input data");
         MetricsCorrelationInput.builder().build();
+    }
+
+    @Test
+    public void constructor_variableLengthInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("All the input metrics sizes should be same");
+        List<float[]> inputData = new ArrayList<>();
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        MetricsCorrelationInput.builder().inputData(inputData).build();
+
     }
 
     @Test

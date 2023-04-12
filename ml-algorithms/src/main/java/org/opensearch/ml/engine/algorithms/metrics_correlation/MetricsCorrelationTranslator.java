@@ -20,6 +20,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.EVENT_PATTERN;
+import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.SUSPECTED_METRICS;
+import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.EVENT_WINDOW;
+
 public class MetricsCorrelationTranslator implements Translator<float[][], Output> {
 
     @Override
@@ -53,24 +57,24 @@ public class MetricsCorrelationTranslator implements Translator<float[][], Outpu
 
         Iterator<NDArray> iterator = list.iterator();
         int i = 0;
-        float[] range = null;
-        float[] event = null;
-        long[] metrics = null;
+        float[] event_window = null;
+        float[] event_pattern = null;
+        long[] suspected_metrics = null;
         while (iterator.hasNext()) {
             i += 1;
             NDArray ndArray = iterator.next();
-            if (i % 3 == 1 && ndArray.getName().equals("range")) {
-                range = ndArray.toFloatArray();
-            } else if (i % 3 == 2 && ndArray.getName().equals("metrics")) {
-                metrics = ndArray.toLongArray();
-            } else {
-                event = ndArray.toFloatArray();;
+            if (EVENT_WINDOW.equals(ndArray.getName())) {
+                event_window = ndArray.toFloatArray();
+            } else if (SUSPECTED_METRICS.equals(ndArray.getName())) {
+                suspected_metrics = ndArray.toLongArray();
+            } else if (EVENT_PATTERN.equals(ndArray.getName())) {
+                event_pattern = ndArray.toFloatArray();;
             }
             if (i % 3 == 0) {
-                outputs.add(new MCorrModelTensor(range, event, metrics));
-                range = null;
-                event = null;
-                metrics = null;
+                outputs.add(new MCorrModelTensor(event_window, event_pattern, suspected_metrics));
+                event_window = null;
+                event_pattern = null;
+                suspected_metrics = null;
             }
 
         }

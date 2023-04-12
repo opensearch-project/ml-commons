@@ -45,9 +45,9 @@ public class MCorrModelTensorsTest {
                 .build();
 
         MCorrModelTensor mCorrModelTensor = MCorrModelTensor.builder()
-                .event(new float[]{1.0f, 2.0f, 3.0f})
-                .range(new float[]{4.0f, 5.0f, 6.0f})
-                .metrics(new long[]{1, 2})
+                .event_pattern(new float[]{1.0f, 2.0f, 3.0f})
+                .event_window(new float[]{4.0f, 5.0f, 6.0f})
+                .suspected_metrics(new long[]{1, 2})
                 .build();
 
         mcorrModelTensors = MCorrModelTensors.builder().mCorrModelTensors(Arrays.asList(mCorrModelTensor)).build();
@@ -58,7 +58,7 @@ public class MCorrModelTensorsTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mcorrModelTensors.toXContent(builder, EMPTY_PARAMS);
         String modelTensorContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"range\":[4.0,5.0,6.0],\"event\":[1.0,2.0,3.0],\"metrics\":[1,2]}", modelTensorContent);
+        assertEquals("{\"event_window\":[4.0,5.0,6.0],\"event_pattern\":[1.0,2.0,3.0],\"suspected_metrics\":[1,2]}", modelTensorContent);
     }
 
     @Test

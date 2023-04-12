@@ -17,28 +17,33 @@ import java.io.IOException;
 
 @Data
 public class MCorrModelTensor implements Writeable, ToXContentObject {
-    private float[] range;
-    private float[] event;
-    private long[] metrics;
+
+    public static final String EVENT_WINDOW = "event_window";
+    public static final String EVENT_PATTERN = "event_pattern";
+    public static final String SUSPECTED_METRICS = "suspected_metrics";
+
+    private float[] event_window;
+    private float[] event_pattern;
+    private long[] suspected_metrics;
 
     @Builder
-    public MCorrModelTensor(float[] range, float[] event, long[] metrics) {
-        this.range = range;
-        this.event = event;
-        this.metrics = metrics;
+    public MCorrModelTensor(float[] event_window, float[] event_pattern, long[] suspected_metrics) {
+        this.event_window = event_window;
+        this.event_pattern = event_pattern;
+        this.suspected_metrics = suspected_metrics;
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        if (range != null) {
-            builder.field("range", range);
+        if (event_window != null) {
+            builder.field(EVENT_WINDOW, event_window);
         }
-        if (event != null) {
-            builder.field("event", event);
+        if (event_pattern != null) {
+            builder.field(EVENT_PATTERN, event_pattern);
         }
-        if (metrics != null) {
-            builder.field("metrics", metrics);
+        if (suspected_metrics != null) {
+            builder.field(SUSPECTED_METRICS, suspected_metrics);
         }
         builder.endObject();
         return builder;
@@ -46,34 +51,34 @@ public class MCorrModelTensor implements Writeable, ToXContentObject {
 
     public MCorrModelTensor(StreamInput in) throws IOException {
         if (in.readBoolean()) {
-            this.range = in.readFloatArray();
+            this.event_window = in.readFloatArray();
         }
         if (in.readBoolean()) {
-            this.event = in.readFloatArray();
+            this.event_pattern = in.readFloatArray();
         }
         if (in.readBoolean()) {
-            this.metrics = in.readLongArray();
+            this.suspected_metrics = in.readLongArray();
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        if (range != null) {
+        if (event_window != null) {
             out.writeBoolean(true);
-            out.writeFloatArray(range);
+            out.writeFloatArray(event_window);
         } else {
             out.writeBoolean(false);
         }
 
-        if (event != null) {
+        if (event_pattern != null) {
             out.writeBoolean(true);
-            out.writeFloatArray(event);
+            out.writeFloatArray(event_pattern);
         } else {
             out.writeBoolean(false);
         }
-        if (metrics != null) {
+        if (suspected_metrics != null) {
             out.writeBoolean(true);
-            out.writeLongArray(metrics);
+            out.writeLongArray(suspected_metrics);
         } else {
             out.writeBoolean(false);
         }
