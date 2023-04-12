@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.forward;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLExceptionUtils.toJsonString;
@@ -23,7 +25,10 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.autoreload.MLModelAutoReDeployer;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
@@ -49,10 +54,19 @@ import com.google.common.collect.ImmutableMap;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Log4j2
 public class TransportForwardAction extends HandledTransportAction<ActionRequest, MLForwardResponse> {
+    private final ClusterService clusterService;
     MLTaskManager mlTaskManager;
     Client client;
     MLModelManager mlModelManager;
     DiscoveryNodeHelper nodeHelper;
+
+    private final Settings settings;
+
+    private volatile float modelAutoRedeploySuccessRatio;
+
+    private boolean enableAutoReDeployModel;
+
+    private MLModelAutoReDeployer mlModelAutoReDeployer;
 
     @Inject
     public TransportForwardAction(
@@ -61,13 +75,26 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLTaskManager mlTaskManager,
         Client client,
         MLModelManager mlModelManager,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        Settings settings,
+        ClusterService clusterService,
+        MLModelAutoReDeployer mlModelAutoReDeployer
     ) {
         super(MLForwardAction.NAME, transportService, actionFilters, MLForwardRequest::new);
         this.mlTaskManager = mlTaskManager;
         this.client = client;
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
+        this.settings = settings;
+        this.clusterService = clusterService;
+        this.mlModelAutoReDeployer = mlModelAutoReDeployer;
+
+        modelAutoRedeploySuccessRatio = ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO.get(settings);
+        enableAutoReDeployModel = ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
+
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE, it -> enableAutoReDeployModel = it);
     }
 
     @Override
@@ -97,6 +124,8 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         mlModelManager.addModelWorkerNode(modelId, workerNodeId);
                         syncModelWorkerNodes(modelId);
                     }
+
+                    processModelAutoRedeploy(workNodes, taskId, modelId);
 
                     if (workNodes == null || workNodes.size() == 0) {
                         MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
@@ -150,6 +179,23 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         } catch (Exception e) {
             logException("Failed to execute forward action " + forwardInput.getRequestType(), e, log);
             listener.onFailure(e);
+        }
+    }
+
+    private void processModelAutoRedeploy(Set<String> workNodes, String taskId, String modelId) {
+        if (enableAutoReDeployModel && workNodes != null) {
+            MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
+            int currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
+            int receivedWorkerNodesCount = currentWorkerNodeCount - workNodes.size();
+            if ((float) receivedWorkerNodesCount / currentWorkerNodeCount > modelAutoRedeploySuccessRatio
+                && !mlTaskCache.getModelAutoReloadClearRetryTimesInModelIndex()) {
+                // An auto redeploy is succeed, clear the model retry times under ml-models index.
+                mlTaskCache.setModelAutoReloadClearRetryTimesInModelIndex(true);
+
+                // Check if there's more model needs auto redeploy.
+                mlModelAutoReDeployer.redeployAModel();
+                mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_AUTO_REDEPLOY_RETRY_TIMES_FIELD, 0));
+            }
         }
     }
 

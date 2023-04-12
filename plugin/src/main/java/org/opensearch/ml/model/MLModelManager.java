@@ -207,6 +207,7 @@ public class MLModelManager {
                         .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
                         .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
                         .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                        .autoRedeployRetryTimes(0)
                         .createdTime(now)
                         .lastUpdateTime(now)
                         .build();

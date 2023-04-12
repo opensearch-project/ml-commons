@@ -92,7 +92,7 @@ public class CommonValue {
             + "\" : {\"type\": \"integer\"},\n"
             + "      \""
             + MLModel.PLANNING_WORKER_NODES_FIELD
-            + "\": {\"type\": \"keyword\"},\n"
+            + "\": {\"type\": \"text\"},\n"
             + "      \""
             + MLModel.DEPLOY_TO_ALL_NODES_FIELD
             + "\": {\"type\": \"boolean\"},\n"
@@ -109,6 +109,9 @@ public class CommonValue {
             + "      \""
             + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + MLModel.MODEL_AUTO_REDEPLOY_RETRY_TIMES_FIELD
+            + "\" : {\"type\": \"integer\"},\n"
             + "      \""
             + MLModel.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"

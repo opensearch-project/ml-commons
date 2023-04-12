@@ -57,6 +57,7 @@ import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
+import org.opensearch.ml.autoreload.MLModelAutoReDeployer;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
@@ -334,12 +335,14 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
-
+        MLModelAutoReDeployer
+            mlModelAutoRedeployer = new MLModelAutoReDeployer(clusterService, client, settings, nodeEnvironment, mlModelManager);
         MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(
             clusterService,
             mlModelManager,
             mlTaskManager,
-            modelCacheHelper
+            modelCacheHelper,
+            mlModelAutoRedeployer
         );
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
             clusterService,
@@ -513,7 +516,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
                 MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
                 MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES,
-                MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN
+                MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES
             );
         return settings;
     }
