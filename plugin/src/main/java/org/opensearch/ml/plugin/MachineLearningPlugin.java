@@ -53,6 +53,7 @@ import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
+import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.cluster.MLCommonsClusterEventListener;
@@ -314,12 +315,19 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
 
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
-
+        MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
+            clusterService,
+            client,
+            settings,
+            mlModelManager,
+            new MLModelAutoReDeployer.SearchRequestBuilderFactory()
+        );
         MLCommonsClusterEventListener mlCommonsClusterEventListener = new MLCommonsClusterEventListener(
             clusterService,
             mlModelManager,
             mlTaskManager,
-            modelCacheHelper
+            modelCacheHelper,
+            mlModelAutoRedeployer
         );
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
             clusterService,
@@ -350,7 +358,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 modelHelper,
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
-                mlCircuitBreakerService
+                mlCircuitBreakerService,
+                mlModelAutoRedeployer
             );
     }
 
@@ -378,7 +387,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
         RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction();
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
-        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService);
+        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction();
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction();
 
@@ -495,7 +504,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
                 MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN,
-                MLCommonsSettings.ML_COMMONS_ENABLE_MCORR
+                MLCommonsSettings.ML_COMMONS_ENABLE_MCORR,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES
             );
         return settings;
     }

@@ -39,6 +39,10 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationCPU;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationGPU;
 
+    // In rare case, this could be null, e.g. model info not synced up yet a predict request comes in.
+    @Setter
+    private Boolean deployToAllNodes;
+
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
         workerNodes = ConcurrentHashMap.newKeySet();
@@ -58,11 +62,35 @@ public class MLModelCache {
         return targetWorkerNodes.toArray(new String[0]);
     }
 
-    public void removeWorkerNode(String nodeId) {
+    /**
+     * There are two entrance of this method, one is cron job sync up, another is undeploy action sync up.
+     * Removing nodeId in targetWorkerNodes as well if deploy to all nodes is true or request is from undeploy.
+     * Case1(request from cron job): A node dropped from the cluster, we regard the cluster a new cluster.
+     * Cronjob will update the new planning worker nodes to model index(removed the dropped nodeId),
+     * the sync up request will update target worker nodes in cache to make sure data consistency.
+     * Case2(undeploy action sync up): User use undeploy API to undeploy partial nodes of a model, in this case,
+     * undeploy action will send sync up request to cluster, and we need to remove the nodeIds in cache to make sure
+     * data consistency with model index, and we need to change the deployToAllNodes to false as well.
+     * When it's not deployed to all nodes and not from undeploy , we should regard the cluster the old cluster,
+     * Cronjob will not update new planning worker nodes and here we don't update target worker nodes either.
+     * @param nodeId
+     * @param isFromUndeploy
+     */
+    public void removeWorkerNode(String nodeId, boolean isFromUndeploy) {
+        if ((deployToAllNodes != null && deployToAllNodes) || isFromUndeploy) {
+            targetWorkerNodes.remove(nodeId);
+        }
+        if (isFromUndeploy)
+            deployToAllNodes = false;
         workerNodes.remove(nodeId);
     }
 
-    public void removeWorkerNodes(Set<String> removedNodes) {
+    public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
+        if ((deployToAllNodes != null && deployToAllNodes) || isFromUndeploy) {
+            targetWorkerNodes.removeAll(removedNodes);
+        }
+        if (isFromUndeploy)
+            deployToAllNodes = false;
         workerNodes.removeAll(removedNodes);
     }
 
@@ -77,6 +105,10 @@ public class MLModelCache {
     public void syncWorkerNode(Set<String> workerNodes) {
         this.workerNodes.clear();
         this.workerNodes.addAll(workerNodes);
+    }
+
+    public boolean isDeployToAllNodes() {
+        return this.deployToAllNodes;
     }
 
     public void clearWorkerNodes() {

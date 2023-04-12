@@ -21,14 +21,15 @@ import java.util.Map;
 public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToXContentFragment {
 
     private Map<String, String> modelUndeployStatus;
-    private Map<String, Integer> modelWorkerNodeCounts;
+    private Map<String, String[]> modelWorkerNodeBeforeRemoval;
 
     public MLUndeployModelNodeResponse(DiscoveryNode node,
                                        Map<String, String> modelUndeployStatus,
-                                       Map<String, Integer> modelWorkerNodeCounts) {
+                                       Map<String, String[]> modelWorkerNodeBeforeRemoval
+    ) {
         super(node);
         this.modelUndeployStatus = modelUndeployStatus;
-        this.modelWorkerNodeCounts = modelWorkerNodeCounts;
+        this.modelWorkerNodeBeforeRemoval = modelWorkerNodeBeforeRemoval;
     }
 
     public MLUndeployModelNodeResponse(StreamInput in) throws IOException {
@@ -37,7 +38,7 @@ public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToX
             this.modelUndeployStatus = in.readMap(s -> s.readString(), s-> s.readString());
         }
         if (in.readBoolean()) {
-            this.modelWorkerNodeCounts = in.readMap(s -> s.readString(), s-> s.readInt());
+            this.modelWorkerNodeBeforeRemoval = in.readMap(s -> s.readString(), s-> s.readOptionalStringArray());
         }
     }
 
@@ -55,9 +56,9 @@ public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToX
         } else {
             out.writeBoolean(false);
         }
-        if (modelWorkerNodeCounts != null) {
+        if (modelWorkerNodeBeforeRemoval != null) {
             out.writeBoolean(true);
-            out.writeMap(modelWorkerNodeCounts, StreamOutput::writeString, StreamOutput::writeInt);
+            out.writeMap(modelWorkerNodeBeforeRemoval, StreamOutput::writeString, StreamOutput::writeOptionalStringArray);
         } else {
             out.writeBoolean(false);
         }

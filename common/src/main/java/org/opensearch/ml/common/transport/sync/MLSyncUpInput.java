@@ -31,12 +31,15 @@ public class MLSyncUpInput implements Writeable {
     // sync running deploy model tasks
     private boolean syncRunningDeployModelTasks;
 
+    private Map<String, Boolean> deployToAllNodes;
+
     @Builder
     public MLSyncUpInput(boolean getDeployedModels,
                          Map<String, String[]> addedWorkerNodes,
                          Map<String, String[]> removedWorkerNodes,
                          Map<String, Set<String>> modelRoutingTable,
                          Map<String, Set<String>> runningDeployModelTasks,
+                         Map<String, Boolean> deployToAllNodes,
                          boolean clearRoutingTable,
                          boolean syncRunningDeployModelTasks) {
         this.getDeployedModels = getDeployedModels;
@@ -44,6 +47,7 @@ public class MLSyncUpInput implements Writeable {
         this.removedWorkerNodes = removedWorkerNodes;
         this.modelRoutingTable = modelRoutingTable;
         this.runningDeployModelTasks = runningDeployModelTasks;
+        this.deployToAllNodes = deployToAllNodes;
         this.clearRoutingTable = clearRoutingTable;
         this.syncRunningDeployModelTasks = syncRunningDeployModelTasks;
     }
@@ -63,6 +67,9 @@ public class MLSyncUpInput implements Writeable {
         }
         if (in.readBoolean()) {
             runningDeployModelTasks = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
+        }
+        if (in.readBoolean()) {
+            deployToAllNodes = in.readMap(StreamInput::readString, StreamInput::readOptionalBoolean);
         }
         this.clearRoutingTable = in.readBoolean();
         this.syncRunningDeployModelTasks = in.readBoolean();
@@ -92,6 +99,12 @@ public class MLSyncUpInput implements Writeable {
         if (runningDeployModelTasks != null && runningDeployModelTasks.size() > 0) {
             out.writeBoolean(true);
             out.writeMap(runningDeployModelTasks, StreamOutput::writeString, StreamOutput::writeStringCollection);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (deployToAllNodes != null && deployToAllNodes.size() > 0) {
+            out.writeBoolean(true);
+            out.writeMap(deployToAllNodes, StreamOutput::writeString, StreamOutput::writeOptionalBoolean);
         } else {
             out.writeBoolean(false);
         }

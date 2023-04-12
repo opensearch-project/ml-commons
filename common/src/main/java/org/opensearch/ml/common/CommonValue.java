@@ -110,6 +110,9 @@ public class CommonValue {
             + MLModel.MODEL_CONTENT_HASH_VALUE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
+            + MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD
+            + "\" : {\"type\": \"integer\"},\n"
+            + "      \""
             + MLModel.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""

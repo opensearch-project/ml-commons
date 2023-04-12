@@ -13,6 +13,7 @@ import java.util.concurrent.Semaphore;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 import org.opensearch.ml.common.MLTask;
 
@@ -28,6 +29,10 @@ public class MLTaskCache {
     // This is the original worker node count. It may not equal to size of workerNodes as
     // worker node may be removed later.
     Integer workerNodeSize;
+
+    @Setter
+    @Getter
+    Boolean modelAutoReloadClearRetryTimesInModelIndex = false;
 
     @Builder
     public MLTaskCache(MLTask mlTask, List<String> workerNodes) {
@@ -53,6 +58,10 @@ public class MLTaskCache {
 
     public boolean hasError() {
         return errors.size() > 0;
+    }
+
+    public int errorNodesCount() {
+        return errors.size();
     }
 
     public boolean allNodeFailed() {

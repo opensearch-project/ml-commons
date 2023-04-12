@@ -63,6 +63,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
@@ -113,6 +114,9 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
 
     private Map<String, Set<String>> runningDeployModelTasks;
 
+    @Mock
+    private MLModelCacheHelper mlModelCacheHelper;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -129,7 +133,8 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             threadPool,
             client,
             xContentRegistry,
-            mlEngine
+            mlEngine,
+            mlModelCacheHelper
         );
         runningDeployModelTasks = new HashMap<>();
         runningDeployModelTasks.put("model1", ImmutableSet.of("node1"));
