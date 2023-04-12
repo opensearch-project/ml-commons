@@ -69,17 +69,4 @@ public class MetricsCorrelationModelConfig extends MLModelConfig {
         }
         return new MetricsCorrelationModelConfig(modelType, allConfig);
     }
-
-    public enum FrameworkType {
-        TORCHSCRIPT;
-
-        public static FrameworkType from(String value) {
-            try {
-                return FrameworkType.valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong framework type");
-            }
-        }
-    }
-
 }

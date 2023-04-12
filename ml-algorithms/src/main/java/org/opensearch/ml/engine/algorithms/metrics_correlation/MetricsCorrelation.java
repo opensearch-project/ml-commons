@@ -147,13 +147,14 @@ public class MetricsCorrelation extends DLModelExecute {
     @VisibleForTesting
     void searchModel(SearchRequest modelSearchRequest, ActionListener<Map<String, Object>> listener) {
         client.execute(MLModelSearchAction.INSTANCE, modelSearchRequest, ActionListener.wrap(searchModelResponse -> {
+            Map<String, Object> modelInfo;
             if (searchModelResponse != null) {
                 SearchHit[] searchHits = searchModelResponse.getHits().getHits();
-                Map<String, Object> modelInfo = searchHits[0].getSourceAsMap();
+                modelInfo = searchHits[0].getSourceAsMap();
                 listener.onResponse(modelInfo);
             }
         }, e -> {
-            log.error("Failed to update model state", e);
+            log.error("Failed to find model", e);
             listener.onFailure(e);
         }));
     }

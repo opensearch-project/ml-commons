@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
@@ -30,6 +32,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.model.*;
@@ -112,13 +115,18 @@ public class MetricsCorrelationTest {
 
     private final String modelId = "modelId";
 
+    private static final Logger log = LogManager.getLogger(MetricsCorrelation.class);
+
     MLTask mlTask;
+
+    Map<String, Object> params = new HashMap<>();
 
     public MetricsCorrelationTest() {
     }
 
     @Before
     public void setUp() throws IOException, URISyntaxException {
+
         System.setProperty("testMode", "true");
 
         djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
@@ -144,8 +152,13 @@ public class MetricsCorrelationTest {
                 .modelId(modelId)
                 .build();
 
+
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(ML_ENGINE, mlEngine);
+
         MockitoAnnotations.openMocks(this);
-        metricsCorrelation = new MetricsCorrelation(client, settings);
+        metricsCorrelation = spy(new MetricsCorrelation(client, settings));
         List<float[]> inputData = new ArrayList<>();
         inputData.add(new float[]{-1.0f, 2.0f, 3.0f});
         inputData.add(new float[]{-1.0f, 2.0f, 3.0f});
@@ -194,7 +207,36 @@ public class MetricsCorrelationTest {
 
     @Test
     public void testExecuteWithModelInIndexAndOneEvent() throws ExecuteException, URISyntaxException {
-        exceptionRule.expect(ExecuteException.class);
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+
+        MLModel smallModel = model.toBuilder().modelConfig(modelConfig).modelState(MLModelState.DEPLOYED).build();
+        MLModelGetResponse response = new MLModelGetResponse(smallModel);
+        MLTaskGetResponse taskResponse = new MLTaskGetResponse(mlTask);
+
+        metricsCorrelation.initModel(smallModel, params);
+
+        ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
+        when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
+        when(mockedFuture.actionGet(anyLong())).thenReturn(response);
+
+        ActionFuture<MLTaskGetResponse> mockedFutureResponse = mock(ActionFuture.class);
+        when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
+        when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
+
+
+        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
+        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+        assert mlModelOutputs.size() == 1;
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+    }
+
+    @Test
+    public void testExecuteWithNoModelIndexAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
@@ -225,12 +267,104 @@ public class MetricsCorrelationTest {
             return mlRegisterModelResponse;
         }).when(client).execute(any(MLRegisterModelAction.class), any(MLRegisterModelRequest.class), isA(ActionListener.class));
 
+        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
+        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+        assert mlModelOutputs.size() == 1;
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+    }
 
+    @Test
+    public void testExecuteWithModelInIndexAndInvokeDeployAndOneEvent() throws ExecuteException, URISyntaxException {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+
+        MLModel smallModel = model.toBuilder().modelConfig(modelConfig).modelState(MLModelState.PARTIALLY_DEPLOYED).build();
+        MLModelGetResponse responseBeforeDeployed = new MLModelGetResponse(model);
+        MLModelGetResponse responseAfterDeployed = new MLModelGetResponse(smallModel);
+        MLTaskGetResponse taskResponse = new MLTaskGetResponse(mlTask);
+
+        ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
+        when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
+        when(mockedFuture.actionGet(anyLong())).thenReturn(responseBeforeDeployed);
+
+//        ActionFuture<MLModelGetResponse> mockedFutureNext = mock(ActionFuture.class);
+//        when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFutureNext);
+//        when(mockedFutureNext.actionGet(anyLong())).thenReturn(responseAfterDeployed);
+
+        ActionFuture<MLTaskGetResponse> mockedFutureResponse = mock(ActionFuture.class);
+        when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
+        when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
+            searchResponse = createSearchModelResponse();
+            searchListener.onResponse(searchResponse);
+            return searchListener;
+        }).when(client).execute(any(MLModelSearchAction.class), any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> deployModelResponseListener = invocation.getArgument(2);
+            metricsCorrelation.initModel(smallModel, params);
+            ActionFuture<MLModelGetResponse> mockedFutureNext = mock(ActionFuture.class);
+            when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFutureNext);
+            when(mockedFutureNext.actionGet(anyLong())).thenReturn(responseAfterDeployed);
+
+            deployModelResponseListener.onResponse(mlDeployModelResponse);
+            return mlDeployModelResponse;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
 
         MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
         List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
         assert mlModelOutputs.size() == 1;
-        assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
+    }
+
+
+    @Test
+    public void testExecuteWithNoModelInIndexAndOneEvent() throws ExecuteException, URISyntaxException {
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
+        params.put(ML_ENGINE, mlEngine);
+
+        MLModel smallModel = model.toBuilder().modelConfig(modelConfig).modelState(MLModelState.DEPLOYED).build();
+        MLModelGetResponse response = new MLModelGetResponse(smallModel);
+        MLTaskGetResponse taskResponse = new MLTaskGetResponse(mlTask);
+
+        ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
+        when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
+        when(mockedFuture.actionGet(anyLong())).thenReturn(response);
+
+        ActionFuture<MLTaskGetResponse> mockedFutureResponse = mock(ActionFuture.class);
+        when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
+        when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
+            searchResponse = createEmptySearchModelResponse();
+            searchListener.onResponse(searchResponse);
+            return searchListener;
+        }).when(client).execute(any(MLModelSearchAction.class), any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelResponse> registerModelResponseListener = invocation.getArgument(2);
+            registerModelResponseListener.onResponse(mlRegisterModelResponse);
+            metricsCorrelation.initModel(smallModel, params);
+            return mlRegisterModelResponse;
+        }).when(client).execute(any(MLRegisterModelAction.class), any(MLRegisterModelRequest.class), isA(ActionListener.class));
+
+        MetricsCorrelationOutput output = metricsCorrelation.execute(extendedInput);
+        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+        assert mlModelOutputs.size() == 1;
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_window());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getEvent_pattern());
+        assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
     @Test
@@ -350,6 +484,18 @@ public class MetricsCorrelationTest {
     }
 
     @Test
+    public void testDeployModelFail() {
+        Exception ex = new ExecuteException("Testing");
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> deployModelResponseListener = invocation.getArgument(2);
+            deployModelResponseListener.onFailure(ex);
+            return null;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
+        metricsCorrelation.deployModel(mlDeployModelResponseActionListener);
+        verify(mlDeployModelResponseActionListener).onFailure(ex);
+    }
+
+    @Test
     public void testWrongInput() throws ExecuteException {
         exceptionRule.expect(ExecuteException.class);
         metricsCorrelation.execute(mock(LocalSampleCalculatorInput.class));
@@ -360,6 +506,51 @@ public class MetricsCorrelationTest {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("No output generated");
         metricsCorrelation.parseModelTensorOutput(null, null);
+    }
+
+    @Test
+    public void initModel_NullModelZipFile() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model file is null");
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        metricsCorrelation.initModel(model, params);
+    }
+
+    @Test
+    public void initModel_NullModelHelper() throws URISyntaxException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model helper is null");
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
+        metricsCorrelation.initModel(model, params);
+    }
+
+    @Test
+    public void initModel_NullMLEngine() throws URISyntaxException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("ML engine is null");
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
+        params.put(MODEL_HELPER, modelHelper);
+        metricsCorrelation.initModel(model, params);
+    }
+
+    @Test
+    public void initModel_NullModelId() throws URISyntaxException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model id is null");
+
+        model.setModelId(null);
+        metricsCorrelation.initModel(model, params);
+    }
+
+    @Test
+    public void initModel_WrongFunctionName() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("wrong function name");
+        MLModel mlModel = model.toBuilder().algorithm(FunctionName.KMEANS).build();
+        metricsCorrelation.initModel(mlModel, params);
     }
 
     private SearchResponse createSearchModelResponse(
@@ -377,6 +568,35 @@ public class MetricsCorrelationTest {
         return new SearchResponse(
                 new InternalSearchResponse(
                         new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
+                        InternalAggregations.EMPTY,
+                        new Suggest(Collections.emptyList()),
+                        new SearchProfileShardResults(Collections.emptyMap()),
+                        false,
+                        false,
+                        1
+                ),
+                "",
+                5,
+                5,
+                0,
+                100,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+        );
+    }
+
+    private SearchResponse createEmptySearchModelResponse(
+    ) throws IOException {
+        XContentBuilder content = builder();
+        content.startObject();
+        content.endObject();
+
+        SearchHit[] hits = new SearchHit[1];
+        hits[0] = new SearchHit(0, "", null, null).sourceRef(BytesReference.bytes(content));
+
+        return new SearchResponse(
+                new InternalSearchResponse(
+                        new SearchHits(hits, new TotalHits(0, TotalHits.Relation.EQUAL_TO), 1.0f),
                         InternalAggregations.EMPTY,
                         new Suggest(Collections.emptyList()),
                         new SearchProfileShardResults(Collections.emptyMap()),

@@ -145,7 +145,7 @@ public abstract class DLModelExecute implements MLExecutable {
                     }
                     ZipUtils.unzip(modelZipFile, modelPath);
                     boolean findModelFile = false;
-                    for (File file : pathFile.listFiles()) {
+                    for (File file : Objects.requireNonNull(pathFile.listFiles())) {
                         String name = file.getName();
                         if (name.endsWith(PYTORCH_FILE_EXTENSION) || name.endsWith(ONNX_FILE_EXTENSION)) {
                             if (findModelFile) {
