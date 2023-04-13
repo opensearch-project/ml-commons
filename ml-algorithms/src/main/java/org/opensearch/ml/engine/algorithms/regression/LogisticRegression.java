@@ -20,6 +20,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.contants.TribuoOutputType;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.opensearch.ml.engine.utils.TribuoUtil;
 import org.tribuo.MutableDataset;
@@ -192,7 +193,7 @@ public class LogisticRegression implements Trainable, Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         this.classificationModel = (org.tribuo.Model<Label>)ModelSerDeSer.deserialize(model);
     }
 

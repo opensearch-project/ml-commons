@@ -31,6 +31,8 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -50,7 +52,8 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()));
+        Encryptor encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
     @Test

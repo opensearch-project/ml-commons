@@ -96,6 +96,8 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -104,6 +106,7 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -153,6 +156,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private Long modelContentSize;
     @Mock
     private MLModelCacheHelper modelCacheHelper;
+    private Encryptor encryptor;
     private MLEngine mlEngine;
     @Mock
     ThresholdCircuitBreaker thresholdCircuitBreaker;
@@ -160,11 +164,14 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     DiscoveryNodeHelper nodeHelper;
     @Mock
     private ActionListener<String> actionListener;
+    @Mock
+    private ScriptService scriptService;
 
     @Before
     public void setup() throws URISyntaxException {
         MockitoAnnotations.openMocks(this);
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
+        encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
@@ -234,6 +241,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager = spy(
             new MLModelManager(
                 clusterService,
+                scriptService,
                 client,
                 threadPool,
                 xContentRegistry,

@@ -39,6 +39,8 @@ import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalcul
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -86,11 +88,13 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     MLEngine mlEngine;
     Settings settings;
     ClusterService clusterService;
+    private Encryptor encryptor;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        mlEngine = new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)));
+        encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)), encryptor);
         when(threadPool.executor(anyString())).thenReturn(executorService);
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);
