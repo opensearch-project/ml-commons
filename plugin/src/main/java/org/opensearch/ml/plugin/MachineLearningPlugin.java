@@ -7,6 +7,7 @@ package org.opensearch.ml.plugin;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 
 import java.util.Collection;
 import java.util.List;
@@ -107,6 +108,8 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -254,7 +257,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         Settings settings = environment.settings();
-        mlEngine = new MLEngine(environment.dataFiles()[0]);
+        String masterKey = ML_COMMONS_MASTER_SECRET_KEY.get(clusterService.getSettings());
+        Encryptor encryptor = new EncryptorImpl(masterKey);
+
+        mlEngine = new MLEngine(environment.dataFiles()[0], encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 
@@ -281,6 +287,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         modelHelper = new ModelHelper(mlEngine);
         mlModelManager = new MLModelManager(
             clusterService,
+            scriptService,
             client,
             threadPool,
             xContentRegistry,
