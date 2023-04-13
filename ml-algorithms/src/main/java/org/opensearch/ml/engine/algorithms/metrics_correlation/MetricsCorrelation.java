@@ -105,7 +105,7 @@ public class MetricsCorrelation extends DLModelExecute {
                             model.getModelState() != MLModelState.PARTIALLY_DEPLOYED) {
                         // if we find a model in the index but the model is not loaded into memory then we will
                         // load the model in memory
-                        deployModel(ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
+                        deployModel(modelInfo.get(MLModel.MODEL_ID_FIELD).toString(), ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
                     }
                 }
             }, e -> {
@@ -119,6 +119,14 @@ public class MetricsCorrelation extends DLModelExecute {
                     throw new RuntimeException(ex);
                 }
             }));
+        } else {
+            MLModel model = getModel(modelId);
+            if (model.getModelState() != MLModelState.DEPLOYED &&
+                    model.getModelState() != MLModelState.PARTIALLY_DEPLOYED) {
+                // if we find a model in the index but the model is not loaded into memory then we will
+                // load the model in memory
+                deployModel(modelId, ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
+            }
         }
 
         //We will be waiting here until actionListeners set the model id to the loadedModelId.
@@ -147,10 +155,16 @@ public class MetricsCorrelation extends DLModelExecute {
     @VisibleForTesting
     void searchModel(SearchRequest modelSearchRequest, ActionListener<Map<String, Object>> listener) {
         client.execute(MLModelSearchAction.INSTANCE, modelSearchRequest, ActionListener.wrap(searchModelResponse -> {
-            Map<String, Object> modelInfo;
+            Map<String, Object> modelInfo = null;
             if (searchModelResponse != null) {
                 SearchHit[] searchHits = searchModelResponse.getHits().getHits();
-                modelInfo = searchHits[0].getSourceAsMap();
+                for (int i = 0; i < searchHits.length; i++) {
+                    // access the current element
+                    SearchHit currentHit = searchHits[i];
+                    if (currentHit.getSourceAsMap().get(MLModel.MODEL_ID_FIELD) != null) {
+                        modelInfo = searchHits[i].getSourceAsMap();
+                    }
+                }
                 listener.onResponse(modelInfo);
             }
         }, e -> {
@@ -187,7 +201,7 @@ public class MetricsCorrelation extends DLModelExecute {
     }
 
     @VisibleForTesting
-    void deployModel(ActionListener<MLDeployModelResponse> listener) {
+    void deployModel(final String modelId, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest loadRequest = MLDeployModelRequest
                 .builder()
                 .modelId(modelId)

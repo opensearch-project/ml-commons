@@ -479,7 +479,7 @@ public class MetricsCorrelationTest {
             assert !mlDeployModelRequestTemp.isDispatchTask();
             return mlDeployModelResponse;
         }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
-        metricsCorrelation.deployModel(mlDeployModelResponseActionListener);
+        metricsCorrelation.deployModel(modelId, mlDeployModelResponseActionListener);
         verify(mlDeployModelResponseActionListener).onResponse(mlDeployModelResponse);
     }
 
@@ -491,7 +491,7 @@ public class MetricsCorrelationTest {
             deployModelResponseListener.onFailure(ex);
             return null;
         }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
-        metricsCorrelation.deployModel(mlDeployModelResponseActionListener);
+        metricsCorrelation.deployModel(modelId, mlDeployModelResponseActionListener);
         verify(mlDeployModelResponseActionListener).onFailure(ex);
     }
 
