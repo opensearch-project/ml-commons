@@ -29,7 +29,7 @@ public class MLRegisterModelResponseTest {
     public void writeTo_Success() throws IOException {
         // Setup
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, status);
+        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, null, status);
         // Run the test
         response.writeTo(bytesStreamOutput);
         MLRegisterModelResponse parsedResponse = new MLRegisterModelResponse(bytesStreamOutput.bytes().streamInput());
@@ -41,7 +41,7 @@ public class MLRegisterModelResponseTest {
     @Test
     public void testToXContent() throws IOException {
         // Setup
-        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, status);
+        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, null, status);
         // Run the test
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);

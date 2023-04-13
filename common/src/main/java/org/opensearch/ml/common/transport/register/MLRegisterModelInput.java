@@ -14,6 +14,8 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLCommonsClassLoader;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -41,6 +43,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String DEPLOY_MODEL_FIELD = "deploy_model";
     public static final String MODEL_NODE_IDS_FIELD = "model_node_ids";
+    public static final String CONNECTOR_FIELD = "connector";
 
     private FunctionName functionName;
     private String modelName;
@@ -53,6 +56,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private boolean deployModel;
     private String[] modelNodeIds;
 
+    private Connector connector;
+
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
                                 String modelName,
@@ -62,7 +67,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 MLModelFormat modelFormat,
                                 MLModelConfig modelConfig,
                                 boolean deployModel,
-                                String[] modelNodeIds) {
+                                String[] modelNodeIds,
+                                Connector connector) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
         } else {
@@ -74,11 +80,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (version == null) {
             throw new IllegalArgumentException("model version is null");
         }
-        if (modelFormat == null) {
-            throw new IllegalArgumentException("model format is null");
-        }
-        if (url != null && modelConfig == null) {
-            throw new IllegalArgumentException("model config is null");
+        if (functionName != FunctionName.REMOTE) {
+            if (modelFormat == null) {
+                throw new IllegalArgumentException("model format is null");
+            }
+            if (url != null && modelConfig == null) {
+                throw new IllegalArgumentException("model config is null");
+            }
         }
         this.modelName = modelName;
         this.version = version;
@@ -88,6 +96,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.modelConfig = modelConfig;
         this.deployModel = deployModel;
         this.modelNodeIds = modelNodeIds;
+        this.connector = connector;
     }
 
 
@@ -105,6 +114,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         this.deployModel = in.readBoolean();
         this.modelNodeIds = in.readOptionalStringArray();
+        if (in.readBoolean()) {
+            String connectorName = in.readString();
+            this.connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, in}, String.class, StreamInput.class);
+        }
     }
 
     @Override
@@ -128,6 +141,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         out.writeBoolean(deployModel);
         out.writeOptionalStringArray(modelNodeIds);
+        if (connector != null) {
+            out.writeBoolean(true);
+            out.writeString(connector.getName());
+            connector.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -152,6 +172,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (modelNodeIds != null) {
             builder.field(MODEL_NODE_IDS_FIELD, modelNodeIds);
         }
+        if (connector != null) {
+            builder.field(CONNECTOR_FIELD, connector);
+        }
         builder.endObject();
         return builder;
     }
@@ -163,6 +186,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
         List<String> modelNodeIds = new ArrayList<>();
+        Connector connector = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -184,6 +208,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
+                case CONNECTOR_FIELD:
+                    parser.nextToken();
+                    String connectorName = parser.currentName();
+                    parser.nextToken();
+                    connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
+                    parser.nextToken();
+                    break;
                 case MODEL_NODE_IDS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
@@ -195,7 +226,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
+        return new MLRegisterModelInput(functionName, modelName, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -207,6 +238,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
         List<String> modelNodeIds = new ArrayList<>();
+        Connector connector = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -229,6 +261,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case URL_FIELD:
                     url = parser.text();
                     break;
+                case CONNECTOR_FIELD:
+                    parser.nextToken();
+                    String connectorName = parser.currentName();
+                    parser.nextToken();
+                    connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
+                    parser.nextToken();
+                    break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
@@ -246,6 +285,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
+        return new MLRegisterModelInput(functionName, name, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector);
     }
 }

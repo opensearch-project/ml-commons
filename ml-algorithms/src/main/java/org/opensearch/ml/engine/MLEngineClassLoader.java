@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.annotation.Function;
 import org.reflections.Reflections;
 
@@ -29,6 +30,7 @@ public class MLEngineClassLoader {
      * This map contains class mapping of enum types like {@link FunctionName}
      */
     private static Map<Enum<?>, Class<?>> mlAlgoClassMap = new HashMap<>();
+    private static Map<String, Class<?>> connectorExecutorMap = new HashMap<>();
 
     /**
      * This map contains pre-created thread-safe ML objects.
@@ -79,10 +81,20 @@ public class MLEngineClassLoader {
                 mlAlgoClassMap.put(functionName, clazz);
             }
         }
+
+        Set<Class<?>> connectorExecutorClasses = reflections.getTypesAnnotatedWith(ConnectorExecutor.class);
+        // Load connector class
+        for (Class<?> clazz : connectorExecutorClasses) {
+            ConnectorExecutor connectorExecutor = clazz.getAnnotation(ConnectorExecutor.class);
+            String connectorName = connectorExecutor.value();
+            if (connectorName != null) {
+                connectorExecutorMap.put(connectorName, clazz);
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends Enum<T>, S, I extends Object> S initInstance(T type, I in, Class<?> constructorParamClass) {
+    public static <T, S, I extends Object> S initInstance(T type, I in, Class<?> constructorParamClass) {
         return initInstance(type, in, constructorParamClass, null);
     }
 
@@ -90,7 +102,7 @@ public class MLEngineClassLoader {
      * Get instance from registered ML objects. If not registered, will create new instance.
      * When create new instance, will try constructor with "constructorParamClass" first. If
      * not found, will try default constructor without input parameter.
-     * @param type enum type
+     * @param type type
      * @param in input parameter of constructor
      * @param constructorParamClass constructor parameter class
      * @param properties class properties
@@ -100,11 +112,14 @@ public class MLEngineClassLoader {
      * @return
      */
     @SuppressWarnings("unchecked")
-    public static <T extends Enum<T>, S, I extends Object> S initInstance(T type, I in, Class<?> constructorParamClass, Map<String, Object> properties) {
+    public static <T, S, I extends Object> S initInstance(T type, I in, Class<?> constructorParamClass, Map<String, Object> properties) {
         if (mlObjects.containsKey(type)) {
             return (S) mlObjects.get(type);
         }
         Class<?> clazz = mlAlgoClassMap.get(type);
+        if (clazz == null) {
+            clazz = connectorExecutorMap.get(type);
+        }
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
         }

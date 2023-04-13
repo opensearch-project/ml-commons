@@ -6,6 +6,7 @@
 package org.opensearch.ml.common;
 
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ml.common.annotation.Connector;
 import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
@@ -32,6 +33,7 @@ public class MLCommonsClassLoader {
     private static Map<Enum<?>, Class<?>> executeInputClassMap = new HashMap<>();
     private static Map<Enum<?>, Class<?>> executeOutputClassMap = new HashMap<>();
     private static Map<Enum<?>, Class<?>> mlInputClassMap = new HashMap<>();
+    private static Map<String, Class<?>> connectorClassMap = new HashMap<>();
 
     static {
         try {
@@ -54,8 +56,23 @@ public class MLCommonsClassLoader {
             loadExecuteInputClassMapping();
             loadExecuteOutputClassMapping();
             loadMLInputClassMapping();
+            loadConnectorClassMapping();
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
+        }
+    }
+
+    private static void loadConnectorClassMapping() {
+        Reflections reflections = new Reflections("org.opensearch.ml.common.connector");
+        Set<Class<?>> classes = reflections.getTypesAnnotatedWith(Connector.class);
+        for (Class<?> clazz : classes) {
+            Connector connector = clazz.getAnnotation(Connector.class);
+            if (connector != null) {
+                String name = connector.value();
+                if (name != null && name.length() > 0) {
+                    connectorClassMap.put(name, clazz);
+                }
+            }
         }
     }
 
@@ -195,7 +212,7 @@ public class MLCommonsClassLoader {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Enum<T>, S, I extends Object> S init(Map<Enum<?>, Class<?>> map, T type, I in, Class<?> constructorParamClass) {
+    private static <T, S, I extends Object> S init(Map<T, Class<?>> map, T type, I in, Class<?> constructorParamClass) {
         Class<?> clazz = map.get(type);
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
@@ -205,8 +222,8 @@ public class MLCommonsClassLoader {
             return (S) constructor.newInstance(in);
         } catch (Exception e) {
             Throwable cause = e.getCause();
-            if (cause instanceof MLException) {
-                throw (MLException)cause;
+            if (cause instanceof MLException || cause instanceof IllegalArgumentException) {
+                throw (RuntimeException)cause;
             } else {
                 log.error("Failed to init instance for type " + type, e);
                 return null;
@@ -218,14 +235,19 @@ public class MLCommonsClassLoader {
         return mlInputClassMap.containsKey(functionName);
     }
 
+    public static <S> S initConnector(String name, Object[] initArgs,
+                                      Class<?>... constructorParameterTypes) {
+        return init(connectorClassMap, name, initArgs, constructorParameterTypes);
+    }
+
     @SuppressWarnings("unchecked")
     public static <T extends Enum<T>, S> S initMLInput(T type, Object[] initArgs,
                                                        Class<?>... constructorParameterTypes) {
         return init(mlInputClassMap, type, initArgs, constructorParameterTypes);
     }
 
-    private static <T extends Enum<T>, S> S init(Map<Enum<?>, Class<?>> map, T type,
-                                                 Object[] initArgs, Class<?>... constructorParameterTypes) {
+    private static <T, S> S init(Map<T, Class<?>> map, T type,
+                                 Object[] initArgs, Class<?>... constructorParameterTypes) {
         Class<?> clazz = map.get(type);
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);

@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
@@ -80,6 +81,7 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
@@ -87,6 +89,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
@@ -101,6 +104,7 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.rest.RestStatus;
+import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -119,6 +123,7 @@ public class MLModelManager {
 
     private final Client client;
     private final ClusterService clusterService;
+    private final ScriptService scriptService;
     private ThreadPool threadPool;
     private NamedXContentRegistry xContentRegistry;
     private ModelHelper modelHelper;
@@ -147,6 +152,7 @@ public class MLModelManager {
 
     public MLModelManager(
         ClusterService clusterService,
+        ScriptService scriptService,
         Client client,
         ThreadPool threadPool,
         NamedXContentRegistry xContentRegistry,
@@ -165,6 +171,7 @@ public class MLModelManager {
         this.xContentRegistry = xContentRegistry;
         this.modelHelper = modelHelper;
         this.clusterService = clusterService;
+        this.scriptService = scriptService;
         this.modelCacheHelper = modelCacheHelper;
         this.mlStats = mlStats;
         this.mlCircuitBreakerService = mlCircuitBreakerService;
@@ -242,6 +249,10 @@ public class MLModelManager {
      * @param mlTask      ML task
      */
     public void registerMLModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
+        registerMLModel(registerModelInput, mlTask, null);
+    }
+
+    public void registerMLModel(MLRegisterModelInput registerModelInput, MLTask mlTask, ActionListener<MLRegisterModelResponse> listener) {
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
         checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
         try {
@@ -249,12 +260,78 @@ public class MLModelManager {
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             if (registerModelInput.getUrl() != null) {
                 registerModelFromUrl(registerModelInput, mlTask);
+            } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE) {
+                indexRemoteModel(registerModelInput, mlTask, listener);
             } else {
                 registerPrebuiltModel(registerModelInput, mlTask);
             }
         } catch (Exception e) {
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
             handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+            if (listener != null) {
+                listener.onFailure(e);
+            }
+        } finally {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+        }
+    }
+
+    private void indexRemoteModel(
+        MLRegisterModelInput registerModelInput,
+        MLTask mlTask,
+        ActionListener<MLRegisterModelResponse> listener
+    ) {
+        String taskId = mlTask.getTaskId();
+        FunctionName functionName = mlTask.getFunctionName();
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+
+            mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            String modelName = registerModelInput.getModelName();
+            String version = registerModelInput.getVersion();
+            Instant now = Instant.now();
+            registerModelInput.getConnector().encrypt((credential) -> mlEngine.encrypt(credential));
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                MLModel mlModelMeta = MLModel
+                    .builder()
+                    .name(modelName)
+                    .algorithm(functionName)
+                    .version(version)
+                    .description(registerModelInput.getDescription())
+                    .modelFormat(registerModelInput.getModelFormat())
+                    .modelState(MLModelState.REGISTERED)
+                    .connector(registerModelInput.getConnector())
+                    .modelConfig(registerModelInput.getModelConfig())
+                    .createdTime(now)
+                    .lastUpdateTime(now)
+                    .build();
+                IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
+                indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                // create model meta doc
+                ActionListener<IndexResponse> indexListener = ActionListener.wrap(modelMetaRes -> {
+                    String modelId = modelMetaRes.getId();
+                    listener.onResponse(new MLRegisterModelResponse(taskId, modelId, MLTaskState.CREATED.name()));
+                    mlTask.setModelId(modelId);
+                    log.info("create new model meta doc {} for upload task {}", modelId, taskId);
+                    mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                }, e -> {
+                    log.error("Failed to index model meta doc", e);
+                    handleException(functionName, taskId, e);
+                    listener.onFailure(e);
+                });
+
+                client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, indexListener));
+            }, e -> {
+                log.error("Failed to init model index", e);
+                handleException(functionName, taskId, e);
+                listener.onFailure(e);
+            }));
+        } catch (Exception e) {
+            logException("Failed to upload model", e, log);
+            handleException(functionName, taskId, e);
+            listener.onFailure(e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         }
@@ -524,8 +601,10 @@ public class MLModelManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                if (!FunctionName.isDLModel(mlModel.getAlgorithm())) {// deploy model trained by built-in algorithm like kmeans
-                    Predictable predictable = mlEngine.deploy(mlModel, null);
+                if (FunctionName.REMOTE == mlModel.getAlgorithm() || !FunctionName.isDLModel(mlModel.getAlgorithm())) {
+                    Map<String, Object> params = ImmutableMap.of(ML_ENGINE, mlEngine, SCRIPT_SERVICE, scriptService);
+                    // deploy remote model or model trained by built-in algorithm like kmeans
+                    Predictable predictable = mlEngine.deploy(mlModel, params);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                     modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
