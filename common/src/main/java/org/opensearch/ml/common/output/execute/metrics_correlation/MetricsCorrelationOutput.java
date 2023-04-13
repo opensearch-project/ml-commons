@@ -26,10 +26,10 @@ import java.util.List;
  */
 @Data
 @EqualsAndHashCode(callSuper=false)
-@MLAlgoOutput(MLOutputType.MODEL_TENSOR)
+@MLAlgoOutput(MLOutputType.MCORR_TENSOR)
 public class MetricsCorrelationOutput extends MLOutput {
 
-    private static final MLOutputType OUTPUT_TYPE = MLOutputType.MODEL_TENSOR;
+    private static final MLOutputType OUTPUT_TYPE = MLOutputType.MCORR_TENSOR;
     private List<MCorrModelTensors> modelOutput;
 
     public static final String INFERENCE_RESULT_FIELD = "inference_results";
@@ -72,6 +72,8 @@ public class MetricsCorrelationOutput extends MLOutput {
 
     @SneakyThrows
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
+        System.out.println("MetricsCorrelationOutput toXContent: " + modelOutput.toArray().toString());
+
         if (modelOutput != null && modelOutput.size() > 0) {
             builder.startArray(INFERENCE_RESULT_FIELD);
             for (MCorrModelTensors output : modelOutput) {

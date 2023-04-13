@@ -9,5 +9,6 @@ public enum MLOutputType {
     TRAINING,
     PREDICTION,
     SAMPLE_ALGO,
-    MODEL_TENSOR
+    MODEL_TENSOR,
+    MCORR_TENSOR
 }

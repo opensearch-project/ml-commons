@@ -24,6 +24,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import org.opensearch.ml.common.output.MLOutputType;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 
 @Getter
 @ToString
@@ -41,9 +43,17 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
     public MLExecuteTaskResponse(StreamInput in) throws IOException {
         super(in);
         this.functionName = in.readEnum(FunctionName.class);
-        if (in.readBoolean()) {
-            output = MLCommonsClassLoader.initExecuteOutputInstance(functionName, in, StreamInput.class);
+        if (FunctionName.METRICS_CORRELATION.equals(this.functionName)) {
+            MLOutputType outputType = in.readEnum(MLOutputType.class);
+            if (outputType == MLOutputType.MCORR_TENSOR) {
+                output = MLCommonsClassLoader.initMLInstance(MLOutputType.MCORR_TENSOR, in, StreamInput.class);
+            }
+        } else {
+            if (in.readBoolean()) {
+                output = MLCommonsClassLoader.initExecuteOutputInstance(functionName, in, StreamInput.class);
+            }
         }
+
     }
 
     @Override
@@ -78,6 +88,9 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
         builder.startObject();
         builder.field("function_name", functionName);
         builder.startObject("output");
+
+        System.out.println("MLExecuteTaskResponse toXContent " + output.toString());
+
         output.toXContent(builder, params);
         builder.endObject();
         builder.endObject();

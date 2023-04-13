@@ -80,7 +80,7 @@ public class MetricsCorrelationOutputTest {
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
-        assertEquals(MLOutputType.MODEL_TENSOR, outputType);
+        assertEquals(MLOutputType.MCORR_TENSOR, outputType);
         verify.accept(new MetricsCorrelationOutput(streamInput));
     }
 }
