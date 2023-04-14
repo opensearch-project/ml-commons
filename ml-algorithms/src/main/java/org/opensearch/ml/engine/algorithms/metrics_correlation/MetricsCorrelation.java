@@ -161,11 +161,11 @@ public class MetricsCorrelation extends DLModelExecute {
             Map<String, Object> modelInfo = null;
             if (searchModelResponse != null) {
                 SearchHit[] searchHits = searchModelResponse.getHits().getHits();
-                for (int i = 0; i < searchHits.length; i++) {
+                for (SearchHit currentHit : searchHits) {
                     // access the current element
-                    SearchHit currentHit = searchHits[i];
                     if (currentHit.getSourceAsMap().get(MLModel.MODEL_ID_FIELD) != null) {
-                        modelInfo = searchHits[i].getSourceAsMap();
+                        modelInfo = currentHit.getSourceAsMap();
+                        break;
                     }
                 }
                 listener.onResponse(modelInfo);

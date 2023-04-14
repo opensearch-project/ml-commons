@@ -32,7 +32,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.opensearch.ml.engine.ModelHelper.*;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
+import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
+import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 @Log4j2

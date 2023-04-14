@@ -78,9 +78,6 @@ public class MLExecuteTaskResponse extends ActionResponse implements ToXContentO
         builder.startObject();
         builder.field("function_name", functionName);
         builder.startObject("output");
-
-        System.out.println("MLExecuteTaskResponse toXContent " + output.toString());
-
         output.toXContent(builder, params);
         builder.endObject();
         builder.endObject();
