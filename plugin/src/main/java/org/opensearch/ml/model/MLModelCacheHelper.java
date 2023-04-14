@@ -20,6 +20,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLModelProfile;
 
@@ -107,6 +108,19 @@ public class MLModelCacheHelper {
     public synchronized void setPredictor(String modelId, Predictable predictor) {
         MLModelCache modelCache = getExistingModelCache(modelId);
         modelCache.setPredictor(predictor);
+    }
+
+    public synchronized void setMLExecutor(String modelId, MLExecutable mlExecutor) {
+        MLModelCache modelCache = getExistingModelCache(modelId);
+        modelCache.setExecutor(mlExecutor);
+    }
+
+    public MLExecutable getMLExecutor(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getExecutor();
     }
 
     /**

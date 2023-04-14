@@ -7,6 +7,7 @@ package org.opensearch.ml.action.models;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
@@ -18,6 +19,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -82,7 +84,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLModel mlModel = MLModel.parse(parser);
+                        GetResponse getResponse = r;
+                        String algorithmName = "";
+                        if (getResponse.getSource() != null && getResponse.getSource().get(ALGORITHM_FIELD) != null) {
+                            algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
+                        }
+                        MLModel mlModel = MLModel.parse(parser, algorithmName);
                         MLModelState mlModelState = mlModel.getModelState();
                         if (mlModelState.equals(MLModelState.LOADED)
                             || mlModelState.equals(MLModelState.LOADING)

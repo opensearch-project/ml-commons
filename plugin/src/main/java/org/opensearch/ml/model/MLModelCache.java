@@ -15,6 +15,7 @@ import java.util.stream.DoubleStream;
 
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 
@@ -30,6 +31,7 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLModelState modelState;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLExecutable executor;
     private final Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
     private final Queue<Double> modelInferenceDurationQueue;
@@ -87,6 +89,9 @@ public class MLModelCache {
         predictRequestDurationQueue.clear();
         if (predictor != null) {
             predictor.close();
+        }
+        if (executor != null) {
+            executor.close();
         }
     }
 

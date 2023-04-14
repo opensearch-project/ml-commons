@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine;
 
+import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.output.Output;
 
@@ -15,6 +16,5 @@ public interface Executable {
      * @param input input data
      * @return execution result
      */
-    Output execute(Input input);
-
+    Output execute(Input input) throws ExecuteException;
 }

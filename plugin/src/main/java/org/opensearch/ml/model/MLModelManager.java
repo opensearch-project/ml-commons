@@ -11,6 +11,7 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
@@ -55,6 +56,7 @@ import java.util.function.Supplier;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.IndicesOptions;
@@ -87,6 +89,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.utils.FileUtils;
@@ -521,7 +524,8 @@ public class MLModelManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                if (!FunctionName.isDLModel(mlModel.getAlgorithm())) {// deploy model trained by built-in algorithm like kmeans
+                if (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION) {
+                    // deploy model trained by built-in algorithm like kmeans
                     Predictable predictable = mlEngine.deploy(mlModel, null);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
@@ -542,16 +546,31 @@ public class MLModelManager {
                     log.debug("Model content matches original hash value, continue deploying");
                     Map<String, Object> params = ImmutableMap
                         .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
-                    Predictable predictable = mlEngine.deploy(mlModel, params);
-                    try {
-                        modelCacheHelper.setPredictor(modelId, predictable);
-                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
-                        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                        listener.onResponse("successful");
-                    } catch (Exception e) {
-                        log.error("Failed to add predictor to cache", e);
-                        predictable.close();
-                        listener.onFailure(e);
+                    if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
+                        MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
+                        try {
+                            modelCacheHelper.setMLExecutor(modelId, mlExecutable);
+                            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+                            listener.onResponse("successful");
+                        } catch (Exception e) {
+                            log.error("Failed to add predictor to cache", e);
+                            mlExecutable.close();
+                            listener.onFailure(e);
+                        }
+
+                    } else {
+                        Predictable predictable = mlEngine.deploy(mlModel, params);
+                        try {
+                            modelCacheHelper.setPredictor(modelId, predictable);
+                            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+                            modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+                            listener.onResponse("successful");
+                        } catch (Exception e) {
+                            log.error("Failed to add predictor to cache", e);
+                            predictable.close();
+                            listener.onFailure(e);
+                        }
                     }
                 }, e -> {
                     log.error("Failed to retrieve model " + modelId, e);
@@ -598,7 +617,10 @@ public class MLModelManager {
             if (r != null && r.isExists()) {
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLModel mlModel = MLModel.parse(parser);
+                    GetResponse getResponse = r;
+                    String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
+
+                    MLModel mlModel = MLModel.parse(parser, algorithmName);
                     mlModel.setModelId(modelId);
                     listener.onResponse(mlModel);
                 } catch (Exception e) {
