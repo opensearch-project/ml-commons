@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine;
 
 import lombok.Getter;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
@@ -112,6 +113,12 @@ public class MLEngine {
         return predictable;
     }
 
+    public MLExecutable deployExecute(MLModel mlModel, Map<String, Object> params) {
+        MLExecutable executable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
+        executable.initModel(mlModel, params);
+        return executable;
+    }
+
     public MLOutput predict(Input input, MLModel model) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
@@ -132,13 +139,21 @@ public class MLEngine {
         return trainAndPredictable.trainAndPredict(mlInput);
     }
 
-    public Output execute(Input input) {
+    public Output execute(Input input) throws Exception {
         validateInput(input);
-        Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
-        if (executable == null) {
-            throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
+        if (input.getFunctionName() == FunctionName.METRICS_CORRELATION) {
+            MLExecutable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
+            if (executable == null) {
+                throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
+            }
+            return executable.execute(input);
+        } else {
+            Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
+            if (executable == null) {
+                throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
+            }
+            return executable.execute(input);
         }
-        return executable.execute(input);
     }
 
     private void validateMLInput(Input input) {
