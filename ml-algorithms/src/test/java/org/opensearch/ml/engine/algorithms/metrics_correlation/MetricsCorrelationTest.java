@@ -115,8 +115,6 @@ public class MetricsCorrelationTest {
 
     private final String modelId = "modelId";
 
-    private static final Logger log = LogManager.getLogger(MetricsCorrelation.class);
-
     MLTask mlTask;
 
     Map<String, Object> params = new HashMap<>();
@@ -132,7 +130,7 @@ public class MetricsCorrelationTest {
         djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
         mlEngine = new MLEngine(djlCachePath);
         modelConfig = MetricsCorrelationModelConfig.builder()
-                .modelType("custom")
+                .modelType(MetricsCorrelation.MODEL_TYPE)
                 .allConfig(null)
                 .build();
 
@@ -151,8 +149,6 @@ public class MetricsCorrelationTest {
                 .taskId("task_id")
                 .modelId(modelId)
                 .build();
-
-
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("mcorr.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -169,6 +165,34 @@ public class MetricsCorrelationTest {
         extendedInputData.add(new float[]{1.3037996f, 2.7976995f, -0.12042701f, 1.3688855f, 1.6955005f, -2.2575269f, 0.080582514f, 3.011721f, -0.4320283f, 3.2440786f, -1.0321085f, 1.2346085f, -2.3152106f, -0.9783513f, 0.6837618f, 1.5320586f, -1.6148578f, -0.94538075f, 0.55978125f, -4.7430468f});
         extendedInputData.add(new float[]{1.8792984f, -3.1561708f, -0.8443318f, -1.998743f, -0.6319316f, 2.4614046f, -0.44511616f, 0.82785237f, 1.7911717f, -1.8172283f, 0.46574894f, -1.8691323f, 3.9586513f, 0.8078605f, 0.9049874f, 5.4086914f, -0.7425967f, -0.20115769f, -1.197923f, 2.741789f});
         extendedInput = MetricsCorrelationInput.builder().inputData(extendedInputData).build();
+    }
+
+    @Test
+    public void testWhenModelIdNotNullButModelIsNotDeployed() throws ExecuteException {
+        metricsCorrelation.initModel(model, params);
+        MLModelGetResponse response = new MLModelGetResponse(model);
+        ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
+        when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
+        when(mockedFuture.actionGet(anyLong())).thenReturn(response);
+
+        doAnswer(invocation -> {
+            MLModel smallModel = model.toBuilder().modelConfig(modelConfig).modelState(MLModelState.DEPLOYED).build();
+            MLModelGetResponse responseTemp = new MLModelGetResponse(smallModel);
+            ActionFuture<MLModelGetResponse> mockedFutureTemp = mock(ActionFuture.class);
+            MLTaskGetResponse taskResponse = new MLTaskGetResponse(mlTask);
+            ActionFuture<MLTaskGetResponse> mockedFutureResponse = mock(ActionFuture.class);
+            when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
+            when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
+            when(mockedFutureTemp.actionGet(anyLong())).thenReturn(responseTemp);
+
+            metricsCorrelation.initModel(smallModel, params);
+            return null;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
+
+        MetricsCorrelationOutput output = metricsCorrelation.execute(input);
+        List<MCorrModelTensors> mlModelOutputs = output.getModelOutput();
+        assert mlModelOutputs.size() == 1;
+        assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
     }
 
     @Test
@@ -192,8 +216,6 @@ public class MetricsCorrelationTest {
         ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
         when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
         when(mockedFuture.actionGet(anyLong())).thenReturn(response);
-
-
         doAnswer(invocation -> {
             metricsCorrelation.initModel(smallModel, params);
             return null;
@@ -291,10 +313,6 @@ public class MetricsCorrelationTest {
         when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
         when(mockedFuture.actionGet(anyLong())).thenReturn(responseBeforeDeployed);
 
-//        ActionFuture<MLModelGetResponse> mockedFutureNext = mock(ActionFuture.class);
-//        when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFutureNext);
-//        when(mockedFutureNext.actionGet(anyLong())).thenReturn(responseAfterDeployed);
-
         ActionFuture<MLTaskGetResponse> mockedFutureResponse = mock(ActionFuture.class);
         when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
         when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
@@ -390,7 +408,7 @@ public class MetricsCorrelationTest {
         assert FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm());
         assert MCORR_ML_VERSION.equals(mlModel.getVersion());
         MetricsCorrelationModelConfig modelConfig1 = (MetricsCorrelationModelConfig) model.getModelConfig();
-        assert "custom".equals(modelConfig1.getModelType());
+        assert MetricsCorrelation.MODEL_TYPE.equals(modelConfig1.getModelType());
         assertNull(modelConfig1.getAllConfig());
     }
 
@@ -460,7 +478,7 @@ public class MetricsCorrelationTest {
             assert FunctionName.METRICS_CORRELATION.name().equals(mlRegisterModelInput.getModelName());
             assert MCORR_ML_VERSION.equals(mlRegisterModelInput.getVersion());
             MLModelConfig modelConfig = mlRegisterModelInput.getModelConfig();
-            assert "custom".equals(modelConfig.getModelType());
+            assert MetricsCorrelation.MODEL_TYPE.equals(modelConfig.getModelType());
             assertNull(modelConfig.getAllConfig());
             assert MetricsCorrelation.MCORR_MODEL_URL.equals(mlRegisterModelInput.getUrl());
             return mlRegisterModelResponse;

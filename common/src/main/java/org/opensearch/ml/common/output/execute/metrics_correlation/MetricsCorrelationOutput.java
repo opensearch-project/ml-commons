@@ -7,15 +7,16 @@ package org.opensearch.ml.common.output.execute.metrics_correlation;
 
 import lombok.Builder;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.annotation.MLAlgoOutput;
-import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.output.MLOutputType;
+import org.opensearch.ml.common.output.Output;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,10 +25,11 @@ import java.util.List;
 /**
  * Output of metrics correlation algorithm results
  */
+
+@Log4j2
 @Data
-@EqualsAndHashCode(callSuper=false)
-@MLAlgoOutput(MLOutputType.MCORR_TENSOR)
-public class MetricsCorrelationOutput extends MLOutput {
+@ExecuteOutput(algorithms={FunctionName.METRICS_CORRELATION})
+public class MetricsCorrelationOutput implements Output {
 
     private static final MLOutputType OUTPUT_TYPE = MLOutputType.MCORR_TENSOR;
     private List<MCorrModelTensors> modelOutput;
@@ -36,12 +38,10 @@ public class MetricsCorrelationOutput extends MLOutput {
 
     @Builder
     public MetricsCorrelationOutput(List<MCorrModelTensors> modelOutput) {
-        super(OUTPUT_TYPE);
         this.modelOutput = modelOutput;
     }
 
     public MetricsCorrelationOutput(StreamInput in) throws IOException {
-        super(OUTPUT_TYPE);
         if (in.readBoolean()) {
             modelOutput = new ArrayList<>();
             int size = in.readInt();
@@ -53,7 +53,6 @@ public class MetricsCorrelationOutput extends MLOutput {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        super.writeTo(out);
         if (modelOutput != null && modelOutput.size() > 0) {
             out.writeBoolean(true);
             out.writeInt(modelOutput.size());
@@ -65,15 +64,8 @@ public class MetricsCorrelationOutput extends MLOutput {
         }
     }
 
-    @Override
-    protected MLOutputType getType() {
-        return OUTPUT_TYPE;
-    }
-
     @SneakyThrows
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
-        System.out.println("MetricsCorrelationOutput toXContent: " + modelOutput.toArray().toString());
-
         if (modelOutput != null && modelOutput.size() > 0) {
             builder.startArray(INFERENCE_RESULT_FIELD);
             for (MCorrModelTensors output : modelOutput) {

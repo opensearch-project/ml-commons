@@ -6,18 +6,16 @@ import ai.djl.engine.Engine;
 import ai.djl.inference.Predictor;
 import ai.djl.repository.zoo.Criteria;
 import ai.djl.repository.zoo.ZooModel;
-import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.common.exception.ExecuteException;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
@@ -34,9 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_FILE_EXTENSION;
+import static org.opensearch.ml.engine.ModelHelper.*;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 @Log4j2
@@ -53,7 +49,7 @@ public abstract class DLModelExecute implements MLExecutable {
     protected Device[] devices;
     protected AtomicInteger nextDevice = new AtomicInteger(0);
 
-    public abstract MLOutput execute(Input input) throws ExecuteException;
+    public abstract Output execute(Input input) throws ExecuteException;
 
     protected Predictor<float[][], ai.djl.modality.Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();
@@ -97,7 +93,6 @@ public abstract class DLModelExecute implements MLExecutable {
                 modelId,
                 model.getName(),
                 model.getVersion(),
-                model.getModelConfig(),
                 engine
         );
     }
@@ -119,10 +114,18 @@ public abstract class DLModelExecute implements MLExecutable {
 
     public abstract Translator getTranslator();
 
-    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
-
+    /**
+     * TODO: This method is mostly similar to the loadModel of the DLMODEL class. While most of the
+     *  functionalities are similar we will refactor this to have a parent class in the next release with
+     *  more breaking down into smaller functions.
+     *
+     * @param modelZipFile zip file of the model
+     * @param modelId id of the model
+     * @param modelName name of the model
+     * @param version version of the model
+     * @param engine engine where model will be run. For now we are supporting only pytorch engine only.
+     */
     private void loadModel(File modelZipFile, String modelId, String modelName, String version,
-                           MLModelConfig modelConfig,
                            String engine) {
         try {
             List<Predictor<ai.djl.modality.Input, ai.djl.modality.Output>> predictorList = new ArrayList<>();
@@ -179,9 +182,6 @@ public abstract class DLModelExecute implements MLExecutable {
                         Predictor<ai.djl.modality.Input, ai.djl.modality.Output> predictor = model.newPredictor();
                         predictorList.add(predictor);
                         modelList.add(model);
-
-                        // First request takes longer time. Predict once to warm up model.
-                        warmUp(predictor, modelId, modelConfig);
                     }
                     if (predictorList.size() > 0) {
                         this.predictors = predictorList.toArray(new Predictor[0]);

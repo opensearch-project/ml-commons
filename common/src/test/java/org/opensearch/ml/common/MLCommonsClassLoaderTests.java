@@ -20,14 +20,13 @@ import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.nlp.TextDocsMLInput;
-import org.opensearch.ml.common.output.MLOutputType;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.output.Output;
-import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
@@ -134,9 +133,7 @@ public class MLCommonsClassLoaderTests {
         BytesStreamOutput bytesStreamOutputMcorrOutput = new BytesStreamOutput();
         output.writeTo(bytesStreamOutputMcorrOutput);
         StreamInput streamInputForOutput = bytesStreamOutputMcorrOutput.bytes().streamInput();
-        MLOutputType outputType = streamInputForOutput.readEnum(MLOutputType.class);
-        assertEquals(MLOutputType.MCORR_TENSOR, outputType);
-        MetricsCorrelationOutput mcorrOutput = MLCommonsClassLoader.initMLInstance(MLOutputType.MCORR_TENSOR, streamInputForOutput, StreamInput.class);
+        MetricsCorrelationOutput mcorrOutput = MLCommonsClassLoader.initExecuteOutputInstance(FunctionName.METRICS_CORRELATION, streamInputForOutput, StreamInput.class);
 
         assertEquals(1, mcorrOutput.getModelOutput().size());
         MCorrModelTensors testmodelTensors = mcorrOutput.getModelOutput().get(0);

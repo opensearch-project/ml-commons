@@ -7,6 +7,7 @@ package org.opensearch.ml.common.output.execute.metrics_correlation;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
@@ -22,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
+@Log4j2
 @Getter
 public class MCorrModelTensors implements Writeable, ToXContentObject {
     public static final String OUTPUT_FIELD = "output";
@@ -34,7 +36,6 @@ public class MCorrModelTensors implements Writeable, ToXContentObject {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-
         if (mCorrModelTensors != null && mCorrModelTensors.size() > 0) {
             for (MCorrModelTensor output : mCorrModelTensors) {
                 output.toXContent(builder, params);

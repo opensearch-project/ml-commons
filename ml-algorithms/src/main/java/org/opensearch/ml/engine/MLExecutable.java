@@ -6,15 +6,10 @@
 package org.opensearch.ml.engine;
 
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.ExecuteException;
-import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.output.MLOutput;
 
 import java.util.Map;
 
 public interface MLExecutable extends Executable {
-
-    MLOutput execute(Input input) throws ExecuteException;
 
     /**
      * Init model (deploy model into memory) with ML model content and params.

@@ -5,27 +5,15 @@
 
 package org.opensearch.ml.common.output.execute.metricscorrelation;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.output.MLOutputType;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
-import org.opensearch.ml.common.output.model.MLResultDataType;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -79,8 +67,8 @@ public class MetricsCorrelationOutputTest {
         input.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
-        assertEquals(MLOutputType.MCORR_TENSOR, outputType);
+//        MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
+//        assertEquals(MLOutputType.MCORR_TENSOR, outputType);
         verify.accept(new MetricsCorrelationOutput(streamInput));
     }
 }

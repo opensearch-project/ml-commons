@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.metrics_correlation;
 import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
 import com.google.common.annotations.VisibleForTesting;
-import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
@@ -21,6 +20,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
@@ -45,7 +45,6 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
-import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.SearchHit;
@@ -66,10 +65,10 @@ public class MetricsCorrelation extends DLModelExecute {
     private static final int AWAIT_BUSY_THRESHOLD = 1000;
     private Client client;
     private final Settings settings;
+    //As metrics correlation is an experimental feature we are marking the version as 1.0.0b1
     public static final String MCORR_ML_VERSION = "1.0.0b1";
-
-    //TODO: Model didn't publish yet to the release repo, so using this for the development.
-    // But before merging this code, we will have the release artifact url here for
+    //This is python based model which is developed in house.
+    public static final String MODEL_TYPE = "in-house";
     public static final String MCORR_MODEL_URL =
             "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b1/torch_script/metrics_correlation-1.0.0b1-torch_script.zip";
 
@@ -78,6 +77,12 @@ public class MetricsCorrelation extends DLModelExecute {
         this.settings = settings;
     }
 
+    /**
+     * @param input input data for metrics correlation. This input expects a list of float array (List<float[]>)
+     * @return MetricsCorrelationOutput output of the metrics correlation algorithm is a list of objects. Each object
+     *  contains 3 properties  event_window, event_pattern and suspected_metrics
+     * @throws ExecuteException
+     */
     @Override
     public MetricsCorrelationOutput execute(Input input) throws ExecuteException {
         if (!(input instanceof MetricsCorrelationInput)) {
@@ -87,14 +92,14 @@ public class MetricsCorrelation extends DLModelExecute {
         MetricsCorrelationInput metricsCorrelation = (MetricsCorrelationInput) input;
         List<float[]> inputData = metricsCorrelation.getInputData();
 
-        // converting List of float array to 2 dimensional float array for DJL input
+        // converting List of float array to 2 dimension float array for DJL input
         float[][] processedInputData = processedInput(inputData);
 
-        SearchRequest modelSearchRequest = getSearchRequest();
         // Searching in the model index to see if there's any model in the index already or not.
         if (modelId == null) {
+            SearchRequest modelSearchRequest = getSearchRequest();
             searchModel(modelSearchRequest, ActionListener.wrap(modelInfo -> {
-                if (modelInfo.isEmpty()) {
+                if (modelInfo == null || modelInfo.isEmpty()) {
                     // if we don't find any model in the index then we will register a model in the index
                     registerModel(ActionListener.wrap(registerModelResponse ->
                                     modelId = getTask(registerModelResponse.getTaskId()).getModelId(),
@@ -123,13 +128,11 @@ public class MetricsCorrelation extends DLModelExecute {
             MLModel model = getModel(modelId);
             if (model.getModelState() != MLModelState.DEPLOYED &&
                     model.getModelState() != MLModelState.PARTIALLY_DEPLOYED) {
-                // if we find a model in the index but the model is not loaded into memory then we will
-                // load the model in memory
                 deployModel(modelId, ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
             }
         }
 
-        //We will be waiting here until actionListeners set the model id to the loadedModelId.
+        //We will be waiting here until actionListeners set the model id to the modelId.
         waitUntil(() -> {
             if (modelId != null) {
                 MLModelState modelState = getModel(modelId).getModelState();
@@ -166,6 +169,8 @@ public class MetricsCorrelation extends DLModelExecute {
                     }
                 }
                 listener.onResponse(modelInfo);
+            } else {
+                listener.onResponse(null);
             }
         }, e -> {
             log.error("Failed to find model", e);
@@ -178,9 +183,9 @@ public class MetricsCorrelation extends DLModelExecute {
 
         FunctionName functionName = FunctionName.METRICS_CORRELATION;
         MLModelFormat modelFormat = MLModelFormat.TORCH_SCRIPT;
-        String modelType = "custom";
+
         MLModelConfig modelConfig = MetricsCorrelationModelConfig.builder()
-                .modelType(modelType)
+                .modelType(MODEL_TYPE)
                 .allConfig(null).build();
         MLRegisterModelInput input = MLRegisterModelInput
                 .builder()

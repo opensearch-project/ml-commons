@@ -78,7 +78,7 @@ jacocoTestCoverageVerification {
             }
             limit {
                 counter = 'BRANCH'
-                minimum = 0.74 //TODO: increase coverage to 0.85
+                minimum = 0.75 //TODO: increase coverage to 0.85
             }
         }
     }
