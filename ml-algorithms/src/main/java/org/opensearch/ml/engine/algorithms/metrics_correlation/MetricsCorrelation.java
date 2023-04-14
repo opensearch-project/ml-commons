@@ -69,6 +69,9 @@ public class MetricsCorrelation extends DLModelExecute {
     public static final String MCORR_ML_VERSION = "1.0.0b1";
     //This is python based model which is developed in house.
     public static final String MODEL_TYPE = "in-house";
+    //This is the opensearch release artifact url for the model
+    // TODO: we need to make this URL more dynamic so that user can define the version from the settings to pull
+    //  up the most updated model version.
     public static final String MCORR_MODEL_URL =
             "https://artifacts.opensearch.org/models/ml-models/amazon/metrics_correlation/1.0.0b1/torch_script/metrics_correlation-1.0.0b1-torch_script.zip";
 
