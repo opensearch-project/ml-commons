@@ -35,11 +35,13 @@ import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -71,8 +73,6 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
 
     private final String clusterManagerNodeId = "mockClusterManagerNodeId";
 
-    private final List<String> addedNodes = ImmutableList.of("ZCBneXv6SG2VdHQvLAnEUg", "gN8IFfxdT4mnPdc6WW9ung");
-
     @Mock
     private SearchRequestBuilder searchRequestBuilder;
 
@@ -87,6 +87,22 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         Collections.singleton(CLUSTER_MANAGER_ROLE),
         Version.CURRENT
     );
+
+    private DiscoveryNode mlNode = new DiscoveryNode(
+        "addedMLNode",
+        "addedMLNode",
+        new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+        Collections.emptyMap(),
+        Collections.singleton(new DiscoveryNodeRole("ml", "ml") {
+            @Override
+            public Setting<Boolean> legacySetting() {
+                return null;
+            }
+        }),
+        Version.CURRENT
+    );
+
+    private final List<DiscoveryNode> addedNodes = ImmutableList.of(mlNode);
 
     @Before
     public void setup() throws IOException {
@@ -110,6 +126,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -142,6 +159,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -186,6 +204,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -218,6 +237,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -243,6 +263,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -274,6 +295,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -301,6 +323,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -328,6 +351,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         ClusterService clusterService = mock(ClusterService.class);
         when(clusterService.localNode()).thenReturn(localNode);
         when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+        mockClusterDataNodes(clusterService);
 
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
@@ -621,6 +645,19 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         Path modelContentPath = Path.of(getClass().getResource(file).toURI());
         String modelContent = Files.readString(modelContentPath);
         return MLModel.parse(TestHelper.parser(modelContent), null);
+    }
+
+    private void mockClusterDataNodes(ClusterService clusterService) {
+        ClusterState clusterState = mock(ClusterState.class);
+        DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
+        ImmutableOpenMap<String, DiscoveryNode> dataNodes = ImmutableOpenMap
+            .<String, DiscoveryNode>builder(1)
+            .fPut("dataNodeId", mock(DiscoveryNode.class))
+            .build();
+        when(discoveryNodes.getDataNodes()).thenReturn(dataNodes);
+        when(discoveryNodes.getSize()).thenReturn(2); // a ml node join cluster.
+        when(clusterState.nodes()).thenReturn(discoveryNodes);
+        when(clusterService.state()).thenReturn(clusterState);
     }
 
     private ClusterSettings getClusterSettings(Settings settings) {

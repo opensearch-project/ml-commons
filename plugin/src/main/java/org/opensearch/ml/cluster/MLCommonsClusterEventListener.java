@@ -7,7 +7,6 @@ package org.opensearch.ml.cluster;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -66,8 +65,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
             Set<String> removedNodeIds = delta.removedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toSet());
             mlModelManager.removeWorkerNodes(removedNodeIds, false);
         } else if (delta.added()) {
-            List<String> addedNodes = delta.addedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toList());
-            mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, state.getNodes().getClusterManagerNodeId());
+            mlModelAutoReDeployer.buildAutoReloadArrangement(delta.addedNodes(), state.getNodes().getClusterManagerNodeId());
         }
     }
 }
