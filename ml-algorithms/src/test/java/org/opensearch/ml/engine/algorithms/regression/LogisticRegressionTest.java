@@ -17,6 +17,8 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.engine.utils.ModelSerDeSer;
+import org.tribuo.classification.Label;
 
 import static org.opensearch.ml.engine.helper.LogisticRegressionHelper.constructLogisticRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LogisticRegressionHelper.constructLogisticRegressionTrainDataFrame;
@@ -107,6 +109,14 @@ public class LogisticRegressionTest {
         MLPredictionOutput output = (MLPredictionOutput)classification.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
+    }
+
+    @Test
+    public void testModelSerDeSer() {
+        LogisticRegression classification = new LogisticRegression(parameters);
+        MLModel model = classification.train(trainDataFrameInput);
+        org.tribuo.Model<Label> deserializedModel = (org.tribuo.Model<Label>) ModelSerDeSer.deserialize(model);
+        Assert.assertNotNull(deserializedModel);
     }
 
     @Test
