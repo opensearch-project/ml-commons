@@ -35,13 +35,11 @@ import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.ClusterSettings;
-import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -88,21 +86,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         Version.CURRENT
     );
 
-    private DiscoveryNode mlNode = new DiscoveryNode(
-        "addedMLNode",
-        "addedMLNode",
-        new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-        Collections.emptyMap(),
-        Collections.singleton(new DiscoveryNodeRole("ml", "ml") {
-            @Override
-            public Setting<Boolean> legacySetting() {
-                return null;
-            }
-        }),
-        Version.CURRENT
-    );
-
-    private final List<DiscoveryNode> addedNodes = ImmutableList.of(mlNode);
+    private final List<String> addedNodes = ImmutableList.of("addedMLNode");
 
     @Before
     public void setup() throws IOException {

@@ -749,6 +749,15 @@ public class MLModelManager {
         }
     }
 
+    public void addModelWorkerNodes(List<String> nodeIds) {
+        if (nodeIds != null) {
+            String[] modelIds = getAllModelIds();
+            for (String nodeId : nodeIds) {
+                Arrays.stream(modelIds).forEach(x -> modelCacheHelper.addWorkerNode(x, nodeId));
+            }
+        }
+    }
+
     /**
      * Remove model from worker node cache.
      *

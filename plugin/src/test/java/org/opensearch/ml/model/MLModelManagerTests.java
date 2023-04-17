@@ -51,6 +51,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,6 +103,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
@@ -659,6 +661,15 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
         when(nodeHelper.filterEligibleNodes(any())).thenReturn(new String[] {});
         modelManager.getWorkerNodes(modelId, true);
+    }
+
+    public void test_addModelWorkerNodes_success() {
+        List<String> nodeIds = ImmutableList.of("node1", "node2");
+        String[] modelIds = new String[] { "model1" };
+        when(modelCacheHelper.getAllModels()).thenReturn(modelIds);
+        modelManager.addModelWorkerNode("model1", "node0");
+        modelManager.addModelWorkerNodes(nodeIds);
+        verify(modelCacheHelper, times(3)).addWorkerNode(anyString(), anyString());
     }
 
     private void testDeployModel_FailedToRetrieveModelChunks(boolean lastChunk) {

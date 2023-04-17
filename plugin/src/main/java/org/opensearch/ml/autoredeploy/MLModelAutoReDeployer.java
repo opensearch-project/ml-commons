@@ -29,7 +29,6 @@ import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
@@ -43,7 +42,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -120,7 +118,7 @@ public class MLModelAutoReDeployer {
         };
     }
 
-    public void buildAutoReloadArrangement(List<DiscoveryNode> addedNodes, String clusterManagerNodeId) {
+    public void buildAutoReloadArrangement(List<String> addedNodes, String clusterManagerNodeId) {
         if (!enableAutoReDeployModel) {
             log.info("Model auto reload configuration is false, not performing auto reloading!");
             return;
@@ -133,11 +131,7 @@ public class MLModelAutoReDeployer {
                 );
             return;
         }
-        if (clusterService.state().nodes().getSize() - clusterService.state().nodes().getDataNodes().size() == addedNodes.size()
-            && addedNodes.stream().anyMatch(MLNodeUtils::isMLNode)) {
-            undeployModelsOnDataNodes();
-        }
-        triggerAutoDeployModels(addedNodes.stream().map(DiscoveryNode::getId).collect(Collectors.toList()));
+        triggerAutoDeployModels(addedNodes);
     }
 
     public void redeployAModel() {

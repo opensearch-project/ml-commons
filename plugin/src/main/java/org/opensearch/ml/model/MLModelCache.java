@@ -86,7 +86,7 @@ public class MLModelCache {
     }
 
     public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
-        if ((deployToAllNodes != null && deployToAllNodes) || isFromUndeploy) {
+        if (this.isDeployToAllNodes() || isFromUndeploy) {
             targetWorkerNodes.removeAll(removedNodes);
         }
         if (isFromUndeploy)
@@ -94,7 +94,17 @@ public class MLModelCache {
         workerNodes.removeAll(removedNodes);
     }
 
+    /**
+     * When a model's deployToAllNodes is true but auto deploy is not enabled.
+     * New ml node joins cluster, the new node will not be deployed with model, but in Cron job the new node will be regards as
+     * a planning worker node and the model status is PARTIALLY_DEPLOYED, if we don't update here, the model status in model index
+     * and profile API will be not consistent.
+     * @param nodeId
+     */
     public void addWorkerNode(String nodeId) {
+        if (this.isDeployToAllNodes()) {
+            targetWorkerNodes.add(nodeId);
+        }
         workerNodes.add(nodeId);
     }
 
@@ -108,7 +118,7 @@ public class MLModelCache {
     }
 
     public boolean isDeployToAllNodes() {
-        return this.deployToAllNodes;
+        return this.deployToAllNodes != null && this.deployToAllNodes;
     }
 
     public void clearWorkerNodes() {
