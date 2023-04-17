@@ -161,7 +161,9 @@ public class RestMLProfileAction extends BaseRestHandler {
                     null,
                     null,
                     entry.getValue().getModelInferenceStats(),
-                    entry.getValue().getPredictRequestStats()
+                    entry.getValue().getPredictRequestStats(),
+                    entry.getValue().getMemSizeEstimationCPU(),
+                    entry.getValue().getMemSizeEstimationGPU()
                 );
                 mlProfileModelResponse.getMlModelProfileMap().putAll(ImmutableMap.of(nodeId, modelProfile));
             }
