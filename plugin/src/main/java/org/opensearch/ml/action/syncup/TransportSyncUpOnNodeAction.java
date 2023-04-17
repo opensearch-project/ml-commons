@@ -139,15 +139,9 @@ public class TransportSyncUpOnNodeAction extends
         Map<String, Set<String>> modelRoutingTable = syncUpInput.getModelRoutingTable();
         Map<String, Set<String>> runningDeployModelTasks = syncUpInput.getRunningDeployModelTasks();
         // DeployToAllNodes will be created when model deployed on each worker nodes.
-        // Only undeploy model will pass this deployToAllNodes map to update the cache deployToAllNodes value and all values in this map is
-        // false.
+        // Only undeploy model and partial undeploy case will pass this deployToAllNodes map to update the cache deployToAllNodes value
+        // and all values in this map is false.
         Map<String, Boolean> deployToAllNodes = syncUpInput.getDeployToAllNodes();
-
-        if (deployToAllNodes != null) {
-            for (Map.Entry<String, Boolean> entry : deployToAllNodes.entrySet()) {
-                mlModelCacheHelper.setDeployToAllNodes(entry.getKey(), deployToAllNodes.get(entry.getKey()));
-            }
-        }
 
         if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
             for (Map.Entry<String, String[]> entry : addedWorkerNodes.entrySet()) {

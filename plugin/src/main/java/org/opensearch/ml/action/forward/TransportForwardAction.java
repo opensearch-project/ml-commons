@@ -185,11 +185,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
             int expectedWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
             int receivedWorkerNodesCount = expectedWorkerNodeCount - workNodes.size();
             int successWorkerNodesCount = receivedWorkerNodesCount - mlTaskCache.errorNodesCount();
-            if ((float) successWorkerNodesCount / expectedWorkerNodeCount >= modelAutoRedeploySuccessRatio
-                && !mlTaskCache.getModelAutoReloadClearRetryTimesInModelIndex()) {
-                // An auto redeploy is succeed, clear the model retry times under ml-models index.
-                mlTaskCache.setModelAutoReloadClearRetryTimesInModelIndex(true);
-
+            if ((float) successWorkerNodesCount / expectedWorkerNodeCount >= modelAutoRedeploySuccessRatio) {
                 // Check if there's more model needs auto redeploy.
                 mlModelAutoReDeployer.redeployAModel();
                 // clear the auto reload retry time by setting the times value to 0

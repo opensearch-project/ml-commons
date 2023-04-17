@@ -30,10 +30,6 @@ public class MLTaskCache {
     // worker node may be removed later.
     Integer workerNodeSize;
 
-    @Setter
-    @Getter
-    Boolean modelAutoReloadClearRetryTimesInModelIndex = false;
-
     @Builder
     public MLTaskCache(MLTask mlTask, List<String> workerNodes) {
         this.mlTask = mlTask;

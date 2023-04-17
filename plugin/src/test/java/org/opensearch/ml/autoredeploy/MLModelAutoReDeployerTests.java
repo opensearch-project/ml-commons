@@ -49,6 +49,12 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
@@ -57,6 +63,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
 import com.google.common.collect.ImmutableList;
+
+import javax.swing.*;
 
 public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
     @Mock
@@ -118,6 +126,12 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        MLDeployModelResponse mlDeployModelResponse = mock(MLDeployModelResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mlDeployModelResponse);
+            return null;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), any(ActionListener.class));
         mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
     }
 
@@ -232,6 +246,12 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
             listener.onResponse(searchResponse);
             return null;
         }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        MLUndeployModelNodesResponse mlUndeployModelNodesResponse = mock(MLUndeployModelNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlUndeployModelNodesResponse);
+            return null;
+        }).when(client).execute(any(MLUndeployModelAction.class), any(MLUndeployModelNodesRequest.class), isA(ActionListener.class));
         mlModelAutoReDeployer.undeployModelsOnDataNodes();
     }
 
@@ -325,11 +345,6 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
     }
 
     private SearchResponse buildDeployToAllNodesTrueSearchResponse(String file) throws Exception {
-        MLModel mlModel = buildModelWithJsonFile(file);
-        return createResponseWithModel(mlModel);
-    }
-
-    private SearchResponse buildDeployToAllNodesFalsePlanningWokerNodesNotEmptySearchResponse(String file) throws Exception {
         MLModel mlModel = buildModelWithJsonFile(file);
         return createResponseWithModel(mlModel);
     }

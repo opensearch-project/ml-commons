@@ -134,10 +134,6 @@ public class TransportUndeployModelAction extends
                         UpdateRequest updateRequest = new UpdateRequest();
                         List<String> removedNodes = actualRemovedNodesMap.get(modelId);
                         int removedNodeCount = removedNodes.size();
-                        // User remove partial nodes but not all, we regard this is a new user deploy plan, so the model status is deployed.
-                        MLModelState mlModelState = modelWorkNodesBeforeRemoval.get(modelId).length > removedNodeCount
-                            ? MLModelState.DEPLOYED
-                            : MLModelState.UNDEPLOYED;
                         /**
                          *  If allow custom deploy is false, user can only undeploy all nodes and status is undeployed.
                          *  If allow custom deploy is true, user can undeploy all nodes and status is undeployed,
@@ -146,8 +142,14 @@ public class TransportUndeployModelAction extends
                          *  and deployToAllNodes value in model index.
                          */
                         Map<String, Object> updateDocument = new HashMap<>();
-                        updateDocument.put(MODEL_STATE_FIELD, mlModelState);
-                        if (MLModelState.DEPLOYED == mlModelState) {// undeploy partial nodes case.
+                        if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) { // undeploy all nodes.
+                            updateDocument.put(PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
+                            updateDocument.put(PLANNING_WORKER_NODE_COUNT_FIELD, 0);
+                            updateDocument.put(CURRENT_WORKER_NODE_COUNT_FIELD, 0);
+                            updateDocument.put(MODEL_STATE_FIELD, UNDEPLOYED);
+                        } else { // undeploy partial nodes.
+                            //TODO (to fix) when undeploy partial nodes, the original model status could be partially_deployed,
+                            // and the user could be undeploying not running model nodes, and we should update model status to deployed.
                             updateDocument.put(DEPLOY_TO_ALL_NODES_FIELD, false);
                             List<String> newPlanningWorkerNodes = Arrays
                                 .stream(modelWorkNodesBeforeRemoval.get(modelId))
@@ -157,10 +159,6 @@ public class TransportUndeployModelAction extends
                             updateDocument.put(PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                             updateDocument.put(CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                             deployToAllNodes.put(modelId, false);
-                        } else { // undeploy all nodes case.
-                            updateDocument.put(PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
-                            updateDocument.put(PLANNING_WORKER_NODE_COUNT_FIELD, 0);
-                            updateDocument.put(CURRENT_WORKER_NODE_COUNT_FIELD, 0);
                         }
                         updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
                         bulkRequest.add(updateRequest);
