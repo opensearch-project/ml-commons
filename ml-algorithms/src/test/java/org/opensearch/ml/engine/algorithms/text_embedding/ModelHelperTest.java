@@ -13,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -75,7 +76,7 @@ public class ModelHelperTest {
     @Test
     public void testVerifyModelZipFile() throws IOException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
     }
 
     @Test
@@ -83,7 +84,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Model format is TORCH_SCRIPT, but find .onnx file");
         String modelUrl = getClass().getResource("traced_small_model_wrong_onnx.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
     }
 
     @Test
@@ -91,7 +92,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Model format is ONNX, but find .pt file");
         String modelUrl = getClass().getResource("traced_small_model_wrong_onnx.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(MLModelFormat.ONNX, modelUrl);
+        modelHelper.verifyModelZipFile(MLModelFormat.ONNX, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
     }
 
     @Test
@@ -99,7 +100,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Find multiple model files, but expected only one");
         String modelUrl = getClass().getResource("traced_small_model_duplicate_pt.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
     }
 
     @Test
@@ -107,7 +108,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No tokenizer file");
         String modelUrl = getClass().getResource("traced_small_model_missing_tokenizer.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl);
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
     }
 
     @Test

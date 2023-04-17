@@ -7,6 +7,7 @@ package org.opensearch.ml.action.models;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -17,6 +18,7 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -67,7 +69,10 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLModel mlModel = MLModel.parse(parser);
+                        GetResponse getResponse = r;
+                        String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
+
+                        MLModel mlModel = MLModel.parse(parser, algorithmName);
                         actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                     } catch (Exception e) {
                         log.error("Failed to parse ml model" + r.getId(), e);

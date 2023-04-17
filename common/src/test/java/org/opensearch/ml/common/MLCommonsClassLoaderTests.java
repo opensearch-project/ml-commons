@@ -17,21 +17,25 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.nlp.TextDocsMLInput;
-import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
+import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
+import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class MLCommonsClassLoaderTests {
 
@@ -97,6 +101,48 @@ public class MLCommonsClassLoaderTests {
     public void testClassLoader_ExecuteOutput() {
         LocalSampleCalculatorOutput calculatorOutput = MLCommonsClassLoader.initExecuteOutputInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, streamInputForOutput, StreamInput.class);
         assertEquals(this.output, calculatorOutput);
+    }
+
+    @Test
+    public void testClassLoader_ExecuteMCorrInput() throws IOException {
+        List<float[]> inputData = new ArrayList<>();
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        inputData.add(new float[]{1.0f, 2.0f, 3.0f, 4.0f});
+        Input mcorrInput = new MetricsCorrelationInput(inputData);
+        BytesStreamOutput bytesStreamOutputMCorrInput = new BytesStreamOutput();
+        mcorrInput.writeTo(bytesStreamOutputMCorrInput);
+        StreamInput streamInputForMcorrInput = bytesStreamOutputMCorrInput.bytes().streamInput();
+        MetricsCorrelationInput mcorrStreamInput = MLCommonsClassLoader.initExecuteInputInstance(FunctionName.METRICS_CORRELATION, streamInputForMcorrInput, StreamInput.class);
+        assertArrayEquals(((MetricsCorrelationInput) mcorrInput).getInputData().toArray(), mcorrStreamInput.getInputData().toArray());
+
+    }
+
+    @Test
+    public void testClassLoader_ExecuteOutputMCorr() throws IOException {
+        List<MCorrModelTensors> outputs = new ArrayList<>();
+        MCorrModelTensor mCorrModelTensor = MCorrModelTensor.builder()
+                    .event_pattern(new float[]{1.0f, 2.0f, 3.0f})
+                    .event_window(new float[]{4.0f, 5.0f, 6.0f})
+                    .suspected_metrics(new long[]{1, 2})
+                    .build();
+        List<MCorrModelTensor> mlModelTensors = Arrays.asList(mCorrModelTensor);
+        MCorrModelTensors modelTensors = MCorrModelTensors.builder().mCorrModelTensors(mlModelTensors).build();
+        outputs.add(modelTensors);
+        MetricsCorrelationOutput output = MetricsCorrelationOutput.builder().modelOutput(outputs).build();
+        BytesStreamOutput bytesStreamOutputMcorrOutput = new BytesStreamOutput();
+        output.writeTo(bytesStreamOutputMcorrOutput);
+        StreamInput streamInputForOutput = bytesStreamOutputMcorrOutput.bytes().streamInput();
+        MetricsCorrelationOutput mcorrOutput = MLCommonsClassLoader.initExecuteOutputInstance(FunctionName.METRICS_CORRELATION, streamInputForOutput, StreamInput.class);
+
+        assertEquals(1, mcorrOutput.getModelOutput().size());
+        MCorrModelTensors testmodelTensors = mcorrOutput.getModelOutput().get(0);
+        assertEquals(1, testmodelTensors.getMCorrModelTensors().size());
+        MCorrModelTensor testmodelTensor = testmodelTensors.getMCorrModelTensors().get(0);
+        float[] events = testmodelTensor.getEvent_pattern();
+        long[] metrics = testmodelTensor.getSuspected_metrics();
+        assertArrayEquals(new float[]{1.0f, 2.0f, 3.0f}, events, 0.001f);
+        assertArrayEquals(new long[]{1, 2}, metrics);
     }
 
     @Test
