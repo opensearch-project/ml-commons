@@ -9,22 +9,18 @@ package org.opensearch.ml.autoredeploy;
 
 import static org.mockito.Mockito.*;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
-import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
 import static org.opensearch.ml.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
-import com.sun.jna.internal.ReflectionUtils;
-import org.apache.commons.io.FileUtils;
+import javax.swing.*;
+
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.Mock;
@@ -63,8 +59,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
 import com.google.common.collect.ImmutableList;
-
-import javax.swing.*;
 
 public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
     @Mock
@@ -161,7 +155,8 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
     }
 
-    public void test_buildAutoReloadArrangement_with_deployToAllNodes_isFalse_allowCustomTrue_enter_checkPlanningWorkerNodes() throws Exception {
+    public void test_buildAutoReloadArrangement_with_deployToAllNodes_isFalse_allowCustomTrue_enter_checkPlanningWorkerNodes()
+        throws Exception {
         Settings settings = Settings
             .builder()
             .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
@@ -187,7 +182,8 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
     }
 
-    public void test_buildAutoReloadArrangement_with_deployToAllNodesFalse_allowCustomTrue_planningWorkerNodesEmpty_enterNodeIdsNull() throws Exception {
+    public void test_buildAutoReloadArrangement_with_deployToAllNodesFalse_allowCustomTrue_planningWorkerNodesEmpty_enterNodeIdsNull()
+        throws Exception {
         Settings settings = Settings
             .builder()
             .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)

@@ -146,9 +146,9 @@ public class TransportUndeployModelAction extends
                             updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
                             updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
                             updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
-                            updateDocument.put(MLModel.MODEL_STATE_FIELD, UNDEPLOYED);
+                            updateDocument.put(MLModel.MODEL_STATE_FIELD, MLModelState.UNDEPLOYED);
                         } else { // undeploy partial nodes.
-                            //TODO (to fix) when undeploy partial nodes, the original model status could be partially_deployed,
+                            // TODO (to fix) when undeploy partial nodes, the original model status could be partially_deployed,
                             // and the user could be undeploying not running model nodes, and we should update model status to deployed.
                             updateDocument.put(MLModel.DEPLOY_TO_ALL_NODES_FIELD, false);
                             List<String> newPlanningWorkerNodes = Arrays

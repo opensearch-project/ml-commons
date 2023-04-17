@@ -170,7 +170,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         Map<String, String> modelToDeployStatus = new HashMap<>();
         modelToDeployStatus.put("modelId1", "undeployed");
         Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
-        modelWorkerNodeCounts.put("modelId1", new String[] { "node" });
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
         MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         responses.add(response1);

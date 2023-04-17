@@ -13,7 +13,6 @@ import java.util.concurrent.Semaphore;
 
 import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
 
 import org.opensearch.ml.common.MLTask;
 
