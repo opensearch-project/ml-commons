@@ -515,6 +515,7 @@ public class MLModelManager {
         if (modelCacheHelper.isModelDeployed(modelId)) {
             if (workerNodes != null && workerNodes.size() > 0) {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
+                modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
             }
             listener.onResponse("successful");
