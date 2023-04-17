@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 import javax.swing.*;
 
@@ -97,7 +98,7 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         when(searchRequestBuilder.setSource(any(SearchSourceBuilder.class))).thenReturn(searchRequestBuilder);
     }
 
-    public void test_buildAutoReloadArrangement_success() throws Exception {
+    public void test_buildAutoReloadArrangement_deployToAllNodes_isTrue_success() throws Exception {
         Settings settings = Settings
             .builder()
             .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
@@ -115,6 +116,82 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         );
 
         SearchResponse searchResponse = buildDeployToAllNodesTrueSearchResponse("ModelResult.json");
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        MLDeployModelResponse mlDeployModelResponse = mock(MLDeployModelResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mlDeployModelResponse);
+            return null;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), any(ActionListener.class));
+        mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
+    }
+
+    public void test_buildAutoReloadArrangement_searchResponseEmpty_failure() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.getKey(), 3)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+            .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), false)
+            .build();
+
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+
+        mlModelAutoReDeployer = spy(
+            new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
+        );
+
+        SearchResponse emptyHitsResponse = mock(SearchResponse.class);
+        SearchResponse emptyTotalHitsResponse = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[] { null }, null, Float.NaN);
+        when(emptyTotalHitsResponse.getHits()).thenReturn(hits);
+        when(emptyHitsResponse.getHits()).thenReturn(null);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(null);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(emptyHitsResponse);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(emptyTotalHitsResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        MLDeployModelResponse mlDeployModelResponse = mock(MLDeployModelResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mlDeployModelResponse);
+            return null;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), any(ActionListener.class));
+        mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
+    }
+
+    public void test_buildAutoReloadArrangement_allowCustomDeployIsFalse_success() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.getKey(), 3)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+            .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), false)
+            .build();
+
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+
+        mlModelAutoReDeployer = spy(
+            new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
+        );
+
+        SearchResponse searchResponse = buildDeployToAllNodesTrueSearchResponse("ModelDeployToAllFalseResult.json");
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(0);
             listener.onResponse(searchResponse);
@@ -151,6 +228,37 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception!"));
             return null;
         }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
+    }
+
+    public void test_buildAutoReloadArrangement_deployModel_exception() throws Exception {
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.getKey(), 3)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+            .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), false)
+            .build();
+
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+
+        mlModelAutoReDeployer = spy(
+            new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
+        );
+
+        SearchResponse searchResponse = buildDeployToAllNodesTrueSearchResponse("ModelResult.json");
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("runtime exception!"));
+            return null;
+        }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), any(ActionListener.class));
         mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodes, clusterManagerNodeId);
     }
 
@@ -273,7 +381,107 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
             listener.onResponse(mlUndeployModelNodesResponse);
             return null;
         }).when(client).execute(any(MLUndeployModelAction.class), any(MLUndeployModelNodesRequest.class), isA(ActionListener.class));
-        mlModelAutoReDeployer.undeployModelsOnDataNodes();
+        Consumer<Boolean> consumer = mlModelAutoReDeployer.undeployModelsOnDataNodesConsumer();
+        consumer.accept(true);
+    }
+
+    public void test_undeployModelsOnDataNodes_undeployModel_failed() throws Exception {
+        ClusterState clusterState = mock(ClusterState.class);
+        DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
+        DiscoveryNode dataNode = mock(DiscoveryNode.class);
+        when(dataNode.getId()).thenReturn("mockDataNodeId");
+        ImmutableOpenMap<String, DiscoveryNode> dataNodes = ImmutableOpenMap.<String, DiscoveryNode>builder().fPut("0", dataNode).build();
+        when(discoveryNodes.getDataNodes()).thenReturn(dataNodes);
+        when(clusterState.nodes()).thenReturn(discoveryNodes);
+
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.state()).thenReturn(clusterState);
+
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.getKey(), 3)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+            .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true)
+            .build();
+
+        when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+
+        mlModelAutoReDeployer = spy(
+            new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
+        );
+
+        SearchResponse searchResponse = buildDeployToAllNodesTrueSearchResponse("ModelResult.json");
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("runtime exception!"));
+            return null;
+        }).when(client).execute(any(MLUndeployModelAction.class), any(MLUndeployModelNodesRequest.class), isA(ActionListener.class));
+        Consumer<Boolean> consumer = mlModelAutoReDeployer.undeployModelsOnDataNodesConsumer();
+        consumer.accept(true);
+    }
+
+    public void test_undeployModelsOnDataNodes_undeployModel_responseNull() throws Exception {
+        ClusterState clusterState = mock(ClusterState.class);
+        DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
+        DiscoveryNode dataNode = mock(DiscoveryNode.class);
+        when(dataNode.getId()).thenReturn("mockDataNodeId");
+        ImmutableOpenMap<String, DiscoveryNode> dataNodes = ImmutableOpenMap.<String, DiscoveryNode>builder().fPut("0", dataNode).build();
+        when(discoveryNodes.getDataNodes()).thenReturn(dataNodes);
+        when(clusterState.nodes()).thenReturn(discoveryNodes);
+
+        ClusterService clusterService = mock(ClusterService.class);
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(clusterService.state()).thenReturn(clusterState);
+
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), true)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.getKey(), 3)
+            .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+            .put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true)
+            .build();
+
+        when(clusterService.getClusterSettings()).thenReturn(getClusterSettings(settings));
+
+        mlModelAutoReDeployer = spy(
+            new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
+        );
+
+        SearchResponse emptyHitsResponse = mock(SearchResponse.class);
+        SearchResponse emptyTotalHitsResponse = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[] { null }, null, Float.NaN);
+        when(emptyTotalHitsResponse.getHits()).thenReturn(hits);
+        when(emptyHitsResponse.getHits()).thenReturn(null);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(null);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(emptyHitsResponse);
+            return null;
+        }).doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(0);
+            listener.onResponse(emptyTotalHitsResponse);
+            return null;
+        }).when(searchRequestBuilder).execute(isA(ActionListener.class));
+        MLUndeployModelNodesResponse mlUndeployModelNodesResponse = mock(MLUndeployModelNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlUndeployModelNodesResponse);
+            return null;
+        }).when(client).execute(any(MLUndeployModelAction.class), any(MLUndeployModelNodesRequest.class), isA(ActionListener.class));
+        Consumer<Boolean> consumer = mlModelAutoReDeployer.undeployModelsOnDataNodesConsumer();
+        consumer.accept(true);
+        consumer.accept(true);
+        consumer.accept(true);
     }
 
     public void test_undeployModelsOnDataNodes_runOnMlNodesIsFalse_notRun() {
@@ -302,7 +510,8 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
         mlModelAutoReDeployer = spy(
             new MLModelAutoReDeployer(clusterService, client, settings, mlModelManager, searchRequestBuilderFactory)
         );
-        mlModelAutoReDeployer.undeployModelsOnDataNodes();
+        Consumer<Boolean> consumer = mlModelAutoReDeployer.undeployModelsOnDataNodesConsumer();
+        consumer.accept(true);
     }
 
     public void test_buildAutoReloadArrangement_with_autoRedeploy_isFalse() {

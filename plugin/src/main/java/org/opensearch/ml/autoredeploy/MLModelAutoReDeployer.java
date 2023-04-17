@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import lombok.Builder;
@@ -89,10 +90,7 @@ public class MLModelAutoReDeployer {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE, it -> enableAutoReDeployModel = it);
 
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ONLY_RUN_ON_ML_NODE, it -> {
-            onlyRunOnMlNode = it;
-            undeployModelsOnDataNodes();
-        });
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ONLY_RUN_ON_ML_NODE, undeployModelsOnDataNodesConsumer());
 
         clusterService
             .getClusterSettings()
@@ -103,14 +101,21 @@ public class MLModelAutoReDeployer {
             .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
     }
 
-    @VisibleForTesting
-    void undeployModelsOnDataNodes() {
+    private void undeployModelsOnDataNodes() {
         if (onlyRunOnMlNode) {
             List<String> dataNodeIds = new ArrayList<>();
             clusterService.state().nodes().getDataNodes().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
             if (dataNodeIds.size() > 0)
                 triggerUndeployModelsOnDataNodes(dataNodeIds);
         }
+    }
+
+    @VisibleForTesting
+    Consumer<Boolean> undeployModelsOnDataNodesConsumer() {
+        return x -> {
+            onlyRunOnMlNode = x;
+            undeployModelsOnDataNodes();
+        };
     }
 
     public void buildAutoReloadArrangement(List<String> addedNodes, String clusterManagerNodeId) {
