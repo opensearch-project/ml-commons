@@ -10,12 +10,16 @@ import org.apache.commons.io.serialization.ValidatingObjectInputStream;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.ObjectInputFilter;
 import java.util.Base64;
 
 @UtilityClass
 public class ModelSerDeSer {
-    // Welcome list includes OpenSearch ml plugin classes, JDK common classes and Tribuo libraries.
+    // Accept list includes OpenSearch ml plugin classes, JDK common classes and Tribuo libraries.
     public static final String[] ACCEPT_CLASS_PATTERNS = {
             "java.lang.*",
             "java.util.*",
@@ -78,6 +82,7 @@ public class ModelSerDeSer {
         }
     }
 
+    // This method has been tested in K-means, Linear Regression, Logistic regression, Anomaly Detection and Random Cut Forest summarization and passed.
     public static Object deserialize(byte[] modelBin) {
         try (ByteArrayInputStream inputStream = new ByteArrayInputStream(modelBin);
              ValidatingObjectInputStream validatingObjectInputStream = new ValidatingObjectInputStream(inputStream)){
