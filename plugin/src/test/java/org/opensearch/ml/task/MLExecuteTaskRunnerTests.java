@@ -12,6 +12,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -27,6 +30,8 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -47,9 +52,6 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
 
     @Mock
     ThreadPool threadPool;
-
-    @Mock
-    ClusterService clusterService;
 
     @Mock
     Client client;
@@ -82,6 +84,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     MLStats mlStats;
     MLExecuteTaskRequest mlExecuteTaskRequest;
     MLEngine mlEngine;
+    Settings settings;
+    ClusterService clusterService;
 
     @Before
     public void setup() {
@@ -93,6 +97,22 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
             runnable.run();
             return null;
         }).when(executorService).execute(any(Runnable.class));
+
+        settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE.getKey(), 10).build();
+        settings = Settings.builder().put(ML_COMMONS_ENABLE_MCORR.getKey(), false).build();
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_MAX_MODELS_PER_NODE,
+            ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE,
+            ML_COMMONS_MONITORING_REQUEST_COUNT,
+            ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
+            ML_COMMONS_ENABLE_MCORR
+        );
+        clusterService = spy(new ClusterService(settings, clusterSettings, null));
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
         stats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
