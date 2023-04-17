@@ -27,6 +27,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel;
 import org.opensearch.ml.profile.MLModelProfile;
@@ -76,6 +77,34 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
         assertTrue(cacheHelper.isModelDeployed(modelId));
         assertEquals(FunctionName.TEXT_EMBEDDING, cacheHelper.getFunctionName(modelId));
+    }
+
+    public void testMemSizeEstimationCPU() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        assertTrue(cacheHelper.getMemEstCPU(modelId) == null);
+        cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.TORCH_SCRIPT, 1000L);
+        assertTrue(cacheHelper.getMemEstCPU(modelId) == 1200L);
+    }
+
+    public void testMemSizeEstimationCPUONNX() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        assertTrue(cacheHelper.getMemEstCPU(modelId) == null);
+        cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.ONNX, 1000L);
+        assertTrue(cacheHelper.getMemEstCPU(modelId) == 1500L);
+    }
+
+    public void testMemSizeEstimationGPU() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        assertTrue(cacheHelper.getMemEstGPU(modelId) == null);
+        cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.TORCH_SCRIPT, 1000L);
+        assertTrue(cacheHelper.getMemEstGPU(modelId) == 1200L);
+    }
+
+    public void testMemSizeEstimationGPUONNX() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        assertTrue(cacheHelper.getMemEstGPU(modelId) == null);
+        cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.ONNX, 1000L);
+        assertTrue(cacheHelper.getMemEstGPU(modelId) == 1500L);
     }
 
     public void testModelState_DuplicateError() {

@@ -28,6 +28,8 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
     private final String[] workerNodes;
     private final MLPredictRequestStats modelInferenceStats;
     private final MLPredictRequestStats predictRequestStats;
+    private final Long memSizeEstimationCPU;
+    private final Long memSizeEstimationGPU;
 
     @Builder
     public MLModelProfile(
@@ -36,7 +38,9 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         String[] targetWorkerNodes,
         String[] workerNodes,
         MLPredictRequestStats modelInferenceStats,
-        MLPredictRequestStats predictRequestStats
+        MLPredictRequestStats predictRequestStats,
+        Long memSizeEstimationCPU,
+        Long memSizeEstimationGPU
     ) {
         this.modelState = modelState;
         this.predictor = predictor;
@@ -44,6 +48,8 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         this.workerNodes = workerNodes;
         this.modelInferenceStats = modelInferenceStats;
         this.predictRequestStats = predictRequestStats;
+        this.memSizeEstimationCPU = memSizeEstimationCPU;
+        this.memSizeEstimationGPU = memSizeEstimationGPU;
     }
 
     @Override
@@ -66,6 +72,12 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         }
         if (predictRequestStats != null) {
             builder.field("predict_request_stats", predictRequestStats);
+        }
+        if (memSizeEstimationCPU != null) {
+            builder.field("mem_size_estimation_cpu", memSizeEstimationCPU);
+        }
+        if (memSizeEstimationGPU != null) {
+            builder.field("mem_size_estimation_gpu", memSizeEstimationGPU);
         }
         builder.endObject();
         return builder;
@@ -90,6 +102,8 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         } else {
             this.predictRequestStats = null;
         }
+        this.memSizeEstimationCPU = in.readOptionalLong();
+        this.memSizeEstimationGPU = in.readOptionalLong();
     }
 
     @Override
@@ -115,5 +129,7 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalLong(memSizeEstimationCPU);
+        out.writeOptionalLong(memSizeEstimationGPU);
     }
 }

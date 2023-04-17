@@ -36,6 +36,8 @@ public class MLModelCache {
     private final Set<String> workerNodes;
     private final Queue<Double> modelInferenceDurationQueue;
     private final Queue<Double> predictRequestDurationQueue;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationCPU;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationGPU;
 
     public MLModelCache() {
         targetWorkerNodes = ConcurrentHashMap.newKeySet();
@@ -90,6 +92,8 @@ public class MLModelCache {
         if (predictor != null) {
             predictor.close();
         }
+        memSizeEstimationCPU = 0L;
+        memSizeEstimationGPU = 0L;
         if (executor != null) {
             executor.close();
         }
