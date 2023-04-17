@@ -30,6 +30,10 @@ ext {
     noticeFile = rootProject.file('NOTICE')
 }
 
+checkstyle {
+    toolVersion = '8.38'
+}
+
 opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
@@ -49,7 +53,7 @@ dependencies {
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.0'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
 
-    checkstyle "com.puppycrawl.tools:checkstyle:8.29"
+    checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
 
 
@@ -337,6 +341,3 @@ tasks.withType(licenseHeaders.class) {
     additionalLicense 'AL   ', 'Apache', 'Licensed under the Apache License, Version 2.0 (the "License")'
 }
 
-checkstyle {
-    toolVersion = '8.29'
-}
