@@ -91,8 +91,7 @@ public class MLModelAutoReDeployer {
 
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ONLY_RUN_ON_ML_NODE, it -> {
             onlyRunOnMlNode = it;
-            if (onlyRunOnMlNode)
-                undeployModelsOnDataNodes();
+            undeployModelsOnDataNodes();
         });
 
         clusterService
@@ -106,10 +105,12 @@ public class MLModelAutoReDeployer {
 
     @VisibleForTesting
     void undeployModelsOnDataNodes() {
-        List<String> dataNodeIds = new ArrayList<>();
-        clusterService.state().nodes().getDataNodes().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
-        if (dataNodeIds.size() > 0)
-            triggerUndeployModelsOnDataNodes(dataNodeIds);
+        if (onlyRunOnMlNode) {
+            List<String> dataNodeIds = new ArrayList<>();
+            clusterService.state().nodes().getDataNodes().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
+            if (dataNodeIds.size() > 0)
+                triggerUndeployModelsOnDataNodes(dataNodeIds);
+        }
     }
 
     public void buildAutoReloadArrangement(List<String> addedNodes, String clusterManagerNodeId) {
@@ -267,11 +268,12 @@ public class MLModelAutoReDeployer {
                 e -> {
                     log
                         .error(
-                            "Exception occurred when auto redeploying the model, model id is: {}, exception is: {}, skipping current model auto redeploy!",
+                            "Exception occurred when auto redeploying the model, model id is: {}, exception is: {}, skipping current model auto redeploy and starting next model redeploy!",
                             modelId,
                             e.getMessage(),
                             e
                         );
+                    redeployAModel();
                 }
             );
 
