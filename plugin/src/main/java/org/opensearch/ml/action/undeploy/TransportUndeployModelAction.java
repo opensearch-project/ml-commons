@@ -7,7 +7,6 @@ package org.opensearch.ml.action.undeploy;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
-import static org.opensearch.ml.common.MLModel.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,6 +31,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
@@ -143,21 +143,21 @@ public class TransportUndeployModelAction extends
                          */
                         Map<String, Object> updateDocument = new HashMap<>();
                         if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) { // undeploy all nodes.
-                            updateDocument.put(PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
-                            updateDocument.put(PLANNING_WORKER_NODE_COUNT_FIELD, 0);
-                            updateDocument.put(CURRENT_WORKER_NODE_COUNT_FIELD, 0);
-                            updateDocument.put(MODEL_STATE_FIELD, UNDEPLOYED);
+                            updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
+                            updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
+                            updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
+                            updateDocument.put(MLModel.MODEL_STATE_FIELD, UNDEPLOYED);
                         } else { // undeploy partial nodes.
                             //TODO (to fix) when undeploy partial nodes, the original model status could be partially_deployed,
                             // and the user could be undeploying not running model nodes, and we should update model status to deployed.
-                            updateDocument.put(DEPLOY_TO_ALL_NODES_FIELD, false);
+                            updateDocument.put(MLModel.DEPLOY_TO_ALL_NODES_FIELD, false);
                             List<String> newPlanningWorkerNodes = Arrays
                                 .stream(modelWorkNodesBeforeRemoval.get(modelId))
                                 .filter(x -> !removedNodes.contains(x))
                                 .collect(Collectors.toList());
-                            updateDocument.put(PLANNING_WORKER_NODES_FIELD, newPlanningWorkerNodes);
-                            updateDocument.put(PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
-                            updateDocument.put(CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
+                            updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkerNodes);
+                            updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
+                            updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                             deployToAllNodes.put(modelId, false);
                         }
                         updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
