@@ -9,6 +9,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -66,17 +67,15 @@ public class DiscoveryNodeHelper {
                 eligibleDataNodes.add(node);
             }
         }
-        eligibleMLNodes.addAll(eligibleDataNodes);
-        return eligibleMLNodes.toArray(new DiscoveryNode[0]);
-        // if (eligibleMLNodes.size() > 0) {
-        // DiscoveryNode[] mlNodes = eligibleMLNodes.toArray(new DiscoveryNode[0]);
-        // log.debug("Find {} dedicated ML nodes: {}", eligibleMLNodes.size(), Arrays.toString(mlNodes));
-        // return mlNodes;
-        // } else {
-        // DiscoveryNode[] dataNodes = eligibleDataNodes.toArray(new DiscoveryNode[0]);
-        // log.debug("Find no dedicated ML nodes. But have {} data nodes: {}", eligibleDataNodes.size(), Arrays.toString(dataNodes));
-        // return dataNodes;
-        // }
+        if (eligibleMLNodes.size() > 0) {
+            DiscoveryNode[] mlNodes = eligibleMLNodes.toArray(new DiscoveryNode[0]);
+            log.debug("Find {} dedicated ML nodes: {}", eligibleMLNodes.size(), Arrays.toString(mlNodes));
+            return mlNodes;
+        } else {
+            DiscoveryNode[] dataNodes = eligibleDataNodes.toArray(new DiscoveryNode[0]);
+            log.debug("Find no dedicated ML nodes. But have {} data nodes: {}", eligibleDataNodes.size(), Arrays.toString(dataNodes));
+            return dataNodes;
+        }
     }
 
     public String[] filterEligibleNodes(String[] nodeIds) {

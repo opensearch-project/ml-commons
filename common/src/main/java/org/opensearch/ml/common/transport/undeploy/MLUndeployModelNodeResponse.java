@@ -20,7 +20,10 @@ import java.util.Map;
 @Getter
 public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToXContentFragment {
 
+    // Model undeploy status, if there's model running and successfully undeployed, the status is undeployed, if model is not
+    // running on current node, status is not_found
     private Map<String, String> modelUndeployStatus;
+    // This is to record before undeploy the model, which nodes are working nodes.
     private Map<String, String[]> modelWorkerNodeBeforeRemoval;
 
     public MLUndeployModelNodeResponse(DiscoveryNode node,
@@ -29,6 +32,7 @@ public class MLUndeployModelNodeResponse extends BaseNodeResponse implements ToX
     ) {
         super(node);
         this.modelUndeployStatus = modelUndeployStatus;
+        //
         this.modelWorkerNodeBeforeRemoval = modelWorkerNodeBeforeRemoval;
     }
 

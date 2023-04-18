@@ -61,6 +61,7 @@ public class MLModel implements ToXContentObject {
     public static final String LAST_UNDEPLOYED_TIME_FIELD = "last_undeployed_time";
 
     public static final String MODEL_ID_FIELD = "model_id";
+    // auto redploy retry times for this model.
     public static final String AUTO_REDEPLOY_RETRY_TIMES_FIELD = "auto_redeploy_retry_times";
     public static final String CHUNK_NUMBER_FIELD = "chunk_number";
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks";
