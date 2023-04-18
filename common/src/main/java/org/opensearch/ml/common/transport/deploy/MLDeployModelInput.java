@@ -21,7 +21,7 @@ public class MLDeployModelInput implements Writeable {
     private String modelContentHash;
     private Integer nodeCount;
     private String coordinatingNodeId;
-    private Boolean deployToAllNodes;
+    private Boolean isDeployToAllNodes;
     private MLTask mlTask;
 
     public MLDeployModelInput(StreamInput in) throws IOException {
@@ -30,18 +30,18 @@ public class MLDeployModelInput implements Writeable {
         this.modelContentHash = in.readOptionalString();
         this.nodeCount = in.readInt();
         this.coordinatingNodeId = in.readString();
-        this.deployToAllNodes = in.readOptionalBoolean();
+        this.isDeployToAllNodes = in.readOptionalBoolean();
         this.mlTask = new MLTask(in);
     }
 
     @Builder
-    public MLDeployModelInput(String modelId, String taskId, String modelContentHash, Integer nodeCount, String coordinatingNodeId, Boolean deployToAllNodes, MLTask mlTask) {
+    public MLDeployModelInput(String modelId, String taskId, String modelContentHash, Integer nodeCount, String coordinatingNodeId, Boolean isDeployToAllNodes, MLTask mlTask) {
         this.modelId = modelId;
         this.taskId = taskId;
         this.modelContentHash = modelContentHash;
         this.nodeCount = nodeCount;
         this.coordinatingNodeId = coordinatingNodeId;
-        this.deployToAllNodes = deployToAllNodes;
+        this.isDeployToAllNodes = isDeployToAllNodes;
         this.mlTask = mlTask;
     }
 
@@ -55,7 +55,7 @@ public class MLDeployModelInput implements Writeable {
         out.writeOptionalString(modelContentHash);
         out.writeInt(nodeCount);
         out.writeString(coordinatingNodeId);
-        out.writeOptionalBoolean(deployToAllNodes);
+        out.writeOptionalBoolean(isDeployToAllNodes);
         mlTask.writeTo(out);
     }
 

@@ -263,7 +263,10 @@ public class MLModelAutoReDeployer {
         }
 
         if (nodeIds == null) {
-            log.info("Added nodes are not in planning worker nodes list, not to auto redeploy the model to the new nodes!");
+            log
+                .info(
+                    "Allow custom deployment plan is true and deploy to all nodes is false and added nodes are not in planning worker nodes list, not to auto redeploy the model to the new nodes!"
+                );
             return;
         }
 

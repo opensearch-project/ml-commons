@@ -131,7 +131,7 @@ public class TransportDeployModelOnNodeAction extends
         String coordinatingNodeId = deployModelInput.getCoordinatingNodeId();
         MLTask mlTask = deployModelInput.getMlTask();
         String modelContentHash = deployModelInput.getModelContentHash();
-        boolean deployToAllNodes = deployModelInput.getDeployToAllNodes();
+        boolean deployToAllNodes = deployModelInput.getIsDeployToAllNodes();
 
         Map<String, String> modelDeployStatus = new HashMap<>();
         modelDeployStatus.put(modelId, "received");

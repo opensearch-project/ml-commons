@@ -141,7 +141,7 @@ public class TransportSyncUpOnNodeAction extends
         // DeployToAllNodes will be created when model deployed on each worker nodes.
         // Only undeploy model and partial undeploy case will pass this deployToAllNodes map to update the cache deployToAllNodes value
         // and all values in this map is false.
-        Map<String, Boolean> deployToAllNodes = syncUpInput.getDeployToAllNodesMap();
+        Map<String, Boolean> deployToAllNodes = syncUpInput.getDeployToAllNodes();
 
         if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
             for (Map.Entry<String, String[]> entry : addedWorkerNodes.entrySet()) {

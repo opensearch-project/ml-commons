@@ -33,7 +33,7 @@ public class MLSyncUpInput implements Writeable {
 
     // deployToAll flag for models, when deploy/undeploy a model, this will passed to each node to update cache value to make sure
     // profile API has consistent data with model index.
-    private Map<String, Boolean> deployToAllNodesMap;
+    private Map<String, Boolean> deployToAllNodes;
 
     @Builder
     public MLSyncUpInput(boolean getDeployedModels,
@@ -41,7 +41,7 @@ public class MLSyncUpInput implements Writeable {
                          Map<String, String[]> removedWorkerNodes,
                          Map<String, Set<String>> modelRoutingTable,
                          Map<String, Set<String>> runningDeployModelTasks,
-                         Map<String, Boolean> deployToAllNodesMap,
+                         Map<String, Boolean> deployToAllNodes,
                          boolean clearRoutingTable,
                          boolean syncRunningDeployModelTasks) {
         this.getDeployedModels = getDeployedModels;
@@ -49,7 +49,7 @@ public class MLSyncUpInput implements Writeable {
         this.removedWorkerNodes = removedWorkerNodes;
         this.modelRoutingTable = modelRoutingTable;
         this.runningDeployModelTasks = runningDeployModelTasks;
-        this.deployToAllNodesMap = deployToAllNodesMap;
+        this.deployToAllNodes = deployToAllNodes;
         this.clearRoutingTable = clearRoutingTable;
         this.syncRunningDeployModelTasks = syncRunningDeployModelTasks;
     }
@@ -71,7 +71,7 @@ public class MLSyncUpInput implements Writeable {
             runningDeployModelTasks = in.readMap(StreamInput::readString, s -> s.readSet(StreamInput::readString));
         }
         if (in.readBoolean()) {
-            deployToAllNodesMap = in.readMap(StreamInput::readString, StreamInput::readOptionalBoolean);
+            deployToAllNodes = in.readMap(StreamInput::readString, StreamInput::readOptionalBoolean);
         }
         this.clearRoutingTable = in.readBoolean();
         this.syncRunningDeployModelTasks = in.readBoolean();
@@ -104,9 +104,9 @@ public class MLSyncUpInput implements Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (deployToAllNodesMap != null && deployToAllNodesMap.size() > 0) {
+        if (deployToAllNodes != null && deployToAllNodes.size() > 0) {
             out.writeBoolean(true);
-            out.writeMap(deployToAllNodesMap, StreamOutput::writeString, StreamOutput::writeOptionalBoolean);
+            out.writeMap(deployToAllNodes, StreamOutput::writeString, StreamOutput::writeOptionalBoolean);
         } else {
             out.writeBoolean(false);
         }

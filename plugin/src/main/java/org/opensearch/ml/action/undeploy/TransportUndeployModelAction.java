@@ -163,7 +163,7 @@ public class TransportUndeployModelAction extends
                         updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
                         bulkRequest.add(updateRequest);
                     }
-                    syncUpInput.setDeployToAllNodesMap(deployToAllNodes);
+                    syncUpInput.setDeployToAllNodes(deployToAllNodes);
                     ActionListener<BulkResponse> actionListener = ActionListener
                         .wrap(
                             r -> {
