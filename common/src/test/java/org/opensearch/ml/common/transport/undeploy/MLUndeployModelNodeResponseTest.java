@@ -25,7 +25,7 @@ public class MLUndeployModelNodeResponseTest {
     @Mock
     private DiscoveryNode localNode;
 
-    private Map<String, Integer> modelWorkerNodeCounts;
+    private Map<String, String[]> modelWorkerNodeCounts;
 
     @Before
     public void setUp() throws Exception {
@@ -38,7 +38,7 @@ public class MLUndeployModelNodeResponseTest {
                 Version.CURRENT
         );
         modelWorkerNodeCounts = new HashMap<>();
-        modelWorkerNodeCounts.put("modelId1", 1);
+        modelWorkerNodeCounts.put("modelId1", new String[]{"node"});
     }
 
     @Test

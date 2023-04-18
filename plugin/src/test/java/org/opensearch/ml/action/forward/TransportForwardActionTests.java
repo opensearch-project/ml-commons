@@ -13,14 +13,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.DEPLOY_MODEL_DONE;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.REGISTER_MODEL;
+import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -37,6 +42,10 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
@@ -57,6 +66,7 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 public class TransportForwardActionTests extends OpenSearchTestCase {
@@ -81,6 +91,16 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
 
     private TransportForwardAction forwardAction;
 
+    Settings settings = Settings
+        .builder()
+        .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
+        .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO.getKey(), 0.8)
+        .build();
+    @Mock
+    private ClusterService clusterService;
+    @Mock
+    MLModelAutoReDeployer mlModelAutoReDeployer;
+
     DiscoveryNode node1;
     DiscoveryNode node2;
     String nodeId1 = "test_node_id1";
@@ -92,7 +112,27 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        forwardAction = spy(new TransportForwardAction(transportService, actionFilters, mlTaskManager, client, mlModelManager, nodeHelper));
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
+            ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
+            ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN,
+            ML_COMMONS_ONLY_RUN_ON_ML_NODE
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        forwardAction = spy(
+            new TransportForwardAction(
+                transportService,
+                actionFilters,
+                mlTaskManager,
+                client,
+                mlModelManager,
+                nodeHelper,
+                settings,
+                clusterService,
+                mlModelAutoReDeployer
+            )
+        );
 
         node1 = new DiscoveryNode(nodeId1, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         node2 = new DiscoveryNode(nodeId2, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
@@ -151,6 +191,33 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
         verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+    }
+
+    public void testDoExecute_DeployModelDone_successDeploy_ratio_exceed_configuration() {
+        Set<String> workerNodes = new HashSet<>();
+        workerNodes.add(nodeId1);
+        when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
+        when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1 });
+        MLTaskCache mlTaskCache = mock(MLTaskCache.class);
+        when(mlTaskCache.getErrors()).thenReturn(ImmutableMap.of());
+        when(mlTaskCache.hasError()).thenReturn(false);
+        when(mlTaskCache.getWorkerNodeSize()).thenReturn(1);
+        when(mlTaskCache.errorNodesCount()).thenReturn(0);
+        when(mlTaskManager.getMLTaskCache(anyString())).thenReturn(mlTaskCache);
+        MLForwardInput forwardInput = MLForwardInput
+            .builder()
+            .requestType(DEPLOY_MODEL_DONE)
+            .taskId(taskId)
+            .modelId(modelId)
+            .workerNodeId(nodeId1)
+            .build();
+        MLForwardRequest forwardRequest = MLForwardRequest.builder().forwardInput(forwardInput).build();
+        forwardAction.doExecute(task, forwardRequest, listener);
+        ArgumentCaptor<MLForwardResponse> response = ArgumentCaptor.forClass(MLForwardResponse.class);
+        verify(listener).onResponse(response.capture());
+        assertEquals("ok", response.getValue().getStatus());
+        assertNull(response.getValue().getMlOutput());
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_Error_NullTaskWorkerNodes() {

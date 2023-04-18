@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import lombok.extern.log4j.Log4j2;
@@ -39,6 +40,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.utils.FileUtils;
+import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
@@ -63,6 +65,8 @@ public class TransportSyncUpOnNodeAction extends
 
     private volatile Integer mlTaskTimeout;
 
+    private final MLModelCacheHelper mlModelCacheHelper;
+
     @Inject
     public TransportSyncUpOnNodeAction(
         TransportService transportService,
@@ -75,7 +79,8 @@ public class TransportSyncUpOnNodeAction extends
         ThreadPool threadPool,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        MLModelCacheHelper mlModelCacheHelper
     ) {
         super(
             MLSyncUpAction.NAME,
@@ -97,6 +102,7 @@ public class TransportSyncUpOnNodeAction extends
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.mlEngine = mlEngine;
+        this.mlModelCacheHelper = mlModelCacheHelper;
 
         this.mlTaskTimeout = ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS, it -> { mlTaskTimeout = it; });
@@ -132,6 +138,10 @@ public class TransportSyncUpOnNodeAction extends
         Map<String, String[]> removedWorkerNodes = syncUpInput.getRemovedWorkerNodes();
         Map<String, Set<String>> modelRoutingTable = syncUpInput.getModelRoutingTable();
         Map<String, Set<String>> runningDeployModelTasks = syncUpInput.getRunningDeployModelTasks();
+        // DeployToAllNodes will be created when model deployed on each worker nodes.
+        // Only undeploy model and partial undeploy case will pass this deployToAllNodes map to update the cache deployToAllNodes value
+        // and all values in this map is false.
+        Map<String, Boolean> deployToAllNodes = syncUpInput.getDeployToAllNodes();
 
         if (addedWorkerNodes != null && addedWorkerNodes.size() > 0) {
             for (Map.Entry<String, String[]> entry : addedWorkerNodes.entrySet()) {
@@ -140,7 +150,12 @@ public class TransportSyncUpOnNodeAction extends
         }
         if (removedWorkerNodes != null && removedWorkerNodes.size() > 0) {
             for (Map.Entry<String, String[]> entry : removedWorkerNodes.entrySet()) {
-                mlModelManager.removeModelWorkerNode(entry.getKey(), entry.getValue());
+                mlModelManager
+                    .removeModelWorkerNode(
+                        entry.getKey(),
+                        Optional.ofNullable(deployToAllNodes).orElse(ImmutableMap.of()).containsKey(entry.getKey()),
+                        entry.getValue()
+                    );
             }
         }
 
