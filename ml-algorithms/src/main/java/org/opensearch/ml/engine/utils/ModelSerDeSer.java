@@ -89,8 +89,7 @@ public class ModelSerDeSer {
             // Validate the model class type to avoid deserialization attack.
             validatingObjectInputStream
                     .accept(ACCEPT_CLASS_PATTERNS)
-                    .reject(REJECT_CLASS_PATTERNS)
-                    .setObjectInputFilter(ObjectInputFilter.Config.createFilter("maxdepth=20;maxrefs=5000;maxbytes=10000000;maxarray=100000"));
+                    .reject(REJECT_CLASS_PATTERNS);
             return validatingObjectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
             throw new ModelSerDeSerException("Failed to deserialize model.", e.getCause());
