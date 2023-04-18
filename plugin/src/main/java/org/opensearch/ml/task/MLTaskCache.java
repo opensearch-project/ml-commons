@@ -55,6 +55,10 @@ public class MLTaskCache {
         return errors.size() > 0;
     }
 
+    public int errorNodesCount() {
+        return errors.size();
+    }
+
     public boolean allNodeFailed() {
         return workerNodeSize != null && errors.size() == workerNodeSize;
     }

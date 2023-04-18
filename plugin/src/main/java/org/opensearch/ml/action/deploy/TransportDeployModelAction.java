@@ -248,6 +248,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             mlModel.getModelContentHash(),
             eligibleNodes.size(),
             localNodeId,
+            deployToAllNodes,
             mlTask
         );
         MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(

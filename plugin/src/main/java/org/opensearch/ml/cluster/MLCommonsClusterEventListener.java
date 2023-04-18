@@ -7,6 +7,7 @@ package org.opensearch.ml.cluster;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -17,6 +18,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskManager;
@@ -31,17 +33,21 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     private final MLTaskManager mlTaskManager;
     private final MLModelCacheHelper modelCacheHelper;
 
+    private final MLModelAutoReDeployer mlModelAutoReDeployer;
+
     public MLCommonsClusterEventListener(
         ClusterService clusterService,
         MLModelManager mlModelManager,
         MLTaskManager mlTaskManager,
-        MLModelCacheHelper modelCacheHelper
+        MLModelCacheHelper modelCacheHelper,
+        MLModelAutoReDeployer mlModelAutoReDeployer
     ) {
         this.clusterService = clusterService;
         this.clusterService.addListener(this);
         this.mlModelManager = mlModelManager;
         this.mlTaskManager = mlTaskManager;
         this.modelCacheHelper = modelCacheHelper;
+        this.mlModelAutoReDeployer = mlModelAutoReDeployer;
     }
 
     @Override
@@ -58,7 +64,11 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         DiscoveryNodes.Delta delta = event.nodesDelta();
         if (delta.removed()) {
             Set<String> removedNodeIds = delta.removedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toSet());
-            mlModelManager.removeWorkerNodes(removedNodeIds);
+            mlModelManager.removeWorkerNodes(removedNodeIds, false);
+        } else if (delta.added()) {
+            List<String> addedNodesIds = delta.addedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toList());
+            mlModelManager.addModelWorkerNodes(addedNodesIds);
+            mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodesIds, state.getNodes().getClusterManagerNodeId());
         }
     }
 }
