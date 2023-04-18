@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelInput;
@@ -34,11 +36,21 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
     private static final String ML_UNDEPLOY_MODEL_ACTION = "ml_undeploy_model_action";
     private ClusterService clusterService;
 
+    private Settings settings;
+
+    private boolean allowCustomDeploymentPlan;
+
     /**
      * Constructor
      */
-    public RestMLUndeployModelAction(ClusterService clusterService) {
+    public RestMLUndeployModelAction(ClusterService clusterService, Settings settings) {
         this.clusterService = clusterService;
+        this.settings = settings;
+        this.allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
+
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
     }
 
     @Override
@@ -85,7 +97,7 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
         if (modelId != null) {
             targetModelIds = new String[] { modelId };
         }
-        String[] targetNodeIds = getAllNodes();
+        String[] targetNodeIds;
         if (request.hasContent()) {
             XContentParser parser = request.contentParser();
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -94,11 +106,18 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
             String[] modelIds = mlInput.getModelIds();
 
             if (ArrayUtils.isNotEmpty(nodeIds)) {
+                if (!allowCustomDeploymentPlan) {
+                    throw new IllegalArgumentException("Don't allow custom deployment plan");
+                }
                 targetNodeIds = nodeIds;
+            } else {
+                targetNodeIds = getAllNodes();
             }
             if (ArrayUtils.isNotEmpty(modelIds)) {
                 targetModelIds = modelIds;
             }
+        } else {
+            targetNodeIds = getAllNodes();
         }
 
         return new MLUndeployModelNodesRequest(targetNodeIds, targetModelIds);

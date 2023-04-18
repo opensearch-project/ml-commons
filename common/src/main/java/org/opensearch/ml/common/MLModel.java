@@ -46,6 +46,7 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
     //SHA256 hash value of model content.
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
+
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
@@ -60,6 +61,8 @@ public class MLModel implements ToXContentObject {
     public static final String LAST_UNDEPLOYED_TIME_FIELD = "last_undeployed_time";
 
     public static final String MODEL_ID_FIELD = "model_id";
+    // auto redploy retry times for this model.
+    public static final String AUTO_REDEPLOY_RETRY_TIMES_FIELD = "auto_redeploy_retry_times";
     public static final String CHUNK_NUMBER_FIELD = "chunk_number";
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks";
     public static final String PLANNING_WORKER_NODE_COUNT_FIELD = "planning_worker_node_count";
@@ -88,6 +91,8 @@ public class MLModel implements ToXContentObject {
 
     @Setter
     private String modelId; // model chunk doc only
+
+    private Integer autoRedeployRetryTimes;
     private Integer chunkNumber; // model chunk doc only
     private Integer totalChunks; // model chunk doc only
     private Integer planningWorkerNodeCount; // plan to deploy model to how many nodes
@@ -112,6 +117,7 @@ public class MLModel implements ToXContentObject {
                    Instant lastRegisteredTime,
                    Instant lastDeployedTime,
                    Instant lastUndeployedTime,
+                   Integer autoRedeployRetryTimes,
                    String modelId, Integer chunkNumber,
                    Integer totalChunks,
                    Integer planningWorkerNodeCount,
@@ -135,6 +141,7 @@ public class MLModel implements ToXContentObject {
         this.lastDeployedTime = lastDeployedTime;
         this.lastUndeployedTime = lastUndeployedTime;
         this.modelId = modelId;
+        this.autoRedeployRetryTimes = autoRedeployRetryTimes;
         this.chunkNumber = chunkNumber;
         this.totalChunks = totalChunks;
         this.planningWorkerNodeCount = planningWorkerNodeCount;
@@ -172,6 +179,7 @@ public class MLModel implements ToXContentObject {
             lastDeployedTime = input.readOptionalInstant();
             lastUndeployedTime = input.readOptionalInstant();
             modelId = input.readOptionalString();
+            autoRedeployRetryTimes = input.readOptionalInt();
             chunkNumber = input.readOptionalInt();
             totalChunks = input.readOptionalInt();
             planningWorkerNodeCount = input.readOptionalInt();
@@ -219,6 +227,7 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInstant(lastDeployedTime);
         out.writeOptionalInstant(lastUndeployedTime);
         out.writeOptionalString(modelId);
+        out.writeOptionalInt(autoRedeployRetryTimes);
         out.writeOptionalInt(chunkNumber);
         out.writeOptionalInt(totalChunks);
         out.writeOptionalInt(planningWorkerNodeCount);
@@ -281,6 +290,9 @@ public class MLModel implements ToXContentObject {
         if (modelId != null) {
             builder.field(MODEL_ID_FIELD, modelId);
         }
+        if (autoRedeployRetryTimes != null) {
+            builder.field(AUTO_REDEPLOY_RETRY_TIMES_FIELD, autoRedeployRetryTimes);
+        }
         if (chunkNumber != null) {
             builder.field(CHUNK_NUMBER_FIELD, chunkNumber);
         }
@@ -327,6 +339,7 @@ public class MLModel implements ToXContentObject {
         Instant lastDeployedTime = null;
         Instant lastUndeployedTime = null;
         String modelId = null;
+        Integer autoRedeployRetryTimes = null;
         Integer chunkNumber = null;
         Integer totalChunks = null;
         Integer planningWorkerNodeCount = null;
@@ -369,6 +382,9 @@ public class MLModel implements ToXContentObject {
                     break;
                 case MODEL_ID_FIELD:
                     modelId = parser.text();
+                    break;
+                case AUTO_REDEPLOY_RETRY_TIMES_FIELD:
+                    autoRedeployRetryTimes = parser.intValue();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
@@ -454,6 +470,7 @@ public class MLModel implements ToXContentObject {
                 .lastDeployedTime(lastDeployedTime == null? lastLoadedTime : lastDeployedTime)
                 .lastUndeployedTime(lastUndeployedTime == null? lastUnloadedTime : lastUndeployedTime)
                 .modelId(modelId)
+                .autoRedeployRetryTimes(autoRedeployRetryTimes)
                 .chunkNumber(chunkNumber)
                 .totalChunks(totalChunks)
                 .planningWorkerNodeCount(planningWorkerNodeCount)

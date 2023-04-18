@@ -8,6 +8,8 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.util.HashMap;
@@ -25,6 +27,7 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
 import org.opensearch.common.bytes.BytesArray;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -54,18 +57,24 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    private final Settings settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true).build();
+
+    private final ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN);
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService);
+        testState = setupTestClusterState();
+        when(clusterService.state()).thenReturn(testState);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
             ActionListener<MLModelGetResponse> actionListener = invocation.getArgument(2);
             return null;
         }).when(client).execute(eq(MLUndeployModelAction.INSTANCE), any(), any());
-        testState = setupTestClusterState();
-        when(clusterService.state()).thenReturn(testState);
+
     }
 
     @Override
@@ -76,7 +85,7 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService);
+        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings);
         assertNotNull(undeployModel);
     }
 

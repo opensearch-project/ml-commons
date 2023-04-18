@@ -140,9 +140,9 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     public void testNewNodeStreamRequest() throws IOException {
         Map<String, String> modelToDeployStatus = new HashMap<>();
-        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
         modelToDeployStatus.put("modelId1", "response");
-        modelWorkerNodeCounts.put("modelId1", 1);
+        modelWorkerNodeCounts.put("modelId1", new String[] { "node" });
         MLUndeployModelNodeResponse response = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
@@ -169,8 +169,8 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
         Map<String, String> modelToDeployStatus = new HashMap<>();
         modelToDeployStatus.put("modelId1", "undeployed");
-        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
-        modelWorkerNodeCounts.put("modelId1", 1);
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
         MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         responses.add(response1);
@@ -193,9 +193,9 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         );
         final List<MLUndeployModelNodeResponse> responses = new ArrayList<>();
         Map<String, String> modelToDeployStatus = new HashMap<>();
-        Map<String, Integer> modelWorkerNodeCounts = new HashMap<>();
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
         modelToDeployStatus.put("modelId1", "not_found");
-        modelWorkerNodeCounts.put("modelId1", 2);
+        modelWorkerNodeCounts.put("modelId1", new String[] { "node" });
         MLUndeployModelNodeResponse response1 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         MLUndeployModelNodeResponse response2 = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         responses.add(response1);
@@ -203,11 +203,12 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
         assertNotNull(response);
-        ArgumentCaptor<BulkRequest> argumentCaptor = ArgumentCaptor.forClass(BulkRequest.class);
-        verify(client, times(1)).bulk(argumentCaptor.capture(), any());
-        UpdateRequest updateRequest = (UpdateRequest) argumentCaptor.getValue().requests().get(0);
-        assertEquals(ML_MODEL_INDEX, updateRequest.index());
-        Map<String, Object> updateContent = updateRequest.doc().sourceAsMap();
-        assertEquals(MLModelState.PARTIALLY_DEPLOYED.name(), updateContent.get(MLModel.MODEL_STATE_FIELD));
+        // not_found model will not trigger bulk update, this is a bug fix. Only removedWorkNodes is not empty, there'll be bulk update.
+        // ArgumentCaptor<BulkRequest> argumentCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        // verify(client, times(1)).bulk(argumentCaptor.capture(), any());
+        // UpdateRequest updateRequest = (UpdateRequest) argumentCaptor.getValue().requests().get(0);
+        // assertEquals(ML_MODEL_INDEX, updateRequest.index());
+        // Map<String, Object> updateContent = updateRequest.doc().sourceAsMap();
+        // assertEquals(MLModelState.PARTIALLY_DEPLOYED.name(), updateContent.get(MLModel.MODEL_STATE_FIELD));
     }
 }
