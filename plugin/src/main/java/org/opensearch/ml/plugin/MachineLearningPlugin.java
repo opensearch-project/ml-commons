@@ -504,7 +504,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
                 MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN,
-                MLCommonsSettings.ML_COMMONS_ENABLE_MCORR,
+                MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES
             );
