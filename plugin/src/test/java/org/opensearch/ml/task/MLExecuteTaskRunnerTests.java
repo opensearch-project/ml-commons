@@ -102,14 +102,14 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE.getKey(), 10).build();
-        settings = Settings.builder().put(ML_COMMONS_ENABLE_MCORR.getKey(), false).build();
+        settings = Settings.builder().put(ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL.getKey(), false).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
             ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE,
             ML_COMMONS_MONITORING_REQUEST_COUNT,
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
-            ML_COMMONS_ENABLE_MCORR
+            ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);

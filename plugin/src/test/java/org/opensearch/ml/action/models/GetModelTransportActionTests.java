@@ -80,7 +80,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find model", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model with the provided model id: test_id", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetModel_RuntimeException() {
