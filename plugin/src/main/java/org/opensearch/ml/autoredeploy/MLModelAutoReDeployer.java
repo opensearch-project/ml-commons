@@ -8,7 +8,6 @@
 package org.opensearch.ml.autoredeploy;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +41,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -81,24 +81,29 @@ public class MLModelAutoReDeployer {
         this.mlModelManager = mlModelManager;
         this.searchRequestBuilderFactory = searchRequestBuilderFactory;
 
-        enableAutoReDeployModel = ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
-        onlyRunOnMlNode = ML_COMMONS_ONLY_RUN_ON_ML_NODE.get(settings);
-        autoDeployMaxRetryTimes = ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.get(settings);
-        allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
+        enableAutoReDeployModel = MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
+        onlyRunOnMlNode = MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE.get(settings);
+        autoDeployMaxRetryTimes = MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES.get(settings);
+        allowCustomDeploymentPlan = MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
 
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE, it -> enableAutoReDeployModel = it);
-
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ONLY_RUN_ON_ML_NODE, undeployModelsOnDataNodesConsumer());
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE, it -> enableAutoReDeployModel = it);
 
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES, it -> autoDeployMaxRetryTimes = it);
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE, undeployModelsOnDataNodesConsumer());
 
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
+            .addSettingsUpdateConsumer(
+                MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
+                it -> autoDeployMaxRetryTimes = it
+            );
+
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
     }
 
     private void undeployModelsOnDataNodes() {
