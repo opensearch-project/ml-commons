@@ -80,28 +80,28 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
     }
 
     public void testMemSizeEstimationCPU() {
-        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         assertTrue(cacheHelper.getMemEstCPU(modelId) == null);
         cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.TORCH_SCRIPT, 1000L);
         assertTrue(cacheHelper.getMemEstCPU(modelId) == 1200L);
     }
 
     public void testMemSizeEstimationCPUONNX() {
-        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         assertTrue(cacheHelper.getMemEstCPU(modelId) == null);
         cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.ONNX, 1000L);
         assertTrue(cacheHelper.getMemEstCPU(modelId) == 1500L);
     }
 
     public void testMemSizeEstimationGPU() {
-        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         assertTrue(cacheHelper.getMemEstGPU(modelId) == null);
         cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.TORCH_SCRIPT, 1000L);
         assertTrue(cacheHelper.getMemEstGPU(modelId) == 1200L);
     }
 
     public void testMemSizeEstimationGPUONNX() {
-        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes);
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         assertTrue(cacheHelper.getMemEstGPU(modelId) == null);
         cacheHelper.setMemSizeEstimation(modelId, MLModelFormat.ONNX, 1000L);
         assertTrue(cacheHelper.getMemEstGPU(modelId) == 1500L);
