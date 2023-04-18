@@ -506,6 +506,7 @@ public class MLModelManager {
         String modelId,
         String modelContentHash,
         FunctionName functionName,
+        boolean deployToAllNodes,
         MLTask mlTask,
         ActionListener<String> listener
     ) {
@@ -514,6 +515,7 @@ public class MLModelManager {
         if (modelCacheHelper.isModelDeployed(modelId)) {
             if (workerNodes != null && workerNodes.size() > 0) {
                 log.info("Set new target node ids {} for model {}", Arrays.toString(workerNodes.toArray(new String[0])), modelId);
+                modelCacheHelper.setDeployToAllNodes(modelId, deployToAllNodes);
                 modelCacheHelper.setTargetWorkerNodes(modelId, workerNodes);
             }
             listener.onResponse("successful");
@@ -523,7 +525,7 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Exceed max model per node limit"));
             return;
         }
-        modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes);
+        modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
@@ -747,16 +749,25 @@ public class MLModelManager {
         }
     }
 
+    public void addModelWorkerNodes(List<String> nodeIds) {
+        if (nodeIds != null) {
+            String[] modelIds = getAllModelIds();
+            for (String nodeId : nodeIds) {
+                Arrays.stream(modelIds).forEach(x -> modelCacheHelper.addWorkerNode(x, nodeId));
+            }
+        }
+    }
+
     /**
      * Remove model from worker node cache.
      *
      * @param modelId model id
      * @param nodeIds node ids
      */
-    public void removeModelWorkerNode(String modelId, String... nodeIds) {
+    public void removeModelWorkerNode(String modelId, boolean isFromUndeploy, String... nodeIds) {
         if (nodeIds != null) {
             for (String nodeId : nodeIds) {
-                modelCacheHelper.removeWorkerNode(modelId, nodeId);
+                modelCacheHelper.removeWorkerNode(modelId, nodeId, isFromUndeploy);
             }
         }
     }
@@ -766,8 +777,8 @@ public class MLModelManager {
      *
      * @param removedNodes removed node ids
      */
-    public void removeWorkerNodes(Set<String> removedNodes) {
-        modelCacheHelper.removeWorkerNodes(removedNodes);
+    public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
+        modelCacheHelper.removeWorkerNodes(removedNodes, isFromUndeploy);
     }
 
     /**

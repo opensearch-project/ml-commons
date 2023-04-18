@@ -84,7 +84,7 @@ public class MLDeployModelNodesRequestTest {
     @Test
     public void testConstructorSerialization1() throws IOException {
         String [] nodeIds = {"id1", "id2", "id3"};
-        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", true, mlTask);
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
                 new MLDeployModelNodesRequest(nodeIds, deployModelInput)
         );
@@ -104,7 +104,7 @@ public class MLDeployModelNodesRequestTest {
     @Test
     public void testConstructorSerialization2() throws IOException {
         DiscoveryNode [] nodeIds = {localNode1, localNode2, localNode3};
-        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", true, mlTask);
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
                 new MLDeployModelNodesRequest(nodeIds, deployModelInput)
         );
@@ -140,7 +140,7 @@ public class MLDeployModelNodesRequestTest {
     @Test
     public void testConstructorFromInputStream() throws IOException {
         String [] nodeIds = {"id1", "id2", "id3"};
-        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", mlTask);
+        MLDeployModelInput deployModelInput = new MLDeployModelInput("modelId", "taskId", "modelContentHash", 3, "coordinatingNodeId", true, mlTask);
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
                 new MLDeployModelNodesRequest(nodeIds, deployModelInput)
         );

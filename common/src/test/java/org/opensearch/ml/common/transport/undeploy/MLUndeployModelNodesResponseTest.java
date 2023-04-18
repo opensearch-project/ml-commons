@@ -77,14 +77,14 @@ public class MLUndeployModelNodesResponseTest {
 
         Map<String, String> modelToUndeployStatus1 = new HashMap<>();
         modelToUndeployStatus1.put("modelId1", "response");
-        Map<String, Integer> modelWorkerNodeCounts1 = new HashMap<>();
-        modelWorkerNodeCounts1.put("modelId1", 1);
+        Map<String, String[]> modelWorkerNodeCounts1 = new HashMap<>();
+        modelWorkerNodeCounts1.put("modelId1", new String[]{"mockNode1"});
         nodes.add(new MLUndeployModelNodeResponse(node1, modelToUndeployStatus1, modelWorkerNodeCounts1));
 
         Map<String, String> modelToUndeployStatus2 = new HashMap<>();
         modelToUndeployStatus2.put("modelId2", "response");
-        Map<String, Integer> modelWorkerNodeCounts2 = new HashMap<>();
-        modelWorkerNodeCounts2.put("modelId2", 2);
+        Map<String, String[]> modelWorkerNodeCounts2 = new HashMap<>();
+        modelWorkerNodeCounts2.put("modelId2", new String[]{"mockNode2"});
         nodes.add(new MLUndeployModelNodeResponse(node2, modelToUndeployStatus2, modelWorkerNodeCounts2));
 
         List<FailedNodeException> failures = new ArrayList<>();

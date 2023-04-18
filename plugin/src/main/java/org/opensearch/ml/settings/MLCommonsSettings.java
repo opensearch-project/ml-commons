@@ -73,4 +73,20 @@ public final class MLCommonsSettings {
         .simpleString("plugins.ml_commons.exclude_nodes._name", Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Boolean> ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN = Setting
         .boolSetting("plugins.ml_commons.allow_custom_deployment_plan", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE = Setting
+        .boolSetting("plugins.ml_commons.model_auto_redeploy.enable", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Integer> ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES = Setting
+        .intSetting("plugins.ml_commons.model_auto_redeploy.lifetime_retry_times", 3, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Float> ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO = Setting
+        .floatSetting(
+            "plugins.ml_commons.model_auto_redeploy_success_ratio",
+            0.8f,
+            0f,
+            1f,
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 }

@@ -45,7 +45,13 @@ public class MLModelCacheHelper {
      * @param state model state
      * @param functionName function name
      */
-    public synchronized void initModelState(String modelId, MLModelState state, FunctionName functionName, List<String> targetWorkerNodes) {
+    public synchronized void initModelState(
+        String modelId,
+        MLModelState state,
+        FunctionName functionName,
+        List<String> targetWorkerNodes,
+        boolean deployToAllNodes
+    ) {
         if (isModelRunningOnNode(modelId)) {
             throw new MLLimitExceededException("Duplicate deploy model task");
         }
@@ -54,6 +60,7 @@ public class MLModelCacheHelper {
         modelCache.setModelState(state);
         modelCache.setFunctionName(functionName);
         modelCache.setTargetWorkerNodes(targetWorkerNodes);
+        modelCache.setDeployToAllNodes(deployToAllNodes);
         modelCaches.put(modelId, modelCache);
     }
 
@@ -251,12 +258,12 @@ public class MLModelCacheHelper {
      * Remove worker nodes for all models.
      * @param removedNodes removed nodes
      */
-    public void removeWorkerNodes(Set<String> removedNodes) {
+    public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
         Set<String> modelIds = modelCaches.keySet();
         for (String modelId : modelIds) {
             MLModelCache modelCache = modelCaches.get(modelId);
             log.debug("remove worker nodes of model {} : {}", modelId, removedNodes.toArray(new String[0]));
-            modelCache.removeWorkerNodes(removedNodes);
+            modelCache.removeWorkerNodes(removedNodes, isFromUndeploy);
             if (!modelCache.isValidCache()) {
                 log.debug("remove model cache {}", modelId);
                 modelCaches.remove(modelId);
@@ -268,12 +275,15 @@ public class MLModelCacheHelper {
      * Remove worker node of model.
      * @param modelId model id
      * @param nodeId node id
+     * @param isFromUndeploy Only allow custom deploy is true and user undeployed partial nodes, the isFromUndeploy is true, in
+     *                       this case, we need to change the deployToAllNodes flag to false in cache to make sure it's consistent
+     *                       with model index, also we need to change the target worker nodes to exclude the removed worker nodes.
      */
-    public void removeWorkerNode(String modelId, String nodeId) {
+    public void removeWorkerNode(String modelId, String nodeId, boolean isFromUndeploy) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache != null) {
             log.debug("remove worker node {} of model {} from cache", nodeId, modelId);
-            modelCache.removeWorkerNode(nodeId);
+            modelCache.removeWorkerNode(nodeId, isFromUndeploy);
             if (!modelCache.isValidCache()) {
                 log.debug("remove model {} from cache as no node running it", modelId);
                 modelCaches.remove(modelId);
@@ -387,6 +397,19 @@ public class MLModelCacheHelper {
         MLModelCache modelCache = modelCaches.get(modelId);
         FunctionName functionName = modelCache == null ? null : modelCache.getFunctionName();
         return Optional.ofNullable(functionName);
+    }
+
+    public void setDeployToAllNodes(String modelId, Boolean deployToAllNodes) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache != null) {
+            log.info("Starting to set deployToAllNodes flag to modelId: {}, value to: {}", modelId, deployToAllNodes);
+            modelCache.setDeployToAllNodes(deployToAllNodes);
+        }
+    }
+
+    public boolean getDeployToAllNodes(String modelId) {
+        MLModelCache mlModelCache = getExistingModelCache(modelId);
+        return mlModelCache.isDeployToAllNodes();
     }
 
     private MLModelCache getExistingModelCache(String modelId) {
