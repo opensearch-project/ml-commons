@@ -74,10 +74,10 @@ public class MLModelProfile implements ToXContentFragment, Writeable {
             builder.field("predict_request_stats", predictRequestStats);
         }
         if (memSizeEstimationCPU != null) {
-            builder.field("mem_size_estimation_cpu", memSizeEstimationCPU);
+            builder.field("memory_size_estimation_cpu", memSizeEstimationCPU);
         }
         if (memSizeEstimationGPU != null) {
-            builder.field("mem_size_estimation_gpu", memSizeEstimationGPU);
+            builder.field("memory_size_estimation_gpu", memSizeEstimationGPU);
         }
         builder.endObject();
         return builder;
