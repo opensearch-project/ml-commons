@@ -10,7 +10,6 @@ import com.jayway.jsonpath.JsonPath;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.apache.commons.text.StringEscapeUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
@@ -27,10 +26,15 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.ConnectorNames.HTTP_V1;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.ml.common.utils.StringUtils.toUTF8;
 
 @Log4j2
 @NoArgsConstructor
@@ -46,6 +50,11 @@ public class HttpConnector implements Connector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String PRE_PROCESS_FUNCTION_FIELD = "pre_process_function";
     public static final String POST_PROCESS_FUNCTION_FIELD = "post_process_function";
+    public static final String ACCESS_KEY_FIELD = "access_key";
+    public static final String SECRET_KEY_FIELD = "secret_key";
+    public static final String SERVICE_NAME_FIELD = "service_name";
+    public static final String REGION_FIELD = "region";
+
     @Getter
     protected String name;
     @Getter
@@ -57,8 +66,10 @@ public class HttpConnector implements Connector {
     protected Map<String, String> credential ;
     protected Map<String, String> decryptedCredential;
     protected Map<String, String> decryptedHeaders;
+    @Getter
     protected Map<String, String> parameters;
 
+    @Getter
     protected String bodyTemplate;
     protected String responseFilter;
     protected String responseType;
@@ -67,16 +78,12 @@ public class HttpConnector implements Connector {
     @Getter
     protected String postProcessFunction;
 
-    protected static Gson gson;
-    static {
-        gson = new Gson();
-    }
     //TODO: add RequestConfig like request time out,
 
     public HttpConnector(String name, XContentParser parser) throws IOException {
         this.name = name;
         headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
+        //headers.put("Content-Type", "application/json");
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -91,8 +98,7 @@ public class HttpConnector implements Connector {
                     endpoint = parser.text();
                     break;
                 case PARAMETERS_FIELD:
-                    parameters = new HashMap<>();
-                    parameters.putAll(parser.mapStrings());
+                    parameters = parser.mapStrings();
                     break;
                 case CREDENTIAL_FIELD:
                     credential = new HashMap<>();
@@ -166,8 +172,8 @@ public class HttpConnector implements Connector {
         return builder;
     }
 
-    public HttpConnector(String name, StreamInput input) throws IOException {
-        this.name = name;
+    public HttpConnector(StreamInput input) throws IOException {
+        this.name = input.readString();
         endpoint = input.readOptionalString();
         httpMethod = input.readOptionalString();
         if (input.readBoolean()) {
@@ -221,21 +227,29 @@ public class HttpConnector implements Connector {
 
     @Override
     public  <T> T createPayload(Map<String, ?> parameters) {
-        if (this.bodyTemplate != null) {
+        Map<String, String> mergedParameters = new HashMap<>();
+        if (this.parameters != null && this.parameters.size() > 0) {
+            mergedParameters.putAll(this.parameters);
+        }
+        if (parameters != null && parameters.size() > 0) {
+            mergedParameters.putAll((Map<String, String>)parameters);
+        }
+        if (bodyTemplate != null) {
             String payload = bodyTemplate;
             Map<String, String> values = new HashMap<>();
-            for (Map.Entry<String, ?> entry : parameters.entrySet()) {
-                values.put(entry.getKey(), (String)entry.getValue());
-            }
-            StringSubstitutor substitutor = new StringSubstitutor(values);
-            payload = substitutor.replace(payload);
-            for (Map.Entry<String, ?> entry : values.entrySet()) {
-                if (payload.contains("%(" + entry.getKey() + ")")) {
-                    values.put(entry.getKey(), StringEscapeUtils.escapeJson(gson.fromJson((String)entry.getValue(), String.class)));
+            for (Map.Entry<String, String> entry : mergedParameters.entrySet()) {
+                if (isJson(entry.getValue())) {
+                    values.put(entry.getKey(), toUTF8(entry.getValue()));
+                } else {
+                    values.put(entry.getKey(), escapeJson(entry.getValue()));
                 }
             }
-            StringSubstitutor innerSubstitutor = new StringSubstitutor(values, "%(", ")");
-            payload = innerSubstitutor.replace(payload);
+            StringSubstitutor substitutor = new StringSubstitutor(values, "${parameters.", "}");
+            payload = substitutor.replace(payload);
+
+            if (!isJson(payload)) {
+                throw new IllegalArgumentException("Invalid JSON: " + payload);
+            }
             return (T) payload;
         }
         return (T) parameters.get("http_body");
@@ -250,9 +264,15 @@ public class HttpConnector implements Connector {
         this.decryptedCredential = decrypted;
 
         Map<String, String> decryptedHeaders = new HashMap<>();
-        StringSubstitutor substitutor = new StringSubstitutor(decryptedCredential);
+        StringSubstitutor substitutor = new StringSubstitutor(decryptedCredential, "${credential.", "}");
         for (String key : headers.keySet()) {
             decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
+        }
+        if (parameters != null && parameters.size() > 0) {
+            substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+            for (String key : decryptedHeaders.keySet()) {
+                decryptedHeaders.put(key, substitutor.replace(decryptedHeaders.get(key)));
+            }
         }
         this.decryptedHeaders = decryptedHeaders;
     }
@@ -266,6 +286,7 @@ public class HttpConnector implements Connector {
     }
 
 
+    @Override
     @SuppressWarnings("unchecked")
     public <T> void parseResponse(T response, List<ModelTensor> modelTensors, boolean modelTensorJson) throws IOException {
         if (modelTensorJson) {
@@ -325,8 +346,7 @@ public class HttpConnector implements Connector {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-            String name = streamInput.readString();
-            return new HttpConnector(name, streamInput);
+            return new HttpConnector(streamInput);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -344,4 +364,33 @@ public class HttpConnector implements Connector {
         return result;
     }
 
+    public void removeCredential() {
+        this.credential = null;
+        this.decryptedCredential = null;
+    }
+
+    public boolean awsCredential() {
+        return this.decryptedCredential.containsKey(ACCESS_KEY_FIELD) && this.decryptedCredential.containsKey(SECRET_KEY_FIELD);
+    }
+
+    public String getAccessKey() {
+        return decryptedCredential.get(ACCESS_KEY_FIELD);
+    }
+
+    public String getSecretKey() {
+        return decryptedCredential.get(SECRET_KEY_FIELD);
+    }
+    public String getServiceName() {
+        if (parameters == null) {
+            return decryptedCredential.get(SERVICE_NAME_FIELD);
+        }
+        return Optional.ofNullable(parameters.get(SERVICE_NAME_FIELD)).orElse(decryptedCredential.get(SERVICE_NAME_FIELD));
+    }
+
+    public String getRegion() {
+        if (parameters == null) {
+            return decryptedCredential.get(REGION_FIELD);
+        }
+        return Optional.ofNullable(parameters.get(REGION_FIELD)).orElse(decryptedCredential.get(REGION_FIELD));
+    }
 }

@@ -18,6 +18,9 @@ public class MLPostProcessFunction {
         POST_PROCESS_FUNCTIONS = new HashMap<>();
         POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, "\n      def name = \"sentence_embedding\";\n" +
                 "      def dataType = \"FLOAT32\";\n" +
+                "      if (params.embeddings == null || params.embeddings.length == 0) {\n" +
+                "          return null;\n" +
+                "      }\n" +
                 "      def embeddings = params.embeddings;\n" +
                 "      StringBuilder builder = new StringBuilder(\"[\");\n" +
                 "      for (int i=0; i<embeddings.length; i++) {\n" +
@@ -39,6 +42,9 @@ public class MLPostProcessFunction {
 
         POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, "\n      def name = \"sentence_embedding\";\n" +
                 "      def dataType = \"FLOAT32\";\n" +
+                "      if (params.data == null || params.data.length == 0) {\n" +
+                "          return null;\n" +
+                "      }\n" +
                 "      def shape = [params.data[0].embedding.length];\n" +
                 "      def json = \"{\" +\n" +
                 "                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n" +

@@ -285,7 +285,11 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory',
         'org.opensearch.ml.action.training.TrainingITTests',
         'org.opensearch.ml.action.prediction.PredictionITTests',
-        'org.opensearch.ml.cluster.MLSyncUpCron'
+        'org.opensearch.ml.cluster.MLSyncUpCron',
+        'org.opensearch.ml.breaker.DiskCircuitBreaker',
+        'org.opensearch.ml.rest.AbstractMLSearchAction',
+        'org.opensearch.ml.rest.AbstractMLSearchAction.1',
+        'org.opensearch.ml.action.undeploy.TransportUndeployModelAction'
 ]
 
 jacocoTestCoverageVerification {

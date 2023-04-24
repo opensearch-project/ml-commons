@@ -11,6 +11,9 @@ import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
@@ -31,7 +34,10 @@ import java.util.Map;
 @Function(FunctionName.REMOTE)
 public class RemoteModel extends DLModel {
 
+    public static final String CLUSTER_SERVICE = "cluster_service";
     public static final String SCRIPT_SERVICE = "script_service";
+    public static final String CLIENT = "client";
+    public static final String XCONTENT_REGISTRY = "xcontent_registry";
     private RemoteConnectorExecutor connectorExecutor;
 
     @Override
@@ -40,7 +46,7 @@ public class RemoteModel extends DLModel {
             return predict(modelId, mlInput);
         } catch (Throwable t) {
             log.error("Failed to call remote model", t);
-            throw new MLException("Failed to call remote model");
+            throw new MLException("Failed to call remote model. " + t.getMessage());
         }
     }
 
@@ -56,6 +62,9 @@ public class RemoteModel extends DLModel {
             connector.decrypt((credential) -> encryptor.decrypt(credential));
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getName(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
+            this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
+            this.connectorExecutor.setClient((Client) params.get(CLIENT));
+            this.connectorExecutor.setXContentRegistry((NamedXContentRegistry) params.get(XCONTENT_REGISTRY));
         } catch (Exception e) {
             log.error("Failed to init remote model", e);
             throw new MLException(e);
