@@ -36,6 +36,7 @@ public class RestActionUtils {
     public static final String PARAMETER_ASYNC = "async";
     public static final String PARAMETER_RETURN_CONTENT = "return_content";
     public static final String PARAMETER_MODEL_ID = "model_id";
+    public static final String PARAMETER_INDEX = "index";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String PARAMETER_DEPLOY_MODEL = "deploy";
     public static final String PARAMETER_VERSION = "version";

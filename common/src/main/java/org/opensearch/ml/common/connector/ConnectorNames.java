@@ -9,4 +9,5 @@ public class ConnectorNames {
 
     public static final String HTTP_V1 = "http/v1";
     public static final String AWS_V1 = "aws/v1";
+    public static final String CHAT_V1 = "chat/v1";
 }

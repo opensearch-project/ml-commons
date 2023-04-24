@@ -26,6 +26,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
@@ -68,6 +70,10 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLModel mlModel = MLModel.parse(parser);
+                        Connector connector = mlModel.getConnector();
+                        if (connector instanceof HttpConnector) {
+                            ((HttpConnector) connector).removeCredential();
+                        }
                         actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                     } catch (Exception e) {
                         log.error("Failed to parse ml model" + r.getId(), e);

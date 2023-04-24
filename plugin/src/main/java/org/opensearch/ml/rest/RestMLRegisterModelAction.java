@@ -77,11 +77,11 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
     MLRegisterModelRequest getRequest(RestRequest request) throws IOException {
         String modelName = request.param(PARAMETER_MODEL_ID);
         String version = request.param(PARAMETER_VERSION);
-        boolean loadModel = request.paramAsBoolean(PARAMETER_DEPLOY_MODEL, false);
+        boolean deployModel = request.paramAsBoolean(PARAMETER_DEPLOY_MODEL, false);
         if (modelName != null && !request.hasContent()) {
             MLRegisterModelInput mlInput = MLRegisterModelInput
                 .builder()
-                .deployModel(loadModel)
+                .deployModel(deployModel)
                 .modelName(modelName)
                 .version(version)
                 .build();
@@ -91,8 +91,8 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLRegisterModelInput mlInput = modelName == null
-            ? MLRegisterModelInput.parse(parser, loadModel)
-            : MLRegisterModelInput.parse(parser, modelName, version, loadModel);
+            ? MLRegisterModelInput.parse(parser, deployModel)
+            : MLRegisterModelInput.parse(parser, modelName, version, deployModel);
         return new MLRegisterModelRequest(mlInput);
     }
 }
