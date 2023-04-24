@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.input.remote;
 
-import com.google.gson.Gson;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
@@ -21,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.REMOTE})
 public class RemoteInferenceMLInput extends MLInput {
@@ -39,7 +39,6 @@ public class RemoteInferenceMLInput extends MLInput {
         super();
         this.algorithm = functionName;
         Map<String, ?> parameterObjs = new HashMap<>();
-        Gson gson = new Gson();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -60,7 +59,11 @@ public class RemoteInferenceMLInput extends MLInput {
             Object value = parameterObjs.get(key);
             try {
                 AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    parameters.put(key, gson.toJson(value));
+                    if (value instanceof String) {
+                        parameters.put(key, (String)value);
+                    } else {
+                        parameters.put(key, gson.toJson(value));
+                    }
                     return null;
                 });
             } catch (PrivilegedActionException e) {

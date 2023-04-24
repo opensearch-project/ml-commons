@@ -22,7 +22,10 @@ import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
@@ -397,6 +400,9 @@ public class MLModelManager {
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
                     mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    if (registerModelInput.isDeployModel()) {
+                        deployModelAfterRegistering(registerModelInput, modelId);
+                    }
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
@@ -701,8 +707,20 @@ public class MLModelManager {
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 if (FunctionName.REMOTE == mlModel.getAlgorithm() || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
-                    Map<String, Object> params = ImmutableMap.of(ML_ENGINE, mlEngine, SCRIPT_SERVICE, scriptService);
-                    // deploy model trained by built-in algorithm like kmeans
+                    Map<String, Object> params = ImmutableMap
+                        .of(
+                            ML_ENGINE,
+                            mlEngine,
+                            SCRIPT_SERVICE,
+                            scriptService,
+                            CLIENT,
+                            client,
+                            XCONTENT_REGISTRY,
+                            xContentRegistry,
+                            CLUSTER_SERVICE,
+                            clusterService
+                        );
+                    // deploy remote model or model trained by built-in algorithm like kmeans
                     Predictable predictable = mlEngine.deploy(mlModel, params);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();

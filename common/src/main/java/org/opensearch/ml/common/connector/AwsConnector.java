@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.opensearch.ml.common.connector.ConnectorNames.AWS_V1;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
 @NoArgsConstructor
@@ -38,8 +39,8 @@ public class AwsConnector extends HttpConnector {
         validate();
     }
 
-    public AwsConnector(String name, StreamInput input) throws IOException {
-        super(name, input);
+    public AwsConnector(StreamInput input) throws IOException {
+        super(input);
         validate();
     }
 
@@ -50,6 +51,7 @@ public class AwsConnector extends HttpConnector {
         }
     }
 
+    @Override
     @SuppressWarnings("unchecked")
     public <T> void parseResponse(T response, List<ModelTensor> modelTensors, boolean modelTensorJson) throws IOException {
         if (modelTensorJson) {
@@ -84,8 +86,7 @@ public class AwsConnector extends HttpConnector {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-            String name = streamInput.readString();
-            return new AwsConnector(name, streamInput);
+            return new AwsConnector(streamInput);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

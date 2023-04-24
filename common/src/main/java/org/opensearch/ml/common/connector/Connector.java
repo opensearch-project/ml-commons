@@ -8,8 +8,10 @@ package org.opensearch.ml.common.connector;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -33,4 +35,14 @@ public interface Connector extends ToXContentObject, Writeable {
         out.writeString(getName());
         out.writeOptionalString(getEndpoint());
     }
+
+    default String getPreProcessFunction() {
+        return null;
+    }
+
+    default String getPostProcessFunction() {
+        return null;
+    }
+
+    default <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException {}
 }
