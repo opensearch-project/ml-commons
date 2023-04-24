@@ -119,6 +119,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void searchModelGroup(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+                listener.onResponse(searchResponse);
+            }
+
+            @Override
             public void getTask(String taskId, ActionListener<MLTask> listener) {
                 listener.onResponse(mlTask);
             }

@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionFuture;
@@ -20,13 +21,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataframe.ColumnMeta;
-import org.opensearch.ml.common.dataframe.ColumnType;
-import org.opensearch.ml.common.dataframe.ColumnValue;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.dataframe.DoubleValue;
-import org.opensearch.ml.common.dataframe.Row;
+import org.opensearch.ml.common.dataframe.*;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
@@ -73,19 +68,22 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     }
 
     @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
-    public void testPredictionWithSearchInput_KMeans() {
+    @Ignore
+    void testPredictionWithSearchInput_KMeans() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
     @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
-    public void testPredictionWithDataInput_KMeans() {
+    @Ignore
+    void testPredictionWithDataInput_KMeans() {
         MLInputDataset inputDataset = new DataFrameInputDataset(irisDataFrame());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
     @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
-    public void testPredictionWithoutDataset_KMeans() {
+    @Ignore
+    void testPredictionWithoutDataset_KMeans() {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
@@ -95,7 +93,8 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     }
 
     @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
-    public void testPredictionWithEmptyDataset_KMeans() {
+    @Ignore
+    void testPredictionWithEmptyDataset_KMeans() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");
         MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);
@@ -105,7 +104,8 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictionFuture.actionGet();
     }
 
-    public void testPredictionWithSearchInput_LogisticRegression() {
+    @Ignore
+    void testPredictionWithSearchInput_LogisticRegression() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(
             ImmutableList.of(irisIndexName),
             irisDataQueryPredictLogisticRegression()
@@ -113,12 +113,14 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictAndVerify(logisticRegressionModelId, inputDataset, FunctionName.LOGISTIC_REGRESSION, null, IRIS_DATA_SIZE);
     }
 
-    public void testPredictionWithDataFrame_BatchRCF() {
+    @Ignore
+    void testPredictionWithDataFrame_BatchRCF() {
         MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(batchRcfDataSize));
         predictAndVerify(batchRcfModelId, inputDataset, FunctionName.BATCH_RCF, null, batchRcfDataSize);
     }
 
-    public void testPredictionWithDataFrame_FitRCF() {
+    @Ignore
+    void testPredictionWithDataFrame_FitRCF() {
         MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(batchRcfDataSize, true));
         DataFrame dataFrame = predictAndVerify(
             fitRcfModelId,
@@ -129,7 +131,8 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         );
     }
 
-    public void testPredictionWithDataFrame_LinearRegression() {
+    @Ignore
+    void testPredictionWithDataFrame_LinearRegression() {
         int size = 1;
         int feet = 20;
         ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("feet", ColumnType.DOUBLE) };

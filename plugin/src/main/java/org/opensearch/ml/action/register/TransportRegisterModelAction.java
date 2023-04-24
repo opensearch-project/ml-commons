@@ -8,6 +8,7 @@ package org.opensearch.ml.action.register;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
@@ -27,15 +28,12 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.transport.forward.MLForwardAction;
-import org.opensearch.ml.common.transport.forward.MLForwardInput;
-import org.opensearch.ml.common.transport.forward.MLForwardRequest;
-import org.opensearch.ml.common.transport.forward.MLForwardRequestType;
-import org.opensearch.ml.common.transport.forward.MLForwardResponse;
+import org.opensearch.ml.common.transport.forward.*;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
@@ -48,6 +46,8 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
+import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -69,6 +69,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     MLTaskDispatcher mlTaskDispatcher;
     MLStats mlStats;
     volatile String trustedUrlRegex;
+    volatile boolean filterByEnabled;
 
     @Inject
     public TransportRegisterModelAction(
@@ -101,14 +102,25 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
+        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
+        User user = RestActionUtils.getUserContext(client);
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
         Pattern pattern = Pattern.compile(trustedUrlRegex);
         String url = registerModelInput.getUrl();
+
+        if ((registerModelInput.getModelGroupId() != null)
+            && (filterByEnabled)
+            && (!SecurityUtils.validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client))) {
+            log.error("User doesn't have valid privilege to perform this operation");
+            throw new IllegalArgumentException("User doesn't have valid privilege to perform this operation");
+        }
+
         if (url != null) {
             boolean validUrl = pattern.matcher(url).find();
             if (!validUrl) {

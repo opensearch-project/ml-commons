@@ -12,9 +12,18 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.*;
+import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
+
 
 import lombok.extern.log4j.Log4j2;
 
@@ -22,6 +31,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.action.update.UpdateRequest;
@@ -29,21 +39,25 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.common.transport.undeploy.*;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.SecurityUtils;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -57,6 +71,9 @@ public class TransportUndeployModelAction extends
     private final Client client;
     private DiscoveryNodeHelper nodeFilter;
     private final MLStats mlStats;
+    NamedXContentRegistry xContentRegistry;
+
+    private volatile boolean filterByEnabled;
 
     @Inject
     public TransportUndeployModelAction(
@@ -67,7 +84,9 @@ public class TransportUndeployModelAction extends
         ThreadPool threadPool,
         Client client,
         DiscoveryNodeHelper nodeFilter,
-        MLStats mlStats
+        MLStats mlStats,
+        NamedXContentRegistry xContentRegistry,
+        Settings settings
     ) {
         super(
             MLUndeployModelAction.NAME,
@@ -85,6 +104,9 @@ public class TransportUndeployModelAction extends
         this.client = client;
         this.nodeFilter = nodeFilter;
         this.mlStats = mlStats;
+        this.xContentRegistry = xContentRegistry;
+        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
     }
 
     @Override
@@ -98,6 +120,7 @@ public class TransportUndeployModelAction extends
             Map<String, String[]> modelWorkNodesBeforeRemoval = new HashMap<>();
             responses.forEach(r -> {
                 Map<String, String[]> nodeCounts = r.getModelWorkerNodeBeforeRemoval();
+
                 if (nodeCounts != null) {
                     for (Map.Entry<String, String[]> entry : nodeCounts.entrySet()) {
                         if (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())

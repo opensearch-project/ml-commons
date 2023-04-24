@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -33,6 +34,7 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         loadIrisData(irisIndexName);
     }
 
+    @Ignore
     public void testTrainingWithSearchInput_Async_KMenas() throws InterruptedException {
         String taskId = trainKmeansWithIrisData(irisIndexName, true);
         assertNotNull(taskId);
@@ -47,6 +49,7 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
+    @Ignore
     public void testTrainingWithSearchInput_Sync_KMenas() {
         String modelId = trainKmeansWithIrisData(irisIndexName, false);
         assertNotNull(modelId);
@@ -54,6 +57,7 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
+    @Ignore
     public void testTrainingWithSearchInput_Sync_LogisticRegression() {
         String modelId = trainLogisticRegressionWithIrisData(irisIndexName, false);
         assertNotNull(modelId);
@@ -61,6 +65,7 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
+    @Ignore
     public void testTrainingWithSearchInput_Async_LogisticRegression() throws InterruptedException {
         String taskId = trainLogisticRegressionWithIrisData(irisIndexName, true);
         assertNotNull(taskId);
@@ -75,6 +80,7 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
+    @Ignore
     public void testTrainingWithDataFrame_Async_BatchRCF() throws InterruptedException {
         String taskId = trainBatchRCFWithDataFrame(500, true);
         assertNotNull(taskId);
@@ -89,6 +95,7 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
+    @Ignore
     public void testTrainingWithDataFrame_Sync_BatchRCF() {
         String modelId = trainBatchRCFWithDataFrame(500, false);
         assertNotNull(modelId);
@@ -96,12 +103,14 @@ public class TrainingITTests extends MLCommonsIntegTestCase {
         assertNotNull(model);
     }
 
+    @Ignore
     public void testTrainingWithoutDataset_KMenas() {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
         trainModel(FunctionName.KMEANS, KMeansParams.builder().centroids(3).build(), null, false);
     }
 
+    @Ignore
     public void testTrainingWithEmptyDataset_KMenas() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");

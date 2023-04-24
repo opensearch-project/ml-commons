@@ -27,6 +27,7 @@ import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.task.*;
@@ -153,6 +154,14 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             listener.onResponse(searchResponse);
         }, listener::onFailure));
     }
+
+    @Override
+    public void searchModelGroup(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
+        client.execute(MLModelGroupSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
+            listener.onResponse(searchResponse);
+        }, listener::onFailure));
+    }
+
 
     @Override
     public void getTask(String taskId, ActionListener<MLTask> listener) {

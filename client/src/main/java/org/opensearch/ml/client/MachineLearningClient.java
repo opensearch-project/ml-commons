@@ -12,10 +12,10 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
-import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.MLOutput;
 
 import java.util.Map;
 
@@ -200,12 +200,32 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
+
     /**
      * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
      * @param searchRequest searchRequest to search the ML Model
      * @param listener action listener
      */
     void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
+
+
+    /**
+     * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
+     * @param searchRequest searchRequest to search the ML Model
+     * @return Action future of search response
+     */
+    default ActionFuture<SearchResponse> searchModelGroup(SearchRequest searchRequest) {
+        PlainActionFuture<SearchResponse> actionFuture = PlainActionFuture.newFuture();
+        searchModelGroup(searchRequest, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
+     * @param searchRequest searchRequest to search the ML Model
+     * @param listener action listener
+     */
+    void searchModelGroup(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
 
     /**
      * For more info on search task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-task

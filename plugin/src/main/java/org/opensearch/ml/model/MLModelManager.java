@@ -18,19 +18,13 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
-import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
-import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
+import static org.opensearch.ml.engine.ModelHelper.*;
+import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -41,13 +35,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -87,6 +75,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -290,7 +279,11 @@ public class MLModelManager {
                                 );
                         } else {
                             log.error("Model group not found");
-                            uploadModel(registerModelInput, mlTask, null, -1, -1);
+                            handleException(
+                                registerModelInput.getFunctionName(),
+                                mlTask.getTaskId(),
+                                new MLValidationException("Model group not found")
+                            );
                         }
                     }, e -> {
                         log.error("Failed to get model group", e);
@@ -1037,4 +1030,5 @@ public class MLModelManager {
     public boolean isModelRunningOnNode(String modelId) {
         return modelCacheHelper.isModelRunningOnNode(modelId);
     }
+
 }

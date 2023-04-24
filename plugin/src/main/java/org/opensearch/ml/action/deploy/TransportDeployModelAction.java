@@ -5,27 +5,27 @@
 
 package org.opensearch.ml.action.deploy;
 
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -34,21 +34,16 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.*;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelInput;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelNodesRequest;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelNodesResponse;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.deploy.*;
+import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -56,6 +51,9 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
+import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.SecurityUtils;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -78,6 +76,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     MLStats mlStats;
 
     private volatile boolean allowCustomDeploymentPlan;
+    private volatile boolean filterByEnabled;
 
     @Inject
     public TransportDeployModelAction(
@@ -108,15 +107,50 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlModelManager = mlModelManager;
         this.mlStats = mlStats;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
+        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
+        log.info(modelId);
+
+        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false);
+        FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
+        GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
+        User user = RestActionUtils.getUserContext(client);
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.get(getRequest, ActionListener.wrap(r -> {
+                if (r != null && r.isExists()) {
+                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        MLModel mlModel = MLModel.parse(parser);
+                        log.info(mlModel.getModelGroupId());
+
+                        if ((mlModel.getModelGroupId() != null)
+                            && (filterByEnabled)
+                            && (!SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client))) {
+                            log.info("backend roles did not match");
+                            log.error("User doesn't have valid privilege to perform this operation");
+                            throw new MLValidationException("User doesn't have valid privilege to perform this operation");
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to parse ml model" + r.getId(), e);
+                        listener.onFailure(e);
+                    }
+                }
+            }, e -> { listener.onFailure(new MLResourceNotFoundException("Fail to find model")); }));
+        } catch (Exception e) {
+            throw e;
+        }
+
         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
         boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
         if (!allowCustomDeploymentPlan && !deployToAllNodes) {
@@ -175,7 +209,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName algorithm = mlModel.getAlgorithm();
                 // TODO: Track deploy failure
-                // mlStats.createCounterStatIfAbsent(algorithm, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+                // mlStats.createCounterStatIfAbsent(algorithm, ActionName.DEPLOY,
+                // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
                 MLTask mlTask = MLTask
                     .builder()
                     .async(true)

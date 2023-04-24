@@ -7,6 +7,10 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -19,6 +23,7 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModelGroup;
@@ -28,9 +33,12 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.collect.ImmutableList;
 
 @Log4j2
 public class TransportRegisterModelGroupAction extends HandledTransportAction<ActionRequest, MLRegisterModelGroupResponse> {
@@ -77,16 +85,43 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     public void createModelGroup(MLRegisterModelGroupInput input, ActionListener<String> listener) {
         try {
             String modelName = input.getName();
+            User user = RestActionUtils.getUserContext(client);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+
+                List<String> backendRoles = user.getBackendRoles() != null ? user.getBackendRoles() : ImmutableList.of();
+
+                if (input.getBackendRoles() == null || input.getBackendRoles().size() == 0) {
+                    input.setBackendRoles(backendRoles);
+                }
+
+                Boolean isRolePresent = input
+                    .getBackendRoles()
+                    .stream()
+                    .allMatch(user.getBackendRoles().stream().collect(Collectors.toSet())::contains);
+
+                if (!isRolePresent) {
+                    log.error("Invalid Backend Roles provided in the input");
+                    throw new IllegalArgumentException("Invalid Backend Roles provided in the input");
+                }
+
                 mlIndicesHandler.initModelGroupIndexIfAbsent(ActionListener.wrap(res -> {
-                    MLModelGroup mlModelMeta = MLModelGroup.builder().name(modelName).description(input.getDescription()).build();
+                    MLModelGroup mlModelGroup = MLModelGroup
+                        .builder()
+                        .name(modelName)
+                        .description(input.getDescription())
+                        .tags(input.getTags())
+                        .backendRoles(input.getBackendRoles())
+                        .owner(user)
+                        .createdTime(Instant.now())
+                        .lastUpdateTime(Instant.now())
+                        .build();
                     IndexRequest indexRequest = new IndexRequest(ML_MODEL_GROUP_INDEX);
                     indexRequest
-                        .source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+                        .source(mlModelGroup.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
                     client.index(indexRequest, ActionListener.wrap(r -> {
-                        log.debug("Index model meta doc successfully {}", modelName);
+                        log.debug("Index model group doc {} successfully created", modelName);
                         listener.onResponse(r.getId());
                     }, e -> {
                         log.error("Failed to index model meta doc", e);
@@ -105,4 +140,5 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             listener.onFailure(e);
         }
     }
+
 }

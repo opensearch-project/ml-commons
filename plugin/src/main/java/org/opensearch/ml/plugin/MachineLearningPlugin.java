@@ -34,7 +34,9 @@ import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.action.model_group.SearchModelGroupTransportAction;
 import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
+import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
@@ -79,7 +81,9 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
+import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -101,24 +105,7 @@ import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.rest.RestMLDeleteModelAction;
-import org.opensearch.ml.rest.RestMLDeleteTaskAction;
-import org.opensearch.ml.rest.RestMLDeployModelAction;
-import org.opensearch.ml.rest.RestMLExecuteAction;
-import org.opensearch.ml.rest.RestMLGetModelAction;
-import org.opensearch.ml.rest.RestMLGetTaskAction;
-import org.opensearch.ml.rest.RestMLPredictionAction;
-import org.opensearch.ml.rest.RestMLProfileAction;
-import org.opensearch.ml.rest.RestMLRegisterModelAction;
-import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
-import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
-import org.opensearch.ml.rest.RestMLSearchModelAction;
-import org.opensearch.ml.rest.RestMLSearchTaskAction;
-import org.opensearch.ml.rest.RestMLStatsAction;
-import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
-import org.opensearch.ml.rest.RestMLTrainingAction;
-import org.opensearch.ml.rest.RestMLUndeployModelAction;
-import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
+import org.opensearch.ml.rest.*;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -202,7 +189,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
-                new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class)
+                new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),
+                new ActionHandler<>(MLUpdateModelGroupAction.INSTANCE, TransportUpdateModelGroupAction.class),
+                new ActionHandler<>(MLModelGroupSearchAction.INSTANCE, SearchModelGroupTransportAction.class)
             );
     }
 
@@ -411,7 +400,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
-
+        RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
+        RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -431,7 +421,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLUndeployModelAction,
                 restMLRegisterModelMetaAction,
                 restMLUploadModelChunkAction,
-                restMLCreateModelGroupAction
+                restMLCreateModelGroupAction,
+                restMLUpdateModelGroupAction,
+                restMLSearchModelGroupAction
             );
     }
 
@@ -530,7 +522,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
-                MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD
+                MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
+                MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES
             );
         return settings;
     }

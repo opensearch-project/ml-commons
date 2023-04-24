@@ -8,18 +8,17 @@ package org.opensearch.ml.utils;
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-
-import lombok.extern.log4j.Log4j2;
+import java.util.*;
 
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -29,8 +28,9 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import com.google.common.annotations.VisibleForTesting;
 
-@Log4j2
 public class RestActionUtils {
+
+    private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
 
     public static final String PARAMETER_ALGORITHM = "algorithm";
     public static final String PARAMETER_ASYNC = "async";
@@ -40,6 +40,7 @@ public class RestActionUtils {
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String PARAMETER_DEPLOY_MODEL = "deploy";
     public static final String PARAMETER_VERSION = "version";
+    public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
@@ -164,6 +165,20 @@ public class RestActionUtils {
 
     public static Optional<String> getStringParam(RestRequest request, String paramName) {
         return Optional.ofNullable(request.param(paramName));
+    }
+
+    /**
+     * Generates a user string formed by the username, backend roles, roles and requested tenants separated by '|'
+     * (e.g., john||own_index,testrole|__user__, no backend role so you see two verticle line after john.).
+     * This is the user string format used internally in the OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT and may be
+     * parsed using User.parse(string).
+     * @param client Client containing user info. A public API request will fill in the user info in the thread context.
+     * @return parsed user object
+     */
+    public static User getUserContext(Client client) {
+        String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        logger.debug("Filtering result by " + userStr);
+        return User.parse(userStr);
     }
 
 }
