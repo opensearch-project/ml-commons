@@ -87,8 +87,15 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor{
             }
 
             Map<String, ?> headers = connector.createHeaders();
+            boolean hasContentTypeHeader = false;
             for (String key : headers.keySet()) {
                 request.addHeader(key, (String)headers.get(key));
+                if (key.toLowerCase().equals("Content-Type")) {
+                    hasContentTypeHeader = true;
+                }
+            }
+            if (!hasContentTypeHeader) {
+                request.addHeader("Content-Type", "application/json");
             }
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 try (CloseableHttpClient httpClient = HttpClientBuilder.create().build();
