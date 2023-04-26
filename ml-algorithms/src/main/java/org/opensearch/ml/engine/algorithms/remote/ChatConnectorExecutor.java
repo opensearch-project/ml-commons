@@ -282,8 +282,15 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
                         .uri(URI.create(connector.getEndpoint()))
                         .contentStreamProvider(requestBody.contentStreamProvider());
                 Map<String, String> headers = connector.createHeaders();
+                boolean hasContentTypeHeader = false;
                 for (String key : headers.keySet()) {
                     builder.putHeader(key, headers.get(key));
+                    if (key.toLowerCase().equals("Content-Type")) {
+                        hasContentTypeHeader = true;
+                    }
+                }
+                if (!hasContentTypeHeader) {
+                    builder.putHeader("Content-Type", "application/json");
                 }
                 SdkHttpFullRequest sdkHttpFullRequest = builder.build();
                 HttpExecuteRequest executeRequest = HttpExecuteRequest.builder()
@@ -345,8 +352,15 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
             }
 
             Map<String, ?> headers = connector.createHeaders();
+            boolean hasContentTypeHeader = false;
             for (String key : headers.keySet()) {
                 request.addHeader(key, (String)headers.get(key));
+                if (key.toLowerCase().equals("Content-Type")) {
+                    hasContentTypeHeader = true;
+                }
+            }
+            if (!hasContentTypeHeader) {
+                request.addHeader("Content-Type", "application/json");
             }
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 try (CloseableHttpClient httpClient = HttpClientBuilder.create().build();
