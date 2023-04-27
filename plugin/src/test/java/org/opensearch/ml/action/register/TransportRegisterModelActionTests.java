@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -116,9 +117,13 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex).build();
+        settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true)
+            .build();
         threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX);
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX, ML_COMMONS_ALLOW_MODEL_URL);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         transportRegisterModelAction = new TransportRegisterModelAction(
             transportService,
@@ -181,6 +186,42 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, prepareRequest("test url"), actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void testDoExecute_URL_disabled() {
+        updateModelUrlSettings();
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Don't allow model url.");
+        transportRegisterModelAction.doExecute(task, prepareRequest("test url"), actionListener);
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    private void updateModelUrlSettings() {
+        settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false)
+            .build();
+        threadContext = new ThreadContext(settings);
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX, ML_COMMONS_ALLOW_MODEL_URL);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        transportRegisterModelAction = new TransportRegisterModelAction(
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlIndicesHandler,
+            mlModelManager,
+            mlTaskManager,
+            clusterService,
+            settings,
+            threadPool,
+            client,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlStats
+        );
+        assertNotNull(transportRegisterModelAction);
     }
 
     public void testDoExecute_successWithLocalNodeNotEqualToClusterNode() {

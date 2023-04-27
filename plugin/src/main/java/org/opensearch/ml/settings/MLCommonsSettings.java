@@ -87,4 +87,7 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    public static final Setting<Boolean> ML_COMMONS_ALLOW_MODEL_URL = Setting
+        .boolSetting("plugins.ml_commons.allow_model_url", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

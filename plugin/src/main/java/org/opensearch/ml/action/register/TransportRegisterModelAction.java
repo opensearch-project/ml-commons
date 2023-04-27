@@ -7,6 +7,7 @@ package org.opensearch.ml.action.register;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -69,6 +70,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     MLTaskDispatcher mlTaskDispatcher;
     MLStats mlStats;
     volatile String trustedUrlRegex;
+    private volatile boolean allowModelUrl;
 
     @Inject
     public TransportRegisterModelAction(
@@ -101,6 +103,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
+        allowModelUrl = ML_COMMONS_ALLOW_MODEL_URL.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ALLOW_MODEL_URL, it -> allowModelUrl = it);
     }
 
     @Override
@@ -110,6 +114,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         Pattern pattern = Pattern.compile(trustedUrlRegex);
         String url = registerModelInput.getUrl();
         if (url != null) {
+            if (!allowModelUrl) {
+                throw new IllegalArgumentException("Don't allow model url.");
+            }
             boolean validUrl = pattern.matcher(url).find();
             if (!validUrl) {
                 throw new IllegalArgumentException("URL can't match trusted url regex");
