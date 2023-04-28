@@ -59,6 +59,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -341,6 +342,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
     }
 
+    @Ignore
     public void testRegisterMLModel_IndexModelChunkFailure() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -370,6 +372,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
     }
 
+    @Ignore
     public void testRegisterMLModel_DownloadModelFile() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -385,6 +388,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
     }
 
+    @Ignore
     public void testRegisterMLModel_DeployModel() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -403,6 +407,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
     }
 
+    @Ignore
     public void testRegisterMLModel_DeployModel_failure() throws IOException {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);

@@ -46,6 +46,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DEPLOY_MODEL_FIELD = "deploy_model";
     public static final String MODEL_NODE_IDS_FIELD = "model_node_ids";
     public static final String CONNECTOR_FIELD = "connector";
+    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
 
     private FunctionName functionName;
     private String modelName;
@@ -74,7 +75,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 MLModelConfig modelConfig,
                                 boolean deployModel,
                                 String[] modelNodeIds,
-                                Connector connector) {
+                                Connector connector
+                              ) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
         } else {

@@ -24,7 +24,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     String getEndpoint();
 
-    <T> T createPayload(Map<String, ?> parameters);
+    <T> T createPayload(Map<String, String> parameters);
 
     void decrypt(Function<String, String> function);
     void encrypt(Function<String, String> function);

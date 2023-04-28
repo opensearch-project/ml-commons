@@ -69,7 +69,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -82,7 +81,6 @@ import static org.opensearch.ml.common.connector.ChatConnector.CONTENT_FIELD_FIE
 import static org.opensearch.ml.common.connector.ChatConnector.SESSION_SIZE_FIELD;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.signRequest;
-import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.gson;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
@@ -114,7 +112,14 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
             throw new IllegalArgumentException("Wrong input type");
         }
 
-        Map<String, String> parameters = inputData.getParameters();
+        Map<String, String> parameters = new HashMap<>();
+        if (connector.getParameters() != null) {
+            parameters.putAll(connector.getParameters());
+        }
+        if (inputData.getParameters() != null) {
+            parameters.putAll(inputData.getParameters());
+        }
+
         String question = parameters.get("question");
         Boolean withMyContent = Boolean.parseBoolean(parameters.get("with_my_content"));
 
@@ -273,7 +278,7 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
         newParameters.put("context", contextRef.get());
         String payload = connector.createPayload(newParameters);
 
-        if (connector.awsCredential()) {
+        if (connector.hasAwsCredential()) {
             try {
                 RequestBody requestBody = RequestBody.fromString(payload);
 
@@ -282,15 +287,8 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
                         .uri(URI.create(connector.getEndpoint()))
                         .contentStreamProvider(requestBody.contentStreamProvider());
                 Map<String, String> headers = connector.createHeaders();
-                boolean hasContentTypeHeader = false;
                 for (String key : headers.keySet()) {
                     builder.putHeader(key, headers.get(key));
-                    if (key.toLowerCase().equals("Content-Type")) {
-                        hasContentTypeHeader = true;
-                    }
-                }
-                if (!hasContentTypeHeader) {
-                    builder.putHeader("Content-Type", "application/json");
                 }
                 SdkHttpFullRequest sdkHttpFullRequest = builder.build();
                 HttpExecuteRequest executeRequest = HttpExecuteRequest.builder()
@@ -321,6 +319,16 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
 
                 ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters, modelTensors);
                 tensorOutputs.add(tensors);
+                if (connector.getSessionIndex() != null) {
+                    IndexRequest indexRequest = new IndexRequest(connector.getSessionIndex());
+                    List results = (List)modelTensors.get(0).getDataAsMap().get("results");
+                    indexRequest.source(ImmutableMap.of(connector.getSessionIdField(), sessionId,
+                            "question", question,
+                            "answer", ((Map)results.get(0)).get("outputText"),
+                            "created_time", Instant.now().toEpochMilli()));
+                    client.index(indexRequest);
+                    modelTensors.add(ModelTensor.builder().name("session_id").result(sessionId).build());
+                }
                 return new ModelTensorOutput(tensorOutputs);
             } catch (Throwable e) {
                 log.error("Failed to execute chat connector", e);
@@ -374,17 +382,13 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
             });
             String modelResponse = responseRef.get();
 
-            String postProcessFunction = connector.getPostProcessFunction();
-            Optional<String> processedResponse = executePostprocessFunction(scriptService, postProcessFunction, parameters, modelResponse);
-
-            connector.parseResponse(processedResponse.orElse(modelResponse), modelTensors, postProcessFunction != null && processedResponse.isPresent());
-            ModelTensors tensors = ModelTensors.builder().mlModelTensors(modelTensors).build();
+            ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters, modelTensors);
             tensorOutputs.add(tensors);
             if (connector.getSessionIndex() != null) {
                 IndexRequest indexRequest = new IndexRequest(connector.getSessionIndex());
                 indexRequest.source(ImmutableMap.of(connector.getSessionIdField(), sessionId,
                         "question", question,
-                        "answer", modelTensors.get(0).getDataAsMap().get("filtered_response"),
+                        "answer", modelTensors.get(0).getDataAsMap().get("response"),
                         "created_time", Instant.now().toEpochMilli()));
                 client.index(indexRequest);
                 modelTensors.add(ModelTensor.builder().name("session_id").result(sessionId).build());
