@@ -116,10 +116,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings
-            .builder()
-            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
-            .build();
+        settings = Settings.builder().put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex).build();
         threadContext = new ThreadContext(settings);
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
