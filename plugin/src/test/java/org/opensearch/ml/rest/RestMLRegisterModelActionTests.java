@@ -136,7 +136,10 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Don't allow uploading model via url.");
+        exceptionRule
+            .expectMessage(
+                "To upload custom model user needs to enable allow_model_url settings. Otherwise please use opensearch pre-trained models."
+            );
         RestRequest request = getRestRequest();
         restMLRegisterModelAction.handleRequest(request, channel, client);
     }

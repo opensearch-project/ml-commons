@@ -32,7 +32,7 @@ import com.google.common.collect.ImmutableList;
 
 public class RestMLRegisterModelAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";
-    private volatile boolean allowModelUrl;
+    private volatile boolean isModelUrlAllowed;
 
     /**
      * Constructor
@@ -45,8 +45,8 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
      * @param settings settings
      */
     public RestMLRegisterModelAction(ClusterService clusterService, Settings settings) {
-        allowModelUrl = ML_COMMONS_ALLOW_MODEL_URL.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ALLOW_MODEL_URL, it -> allowModelUrl = it);
+        isModelUrlAllowed = ML_COMMONS_ALLOW_MODEL_URL.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ALLOW_MODEL_URL, it -> isModelUrlAllowed = it);
     }
 
     @Override
@@ -107,8 +107,10 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
         MLRegisterModelInput mlInput = modelName == null
             ? MLRegisterModelInput.parse(parser, loadModel)
             : MLRegisterModelInput.parse(parser, modelName, version, loadModel);
-        if (mlInput.getUrl() != null && !allowModelUrl) {
-            throw new IllegalArgumentException("Don't allow uploading model via url.");
+        if (mlInput.getUrl() != null && !isModelUrlAllowed) {
+            throw new IllegalArgumentException(
+                "To upload custom model user needs to enable allow_model_url settings. Otherwise please use opensearch pre-trained models."
+            );
         }
         return new MLRegisterModelRequest(mlInput);
     }
