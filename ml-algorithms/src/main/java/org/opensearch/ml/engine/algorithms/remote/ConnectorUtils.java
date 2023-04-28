@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import com.google.common.collect.ImmutableMap;
+import com.jayway.jsonpath.JsonPath;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.gson;
@@ -80,7 +82,14 @@ public class ConnectorUtils {
         String postProcessFunction = connector.getPostProcessFunction();
         Optional<String> processedResponse = executePostprocessFunction(scriptService, postProcessFunction, parameters, modelResponse);
 
-        connector.parseResponse(processedResponse.orElse(modelResponse), modelTensors, postProcessFunction != null && processedResponse.isPresent());
+        String response = processedResponse.orElse(modelResponse);
+        if (parameters.get(RESPONSE_FILTER_FIELD) == null) {
+            connector.parseResponse(response, modelTensors, postProcessFunction != null && processedResponse.isPresent());
+        } else {
+            Object filteredResponse = JsonPath.parse(response).read(parameters.get(RESPONSE_FILTER_FIELD));
+            connector.parseResponse(filteredResponse, modelTensors, postProcessFunction != null && processedResponse.isPresent());
+        }
+
         ModelTensors tensors = ModelTensors.builder().mlModelTensors(modelTensors).build();
         return tensors;
     }

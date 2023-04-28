@@ -44,6 +44,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DEPLOY_MODEL_FIELD = "deploy_model";
     public static final String MODEL_NODE_IDS_FIELD = "model_node_ids";
     public static final String CONNECTOR_FIELD = "connector";
+    public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
 
     private FunctionName functionName;
     private String modelName;
@@ -57,6 +58,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private String[] modelNodeIds;
 
     private Connector connector;
+    private String modelContentHash;
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
@@ -68,7 +70,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 MLModelConfig modelConfig,
                                 boolean deployModel,
                                 String[] modelNodeIds,
-                                Connector connector) {
+                                Connector connector,
+                                String modelContentHash) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
         } else {
@@ -97,6 +100,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.deployModel = deployModel;
         this.modelNodeIds = modelNodeIds;
         this.connector = connector;
+        this.modelContentHash = modelContentHash;
     }
 
 
@@ -118,6 +122,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             String connectorName = in.readString();
             this.connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, in}, String.class, StreamInput.class);
         }
+        this.modelContentHash = in.readOptionalString();
     }
 
     @Override
@@ -148,6 +153,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(modelContentHash);
     }
 
     @Override
@@ -175,6 +181,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (connector != null) {
             builder.field(CONNECTOR_FIELD, connector);
         }
+        if (modelContentHash != null) {
+            builder.field(MODEL_CONTENT_HASH_VALUE_FIELD, modelContentHash);
+        }
         builder.endObject();
         return builder;
     }
@@ -187,6 +196,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         MLModelConfig modelConfig = null;
         List<String> modelNodeIds = new ArrayList<>();
         Connector connector = null;
+        String modelContentHash = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -221,12 +231,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                         modelNodeIds.add(parser.text());
                     }
                     break;
+                case MODEL_CONTENT_HASH_VALUE_FIELD:
+                    modelContentHash = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector);
+        return new MLRegisterModelInput(functionName, modelName, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, modelContentHash);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -239,6 +252,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         MLModelConfig modelConfig = null;
         List<String> modelNodeIds = new ArrayList<>();
         Connector connector = null;
+        String modelContentHash = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -280,11 +294,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                         modelNodeIds.add(parser.text());
                     }
                     break;
+                case MODEL_CONTENT_HASH_VALUE_FIELD:
+                    modelContentHash = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector);
+        return new MLRegisterModelInput(functionName, name, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, modelContentHash);
     }
 }

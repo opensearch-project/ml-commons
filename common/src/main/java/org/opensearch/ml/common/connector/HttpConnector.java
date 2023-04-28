@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.common.connector;
 
-import com.google.gson.Gson;
-import com.jayway.jsonpath.JsonPath;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -18,11 +16,9 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +42,6 @@ public class HttpConnector implements Connector {
     public static final String HEADERS_FIELD = "headers";
     public static final String BODY_TEMPLATE_FIELD = "body_template";
     public static final String RESPONSE_FILTER_FIELD = "response_filter";
-    public static final String RESPONSE_TYPE_FIELD = "response_type";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String PRE_PROCESS_FUNCTION_FIELD = "pre_process_function";
     public static final String POST_PROCESS_FUNCTION_FIELD = "post_process_function";
@@ -71,8 +66,6 @@ public class HttpConnector implements Connector {
 
     @Getter
     protected String bodyTemplate;
-    protected String responseFilter;
-    protected String responseType;
     @Getter
     protected String preProcessFunction;
     @Getter
@@ -83,7 +76,6 @@ public class HttpConnector implements Connector {
     public HttpConnector(String name, XContentParser parser) throws IOException {
         this.name = name;
         headers = new HashMap<>();
-        //headers.put("Content-Type", "application/json");
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -109,12 +101,6 @@ public class HttpConnector implements Connector {
                     break;
                 case BODY_TEMPLATE_FIELD:
                     bodyTemplate = parser.text();
-                    break;
-                case RESPONSE_FILTER_FIELD:
-                    responseFilter = parser.text();
-                    break;
-                case RESPONSE_TYPE_FIELD:
-                    responseType = parser.text();
                     break;
                 case PRE_PROCESS_FUNCTION_FIELD:
                     preProcessFunction = parser.text();
@@ -155,12 +141,6 @@ public class HttpConnector implements Connector {
         if (bodyTemplate != null) {
             builder.field(BODY_TEMPLATE_FIELD, bodyTemplate);
         }
-        if (responseFilter != null) {
-            builder.field(RESPONSE_FILTER_FIELD, responseFilter);
-        }
-        if (responseType != null) {
-            builder.field(RESPONSE_TYPE_FIELD, responseType);
-        }
         if (preProcessFunction != null) {
             builder.field(PRE_PROCESS_FUNCTION_FIELD, preProcessFunction);
         }
@@ -186,8 +166,6 @@ public class HttpConnector implements Connector {
             headers = input.readMap(StreamInput::readString, StreamInput::readString);
         }
         bodyTemplate = input.readOptionalString();
-        responseFilter = input.readOptionalString();
-        responseType = input.readOptionalString();
         preProcessFunction = input.readOptionalString();
         postProcessFunction = input.readOptionalString();
     }
@@ -215,8 +193,6 @@ public class HttpConnector implements Connector {
             out.writeBoolean(false);
         }
         out.writeOptionalString(bodyTemplate);
-        out.writeOptionalString(responseFilter);
-        out.writeOptionalString(responseType);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
     }
@@ -226,18 +202,11 @@ public class HttpConnector implements Connector {
     }
 
     @Override
-    public  <T> T createPayload(Map<String, ?> parameters) {
-        Map<String, String> mergedParameters = new HashMap<>();
-        if (this.parameters != null && this.parameters.size() > 0) {
-            mergedParameters.putAll(this.parameters);
-        }
-        if (parameters != null && parameters.size() > 0) {
-            mergedParameters.putAll((Map<String, String>)parameters);
-        }
+    public  <T> T createPayload(Map<String, String> parameters) {
         if (bodyTemplate != null) {
             String payload = bodyTemplate;
             Map<String, String> values = new HashMap<>();
-            for (Map.Entry<String, String> entry : mergedParameters.entrySet()) {
+            for (Map.Entry<String, String> entry : parameters.entrySet()) {
                 if (isJson(entry.getValue())) {
                     values.put(entry.getKey(), toUTF8(entry.getValue()));
                 } else {
@@ -304,39 +273,12 @@ public class HttpConnector implements Connector {
             }
             return;
         }
-        if (responseFilter == null) {
+        if (response instanceof String && isJson((String)response)) {
             Map<String, Object> data = gson.fromJson((String) response, Map.class);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
-            return;
-        }
-        Object result = JsonPath.parse((String)response).read(responseFilter);
-
-        if ("embedding".equals(responseType)) {
-            long m = 0;
-            long n = 0;
-            boolean number = false;
-            if (result instanceof List) {
-                m++;
-                Object item = ((List<?>) result).get(0);
-                while(item instanceof List){
-                    m++;
-                    n = ((List<?>) item).size();
-                    item = ((List<?>) item).get(0);
-                }
-                if(item instanceof Number){
-                    number = true;
-                }
-            }
-            if (number == true) {
-                List<Object> data = flattenList((List<?>) result);
-                modelTensors.add(ModelTensor.builder().name("sentence_embedding").dataType(MLResultDataType.FLOAT32).shape(new long[]{m-1, n })
-                        .data(data.toArray(new Number[0])).build());
-            } else {
-                throw new IllegalArgumentException("wrong embedding result");
-            }
         } else {
             Map<String, Object> map = new HashMap<>();
-            map.put("filtered_response", result);
+            map.put("response", response);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(map).build());
         }
     }
@@ -352,24 +294,12 @@ public class HttpConnector implements Connector {
         }
     }
 
-    public static List<Object> flattenList(List<?> list) {
-        List<Object> result = new ArrayList<>();
-        for (Object element : list) {
-            if (element instanceof List<?>) {
-                result.addAll(flattenList((List<?>) element));
-            } else {
-                result.add(element);
-            }
-        }
-        return result;
-    }
-
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;
     }
 
-    public boolean awsCredential() {
+    public boolean hasAwsCredential() {
         return this.decryptedCredential.containsKey(ACCESS_KEY_FIELD) && this.decryptedCredential.containsKey(SECRET_KEY_FIELD);
     }
 

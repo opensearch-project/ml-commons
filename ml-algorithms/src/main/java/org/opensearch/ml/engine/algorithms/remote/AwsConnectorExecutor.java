@@ -36,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -69,7 +70,14 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
         try {
             RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, scriptService);
 
-            Map<String, String> parameters = inputData.getParameters();
+            Map<String, String> parameters = new HashMap<>();
+            if (connector.getParameters() != null) {
+                parameters.putAll(connector.getParameters());
+            }
+            if (inputData.getParameters() != null) {
+                parameters.putAll(inputData.getParameters());
+            }
+
             String payload = connector.createPayload(parameters);
 
             String endpoint = connector.getEndpoint();

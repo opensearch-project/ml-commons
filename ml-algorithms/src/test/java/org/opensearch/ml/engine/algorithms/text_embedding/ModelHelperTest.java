@@ -56,7 +56,7 @@ public class ModelHelperTest {
 
     @Test
     public void testDownloadAndSplit_UrlFailure() {
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
@@ -65,7 +65,7 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, null, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());

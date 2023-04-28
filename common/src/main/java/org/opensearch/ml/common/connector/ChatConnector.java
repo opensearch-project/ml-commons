@@ -5,24 +5,17 @@
 
 package org.opensearch.ml.common.connector;
 
-import com.jayway.jsonpath.JsonPath;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.output.model.ModelTensor;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.ml.common.connector.ConnectorNames.CHAT_V1;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
 @NoArgsConstructor
@@ -72,42 +65,10 @@ public class ChatConnector extends HttpConnector {
     }
 
     public String createNeuralSearchQuery(Map<String, String> params) {
-        Map<String, String> mergedParams = new HashMap<>();
-        mergedParams.putAll(this.parameters);
-        mergedParams.putAll(params);
-        String searchTemplate = mergedParams.containsKey("search_query") ? mergedParams.get("search_query") : DEFAULT_SEMANTIC_SEARCH_QUERY;
-        StringSubstitutor substitutor = new StringSubstitutor(mergedParams, "${parameters.", "}");
+        String searchTemplate = params.containsKey("search_query") ? params.get("search_query") : DEFAULT_SEMANTIC_SEARCH_QUERY;
+        StringSubstitutor substitutor = new StringSubstitutor(params, "${parameters.", "}");
         String query = substitutor.replace(searchTemplate);
         return query;
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T> void parseResponse(T response, List<ModelTensor> modelTensors, boolean modelTensorJson) throws IOException {
-        if (modelTensorJson) {
-            String modelTensorJsonContent = (String) response;
-            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, modelTensorJsonContent);
-            parser.nextToken();
-            if (XContentParser.Token.START_ARRAY == parser.currentToken()) {
-                while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                    ModelTensor modelTensor = ModelTensor.parser(parser);
-                    modelTensors.add(modelTensor);
-                }
-            } else {
-                ModelTensor modelTensor = ModelTensor.parser(parser);
-                modelTensors.add(modelTensor);
-            }
-            return;
-        }
-        if (responseFilter == null) {
-            Map<String, Object> data = gson.fromJson((String) response, Map.class);
-            modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
-            return;
-        }
-        Object result = JsonPath.parse((String)response).read(responseFilter);
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("filtered_response", result);
-        modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
     }
 
     @Override

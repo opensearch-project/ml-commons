@@ -87,6 +87,9 @@ public class ModelHelper {
                         case MLRegisterModelInput.MODEL_FORMAT_FIELD:
                             builder.modelFormat(MLModelFormat.from(entry.getValue().toString()));
                             break;
+                        case MLRegisterModelInput.MODEL_CONTENT_HASH_VALUE_FIELD:
+                            builder.modelContentHash(entry.getValue().toString());
+                            break;
                         case MLRegisterModelInput.MODEL_CONFIG_FIELD:
                             TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
                             Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
@@ -142,7 +145,7 @@ public class ModelHelper {
      * @param url model file URL
      * @param listener action listener
      */
-    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, ActionListener<Map<String, Object>> listener) {
+    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, String modelHash, ActionListener<Map<String, Object>> listener) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
@@ -157,8 +160,11 @@ public class ModelHelper {
                 Map<String, Object> result = new HashMap<>();
                 result.put(CHUNK_FILES, chunkFiles);
                 result.put(MODEL_SIZE_IN_BYTES, modelZipFile.length());
-
-                result.put(MODEL_FILE_HASH, calculateFileHash(modelZipFile));
+                String calculatedFileHash = calculateFileHash(modelZipFile);
+                if (modelHash != null && !modelHash.equals(calculatedFileHash)) {
+                    throw new IllegalArgumentException("Model file hash value can't match given hash value");
+                }
+                result.put(MODEL_FILE_HASH, calculatedFileHash);
                 deleteFileQuietly(modelZipFile);
                 listener.onResponse(result);
                 return null;
