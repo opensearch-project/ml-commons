@@ -109,7 +109,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
             : MLRegisterModelInput.parse(parser, modelName, version, loadModel);
         if (mlInput.getUrl() != null && !isModelUrlAllowed) {
             throw new IllegalArgumentException(
-                "To upload custom model user needs to enable allow_model_url settings. Otherwise please use opensearch pre-trained models."
+                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."
             );
         }
         return new MLRegisterModelRequest(mlInput);

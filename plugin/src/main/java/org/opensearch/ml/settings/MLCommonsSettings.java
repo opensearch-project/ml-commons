@@ -90,5 +90,5 @@ public final class MLCommonsSettings {
 
     // This setting is to enable/disable model url in model register API.
     public static final Setting<Boolean> ML_COMMONS_ALLOW_MODEL_URL = Setting
-        .boolSetting("plugins.ml_commons.allow_model_url", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.allow_registering_model_via_url", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

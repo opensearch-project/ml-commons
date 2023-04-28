@@ -138,7 +138,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule
             .expectMessage(
-                "To upload custom model user needs to enable allow_model_url settings. Otherwise please use opensearch pre-trained models."
+                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."
             );
         RestRequest request = getRestRequest();
         restMLRegisterModelAction.handleRequest(request, channel, client);
