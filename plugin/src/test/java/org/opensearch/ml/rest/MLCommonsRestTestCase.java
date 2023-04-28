@@ -120,6 +120,17 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
 
+        response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.allow_registering_model_via_url\":true}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
+
         String jsonEntity = "{\n"
             + "  \"persistent\" : {\n"
             + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
