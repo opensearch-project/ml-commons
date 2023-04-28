@@ -8,6 +8,8 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,12 +17,17 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Ignore;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Strings;
 import org.opensearch.common.bytes.BytesArray;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -39,6 +46,8 @@ import org.opensearch.threadpool.ThreadPool;
 import com.google.gson.Gson;
 
 public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     private RestMLRegisterModelAction restMLRegisterModelAction;
     private NodeClient client;
@@ -47,9 +56,18 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private ClusterService clusterService;
+
+    private Settings settings;
+
     @Before
     public void setup() {
-        restMLRegisterModelAction = new RestMLRegisterModelAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -110,6 +128,17 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model_with_modelId", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
+    }
+
+    public void testRegisterModelUrlNotAllowed() throws Exception {
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Don't allow model url.");
+        RestRequest request = getRestRequest();
+        restMLRegisterModelAction.handleRequest(request, channel, client);
     }
 
     public void testRegisterModelRequest_NullModelID() throws Exception {

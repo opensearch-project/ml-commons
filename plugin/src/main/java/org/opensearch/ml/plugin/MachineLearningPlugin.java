@@ -385,7 +385,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
         RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
         RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
-        RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction();
+        RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction();
