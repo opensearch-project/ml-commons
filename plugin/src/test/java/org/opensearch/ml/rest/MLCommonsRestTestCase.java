@@ -123,7 +123,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
                 "PUT",
                 "_cluster/settings",
                 null,
-                "{\"persistent\":{\"plugins.ml_commons.allow_model_url\":true}}",
+                "{\"persistent\":{\"plugins.ml_commons.allow_registering_model_via_url\":true}}",
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
