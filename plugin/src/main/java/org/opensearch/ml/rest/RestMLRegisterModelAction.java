@@ -108,7 +108,7 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
             ? MLRegisterModelInput.parse(parser, loadModel)
             : MLRegisterModelInput.parse(parser, modelName, version, loadModel);
         if (mlInput.getUrl() != null && !allowModelUrl) {
-            throw new IllegalArgumentException("Don't allow model url.");
+            throw new IllegalArgumentException("Don't allow uploading model via url.");
         }
         return new MLRegisterModelRequest(mlInput);
     }
