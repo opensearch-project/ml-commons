@@ -8,6 +8,8 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -20,7 +22,10 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -50,12 +55,21 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private ClusterService clusterService;
+
+    private Settings settings;
+
     @Rule
-    public ExpectedException expectedEx = ExpectedException.none();
+    public ExpectedException expectedException = ExpectedException.none();
 
     @Before
     public void setup() {
-        restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD.getKey(), true).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -72,7 +86,7 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLRegisterModelMetaAction mlUploadModel = new RestMLRegisterModelMetaAction();
+        RestMLRegisterModelMetaAction mlUploadModel = new RestMLRegisterModelMetaAction(clusterService, settings);
         assertNotNull(mlUploadModel);
     }
 
@@ -112,12 +126,26 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
     }
 
+    public void testRegisterModelFileUploadNotAllowed() throws Exception {
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD.getKey(), false).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
+        expectedException.expect(IllegalArgumentException.class);
+        expectedException
+            .expectMessage(
+                "To upload custom model from local file, user needs to enable allow_registering_model_via_local_file settings. Otherwise please use opensearch pre-trained models"
+            );
+        RestRequest request = getRestRequest();
+        restMLRegisterModelMetaAction.handleRequest(request, channel, client);
+    }
+
     public void testRegisterModelMeta_NoContent() throws Exception {
         RestRequest.Method method = RestRequest.Method.POST;
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withMethod(method).withParams(params).build();
-        expectedEx.expect(IOException.class);
-        expectedEx.expectMessage("Model meta request has empty body");
+        expectedException.expect(IOException.class);
+        expectedException.expectMessage("Model meta request has empty body");
         restMLRegisterModelMetaAction.handleRequest(request, channel, client);
     }
 
