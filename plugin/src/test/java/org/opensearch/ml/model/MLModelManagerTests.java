@@ -293,7 +293,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
-        verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any());
+        verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
         verify(client, never()).index(any(), any());
     }
 
@@ -308,7 +308,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
-        verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any());
+        verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
     }
 
     public void testRegisterMLModel_IndexModelChunkFailure() throws IOException {
@@ -323,7 +323,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(2)).index(any(), any());
-        verify(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any());
+        verify(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
     }
 
     public void testRegisterMLModel_DownloadModelFileFailure() {
@@ -337,7 +337,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
-        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
+        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
     }
 
     public void testRegisterMLModel_DownloadModelFile() throws IOException {
@@ -352,7 +352,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
-        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
+        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
     }
 
     public void testRegisterMLModel_DeployModel() throws IOException {
@@ -369,7 +369,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
-        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
+        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
         verify(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
     }
 
@@ -387,7 +387,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
-        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
+        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
         verify(client, never()).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
     }
 
@@ -403,7 +403,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(1)).index(any(), any());
-        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any());
+        verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
     }
 
     public void testRegisterModel_ClientFailedToGetThreadPool() {
@@ -759,22 +759,22 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     private void setUpMock_DownloadModelFileFailure() {
         doAnswer(invocation -> {
-            ActionListener<Map<String, Object>> listener = invocation.getArgument(5);
+            ActionListener<Map<String, Object>> listener = invocation.getArgument(6);
             listener.onFailure(new RuntimeException("downloadAndSplit failure"));
             return null;
-        }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any());
+        }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
     }
 
     private void setUpMock_DownloadModelFile(String[] chunks, Long modelContentSize) {
         doAnswer(invocation -> {
-            ActionListener<Map<String, Object>> listener = invocation.getArgument(5);
+            ActionListener<Map<String, Object>> listener = invocation.getArgument(6);
             Map<String, Object> result = new HashMap<>();
             result.put(MODEL_SIZE_IN_BYTES, modelContentSize);
             result.put(CHUNK_FILES, Arrays.asList(chunks[0], chunks[1]));
             result.put(MODEL_FILE_HASH, randomAlphaOfLength(10));
             listener.onResponse(result);
             return null;
-        }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any());
+        }).when(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Mock
