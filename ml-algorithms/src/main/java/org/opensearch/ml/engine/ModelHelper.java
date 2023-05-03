@@ -120,6 +120,9 @@ public class ModelHelper {
                             }
                             builder.modelConfig(configBuilder.build());
                             break;
+                        case MLRegisterModelInput.HASH_VALUE_FIELD:
+                            builder.hashValue(entry.getValue().toString());
+                            break;
                         default:
                             break;
                     }
@@ -141,9 +144,10 @@ public class ModelHelper {
      * @param modelName model name
      * @param version model version
      * @param url model file URL
+     * @param modelContentHash model content hash value
      * @param listener action listener
      */
-    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, ActionListener<Map<String, Object>> listener) {
+    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, String modelContentHash, ActionListener<Map<String, Object>> listener) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
@@ -153,6 +157,11 @@ public class ModelHelper {
                 log.debug("download model to file {}", modelZipFile.getAbsolutePath());
                 DownloadUtils.download(url, modelPath, new ProgressBar());
                 verifyModelZipFile(modelFormat, modelPath, modelName);
+                String hash = calculateFileHash(modelZipFile);
+                if (modelContentHash != null && !modelContentHash.equals(hash)) {
+                    log.error("Model content hash can't match original hash value when registering");
+                    throw (new IllegalArgumentException("model content changed"));
+                }
 
                 List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
                 Map<String, Object> result = new HashMap<>();
