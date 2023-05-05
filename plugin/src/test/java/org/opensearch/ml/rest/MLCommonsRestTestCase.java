@@ -638,6 +638,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .modelConfig(modelConfig)
             .url(SENTENCE_TRANSFORMER_MODEL_URL)
             .deployModel(false)
+            .hashValue("e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021")
             .build();
     }
 
