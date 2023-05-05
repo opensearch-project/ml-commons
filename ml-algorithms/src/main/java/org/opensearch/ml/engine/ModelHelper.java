@@ -22,6 +22,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.AccessController;
+import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -132,6 +133,44 @@ public class ModelHelper {
             });
         } catch (Exception e) {
             listener.onFailure(e);
+        } finally {
+            deleteFileQuietly(mlEngine.getRegisterModelPath(taskId));
+        }
+    }
+
+    public boolean isModelAllowed(MLRegisterModelInput registerModelInput, List modelMetaList) {
+        String modelName = registerModelInput.getModelName();
+        String version = registerModelInput.getVersion();
+        MLModelFormat modelFormat = registerModelInput.getModelFormat();
+        for (Object meta: modelMetaList) {
+            String name = (String) ((Map<String, Object>)meta).get("name");
+            List<String> versions = (List) ((Map<String, Object>)meta).get("version");
+            List<String> formats = (List) ((Map<String, Object>)meta).get("format");
+            if (name.equals(modelName) && versions.contains(version.toLowerCase(Locale.ROOT)) && formats.contains(modelFormat.toString().toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public List downloadPrebuiltModelMetaList(String taskId, MLRegisterModelInput registerModelInput) throws PrivilegedActionException {
+        String modelName = registerModelInput.getModelName();
+        String version = registerModelInput.getVersion();
+        try {
+            return AccessController.doPrivileged((PrivilegedExceptionAction<List>) () -> {
+
+                Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
+                String cacheFilePath = registerModelPath.resolve("model_meta_list.json").toString();
+                String modelMetaListUrl = mlEngine.getPrebuiltModelMetaListPath();
+                DownloadUtils.download(modelMetaListUrl, cacheFilePath, new ProgressBar());
+
+                List<?> config = null;
+                try (JsonReader reader = new JsonReader(new FileReader(cacheFilePath))) {
+                    config = gson.fromJson(reader, List.class);
+                }
+
+                return config;
+            });
         } finally {
             deleteFileQuietly(mlEngine.getRegisterModelPath(taskId));
         }
