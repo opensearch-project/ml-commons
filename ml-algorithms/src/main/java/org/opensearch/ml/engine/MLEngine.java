@@ -40,6 +40,10 @@ public class MLEngine {
         mlModelsCachePath = mlCachePath.resolve("models_cache");
     }
 
+    public String getPrebuiltModelMetaListPath() {
+        return "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json";
+    }
+
     public String getPrebuiltModelConfigPath(String modelName, String version, MLModelFormat modelFormat) {
         String format = modelFormat.name().toLowerCase(Locale.ROOT);
         return String.format("%s/%s/%s/%s/config.json", MODEL_REPO, modelName, version, format, Locale.ROOT);

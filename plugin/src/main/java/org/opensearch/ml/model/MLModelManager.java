@@ -38,6 +38,7 @@ import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegist
 
 import java.io.File;
 import java.nio.file.Path;
+import java.security.PrivilegedActionException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -404,14 +405,21 @@ public class MLModelManager {
             );
     }
 
-    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
+    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask) throws PrivilegedActionException {
         String taskId = mlTask.getTaskId();
-        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
-            registerModelFromUrl(mlRegisterModelInput, mlTask);
-        }, e -> {
-            log.error("Failed to register prebuilt model", e);
-            handleException(registerModelInput.getFunctionName(), taskId, e);
-        }));
+        List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
+        if (!modelHelper.isModelAllowed(registerModelInput, modelMetaList)) {
+            throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
+        }
+        modelHelper
+            .downloadPrebuiltModelConfig(
+                taskId,
+                registerModelInput,
+                ActionListener.wrap(mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask); }, e -> {
+                    log.error("Failed to register prebuilt model", e);
+                    handleException(registerModelInput.getFunctionName(), taskId, e);
+                })
+            );
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {
