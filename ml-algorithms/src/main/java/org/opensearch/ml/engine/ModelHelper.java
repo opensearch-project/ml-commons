@@ -171,8 +171,6 @@ public class ModelHelper {
 
                 return config;
             });
-        } catch (Exception e) {
-            throw e;
         } finally {
             deleteFileQuietly(mlEngine.getRegisterModelPath(taskId));
         }
