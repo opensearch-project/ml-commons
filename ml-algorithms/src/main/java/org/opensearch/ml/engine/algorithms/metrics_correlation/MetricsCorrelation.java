@@ -63,6 +63,7 @@ import static org.opensearch.index.query.QueryBuilders.termQuery;
 public class MetricsCorrelation extends DLModelExecute {
 
     private static final int AWAIT_BUSY_THRESHOLD = 1000;
+    private static final String MODEL_CONTENT_HASH = "4d7e4ede2293d3611def0f9fc4065852cb7f6841bc7df7d6bfc16562ae4f6743";
     private Client client;
     private final Settings settings;
     //As metrics correlation is an experimental feature we are marking the version as 1.0.0b1
@@ -196,6 +197,7 @@ public class MetricsCorrelation extends DLModelExecute {
                 .modelName(FunctionName.METRICS_CORRELATION.name())
                 .version(MCORR_ML_VERSION)
                 .modelFormat(modelFormat)
+                .hashValue(MODEL_CONTENT_HASH)
                 .modelConfig(modelConfig)
                 .url(MCORR_MODEL_URL)
                 .deployModel(true)
