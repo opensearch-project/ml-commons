@@ -24,11 +24,14 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verify;
 
 public class ModelHelperTest {
@@ -165,5 +168,61 @@ public class ModelHelperTest {
         MLModelConfig modelConfig = argumentCaptor.getValue().getModelConfig();
         assertNotNull(modelConfig);
         assertEquals("mpnet", modelConfig.getModelType());
+    }
+
+    @Test
+    public void testDownloadPrebuiltModelMetaList() throws PrivilegedActionException {
+        String taskId = "test_task_id";
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
+                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+                .version("1.0.1")
+                .modelFormat(modelFormat)
+                .deployModel(false)
+                .modelNodeIds(new String[]{"node_id1"})
+                .build();
+        List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
+        assertEquals("huggingface/sentence-transformers/all-distilroberta-v1", ((Map<String, String>)modelMetaList.get(0)).get("name"));
+    }
+
+    @Test
+    public void testIsModelAllowed_true() throws PrivilegedActionException {
+        String taskId = "test_task_id";
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
+                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+                .version("1.0.1")
+                .modelFormat(modelFormat)
+                .deployModel(false)
+                .modelNodeIds(new String[]{"node_id1"})
+                .build();
+        List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
+        assertTrue(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
+    }
+
+    @Test
+    public void testIsModelAllowed_WrongModelName() throws PrivilegedActionException {
+        String taskId = "test_task_id";
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
+                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2-wrong")
+                .version("1.0.1")
+                .modelFormat(modelFormat)
+                .deployModel(false)
+                .modelNodeIds(new String[]{"node_id1"})
+                .build();
+        List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
+        assertFalse(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
+    }
+
+    @Test
+    public void testIsModelAllowed_WrongModelVersion() throws PrivilegedActionException {
+        String taskId = "test_task_id";
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
+                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+                .version("000")
+                .modelFormat(modelFormat)
+                .deployModel(false)
+                .modelNodeIds(new String[]{"node_id1"})
+                .build();
+        List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
+        assertFalse(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
     }
 }
