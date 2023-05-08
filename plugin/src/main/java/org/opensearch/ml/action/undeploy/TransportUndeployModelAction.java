@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -160,6 +161,7 @@ public class TransportUndeployModelAction extends
                             updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                             deployToAllNodes.put(modelId, false);
                         }
+                        updateDocument.put(MLModel.LAST_UNDEPLOYED_TIME_FIELD, Instant.now().toEpochMilli());
                         updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
                         bulkRequest.add(updateRequest);
                     }

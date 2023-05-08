@@ -123,7 +123,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         MLTask mlTask = MLTask
             .builder()
             .async(true)
-            .taskType(MLTaskType.DEPLOY_MODEL)
+            .taskType(MLTaskType.REGISTER_MODEL)
             .functionName(registerModelInput.getFunctionName())
             .createTime(Instant.now())
             .lastUpdateTime(Instant.now())

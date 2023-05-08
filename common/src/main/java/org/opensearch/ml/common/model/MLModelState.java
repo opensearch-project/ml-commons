@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.model;
 
+import java.util.function.Function;
+
 public enum MLModelState {
     TRAINED,
     @Deprecated
@@ -23,6 +25,7 @@ public enum MLModelState {
     LOAD_FAILED,
 
     REGISTERING,
+    REGISTER_FAILED,
     REGISTERED,
     DEPLOYING,
     DEPLOYED,
