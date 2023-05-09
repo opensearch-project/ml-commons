@@ -42,6 +42,7 @@ import org.opensearch.index.reindex.ScrollableHitSource;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -70,6 +71,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     NamedXContentRegistry xContentRegistry;
+
+    @Mock
+    private MLModelManager mlModelManager;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();

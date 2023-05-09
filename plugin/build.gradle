@@ -290,6 +290,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction',
         'org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction',
         'org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction',
+        'org.opensearch.ml.action.model_group.SearchModelGroupTransportAction',
         'org.opensearch.ml.rest.RestMLRegisterModelGroupAction',
         'org.opensearch.ml.rest.RestMLUpdateModelGroupAction',
         'org.opensearch.ml.rest.RestMLRegisterModelAction',

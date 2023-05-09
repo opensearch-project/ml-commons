@@ -75,11 +75,10 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
                         Map<String, Object> source = modelGroup.getSourceAsMap();
-                        log.info(source.get(MLModelGroup.OWNER));
                         Map<String, Object> owner = (Map) source.get(MLModelGroup.OWNER);
-                        log.info(owner.get("name"));
+                        String access = (String) source.get(MLModelGroup.ACCESS);
 
-                        if (SecurityUtils.isAdmin(user)) {
+                        if (SecurityUtils.isAdmin(user) || access == "public") {
                             updateModelGroup(modelGroupId, source, updateModelGroupInput, listener);
                         } else if (user.getName().equals(owner.get("name"))) {
                             if (updateModelGroupInput.getBackendRoles() != null) {

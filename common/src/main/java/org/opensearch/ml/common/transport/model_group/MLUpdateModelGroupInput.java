@@ -28,6 +28,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public static final String DESCRIPTION = "description";
     public static final String BACKEND_ROLES = "backend_roles";
 
+
     private String modelGroupID;
     private String name;
     private String description;
@@ -44,7 +45,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public MLUpdateModelGroupInput(StreamInput in) throws IOException {
         this.modelGroupID = in.readString();
         this.name = in.readString();
-        this.description = in.readString();
+        this.description = in.readOptionalString();
         if (in.readBoolean()) {
             backendRoles = in.readStringList();
         }
@@ -55,7 +56,9 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         builder.startObject();
         builder.field(MODEL_GROUP_ID, modelGroupID);
         builder.field(NAME, name);
-        builder.field(DESCRIPTION, description);
+        if (description != null) {
+            builder.field(DESCRIPTION, description);
+        }
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES, backendRoles);
         }
@@ -67,7 +70,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(modelGroupID);
         out.writeString(name);
-        out.writeString(description);
+        out.writeOptionalString(description);
         if (backendRoles != null) {
             out.writeBoolean(true);
             out.writeStringCollection(backendRoles);

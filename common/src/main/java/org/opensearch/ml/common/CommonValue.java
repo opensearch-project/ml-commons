@@ -61,8 +61,36 @@ public class CommonValue {
             "    \""+MLModelGroup.DESCRIPTION_FIELD+"\": {\n" +
             "      \"type\": \"text\"\n" +
             "    },\n" +
+            "    },\n" +
+            "    \""+MLModelGroup.TAGS_FIELD+"\": {\n" +
+            "      \"type\": \"map\"\n" +
+            "    },\n" +
             "    \""+MLModelGroup.LATEST_VERSION_FIELD+"\": {\n" +
             "      \"type\": \"integer\"\n" +
+            "    },\n" +
+            "   \""+MLModelGroup.MODEL_GROUP_ID_FIELD+"\": {\n" +
+            "      \"type\": \"keyword\"},\n" +
+            "    },\n" +
+            "    \""+MLModelGroup.BACKEND_ROLES_FIELD+"\": {\n" +
+            "      \"type\": \"list\"\n" +
+            "    },\n" +
+            "   \""+MLModelGroup.ACCESS+"\": {\n" +
+            "      \"type\": \"text\"},\n" +
+            "    },\n" +
+            "    \""+MLModelGroup.OWNER+"\": {\n" +
+            "      \"type\": \"nested\",\n" +
+            "        \"properties\": {\n" +
+            "          \"name\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\", \"ignore_above\":256}}},\n" +
+            "          \"backend_roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n" +
+            "          \"roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n" +
+            "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n" +
+            "        }\n" +
+            "    },\n" +
+            "     \""+MLModelGroup.CREATED_TIME_FIELD+"\": {\n" +
+            "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n" +
+            "    },\n" +
+            "    \""+MLModelGroup.LAST_UPDATED_TIME_FIELD+"\": {\n" +
+            "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n" +
             "    }\n" +
             "  }\n" +
             "}";
