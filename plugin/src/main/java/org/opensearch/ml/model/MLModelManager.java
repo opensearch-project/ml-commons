@@ -267,6 +267,7 @@ public class MLModelManager {
                             int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
                             int newVersion = latestVersion + 1;
                             source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
+                            source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
                             UpdateRequest updateModelGroupRequest = new UpdateRequest();
                             long seqNo = modelGroup.getSeqNo();
                             long primaryTerm = modelGroup.getPrimaryTerm();
