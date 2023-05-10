@@ -280,7 +280,9 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.breaker.DiskCircuitBreaker',
         'org.opensearch.ml.rest.AbstractMLSearchAction',
         'org.opensearch.ml.rest.AbstractMLSearchAction.1',
-        'org.opensearch.ml.action.undeploy.TransportUndeployModelAction'
+        'org.opensearch.ml.action.undeploy.TransportUndeployModelAction',
+        'org.opensearch.ml.action.remote.TransportCreateConnectorAction',
+        'org.opensearch.ml.rest.RestMLCreateConnectorAction'
 ]
 
 jacocoTestCoverageVerification {
