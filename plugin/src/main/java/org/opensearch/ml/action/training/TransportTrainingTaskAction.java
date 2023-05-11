@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.training;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -19,6 +17,8 @@ import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportTrainingTaskAction extends HandledTransportAction<ActionRequest, MLTaskResponse> {

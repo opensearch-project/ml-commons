@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -29,6 +27,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import com.google.common.annotations.VisibleForTesting;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class RestActionUtils {

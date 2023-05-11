@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkRequest;
@@ -50,6 +48,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableMap;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportUndeployModelAction extends
@@ -146,17 +146,13 @@ public class TransportUndeployModelAction extends
                         updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(ImmutableMap.of(MODEL_STATE_FIELD, mlModelState));
                         bulkRequest.add(updateRequest);
                     }
-                    ActionListener<BulkResponse> actionListenr = ActionListener
-                        .wrap(
-                            r -> {
-                                log
-                                    .debug(
-                                        "updated model state as undeployed for : {}",
-                                        Arrays.toString(removedNodeMap.keySet().toArray(new String[0]))
-                                    );
-                            },
-                            e -> { log.error("Failed to update model state as undeployed", e); }
-                        );
+                    ActionListener<BulkResponse> actionListenr = ActionListener.wrap(r -> {
+                        log
+                            .debug(
+                                "updated model state as undeployed for : {}",
+                                Arrays.toString(removedNodeMap.keySet().toArray(new String[0]))
+                            );
+                    }, e -> { log.error("Failed to update model state as undeployed", e); });
                     client.bulk(bulkRequest, ActionListener.runAfter(actionListenr, () -> { syncUpUndeployedModels(syncUpRequest); }));
                 } else {
                     syncUpUndeployedModels(syncUpRequest);

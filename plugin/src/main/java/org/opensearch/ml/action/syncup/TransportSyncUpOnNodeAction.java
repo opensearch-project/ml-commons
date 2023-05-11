@@ -16,8 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
@@ -47,6 +45,8 @@ import org.opensearch.transport.TransportService;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportSyncUpOnNodeAction extends

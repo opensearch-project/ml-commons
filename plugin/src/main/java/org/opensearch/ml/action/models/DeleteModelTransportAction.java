@@ -11,10 +11,6 @@ import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
@@ -45,6 +41,10 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.annotations.VisibleForTesting;
+
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)

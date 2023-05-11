@@ -12,8 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
@@ -29,6 +27,8 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLProfileTransportAction extends

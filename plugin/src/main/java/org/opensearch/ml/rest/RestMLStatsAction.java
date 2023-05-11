@@ -22,8 +22,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -47,6 +45,8 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class RestMLStatsAction extends BaseRestHandler {

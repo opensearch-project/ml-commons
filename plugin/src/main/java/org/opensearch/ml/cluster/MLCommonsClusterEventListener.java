@@ -10,8 +10,6 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.cluster.ClusterChangedEvent;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateListener;
@@ -22,6 +20,8 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskManager;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLCommonsClusterEventListener implements ClusterStateListener {

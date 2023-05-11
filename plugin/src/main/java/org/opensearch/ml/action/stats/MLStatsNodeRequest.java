@@ -7,11 +7,11 @@ package org.opensearch.ml.action.stats;
 
 import java.io.IOException;
 
-import lombok.Getter;
-
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.transport.TransportRequest;
+
+import lombok.Getter;
 
 public class MLStatsNodeRequest extends TransportRequest {
     @Getter

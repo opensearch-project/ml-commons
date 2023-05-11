@@ -15,8 +15,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import lombok.SneakyThrows;
-
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -145,6 +143,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.SneakyThrows;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
