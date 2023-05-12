@@ -10,7 +10,7 @@ buildscript {
         opensearch_group = "org.opensearch"
         opensearch_version = System.getProperty("opensearch.version", "1.3.10-SNAPSHOT")
         // 1.3.0 -> 1.3.0.0, and 1.3.0-SNAPSHOT -> 1.3.0.0-SNAPSHOT
-        opensearch_build = opensearch_version.tokenize('-')[0] + '.0'
+        opensearch_build = opensearch_version.tokenize('-')[0] + '.0-SNAPSHOT'
         common_utils_version = System.getProperty("common_utils.version", opensearch_build)
     }
 
