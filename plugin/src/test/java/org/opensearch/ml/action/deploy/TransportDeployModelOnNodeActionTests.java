@@ -228,7 +228,7 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             null,
             nodes,
             null,
-            null,
+            new HashMap<>(),
             0,
             false
         );

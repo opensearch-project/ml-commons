@@ -99,7 +99,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     }
 
     public void testRun_NoMLModelIndex() {
-        Metadata metadata = new Metadata.Builder().indices(ImmutableOpenMap.<String, IndexMetadata>builder().build()).build();
+        final Map<String, IndexMetadata> indices = new HashMap<>();
+        Metadata metadata = new Metadata.Builder().indices(indices).build();
         DiscoveryNode node = new DiscoveryNode(
             "node",
             new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
@@ -115,7 +116,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             null,
             DiscoveryNodes.builder().add(node).build(),
             null,
-            null,
+            new HashMap<>(),
             0,
             false
         );
