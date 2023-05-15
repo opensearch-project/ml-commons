@@ -5,18 +5,8 @@
 
 package org.opensearch.ml.plugin;
 
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
-
+import com.google.common.collect.ImmutableList;
 import lombok.SneakyThrows;
-
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -57,6 +47,7 @@ import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
+import org.opensearch.ml.action.undeploy.TransportUndeployModelsAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
@@ -97,6 +88,7 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.engine.MLEngine;
@@ -156,7 +148,15 @@ import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
-import com.google.common.collect.ImmutableList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
+
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
@@ -213,6 +213,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLDeployModelAction.INSTANCE, TransportDeployModelAction.class),
                 new ActionHandler<>(MLDeployModelOnNodeAction.INSTANCE, TransportDeployModelOnNodeAction.class),
                 new ActionHandler<>(MLUndeployModelAction.INSTANCE, TransportUndeployModelAction.class),
+                new ActionHandler<>(MLUndeployModelsAction.INSTANCE, TransportUndeployModelsAction.class),
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),

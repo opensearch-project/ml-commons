@@ -7,27 +7,19 @@ package org.opensearch.ml.action.undeploy;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
-import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.concurrent.CountDownLatch;
 
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.FailedNodeException;
-import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -39,11 +31,9 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
@@ -56,12 +46,11 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
-import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
+
 
 @Log4j2
 public class TransportUndeployModelAction extends
@@ -248,35 +237,10 @@ public class TransportUndeployModelAction extends
         String[] modelIds = MLUndeployModelNodesRequest.getModelIds();
 
         Map<String, String[]> modelWorkerNodesMap = new HashMap<>();
-        boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
 
-        Set<String> invalidAccessModels = new HashSet<>();
-        User user = RestActionUtils.getUserContext(client);
-        if (specifiedModelIds) {
-            CountDownLatch latch = new CountDownLatch(modelIds.length);
-            String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
+
+        if (modelIds != null) {
             for (String modelId : modelIds) {
-                validateAccess(modelId, invalidAccessModels, user, excludes, latch);
-            }
-            try {
-                latch.await();
-            } catch (InterruptedException e) {
-                throw new IllegalArgumentException(e);
-            }
-            if (modelIds.length == invalidAccessModels.size()) {
-                throw new MLException("User doesn't have previlege to perform this Action");
-            } else {
-                modelIds = Arrays
-                    .asList(modelIds)
-                    .stream()
-                    .filter(modelId -> !invalidAccessModels.contains(modelId))
-                    .toArray(String[]::new);
-            }
-        }
-
-        String[] removedModelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
-        if (removedModelIds != null) {
-            for (String modelId : removedModelIds) {
                 String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
                 modelWorkerNodesMap.put(modelId, workerNodes);
             }
@@ -285,32 +249,5 @@ public class TransportUndeployModelAction extends
         Map<String, String> modelUndeployStatus = mlModelManager.undeployModel(modelIds);
         mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).decrement();
         return new MLUndeployModelNodeResponse(clusterService.localNode(), modelUndeployStatus, modelWorkerNodesMap);
-    }
-
-    private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                SecurityUtils
-                    .validateModelGroupAccess(
-                        user,
-                        mlModel.getModelGroupId(),
-                        client,
-                        new LatchedActionListener<>(ActionListener.wrap(access -> {
-                            if (filterByEnabled && Boolean.FALSE.equals(access)) {
-                                invalidAccessModels.add(modelId);
-                            }
-                        }, e -> {
-                            log.error("Failed to Validate Access for ModelID " + modelId, e);
-                            invalidAccessModels.add(modelId);
-                        }), latch)
-                    );
-            }, e -> {
-                log.error("Failed to find Model", e);
-                latch.countDown();
-            }));
-        } catch (Exception e) {
-            log.error("Failed to undeploy ML model");
-            throw e;
-        }
     }
 }
