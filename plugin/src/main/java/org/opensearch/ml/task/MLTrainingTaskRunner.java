@@ -11,8 +11,6 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 import java.time.Instant;
 import java.util.UUID;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.index.IndexRequest;
@@ -49,6 +47,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * MLTrainingTaskRunner is responsible for running training tasks.
@@ -155,11 +155,12 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
         mlTaskManager.add(mlTask);
         try {
             if (mlInput.getInputDataset().getInputDataType().equals(MLInputDataType.SEARCH_QUERY)) {
-                ActionListener<MLInputDataset> dataFrameActionListener = ActionListener
-                    .wrap(dataSet -> { train(mlTask, mlInput.toBuilder().inputDataset(dataSet).build(), internalListener); }, e -> {
-                        log.error("Failed to generate DataFrame from search query", e);
-                        internalListener.onFailure(e);
-                    });
+                ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
+                    train(mlTask, mlInput.toBuilder().inputDataset(dataSet).build(), internalListener);
+                }, e -> {
+                    log.error("Failed to generate DataFrame from search query", e);
+                    internalListener.onFailure(e);
+                });
                 mlInputDatasetHandler
                     .parseSearchQueryInput(
                         mlInput.getInputDataset(),

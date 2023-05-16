@@ -12,8 +12,6 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.function.Function;
 
-import lombok.experimental.UtilityClass;
-
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -26,6 +24,8 @@ import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+
+import lombok.experimental.UtilityClass;
 
 @UtilityClass
 public class MLNodeUtils {

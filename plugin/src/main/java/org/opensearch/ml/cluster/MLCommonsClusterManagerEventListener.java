@@ -8,8 +8,6 @@ package org.opensearch.ml.cluster;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.client.Client;
 import org.opensearch.cluster.LocalNodeClusterManagerListener;
 import org.opensearch.cluster.service.ClusterService;
@@ -19,6 +17,8 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLCommonsClusterManagerEventListener implements LocalNodeClusterManagerListener {

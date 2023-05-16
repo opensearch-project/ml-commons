@@ -15,8 +15,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -24,6 +22,8 @@ import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.utils.MLNodeUtils;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class DiscoveryNodeHelper {

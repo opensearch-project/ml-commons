@@ -16,8 +16,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
@@ -38,6 +36,8 @@ import org.opensearch.rest.action.RestToXContentListener;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class RestMLPredictionAction extends BaseRestHandler {

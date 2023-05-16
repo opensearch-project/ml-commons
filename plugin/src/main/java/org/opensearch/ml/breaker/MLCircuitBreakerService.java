@@ -9,12 +9,12 @@ import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This service registers internal system breakers and provide API for users to register their own breakers.
