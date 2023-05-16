@@ -209,14 +209,6 @@ public interface MachineLearningClient {
     void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
 
 
-    default ActionFuture<SearchResponse> searchModelGroup(SearchRequest searchRequest) {
-        PlainActionFuture<SearchResponse> actionFuture = PlainActionFuture.newFuture();
-        searchModelGroup(searchRequest, actionFuture);
-        return actionFuture;
-    }
-
-    void searchModelGroup(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
-
     /**
      * For more info on search task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-task
      * @param searchRequest searchRequest to search the ML Task

@@ -160,13 +160,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         }, listener::onFailure));
     }
 
-    @Override
-    public void searchModelGroup(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
-        client.execute(MLModelGroupSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
-            listener.onResponse(searchResponse);
-        }, listener::onFailure));
-    }
-
 
     @Override
     public void getTask(String taskId, ActionListener<MLTask> listener) {
