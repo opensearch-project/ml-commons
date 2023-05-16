@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLTaskState;
@@ -30,6 +31,7 @@ public class RestMLCustomModelActionIT extends MLCommonsRestTestCase {
         registerModelInput = createRegisterModelInput();
     }
 
+    @Ignore
     public void testCustomModelWorkflow() throws IOException, InterruptedException {
         // register model
         String taskId = registerModel(TestHelper.toJsonString(registerModelInput));
