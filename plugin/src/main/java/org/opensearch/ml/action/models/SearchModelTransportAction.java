@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.models;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -17,6 +15,8 @@ import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class SearchModelTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {

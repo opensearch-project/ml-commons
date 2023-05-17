@@ -5,11 +5,11 @@
 
 package org.opensearch.ml.permission;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.client.Client;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * AccessController has common code for backend roles based permission check.

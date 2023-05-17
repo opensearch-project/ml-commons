@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.upload_chunk;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -18,6 +16,8 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportUploadModelChunkAction extends HandledTransportAction<ActionRequest, MLUploadModelChunkResponse> {

@@ -21,8 +21,7 @@ dependencies {
 
 jacocoTestReport {
     reports {
-        xml.enabled false
-        csv.enabled false
+        html.required = true
     }
 
     dependsOn test
@@ -45,5 +44,5 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 
-lombok.config['lombok.nonNull.exceptionType'] = 'JDK'
+
 

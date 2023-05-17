@@ -13,17 +13,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.DoubleStream;
 
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 
 import com.google.common.math.Quantiles;
+
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLModelCache {

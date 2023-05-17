@@ -49,7 +49,6 @@ import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
-import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
@@ -305,11 +304,7 @@ public class TestHelper {
             .build();
         final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
         IndexMetadata indexMetaData = IndexMetadata.builder(indexName).settings(existingSettings).putMapping(mapping).build();
-
-        final ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap
-            .<String, IndexMetadata>builder()
-            .fPut(indexName, indexMetaData)
-            .build();
+        final Map<String, IndexMetadata> indices = Collections.unmodifiableMap(Map.of(indexName, indexMetaData));
         ClusterState clusterState = ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
 
         return clusterState;
@@ -352,26 +347,14 @@ public class TestHelper {
             roleSet,
             Version.CURRENT
         );
-        Metadata metadata = new Metadata.Builder()
-            .indices(
-                ImmutableOpenMap
-                    .<String, IndexMetadata>builder()
-                    .fPut(
-                        ML_MODEL_INDEX,
-                        IndexMetadata
-                            .builder("test")
-                            .settings(
-                                Settings
-                                    .builder()
-                                    .put("index.number_of_shards", 1)
-                                    .put("index.number_of_replicas", 1)
-                                    .put("index.version.created", Version.CURRENT.id)
-                            )
-                            .build()
-                    )
-                    .build()
-            )
-            .build();
+        final Settings.Builder indexSettings = Settings
+            .builder()
+            .put("index.number_of_shards", 1)
+            .put("index.number_of_replicas", 1)
+            .put("index.version.created", Version.CURRENT.id);
+        IndexMetadata indexMetaData = IndexMetadata.builder("test").settings(indexSettings).build();
+        final Map<String, IndexMetadata> indices = Map.of(ML_MODEL_INDEX, indexMetaData);
+        Metadata metadata = new Metadata.Builder().indices(indices).build();
         return new ClusterState(
             new ClusterName("test cluster"),
             123l,
@@ -380,7 +363,7 @@ public class TestHelper {
             null,
             DiscoveryNodes.builder().add(node).build(),
             null,
-            null,
+            new HashMap<>(),
             0,
             false
         );

@@ -15,9 +15,6 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-import lombok.Builder;
-import lombok.Getter;
-
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
@@ -25,6 +22,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+
+import lombok.Builder;
+import lombok.Getter;
 
 @Getter
 public class MLStatsInput implements ToXContentObject, Writeable {

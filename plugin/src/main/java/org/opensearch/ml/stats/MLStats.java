@@ -10,10 +10,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import lombok.Getter;
-
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
+
+import lombok.Getter;
 
 /**
  * This class is the main entry-point for access to the stats that the ML plugin keeps track of.

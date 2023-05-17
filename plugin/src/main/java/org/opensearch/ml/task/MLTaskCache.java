@@ -11,10 +11,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
+import org.opensearch.ml.common.MLTask;
+
 import lombok.Builder;
 import lombok.Getter;
-
-import org.opensearch.ml.common.MLTask;
 
 @Getter
 public class MLTaskCache {

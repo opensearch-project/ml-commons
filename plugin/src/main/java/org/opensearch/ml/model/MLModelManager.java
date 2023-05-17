@@ -52,8 +52,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
@@ -108,6 +106,8 @@ import org.opensearch.threadpool.ThreadPool;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Manager class for ML models. It contains ML model related operations like register, deploy model etc.
@@ -404,15 +404,12 @@ public class MLModelManager {
 
     private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
         String taskId = mlTask.getTaskId();
-        modelHelper
-            .downloadPrebuiltModelConfig(
-                taskId,
-                registerModelInput,
-                ActionListener.wrap(mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask); }, e -> {
-                    log.error("Failed to register prebuilt model", e);
-                    handleException(registerModelInput.getFunctionName(), taskId, e);
-                })
-            );
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
+            registerModelFromUrl(mlRegisterModelInput, mlTask);
+        }, e -> {
+            log.error("Failed to register prebuilt model", e);
+            handleException(registerModelInput.getFunctionName(), taskId, e);
+        }));
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {
