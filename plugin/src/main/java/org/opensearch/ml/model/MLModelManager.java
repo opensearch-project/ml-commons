@@ -390,8 +390,6 @@ public class MLModelManager {
                             failedToUploadChunk.set(true);
                             handleExceptionUpdateModelState(functionName, taskId, modelId, e);
                             deleteFileQuietly(file);
-                            // remove model doc as failed to upload model
-                            // deleteModel(modelId);
                             semaphore.release();
                             deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                         }));
@@ -399,7 +397,6 @@ public class MLModelManager {
                 }, e -> {
                     log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-                    // deleteModel(modelId);
                     handleExceptionUpdateModelState(functionName, taskId, modelId, e);
                 })
             );
@@ -464,7 +461,6 @@ public class MLModelManager {
         }, e -> {
             log.error("Failed to update model", e);
             handleException(functionName, taskId, e);
-            // deleteModel(modelId);
         }));
     }
 
@@ -475,17 +471,6 @@ public class MLModelManager {
         ActionListener<MLDeployModelResponse> listener = ActionListener
             .wrap(r -> log.debug("model deployed, response {}", r), e -> log.error("Failed to deploy model", e));
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
-    }
-
-    private void deleteModel(String modelId) {
-        DeleteRequest deleteRequest = new DeleteRequest();
-        deleteRequest.index(ML_MODEL_INDEX).id(modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        client.delete(deleteRequest);
-        DeleteByQueryRequest deleteChunksRequest = new DeleteByQueryRequest(ML_MODEL_INDEX)
-            .setQuery(new TermQueryBuilder(MLModel.MODEL_ID_FIELD, modelId))
-            .setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN)
-            .setAbortOnVersionConflict(false);
-        client.execute(DeleteByQueryAction.INSTANCE, deleteChunksRequest);
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
