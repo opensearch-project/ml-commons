@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import java.time.Instant;
 import java.util.Base64;
 import java.util.concurrent.Semaphore;
 
@@ -113,6 +114,7 @@ public class MLModelChunkUploader {
                                         .totalChunks(existingModel.getTotalChunks())
                                         .modelContentHash(existingModel.getModelContentHash())
                                         .modelContentSizeInBytes(existingModel.getModelContentSizeInBytes())
+                                        .lastRegisteredTime(Instant.now())
                                         .createdTime(existingModel.getCreatedTime())
                                         .build();
                                     IndexRequest indexReq = new IndexRequest(ML_MODEL_INDEX);
