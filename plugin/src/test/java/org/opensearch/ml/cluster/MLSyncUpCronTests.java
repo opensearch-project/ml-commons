@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -97,6 +99,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
 
         testState = setupTestClusterState();
         when(clusterService.state()).thenReturn(testState);
+        when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[]{mlNode1, mlNode2});
     }
 
     public void testRun_NoMLModelIndex() {
@@ -219,7 +222,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, null, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, null, Instant.now().toEpochMilli(), false));
             return null;
         }).when(client).search(any(), any());
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
@@ -242,7 +245,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, 0, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, 0, Instant.now().toEpochMilli(), false));
             return null;
         }).when(client).search(any(), any());
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
@@ -266,7 +269,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
             actionListener
-                .onResponse(createSearchModelResponse("modelId", MLModelState.PARTIALLY_DEPLOYED, 3, 2, Instant.now().toEpochMilli()));
+                .onResponse(createSearchModelResponse("modelId", MLModelState.PARTIALLY_DEPLOYED, 3, 2, Instant.now().toEpochMilli(), false));
             return null;
         }).when(client).search(any(), any());
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
@@ -290,7 +293,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         deployingModels.put("modelId", ImmutableSet.of("node2"));
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOY_FAILED, 2, 0, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOY_FAILED, 2, 0, Instant.now().toEpochMilli(), false));
             return null;
         }).when(client).search(any(), any());
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
@@ -313,7 +316,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         deployingModels.put("modelId", ImmutableSet.of("node2"));
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli(), false));
             return null;
         }).when(client).search(any(), any());
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
@@ -326,12 +329,38 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> deployingModels = new HashMap<>();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli(), false));
             return null;
         }).when(client).search(any(), any());
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any(), any());
         verify(client, never()).bulk(any(), any());
+    }
+
+    public void testRefreshModelState_NotResetState_DeployingInGraceTime_deployToAll_isTrue() {
+        Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
+        Map<String, Set<String>> deployingModels = new HashMap<>();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli(), true));
+            return null;
+        }).when(client).search(any(), any());
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
+        verify(client, times(1)).search(any(), any());
+        verify(client, times(1)).bulk(any(), any());
+    }
+
+    public void testRefreshModelState_ModelStateChanged2Deployed() {
+        Map<String, Set<String>> modelWorkerNodes = ImmutableMap.of("modelId", ImmutableSet.of("node1"));
+        Map<String, Set<String>> deployingModels = new HashMap<>();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 1, 1, Instant.now().toEpochMilli(), false));
+            return null;
+        }).when(client).search(any(), any());
+        syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
+        verify(client, times(1)).search(any(), any());
+        verify(client, times(1)).bulk(any(), any());
     }
 
     private void mockSyncUp_GatherRunningTasks() {
@@ -361,7 +390,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         MLModelState state,
         Integer planningWorkerNodeCount,
         Integer currentWorkerNodeCount,
-        Long lastUpdateTime
+        Long lastUpdateTime,
+        boolean deployToAllNodes
     ) throws IOException {
         XContentBuilder content = TestHelper.builder();
         content.startObject();
@@ -371,6 +401,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             content.field(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkerNodeCount);
         }
         content.field(MLModel.LAST_UPDATED_TIME_FIELD, lastUpdateTime);
+        content.field(MLModel.DEPLOY_TO_ALL_NODES_FIELD, deployToAllNodes);
+        content.field(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of("node1", "node2"));
         content.endObject();
 
         SearchHit[] hits = new SearchHit[1];
