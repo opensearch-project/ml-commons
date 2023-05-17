@@ -53,17 +53,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import javax.management.modelmbean.ModelMBeanInfo;
-
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
-import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.action.support.ThreadedActionListener;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
@@ -76,9 +72,6 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.index.reindex.DeleteByQueryAction;
-import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -478,11 +471,12 @@ public class MLModelManager {
         Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
-    
+
     private void handleExceptionUpdateModelState(FunctionName functionName, String taskId, String modelId, Exception e) {
         mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-        Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED, MODEL_ID_FIELD, modelId);
-        mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true); 
+        Map<String, Object> updated = ImmutableMap
+            .of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED, MODEL_ID_FIELD, modelId);
+        mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
         updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.REGISTER_FAILED));
     }
 
