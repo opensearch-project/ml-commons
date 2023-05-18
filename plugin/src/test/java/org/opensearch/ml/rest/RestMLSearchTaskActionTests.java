@@ -9,7 +9,7 @@ import java.util.List;
 
 import org.hamcrest.Matchers;
 import org.junit.Before;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;

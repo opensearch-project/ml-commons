@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.common;
 
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -16,7 +16,6 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-
 import java.io.IOException;
 import java.util.function.Function;
 
@@ -26,7 +25,8 @@ public class TestHelper {
         testParse(obj, function, false);
     }
 
-    public static <T> void testParse(ToXContentObject obj, Function<XContentParser, T> function, boolean wrapWithObject) throws IOException {
+    public static <T> void testParse(ToXContentObject obj, Function<XContentParser, T> function, boolean wrapWithObject)
+            throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         if (wrapWithObject) {
             builder.startObject();
@@ -35,12 +35,14 @@ public class TestHelper {
         if (wrapWithObject) {
             builder.endObject();
         }
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         testParseFromString(obj, jsonStr, function);
     }
 
-    public static <T> void testParseFromString(ToXContentObject obj, String jsonStr, Function<XContentParser, T> function) throws IOException {
-        XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr);
+    public static <T> void testParseFromString(ToXContentObject obj, String jsonStr,
+            Function<XContentParser, T> function) throws IOException {
+        XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY,
+                LoggingDeprecationHandler.INSTANCE, jsonStr);
         parser.nextToken();
         T parsedObj = function.apply(parser);
         obj.equals(parsedObj);

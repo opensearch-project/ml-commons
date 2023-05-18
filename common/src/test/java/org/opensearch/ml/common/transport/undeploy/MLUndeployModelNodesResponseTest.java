@@ -9,7 +9,7 @@ import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -42,16 +42,14 @@ public class MLUndeployModelNodesResponseTest {
                 new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
                 Collections.emptyMap(),
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
+                Version.CURRENT);
         node2 = new DiscoveryNode(
                 "foo2",
                 "foo2",
                 new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
                 Collections.emptyMap(),
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
+                Version.CURRENT);
         modelWorkerNodeCounts = new HashMap<>();
         modelWorkerNodeCounts.put("modelId1", 1);
     }
@@ -60,7 +58,8 @@ public class MLUndeployModelNodesResponseTest {
     public void testSerializationDeserialization1() throws IOException {
         List<MLUndeployModelNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
-        MLUndeployModelNodesResponse response = new MLUndeployModelNodesResponse(clusterName, responseList, failuresList);
+        MLUndeployModelNodesResponse response = new MLUndeployModelNodesResponse(clusterName, responseList,
+                failuresList);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLUndeployModelNodesResponse newResponse = new MLUndeployModelNodesResponse(output.bytes().streamInput());
@@ -87,10 +86,9 @@ public class MLUndeployModelNodesResponseTest {
         MLUndeployModelNodesResponse response = new MLUndeployModelNodesResponse(clusterName, nodes, failures);
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals(
                 "{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}",
-                jsonStr
-        );
+                jsonStr);
     }
 }

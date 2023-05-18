@@ -18,7 +18,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
@@ -75,12 +75,16 @@ public class RestActionUtils {
     }
 
     /**
-     * Checks to see if the request came from OpenSearch Dashboards, if so we want to return the UI Metadata from the document.
-     * If the request came from the client then we exclude the UI Metadata from the search result.
+     * Checks to see if the request came from OpenSearch Dashboards, if so we want
+     * to return the UI Metadata from the document.
+     * If the request came from the client then we exclude the UI Metadata from the
+     * search result.
      *
-     * @param request rest request
-     * @param searchSourceBuilder instance of searchSourceBuilder to fetch includes and excludes
-     * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
+     * @param request             rest request
+     * @param searchSourceBuilder instance of searchSourceBuilder to fetch includes
+     *                            and excludes
+     * @return instance of
+     *         {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
      */
     public static FetchSourceContext getSourceContext(RestRequest request, SearchSourceBuilder searchSourceBuilder) {
         String userAgent = coalesceToEmpty(request.header("User-Agent"));
@@ -106,7 +110,8 @@ public class RestActionUtils {
                 return new FetchSourceContext(true, includes, excludes);
             }
         } else {
-            // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
+            // When user does not set the _source field in search model api request,
+            // searchSourceBuilder.fetchSource becomes null
             String[] excludes = new String[] { OLD_MODEL_CONTENT_FIELD, MODEL_CONTENT_FIELD };
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
                 return new FetchSourceContext(true, Strings.EMPTY_ARRAY, ArrayUtils.add(excludes, "ui_metadata"));
@@ -118,6 +123,7 @@ public class RestActionUtils {
 
     /**
      * Return FetchSourceContext
+     * 
      * @param returnModelContent if the model content should be returned
      */
     public static FetchSourceContext getFetchSourceContext(boolean returnModelContent) {
@@ -129,6 +135,7 @@ public class RestActionUtils {
 
     /**
      * Return all nodes in the cluster
+     * 
      * @param clusterService the cluster service
      */
     public static String[] getAllNodes(ClusterService clusterService) {
@@ -142,10 +149,10 @@ public class RestActionUtils {
 
     /**
      *
-     * @param channel RestChannel
-     * @param status RestStatus enums
+     * @param channel      RestChannel
+     * @param status       RestStatus enums
      * @param errorMessage Error messages
-     * @param exception Reported Exception
+     * @param exception    Reported Exception
      */
     public static void onFailure(RestChannel channel, RestStatus status, String errorMessage, Exception exception) {
         BytesRestResponse bytesRestResponse;

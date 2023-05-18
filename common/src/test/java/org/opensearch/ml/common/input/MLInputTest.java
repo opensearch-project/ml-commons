@@ -10,7 +10,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
@@ -61,11 +61,11 @@ public class MLInputTest {
 
     @Before
     public void setUp() throws Exception {
-        final ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("test", ColumnType.DOUBLE)};
+        final ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("test", ColumnType.DOUBLE) };
         List<Row> rows = new ArrayList<>();
-        rows.add(new Row(new ColumnValue[]{new DoubleValue(1.0)}));
-        rows.add(new Row(new ColumnValue[]{new DoubleValue(2.0)}));
-        rows.add(new Row(new ColumnValue[]{new DoubleValue(3.0)}));
+        rows.add(new Row(new ColumnValue[] { new DoubleValue(1.0) }));
+        rows.add(new Row(new ColumnValue[] { new DoubleValue(2.0) }));
+        rows.add(new Row(new ColumnValue[] { new DoubleValue(3.0) }));
         DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
         input = MLInput.builder()
                 .algorithm(algorithm)
@@ -89,20 +89,23 @@ public class MLInputTest {
                 .searchSourceBuilder(new SearchSourceBuilder().query(new MatchAllQueryBuilder()).size(1))
                 .build();
         String expectedInputStr = "{\"algorithm\":\"LINEAR_REGRESSION\",\"input_index\":[\"index1\"],\"input_query\":{\"size\":1,\"query\":{\"match_all\":{\"boost\":1.0}}}}";
-        testParse(FunctionName.LINEAR_REGRESSION, inputDataset, expectedInputStr,  parsedInput -> {
+        testParse(FunctionName.LINEAR_REGRESSION, inputDataset, expectedInputStr, parsedInput -> {
             assertNotNull(parsedInput.getInputDataset());
-            assertEquals(1, ((SearchQueryInputDataset)parsedInput.getInputDataset()).getIndices().size());
-            assertEquals(indexName, ((SearchQueryInputDataset)parsedInput.getInputDataset()).getIndices().get(0));
+            assertEquals(1, ((SearchQueryInputDataset) parsedInput.getInputDataset()).getIndices().size());
+            assertEquals(indexName, ((SearchQueryInputDataset) parsedInput.getInputDataset()).getIndices().get(0));
         });
 
-        @NonNull DataFrame dataFrame = new DefaultDataFrame(new ColumnMeta[]{ColumnMeta.builder().name("value").columnType(ColumnType.FLOAT).build()});
-        dataFrame.appendRow(new Float[]{1.0f});
+        @NonNull
+        DataFrame dataFrame = new DefaultDataFrame(
+                new ColumnMeta[] { ColumnMeta.builder().name("value").columnType(ColumnType.FLOAT).build() });
+        dataFrame.appendRow(new Float[] { 1.0f });
         DataFrameInputDataset dataFrameInputDataset = DataFrameInputDataset.builder().dataFrame(dataFrame).build();
         expectedInputStr = "{\"algorithm\":\"LINEAR_REGRESSION\",\"input_data\":{\"column_metas\":[{\"name\":\"value\",\"column_type\":\"FLOAT\"}],\"rows\":[{\"values\":[{\"column_type\":\"FLOAT\",\"value\":1.0}]}]}}";
-        testParse(FunctionName.LINEAR_REGRESSION, dataFrameInputDataset, expectedInputStr,  parsedInput -> {
+        testParse(FunctionName.LINEAR_REGRESSION, dataFrameInputDataset, expectedInputStr, parsedInput -> {
             assertNotNull(parsedInput.getInputDataset());
-            assertEquals(1, ((DataFrameInputDataset)parsedInput.getInputDataset()).getDataFrame().size());
-            assertEquals(1.0f, ((DataFrameInputDataset)parsedInput.getInputDataset()).getDataFrame().getRow(0).getValue(0).floatValue(), 1e-5);
+            assertEquals(1, ((DataFrameInputDataset) parsedInput.getInputDataset()).getDataFrame().size());
+            assertEquals(1.0f, ((DataFrameInputDataset) parsedInput.getInputDataset()).getDataFrame().getRow(0)
+                    .getValue(0).floatValue(), 1e-5);
         });
     }
 
@@ -115,7 +118,8 @@ public class MLInputTest {
                 .targetResponse(Arrays.asList(column))
                 .targetResponsePositions(Arrays.asList(position))
                 .build();
-        TextDocsInputDataSet inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList(sentence)).resultFilter(resultFilter).build();
+        TextDocsInputDataSet inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList(sentence))
+                .resultFilter(resultFilter).build();
         String expectedInputStr = "{\"algorithm\":\"TEXT_EMBEDDING\",\"text_docs\":[\"test sentence\"],\"return_bytes\":false,\"return_number\":false,\"target_response\":[\"column1\"],\"target_response_positions\":[1]}";
         testParse(FunctionName.TEXT_EMBEDDING, inputDataset, expectedInputStr, parsedInput -> {
             assertNotNull(parsedInput.getInputDataset());
@@ -135,28 +139,29 @@ public class MLInputTest {
         String expectedInputStr = "{\"algorithm\":\"TEXT_EMBEDDING\",\"text_docs\":[\"test sentence\"]}";
         testParse(FunctionName.TEXT_EMBEDDING, inputDataset, expectedInputStr, parsedInput -> {
             assertNotNull(parsedInput.getInputDataset());
-            assertEquals(1, ((TextDocsInputDataSet)parsedInput.getInputDataset()).getDocs().size());
-            assertEquals(sentence, ((TextDocsInputDataSet)parsedInput.getInputDataset()).getDocs().get(0));
+            assertEquals(1, ((TextDocsInputDataSet) parsedInput.getInputDataset()).getDocs().size());
+            assertEquals(sentence, ((TextDocsInputDataSet) parsedInput.getInputDataset()).getDocs().get(0));
         });
     }
 
-    private void testParse(FunctionName algorithm, MLInputDataset inputDataset, String expectedInputStr, Consumer<MLInput> verify) throws IOException {
+    private void testParse(FunctionName algorithm, MLInputDataset inputDataset, String expectedInputStr,
+            Consumer<MLInput> verify) throws IOException {
         MLInput input = MLInput.builder().inputDataset(inputDataset).algorithm(algorithm).build();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals(expectedInputStr, jsonStr);
 
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON.xContent()
+                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
         MLInput parsedInput = MLInput.parse(parser, algorithm.name());
         assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
         assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
         verify.accept(parsedInput);
     }
-
 
     @Test
     public void readInputStream_Success() throws IOException {

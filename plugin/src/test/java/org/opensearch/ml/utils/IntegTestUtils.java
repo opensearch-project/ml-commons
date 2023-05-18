@@ -22,7 +22,6 @@ import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
-import org.opensearch.common.Strings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -117,9 +116,11 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     }
 
     /**
-     * Train model and return model id if not async request or task id for async request.
+     * Train model and return model id if not async request or task id for async
+     * request.
+     * 
      * @param inputDataset input data set
-     * @param async async request or not
+     * @param async        async request or not
      * @return model id for sync request or task id for async request.
      */
     public static String trainModel(MLInputDataset inputDataset, boolean async) {
@@ -141,7 +142,8 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         return id;
     }
 
-    // Wait a while (20 seconds at most) for the model to be available in the ml index.
+    // Wait a while (20 seconds at most) for the model to be available in the ml
+    // index.
     public static SearchResponse waitModelAvailable1(String taskId) throws InterruptedException {
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
@@ -194,7 +196,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
         mlPredictionOutput.getPredictionResult().toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         String expectedStr1 = "{\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}],"
             + "\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}]}";
         String expectedStr2 = "{\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}],"

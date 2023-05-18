@@ -7,7 +7,7 @@ package org.opensearch.ml.common.transport.upload_chunk;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
@@ -90,11 +90,12 @@ public class MLUploadModelChunkInputTest {
 	public void testMLUploadModelChunkInputParser() throws IOException {
 		XContentBuilder builder = XContentFactory.jsonBuilder();
 		builder = mlUploadModelChunkInput.toXContent(builder, null);
-		String json = Strings.toString(builder);
+		String json = org.opensearch.common.Strings.toString(builder);
 		XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(
 				new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()), null, json);
 		parser.nextToken();
-		MLUploadModelChunkInput newMlUploadModelChunkInput = MLUploadModelChunkInput.parse(parser, new byte[] { 1, 3, 4 });
+		MLUploadModelChunkInput newMlUploadModelChunkInput = MLUploadModelChunkInput.parse(parser,
+				new byte[] { 1, 3, 4 });
 		assertEquals(mlUploadModelChunkInput, newMlUploadModelChunkInput);
 	}
 

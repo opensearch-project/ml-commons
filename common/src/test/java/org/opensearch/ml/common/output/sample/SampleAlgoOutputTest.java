@@ -7,7 +7,7 @@ package org.opensearch.ml.common.output.sample;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 
 public class SampleAlgoOutputTest {
     SampleAlgoOutput output;
+
     @Before
     public void setUp() {
         output = SampleAlgoOutput.builder()
@@ -33,7 +34,7 @@ public class SampleAlgoOutputTest {
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{\"sample_result\":1.0}", jsonStr);
     }
 
@@ -42,7 +43,7 @@ public class SampleAlgoOutputTest {
         SampleAlgoOutput output = SampleAlgoOutput.builder().build();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{}", jsonStr);
     }
 

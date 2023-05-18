@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.input.execute.anomalylocalization;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.NamedWriteableAwareStreamInput;
 import org.opensearch.common.io.stream.NamedWriteableRegistry;
@@ -29,51 +29,59 @@ import static org.junit.Assert.assertEquals;
 
 public class AnomalyLocalizationInputTests {
 
-    @Test
-    public void testXContentFullObject() throws Exception {
-        AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field"),
-                AggregationBuilders.min("min").field("field")), "@timestamp", 0L, 10L, 1L, 2, Optional.of(3L),
-                Optional.of(QueryBuilders.matchAllQuery()));
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        builder = input.toXContent(builder, null);
-        String json = Strings.toString(builder);
+        @Test
+        public void testXContentFullObject() throws Exception {
+                AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"),
+                                Arrays.asList(AggregationBuilders.max("max").field("field"),
+                                                AggregationBuilders.min("min").field("field")),
+                                "@timestamp", 0L, 10L, 1L, 2, Optional.of(3L),
+                                Optional.of(QueryBuilders.matchAllQuery()));
+                XContentBuilder builder = XContentFactory.jsonBuilder();
+                builder = input.toXContent(builder, null);
+                String json = org.opensearch.common.Strings.toString(builder);
 
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, json);
-        parser.nextToken();
-        AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
+                XContentParser parser = XContentType.JSON.xContent()
+                                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                                                Collections.emptyList()).getNamedXContents()), null, json);
+                parser.nextToken();
+                AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
 
-        assertEquals(input, newInput);
-    }
+                assertEquals(input, newInput);
+        }
 
-    @Test
-    public void testXContentMissingAnomalyStartFilter() throws Exception {
-        AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field")),
-                "@timestamp", 0L, 10L, 1L, 2, Optional.empty(), Optional.empty());
-        XContentBuilder builder = XContentFactory.jsonBuilder();
-        builder = input.toXContent(builder, null);
-        String json = Strings.toString(builder);
+        @Test
+        public void testXContentMissingAnomalyStartFilter() throws Exception {
+                AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"),
+                                Arrays.asList(AggregationBuilders.max("max").field("field")),
+                                "@timestamp", 0L, 10L, 1L, 2, Optional.empty(), Optional.empty());
+                XContentBuilder builder = XContentFactory.jsonBuilder();
+                builder = input.toXContent(builder, null);
+                String json = org.opensearch.common.Strings.toString(builder);
 
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, json);
-        parser.nextToken();
-        AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
+                XContentParser parser = XContentType.JSON.xContent()
+                                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                                                Collections.emptyList()).getNamedXContents()), null, json);
+                parser.nextToken();
+                AnomalyLocalizationInput newInput = AnomalyLocalizationInput.parse(parser);
 
-        assertEquals(input, newInput);
-    }
+                assertEquals(input, newInput);
+        }
 
-    @Test
-    public void testWriteable() throws Exception {
-        AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"), Arrays.asList(AggregationBuilders.max("max").field("field"),
-                AggregationBuilders.min("min").field("field")), "@timestamp", 0L, 10L, 1L, 2, Optional.of(3L),
-                Optional.of(QueryBuilders.matchAllQuery()));
+        @Test
+        public void testWriteable() throws Exception {
+                AnomalyLocalizationInput input = new AnomalyLocalizationInput("indexName", Arrays.asList("attribute"),
+                                Arrays.asList(AggregationBuilders.max("max").field("field"),
+                                                AggregationBuilders.min("min").field("field")),
+                                "@timestamp", 0L, 10L, 1L, 2, Optional.of(3L),
+                                Optional.of(QueryBuilders.matchAllQuery()));
 
-        BytesStreamOutput out = new BytesStreamOutput();
-        input.writeTo(out);
-        StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(),
-                new NamedWriteableRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedWriteables()));
-        AnomalyLocalizationInput newInput = new AnomalyLocalizationInput(in);
+                BytesStreamOutput out = new BytesStreamOutput();
+                input.writeTo(out);
+                StreamInput in = new NamedWriteableAwareStreamInput(out.bytes().streamInput(),
+                                new NamedWriteableRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList())
+                                                .getNamedWriteables()));
+                AnomalyLocalizationInput newInput = new AnomalyLocalizationInput(in);
 
-        assertEquals(input, newInput);
-    }
+                assertEquals(input, newInput);
+        }
 }
