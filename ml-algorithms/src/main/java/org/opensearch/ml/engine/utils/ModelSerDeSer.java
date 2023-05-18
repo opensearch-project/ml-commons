@@ -11,7 +11,10 @@ import org.apache.commons.io.serialization.ValidatingObjectInputStream;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.engine.exceptions.ModelSerDeSerException;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.Base64;
 
 @Log4j2
