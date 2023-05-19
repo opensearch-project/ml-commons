@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkRequest;
@@ -50,7 +51,6 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
-
 
 @Log4j2
 public class TransportUndeployModelAction extends
@@ -237,7 +237,6 @@ public class TransportUndeployModelAction extends
         String[] modelIds = MLUndeployModelNodesRequest.getModelIds();
 
         Map<String, String[]> modelWorkerNodesMap = new HashMap<>();
-
 
         if (modelIds != null) {
             for (String modelId : modelIds) {

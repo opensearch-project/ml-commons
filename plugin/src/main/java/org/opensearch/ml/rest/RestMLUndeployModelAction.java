@@ -5,17 +5,22 @@
 
 package org.opensearch.ml.rest;
 
-
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
-import com.google.common.collect.ImmutableList;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+
 import org.apache.commons.lang3.ArrayUtils;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelInput;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
@@ -24,12 +29,7 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-
+import com.google.common.collect.ImmutableList;
 
 public class RestMLUndeployModelAction extends BaseRestHandler {
     private static final String ML_UNDEPLOY_MODEL_ACTION = "ml_undeploy_model_action";
@@ -79,8 +79,7 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         MLUndeployModelsRequest mlUndeployModelsRequest = getUndeployRequest(request);
-        return channel -> client
-                .execute(MLUndeployModelsAction.INSTANCE, mlUndeployModelsRequest, new RestToXContentListener<>(channel));
+        return channel -> client.execute(MLUndeployModelsAction.INSTANCE, mlUndeployModelsRequest, new RestToXContentListener<>(channel));
     }
 
     MLUndeployModelsRequest getUndeployRequest(RestRequest request) throws IOException {
@@ -114,7 +113,6 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
 
         return new MLUndeployModelsRequest(targetModelIds, targetNodeIds);
     }
-
 
     private String[] getAllNodes() {
         Iterator<DiscoveryNode> iterator = clusterService.state().nodes().iterator();

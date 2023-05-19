@@ -36,16 +36,16 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
     private Map<String, Object> tags;
     private List<String> backendRoles;
     private Boolean isPublic;
-    private Boolean addAllBackendRoles;
+    private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelGroupInput(String name, String description, Map<String, Object> tags, List<String> backendRoles, Boolean isPublic, Boolean addAllBackendRoles) {
+    public MLRegisterModelGroupInput(String name, String description, Map<String, Object> tags, List<String> backendRoles, Boolean isPublic, Boolean isAddAllBackendRoles) {
         this.name = name;
         this.description = description;
         this.tags = tags;
         this.backendRoles = backendRoles;
         this.isPublic = isPublic;
-        this.addAllBackendRoles = addAllBackendRoles;
+        this.isAddAllBackendRoles = isAddAllBackendRoles;
     }
 
     public MLRegisterModelGroupInput(StreamInput in) throws IOException{
@@ -56,7 +56,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         }
         this.backendRoles = in.readOptionalStringList();
         this.isPublic = in.readOptionalBoolean();
-        this.addAllBackendRoles = in.readOptionalBoolean();
+        this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
 
     @Override
@@ -76,7 +76,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isPublic);
-        out.writeOptionalBoolean(addAllBackendRoles);
+        out.writeOptionalBoolean(isAddAllBackendRoles);
     }
 
     @Override
@@ -95,8 +95,8 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         if (isPublic != null) {
             builder.field(IS_PUBLIC, isPublic);
         }
-        if (addAllBackendRoles != null) {
-            builder.field(ADD_ALL_BACKEND_ROLES, addAllBackendRoles);
+        if (isAddAllBackendRoles != null) {
+            builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
         }
         builder.endObject();
         return builder;
@@ -108,7 +108,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         Map<String, Object> tags = null;
         List<String> backendRoles = null;
         Boolean isPublic = null;
-        Boolean addAllBackendRoles = null;
+        Boolean isAddAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -135,14 +135,14 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
                     isPublic = parser.booleanValue();
                     break;
                 case ADD_ALL_BACKEND_ROLES:
-                    addAllBackendRoles = parser.booleanValue();
+                    isAddAllBackendRoles = parser.booleanValue();
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelGroupInput(name, description, tags, backendRoles, isPublic, addAllBackendRoles);
+        return new MLRegisterModelGroupInput(name, description, tags, backendRoles, isPublic, isAddAllBackendRoles);
     }
 
 }

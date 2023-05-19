@@ -107,9 +107,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
 
-
                         SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if ((filterByEnabled) && (Boolean.FALSE.equals(access))) {
+                            if ((filterByEnabled) && (access == false)) {
                                 actionListener
                                     .onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                             } else {

@@ -47,7 +47,7 @@ public class MLModelGroup implements ToXContentObject {
     private String name;
     private String description;
     private Map<String, Object> tags;
-    private int latestVersion = 0;
+    private int latestVersion;
     private List<String> backendRoles;
     private User owner;
 
@@ -56,7 +56,7 @@ public class MLModelGroup implements ToXContentObject {
     private String modelGroupId;
 
     private Instant createdTime;
-    private Instant lastUpdateTime;
+    private Instant lastUpdatedTime;
 
 
     @Builder(toBuilder = true)
@@ -64,7 +64,7 @@ public class MLModelGroup implements ToXContentObject {
                         List<String> backendRoles, User owner, String access,
                         String modelGroupId,
                         Instant createdTime,
-                        Instant lastUpdateTime) {
+                        Instant lastUpdatedTime) {
         this.name = name;
         this.description = description;
         this.tags = tags;
@@ -74,7 +74,7 @@ public class MLModelGroup implements ToXContentObject {
         this.access = access;
         this.modelGroupId = modelGroupId;
         this.createdTime = createdTime;
-        this.lastUpdateTime = lastUpdateTime;
+        this.lastUpdatedTime = lastUpdatedTime;
     }
 
 
@@ -94,7 +94,7 @@ public class MLModelGroup implements ToXContentObject {
         access = input.readOptionalString();
         modelGroupId = input.readOptionalString();
         createdTime = input.readOptionalInstant();
-        lastUpdateTime = input.readOptionalInstant();
+        lastUpdatedTime = input.readOptionalInstant();
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -116,7 +116,7 @@ public class MLModelGroup implements ToXContentObject {
         out.writeOptionalString(access);
         out.writeOptionalString(modelGroupId);
         out.writeOptionalInstant(createdTime);
-        out.writeOptionalInstant(lastUpdateTime);
+        out.writeOptionalInstant(lastUpdatedTime);
     }
 
     @Override
@@ -145,8 +145,8 @@ public class MLModelGroup implements ToXContentObject {
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
-        if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        if (lastUpdatedTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
         builder.endObject();
         return builder;
@@ -217,7 +217,7 @@ public class MLModelGroup implements ToXContentObject {
                 .access(access)
                 .modelGroupId(modelGroupId)
                 .createdTime(createdTime)
-                .lastUpdateTime(lastUpdateTime)
+                .lastUpdatedTime(lastUpdateTime)
                 .build();
     }
 

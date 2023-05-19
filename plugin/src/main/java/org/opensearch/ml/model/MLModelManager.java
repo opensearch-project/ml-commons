@@ -317,7 +317,8 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, long seqNo, long primaryTerm) throws PrivilegedActionException {
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, long seqNo, long primaryTerm)
+        throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion, seqNo, primaryTerm);
         } else {
@@ -509,7 +510,6 @@ public class MLModelManager {
                 })
             );
     }
-
 
     private void registerPrebuiltModel(
         MLRegisterModelInput registerModelInput,

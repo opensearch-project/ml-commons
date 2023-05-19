@@ -142,7 +142,8 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             mlCircuitBreakerService,
-            mlStats
+            mlStats,
+            settings
         );
 
         clusterManagerNode = new DiscoveryNode(

@@ -5,7 +5,16 @@
 
 package org.opensearch.ml.action.undeploy;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+
+import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.LatchedActionListener;
@@ -38,16 +47,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
-
-;
-
 @Log4j2
 public class TransportUndeployModelsAction extends HandledTransportAction<ActionRequest, MLUndeployModelNodesResponse> {
     TransportService transportService;
@@ -67,19 +66,19 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
     @Inject
     public TransportUndeployModelsAction(
-            TransportService transportService,
-            ActionFilters actionFilters,
-            ModelHelper modelHelper,
-            MLTaskManager mlTaskManager,
-            ClusterService clusterService,
-            ThreadPool threadPool,
-            Client client,
-            NamedXContentRegistry xContentRegistry,
-            DiscoveryNodeHelper nodeFilter,
-            MLTaskDispatcher mlTaskDispatcher,
-            MLModelManager mlModelManager,
-            MLStats mlStats,
-            Settings settings
+        TransportService transportService,
+        ActionFilters actionFilters,
+        ModelHelper modelHelper,
+        MLTaskManager mlTaskManager,
+        ClusterService clusterService,
+        ThreadPool threadPool,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        DiscoveryNodeHelper nodeFilter,
+        MLTaskDispatcher mlTaskDispatcher,
+        MLModelManager mlModelManager,
+        MLStats mlStats,
+        Settings settings
     ) {
         super(MLUndeployModelsAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -96,8 +95,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
         filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
         clusterService
-                .getClusterSettings()
-                .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
 
     }
@@ -109,7 +108,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
         boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
         modelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
-        Set<String> invalidAccessModels = new HashSet<>();
+        Set<String> invalidAccessModels = ConcurrentHashMap.newKeySet();
 
         User user = RestActionUtils.getUserContext(client);
 
@@ -126,16 +125,10 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         if (modelIds.length == invalidAccessModels.size()) {
             throw new MLException("User doesn't have previlege to perform this Action");
         } else {
-            modelIds = Arrays
-                    .asList(modelIds)
-                    .stream()
-                    .filter(modelId -> !invalidAccessModels.contains(modelId))
-                    .toArray(String[]::new);
+            modelIds = Arrays.asList(modelIds).stream().filter(modelId -> !invalidAccessModels.contains(modelId)).toArray(String[]::new);
         }
 
-        MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(
-                targetNodeIds, modelIds
-        );
+        MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
 
         // TODO: then you can send out request to undeploy models
         client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, listener);
@@ -145,19 +138,19 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 SecurityUtils
-                        .validateModelGroupAccess(
-                                user,
-                                mlModel.getModelGroupId(),
-                                client,
-                                new LatchedActionListener<>(ActionListener.wrap(access -> {
-                                    if (filterByEnabled && Boolean.FALSE.equals(access)) {
-                                        invalidAccessModels.add(modelId);
-                                    }
-                                }, e -> {
-                                    log.error("Failed to Validate Access for ModelID " + modelId, e);
-                                    invalidAccessModels.add(modelId);
-                                }), latch)
-                        );
+                    .validateModelGroupAccess(
+                        user,
+                        mlModel.getModelGroupId(),
+                        client,
+                        new LatchedActionListener<>(ActionListener.wrap(access -> {
+                            if (filterByEnabled && Boolean.FALSE.equals(access)) {
+                                invalidAccessModels.add(modelId);
+                            }
+                        }, e -> {
+                            log.error("Failed to Validate Access for ModelID " + modelId, e);
+                            invalidAccessModels.add(modelId);
+                        }), latch)
+                    );
             }, e -> {
                 log.error("Failed to find Model", e);
                 latch.countDown();

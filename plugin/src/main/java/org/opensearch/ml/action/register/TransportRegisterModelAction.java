@@ -119,7 +119,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         String url = registerModelInput.getUrl();
 
         SecurityUtils.validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-            if ((filterByEnabled) && (Boolean.FALSE.equals(access))) {
+            if ((filterByEnabled) && (access == false)) {
                 log.error("User doesn't have valid privilege to perform this operation");
                 listener.onFailure(new IllegalArgumentException("User doesn't have valid privilege to perform this operation"));
             } else {

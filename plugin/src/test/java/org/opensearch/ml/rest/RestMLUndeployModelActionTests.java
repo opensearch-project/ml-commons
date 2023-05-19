@@ -5,9 +5,13 @@
 
 package org.opensearch.ml.rest;
 
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
@@ -16,7 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.google.gson.Gson;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
@@ -43,12 +46,7 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.google.gson.Gson;
 
 public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
 

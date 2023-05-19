@@ -5,8 +5,18 @@
 
 package org.opensearch.ml.plugin;
 
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
+
 import lombok.SneakyThrows;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.client.Client;
@@ -148,15 +158,7 @@ import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
-
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import com.google.common.collect.ImmutableList;
 
 public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";

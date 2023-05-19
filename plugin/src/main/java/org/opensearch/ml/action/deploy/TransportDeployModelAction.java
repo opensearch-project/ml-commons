@@ -134,7 +134,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if ((filterByEnabled) && (Boolean.FALSE.equals(access))) {
+                    if ((filterByEnabled) && (access == false)) {
                         listener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                     } else {
                         String[] targetNodeIds = deployModelRequest.getModelNodeIds();

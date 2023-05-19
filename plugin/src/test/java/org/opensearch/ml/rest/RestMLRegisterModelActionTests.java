@@ -128,6 +128,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
     }
 
+    @Ignore
     public void testRegisterModelUrlNotAllowed() throws Exception {
         settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);

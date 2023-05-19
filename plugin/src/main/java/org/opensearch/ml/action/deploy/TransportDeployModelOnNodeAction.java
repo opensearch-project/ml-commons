@@ -5,7 +5,16 @@
 
 package org.opensearch.ml.action.deploy;
 
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.FailedNodeException;
@@ -40,14 +49,6 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportDeployModelOnNodeAction extends
@@ -146,42 +147,51 @@ public class TransportDeployModelOnNodeAction extends
                 ex -> { logException("Deploy model task failed: " + taskId, ex, log); }
             );
 
-        deployModel(modelId, modelContentHash, mlTask.getFunctionName(), localNodeId, coordinatingNodeId, deployToAllNodes, mlTask, ActionListener.wrap(r -> {
-            MLForwardInput mlForwardInput = MLForwardInput
-                .builder()
-                .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
-                .taskId(taskId)
-                .modelId(modelId)
-                .workerNodeId(clusterService.localNode().getId())
-                .build();
-            MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
+        deployModel(
+            modelId,
+            modelContentHash,
+            mlTask.getFunctionName(),
+            localNodeId,
+            coordinatingNodeId,
+            deployToAllNodes,
+            mlTask,
+            ActionListener.wrap(r -> {
+                MLForwardInput mlForwardInput = MLForwardInput
+                    .builder()
+                    .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
+                    .taskId(taskId)
+                    .modelId(modelId)
+                    .workerNodeId(clusterService.localNode().getId())
+                    .build();
+                MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
-            transportService
-                .sendRequest(
-                    getNodeById(coordinatingNodeId),
-                    MLForwardAction.NAME,
-                    deployModelDoneMessage,
-                    new ActionListenerResponseHandler<MLForwardResponse>(taskDoneListener, MLForwardResponse::new)
-                );
-        }, e -> {
-            MLForwardInput mlForwardInput = MLForwardInput
-                .builder()
-                .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
-                .taskId(taskId)
-                .modelId(modelId)
-                .workerNodeId(clusterService.localNode().getId())
-                .error(MLExceptionUtils.getRootCauseMessage(e))
-                .build();
-            MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
+                transportService
+                    .sendRequest(
+                        getNodeById(coordinatingNodeId),
+                        MLForwardAction.NAME,
+                        deployModelDoneMessage,
+                        new ActionListenerResponseHandler<MLForwardResponse>(taskDoneListener, MLForwardResponse::new)
+                    );
+            }, e -> {
+                MLForwardInput mlForwardInput = MLForwardInput
+                    .builder()
+                    .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
+                    .taskId(taskId)
+                    .modelId(modelId)
+                    .workerNodeId(clusterService.localNode().getId())
+                    .error(MLExceptionUtils.getRootCauseMessage(e))
+                    .build();
+                MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
-            transportService
-                .sendRequest(
-                    getNodeById(coordinatingNodeId),
-                    MLForwardAction.NAME,
-                    deployModelDoneMessage,
-                    new ActionListenerResponseHandler<MLForwardResponse>(taskDoneListener, MLForwardResponse::new)
-                );
-        }));
+                transportService
+                    .sendRequest(
+                        getNodeById(coordinatingNodeId),
+                        MLForwardAction.NAME,
+                        deployModelDoneMessage,
+                        new ActionListenerResponseHandler<MLForwardResponse>(taskDoneListener, MLForwardResponse::new)
+                    );
+            })
+        );
 
         return new MLDeployModelNodeResponse(clusterService.localNode(), modelDeployStatus);
     }
@@ -210,11 +220,12 @@ public class TransportDeployModelOnNodeAction extends
     ) {
         try {
             log.debug("start deploying model {}", modelId);
-            mlModelManager.deployModel(modelId, modelContentHash, functionName, deployToAllNodes, mlTask, ActionListener.runBefore(listener, () -> {
-                if (!coordinatingNodeId.equals(localNodeId)) {
-                    mlTaskManager.remove(mlTask.getTaskId());
-                }
-            }));
+            mlModelManager
+                .deployModel(modelId, modelContentHash, functionName, deployToAllNodes, mlTask, ActionListener.runBefore(listener, () -> {
+                    if (!coordinatingNodeId.equals(localNodeId)) {
+                        mlTaskManager.remove(mlTask.getTaskId());
+                    }
+                }));
         } catch (Exception e) {
             logException("Failed to deploy model " + modelId, e, log);
             listener.onFailure(e);

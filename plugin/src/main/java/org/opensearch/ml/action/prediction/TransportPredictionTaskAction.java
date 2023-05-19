@@ -83,12 +83,17 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
 
-        User user = RestActionUtils.getUserContext(client);
+        User user = mlPredictionTaskRequest.getUser();
+        if (user == null) {
+            user = RestActionUtils.getUserContext(client);
+            mlPredictionTaskRequest.setUser(user);
+        }
+        final User userInfo = user;
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
-                SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if ((filterByEnabled) && (Boolean.FALSE.equals(access))) {
+                SecurityUtils.validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                    if ((filterByEnabled) && (access == false)) {
                         listener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                     } else {
                         String requestId = mlPredictionTaskRequest.getRequestID();
