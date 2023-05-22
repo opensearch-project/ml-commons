@@ -40,7 +40,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Handle general get and search request in ml common.
@@ -88,27 +87,21 @@ public class MLSearchHandler {
                 if (r != null && r.getHits() != null && r.getHits().getTotalHits().value > 0) {
                     List<String> modelGroupIds = new ArrayList<>();
                     Arrays.stream(r.getHits().getHits()).forEach(hit -> {
-                        Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-                        String modelGroupId = (String)sourceAsMap.get(MLModelGroup.MODEL_GROUP_ID_FIELD);
-                        modelGroupIds.add(modelGroupId);
+                        modelGroupIds.add(hit.getId());
                     });
                     ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                         final QueryBuilder queryBuilder = request.source().query();
-                        TermsQueryBuilder backendRoleTermsQuery = new TermsQueryBuilder(MLModelGroup.BACKEND_ROLES_FIELD, user.getRoles());
-                        TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD, modelGroupIds);
+                        TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds);
                         if (queryBuilder == null) {
                             BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
-                            accessControlledBoolQuery.must(backendRoleTermsQuery);
                             accessControlledBoolQuery.must(modelGroupIdTermsQuery);
                             request.source().query(accessControlledBoolQuery);
                         } else if (queryBuilder instanceof BoolQueryBuilder) {
-                            ((BoolQueryBuilder) queryBuilder).must(backendRoleTermsQuery);
                             ((BoolQueryBuilder) queryBuilder).must(modelGroupIdTermsQuery);
                         } else if (SecurityUtils.SUPPORTED_QUERY_TYPES.stream().anyMatch(x -> x.isAssignableFrom(queryBuilder.getClass()))) {
                             BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
                             boolQueryBuilder.must(queryBuilder);
-                            boolQueryBuilder.must(backendRoleTermsQuery);
                             boolQueryBuilder.must(modelGroupIdTermsQuery);
                             request.source().query(boolQueryBuilder);
                         } else {

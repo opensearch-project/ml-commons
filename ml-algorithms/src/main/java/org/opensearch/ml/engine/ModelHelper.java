@@ -197,7 +197,7 @@ public class ModelHelper {
                 DownloadUtils.download(url, modelPath, new ProgressBar());
                 verifyModelZipFile(modelFormat, modelPath, modelName);
                 String hash = calculateFileHash(modelZipFile);
-                if (hash.equals(modelContentHash)) {
+                if (modelContentHash == null || hash.equals(modelContentHash)) {
                     List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
                     Map<String, Object> result = new HashMap<>();
                     result.put(CHUNK_FILES, chunkFiles);
