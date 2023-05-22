@@ -5,7 +5,12 @@
 
 package org.opensearch.ml.action.prediction;
 
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
+import static org.opensearch.ml.utils.TestData.TIME_FIELD;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -34,11 +39,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
-import static org.opensearch.ml.utils.TestData.TIME_FIELD;
+import com.google.common.collect.ImmutableList;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
 public class PredictionITTests extends MLCommonsIntegTestCase {

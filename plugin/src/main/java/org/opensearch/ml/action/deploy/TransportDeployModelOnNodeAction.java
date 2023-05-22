@@ -5,7 +5,16 @@
 
 package org.opensearch.ml.action.deploy;
 
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.FailedNodeException;
@@ -39,14 +48,6 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportDeployModelOnNodeAction extends

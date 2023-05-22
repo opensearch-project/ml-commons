@@ -5,10 +5,18 @@
 
 package org.opensearch.ml.action.models;
 
-import com.google.common.annotations.VisibleForTesting;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
@@ -45,13 +53,7 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
-import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
+import com.google.common.annotations.VisibleForTesting;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)

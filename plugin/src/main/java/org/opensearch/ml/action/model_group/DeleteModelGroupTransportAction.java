@@ -5,9 +5,15 @@
 
 package org.opensearch.ml.action.model_group;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -33,11 +39,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
-
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class DeleteModelGroupTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
@@ -50,12 +51,12 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     @Inject
     public DeleteModelGroupTransportAction(
-            TransportService transportService,
-            ActionFilters actionFilters,
-            Client client,
-            NamedXContentRegistry xContentRegistry,
-            Settings settings,
-            ClusterService clusterService
+        TransportService transportService,
+        ActionFilters actionFilters,
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        Settings settings,
+        ClusterService clusterService
     ) {
         super(MLModelGroupDeleteAction.NAME, transportService, actionFilters, MLModelGroupDeleteRequest::new);
         this.client = client;
@@ -75,8 +76,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             SecurityUtils.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
                 if ((filterByEnabled) && (!access)) {
-                    actionListener
-                            .onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
+                    actionListener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                 } else {
                     BoolQueryBuilder query = new BoolQueryBuilder();
                     query.filter(new TermQueryBuilder(PARAMETER_MODEL_GROUP_ID, modelGroupId));

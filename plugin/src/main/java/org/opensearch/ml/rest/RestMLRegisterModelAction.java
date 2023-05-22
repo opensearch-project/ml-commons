@@ -5,8 +5,17 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_DEPLOY_MODEL;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_VERSION;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -18,16 +27,8 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_DEPLOY_MODEL;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_VERSION;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
 
 public class RestMLRegisterModelAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";

@@ -5,7 +5,20 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.gson.Gson;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -34,19 +47,7 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
-import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+import com.google.gson.Gson;
 
 public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     @Rule
@@ -159,16 +160,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
-            .of(
-                "model_type",
-                "bert",
-                "embedding_dimension",
-                384,
-                "framework_type",
-                "sentence_transformers",
-                "all_config",
-                "All Config"
-            );
+            .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
         final Map<String, Object> model = Map.of("url", "testUrl", "model_format", "TORCH_SCRIPT", "model_config", modelConfig);
         String requestContent = new Gson().toJson(model).toString();
         Map<String, String> params = new HashMap<>();

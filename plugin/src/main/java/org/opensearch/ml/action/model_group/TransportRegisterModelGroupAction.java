@@ -5,7 +5,14 @@
 
 package org.opensearch.ml.action.model_group;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+
+import java.time.Instant;
+import java.util.stream.Collectors;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -36,12 +43,6 @@ import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.time.Instant;
-import java.util.stream.Collectors;
-
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 
 @Log4j2
 public class TransportRegisterModelGroupAction extends HandledTransportAction<ActionRequest, MLRegisterModelGroupResponse> {
@@ -100,7 +101,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             MLModelGroup mlModelGroup;
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 if (filterByEnabled && user != null) {
-                    if (isInvalidRequest(input)){
+                    if (isInvalidRequest(input)) {
                         throw new IllegalArgumentException("User cannot specify backend roles to a public/private model grouo");
                     }
                     if (Boolean.TRUE.equals(input.getIsPublic())) {
@@ -173,7 +174,6 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             listener.onFailure(e);
         }
     }
-
 
     public static boolean isInvalidRequest(MLRegisterModelGroupInput input) {
         Boolean isPublic = input.getIsPublic() == null ? false : input.getIsPublic();

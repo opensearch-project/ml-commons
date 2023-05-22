@@ -5,10 +5,13 @@
 
 package org.opensearch.ml.action.prediction;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -32,8 +35,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
