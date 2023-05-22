@@ -54,7 +54,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
 
     public MLUpdateModelGroupInput(StreamInput in) throws IOException {
         this.modelGroupID = in.readString();
-        this.name = in.readString();
+        this.name = in.readOptionalString();
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
             tags = in.readMap();
@@ -68,7 +68,9 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(MODEL_GROUP_ID_FIELD, modelGroupID);
-        builder.field(NAME_FIELD, name);
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
@@ -91,7 +93,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(modelGroupID);
-        out.writeString(name);
+        out.writeOptionalString(name);
         out.writeOptionalString(description);
         if (tags != null) {
             out.writeBoolean(true);

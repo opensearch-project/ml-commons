@@ -358,7 +358,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
 
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, settings, clusterService);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
             client,
