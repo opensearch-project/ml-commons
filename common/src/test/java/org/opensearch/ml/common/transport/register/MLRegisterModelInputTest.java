@@ -1,7 +1,7 @@
 package org.opensearch.ml.common.transport.register;
 
-import org.junit.Rule;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
@@ -11,7 +11,9 @@ import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.*;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -19,15 +21,17 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.search.SearchModule;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-
+import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.function.Consumer;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLRegisterModelInputTest {
@@ -167,12 +171,29 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
+    public void parse_WithModel() throws Exception {
+        testParseFromJsonString("modelNameInsideTest", "versionInsideTest", true, expectedInputStr, parsedInput -> {
+            assertEquals(FunctionName.LINEAR_REGRESSION, parsedInput.getFunctionName());
+            assertEquals("modelNameInsideTest", parsedInput.getModelName());
+            assertEquals("versionInsideTest", parsedInput.getVersion());
+        });
+    }
+
+    @Test
     public void parse_WithoutModel() throws Exception {
         testParseFromJsonString( false, expectedInputStr, parsedInput -> {
             assertFalse(parsedInput.isDeployModel());
             assertEquals("modelName", parsedInput.getModelName());
             assertEquals("version", parsedInput.getVersion());
         });
+    }
+
+    private void testParseFromJsonString(String modelName, String version, Boolean deployModel, String expectedInputStr, Consumer<MLRegisterModelInput> verify) throws Exception {
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
+        parser.nextToken();
+        MLRegisterModelInput parsedInput = MLRegisterModelInput.parse(parser, modelName, version, deployModel);
+        verify.accept(parsedInput);
     }
 
     private void testParseFromJsonString(Boolean deployModel,String expectedInputStr, Consumer<MLRegisterModelInput> verify) throws Exception {

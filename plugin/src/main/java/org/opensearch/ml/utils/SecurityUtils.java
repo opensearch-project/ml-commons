@@ -5,14 +5,7 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-
-import java.util.List;
-import java.util.stream.Collectors;
-
 import lombok.extern.log4j.Log4j2;
-
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
@@ -31,6 +24,12 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+
 @Log4j2
 public class SecurityUtils {
 
@@ -48,16 +47,15 @@ public class SecurityUtils {
                 if (r != null && r.isExists()) {
                     try (
                         XContentParser parser = MLNodeUtils
-                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
-                    ) {
+                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
 
                         if (mlModelGroup.getOwner() == null) {
                             listener.onResponse(true);
-                        } else if (mlModelGroup.getAccess() == MLModelGroup.PUBLIC) {
+                        } else if (mlModelGroup.getAccess().equals(MLModelGroup.PUBLIC)) {
                             listener.onResponse(true);
-                        } else if (mlModelGroup.getAccess() == MLModelGroup.PRIVATE) {
+                        } else if (mlModelGroup.getAccess().equals(MLModelGroup.PRIVATE)) {
                             if (isOwner(mlModelGroup.getOwner(), user)) {
                                 listener.onResponse(true);
                                 return;
@@ -102,7 +100,7 @@ public class SecurityUtils {
         if (user == null || owner == null) {
             return false;
         }
-        return owner.getName() == user.getName();
+        return owner.getName().equals(user.getName());
     }
 
     public static SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {

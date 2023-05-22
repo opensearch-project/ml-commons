@@ -5,26 +5,9 @@
 
 package org.opensearch.ml.action.deploy;
 
-import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
-import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableMap;
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -65,10 +48,24 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
-;
+import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+
 
 @Log4j2
 public class TransportDeployModelAction extends HandledTransportAction<ActionRequest, MLDeployModelResponse> {
@@ -134,7 +131,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if ((filterByEnabled) && (access == false)) {
+                    if ((filterByEnabled) && (!access)) {
                         listener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                     } else {
                         String[] targetNodeIds = deployModelRequest.getModelNodeIds();

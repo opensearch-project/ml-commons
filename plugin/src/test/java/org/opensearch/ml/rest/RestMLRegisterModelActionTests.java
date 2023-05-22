@@ -5,16 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
-import static org.opensearch.ml.utils.TestHelper.clusterSetting;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import com.google.gson.Gson;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -43,7 +34,19 @@ import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.gson.Gson;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     @Rule
@@ -157,8 +160,6 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
             .of(
-                "model_name",
-                "test",
                 "model_type",
                 "bert",
                 "embedding_dimension",

@@ -174,6 +174,55 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         return builder;
     }
 
+    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel) throws IOException {
+        FunctionName functionName = null;
+        String modelGroupId = null;
+        String url = null;
+        String hashValue = null;
+        String description = null;
+        MLModelFormat modelFormat = null;
+        MLModelConfig modelConfig = null;
+        List<String> modelNodeIds = new ArrayList<>();
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+            switch (fieldName) {
+                case FUNCTION_NAME_FIELD:
+                    functionName = FunctionName.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case MODEL_GROUP_ID_FIELD:
+                    modelGroupId = parser.text();
+                    break;
+                case URL_FIELD:
+                    url = parser.text();
+                    break;
+                case HASH_VALUE_FIELD:
+                    hashValue = parser.text();
+                    break;
+                case DESCRIPTION_FIELD:
+                    description = parser.text();
+                    break;
+                case MODEL_FORMAT_FIELD:
+                    modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
+                    break;
+                case MODEL_CONFIG_FIELD:
+                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    break;
+                case MODEL_NODE_IDS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        modelNodeIds.add(parser.text());
+                    }
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
+    }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
         FunctionName functionName = null;

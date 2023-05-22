@@ -5,19 +5,9 @@
 
 package org.opensearch.ml.action.register;
 
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
-import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.regex.Pattern;
-
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
@@ -56,8 +46,16 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.regex.Pattern;
+
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
+import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportRegisterModelAction extends HandledTransportAction<ActionRequest, MLRegisterModelResponse> {
@@ -119,7 +117,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         String url = registerModelInput.getUrl();
 
         SecurityUtils.validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-            if ((filterByEnabled) && (access == false)) {
+            if ((filterByEnabled) && (!access)) {
                 log.error("User doesn't have valid privilege to perform this operation");
                 listener.onFailure(new IllegalArgumentException("User doesn't have valid privilege to perform this operation"));
             } else {
@@ -199,7 +197,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 }));
             }
         }, e -> {
-            logException("Failed to register model", e, log);
+            logException("Failed to validate model access", e, log);
             listener.onFailure(e);
         }));
 

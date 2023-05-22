@@ -5,16 +5,7 @@
 
 package org.opensearch.ml.action.deploy;
 
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
 import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.FailedNodeException;
@@ -26,7 +17,6 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.common.FunctionName;
@@ -49,6 +39,14 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportDeployModelOnNodeAction extends
@@ -76,8 +74,7 @@ public class TransportDeployModelOnNodeAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         MLCircuitBreakerService mlCircuitBreakerService,
-        MLStats mlStats,
-        Settings settings
+        MLStats mlStats
     ) {
         super(
             MLDeployModelOnNodeAction.NAME,
@@ -130,7 +127,6 @@ public class TransportDeployModelOnNodeAction extends
         MLDeployModelInput deployModelInput = MLDeployModelNodesRequest.getMlDeployModelInput();
         String modelId = deployModelInput.getModelId();
         String taskId = deployModelInput.getTaskId();
-        Integer nodeCount = deployModelInput.getNodeCount();
         String coordinatingNodeId = deployModelInput.getCoordinatingNodeId();
         MLTask mlTask = deployModelInput.getMlTask();
         String modelContentHash = deployModelInput.getModelContentHash();
@@ -170,7 +166,7 @@ public class TransportDeployModelOnNodeAction extends
                         getNodeById(coordinatingNodeId),
                         MLForwardAction.NAME,
                         deployModelDoneMessage,
-                        new ActionListenerResponseHandler<MLForwardResponse>(taskDoneListener, MLForwardResponse::new)
+                        new ActionListenerResponseHandler<>(taskDoneListener, MLForwardResponse::new)
                     );
             }, e -> {
                 MLForwardInput mlForwardInput = MLForwardInput
@@ -188,7 +184,7 @@ public class TransportDeployModelOnNodeAction extends
                         getNodeById(coordinatingNodeId),
                         MLForwardAction.NAME,
                         deployModelDoneMessage,
-                        new ActionListenerResponseHandler<MLForwardResponse>(taskDoneListener, MLForwardResponse::new)
+                        new ActionListenerResponseHandler<>(taskDoneListener, MLForwardResponse::new)
                     );
             })
         );
