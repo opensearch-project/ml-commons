@@ -53,9 +53,9 @@ public class SecurityUtils {
 
                         if (mlModelGroup.getOwner() == null) {
                             listener.onResponse(true);
-                        } else if (mlModelGroup.getAccess().equals(MLModelGroup.PUBLIC)) {
+                        } else if (MLModelGroup.PUBLIC.equals(mlModelGroup.getAccess())) {
                             listener.onResponse(true);
-                        } else if (mlModelGroup.getAccess().equals(MLModelGroup.PRIVATE)) {
+                        } else if (MLModelGroup.PRIVATE.equals(mlModelGroup.getAccess())) {
                             if (isOwner(mlModelGroup.getOwner(), user)) {
                                 listener.onResponse(true);
                                 return;
