@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
@@ -53,6 +52,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
@@ -60,7 +60,6 @@ import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -83,7 +82,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     MLStats mlStats;
 
     private volatile boolean allowCustomDeploymentPlan;
-    private volatile boolean filterByEnabled;
+    private ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public TransportDeployModelAction(
@@ -99,7 +98,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLTaskDispatcher mlTaskDispatcher,
         MLModelManager mlModelManager,
         MLStats mlStats,
-        Settings settings
+        Settings settings,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLDeployModelAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -113,13 +113,11 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
         this.mlStats = mlStats;
+        this.modelAccessControlHelper = modelAccessControlHelper;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
-
     }
 
     @Override
@@ -131,16 +129,16 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if ((filterByEnabled) && (!access)) {
-                        listener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
+                modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                    if (!access) {
+                        listener
+                            .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
                     } else {
                         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
                         boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
                         if (!allowCustomDeploymentPlan && !deployToAllNodes) {
                             throw new IllegalArgumentException("Don't allow custom deployment plan");
                         }
-
                         // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
                         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
                         DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes();

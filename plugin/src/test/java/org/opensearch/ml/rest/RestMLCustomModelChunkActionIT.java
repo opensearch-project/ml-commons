@@ -132,7 +132,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         MLRegisterModelMetaInput input = MLRegisterModelMetaInput
             .builder()
             .name("test_model")
-            .version("1")
+            .modelGroupId("1")
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelState(MLModelState.REGISTERING)
             .modelContentHashValue("1234566775")

@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.undeploy;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -37,12 +36,12 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -62,7 +61,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     MLStats mlStats;
 
     private volatile boolean allowCustomDeploymentPlan;
-    private volatile boolean filterByEnabled;
+
+    ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public TransportUndeployModelsAction(
@@ -78,7 +78,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         MLTaskDispatcher mlTaskDispatcher,
         MLModelManager mlModelManager,
         MLStats mlStats,
-        Settings settings
+        Settings settings,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLUndeployModelsAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -92,12 +93,11 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
         this.mlStats = mlStats;
+        this.modelAccessControlHelper = modelAccessControlHelper;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
 
     }
 
@@ -137,13 +137,13 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                SecurityUtils
+                modelAccessControlHelper
                     .validateModelGroupAccess(
                         user,
                         mlModel.getModelGroupId(),
                         client,
                         new LatchedActionListener<>(ActionListener.wrap(access -> {
-                            if (filterByEnabled && !access) {
+                            if (!access) {
                                 invalidAccessModels.add(modelId);
                             }
                         }, e -> {

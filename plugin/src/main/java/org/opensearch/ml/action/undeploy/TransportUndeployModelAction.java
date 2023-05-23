@@ -7,7 +7,6 @@ package org.opensearch.ml.action.undeploy;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,7 +29,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -44,6 +42,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
@@ -62,7 +61,7 @@ public class TransportUndeployModelAction extends
     private final MLStats mlStats;
     private NamedXContentRegistry xContentRegistry;
 
-    private volatile boolean filterByEnabled;
+    private ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public TransportUndeployModelAction(
@@ -75,7 +74,7 @@ public class TransportUndeployModelAction extends
         DiscoveryNodeHelper nodeFilter,
         MLStats mlStats,
         NamedXContentRegistry xContentRegistry,
-        Settings settings
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(
             MLUndeployModelAction.NAME,
@@ -94,8 +93,7 @@ public class TransportUndeployModelAction extends
         this.nodeFilter = nodeFilter;
         this.mlStats = mlStats;
         this.xContentRegistry = xContentRegistry;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override

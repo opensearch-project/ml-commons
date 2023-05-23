@@ -36,8 +36,6 @@ public class MLModelGroup implements ToXContentObject {
     public static final String OWNER = "owner"; //user who creates/owns the model group
 
     public static final String ACCESS = "access"; //assigned to public, private, or null when model group created
-    public static final String PRIVATE = "private";
-    public static final String PUBLIC = "public";
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //unique ID assigned to each model group
     public static final String CREATED_TIME_FIELD = "created_time"; //model group created time stamp
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; //updated whenever a new model version is created
