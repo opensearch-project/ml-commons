@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
@@ -34,6 +35,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -41,6 +43,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelInput;
@@ -56,6 +59,8 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
+import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -78,6 +83,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     MLStats mlStats;
 
     private volatile boolean allowCustomDeploymentPlan;
+    private volatile boolean filterByEnabled;
 
     @Inject
     public TransportDeployModelAction(
@@ -108,125 +114,143 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlModelManager = mlModelManager;
         this.mlStats = mlStats;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
+        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
-        String[] targetNodeIds = deployModelRequest.getModelNodeIds();
-        boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
-        if (!allowCustomDeploymentPlan && !deployToAllNodes) {
-            throw new IllegalArgumentException("Don't allow custom deployment plan");
-        }
-
-        // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-        DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes();
-        Map<String, DiscoveryNode> nodeMapping = new HashMap<>();
-        for (DiscoveryNode node : allEligibleNodes) {
-            nodeMapping.put(node.getId(), node);
-        }
-
-        Set<String> allEligibleNodeIds = Arrays.stream(allEligibleNodes).map(DiscoveryNode::getId).collect(Collectors.toSet());
-
-        List<DiscoveryNode> eligibleNodes = new ArrayList<>();
-        List<String> nodeIds = new ArrayList<>();
-        if (!deployToAllNodes) {
-            for (String nodeId : targetNodeIds) {
-                if (allEligibleNodeIds.contains(nodeId)) {
-                    eligibleNodes.add(nodeMapping.get(nodeId));
-                    nodeIds.add(nodeId);
-                }
-            }
-            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
-            if (workerNodes != null && workerNodes.length > 0) {
-                Set<String> difference = new HashSet<String>(Arrays.asList(workerNodes));
-                difference.removeAll(Arrays.asList(targetNodeIds));
-                if (difference.size() > 0) {
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException(
-                                "Model already deployed to these nodes: "
-                                    + Arrays.toString(difference.toArray(new String[0]))
-                                    + ", but they are not included in target node ids. Undeploy model from these nodes if don't need them any more."
-                            )
-                        );
-                    return;
-                }
-            }
-        } else {
-            nodeIds.addAll(allEligibleNodeIds);
-            eligibleNodes.addAll(Arrays.asList(allEligibleNodes));
-        }
-        if (nodeIds.size() == 0) {
-            listener.onFailure(new IllegalArgumentException("no eligible node found"));
-            return;
-        }
-
-        log.info("Will deploy model on these nodes: {}", String.join(",", nodeIds));
-        String localNodeId = clusterService.localNode().getId();
-
+        User user = RestActionUtils.getUserContext(client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
+
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                FunctionName algorithm = mlModel.getAlgorithm();
-                // TODO: Track deploy failure
-                // mlStats.createCounterStatIfAbsent(algorithm, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
-                MLTask mlTask = MLTask
-                    .builder()
-                    .async(true)
-                    .modelId(modelId)
-                    .taskType(MLTaskType.DEPLOY_MODEL)
-                    .functionName(algorithm)
-                    .createTime(Instant.now())
-                    .lastUpdateTime(Instant.now())
-                    .state(MLTaskState.CREATED)
-                    .workerNodes(nodeIds)
-                    .build();
-                mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-                    String taskId = response.getId();
-                    mlTask.setTaskId(taskId);
-                    try {
-                        mlTaskManager.add(mlTask, nodeIds);
-                        listener.onResponse(new MLDeployModelResponse(taskId, MLTaskState.CREATED.name()));
-                        threadPool
-                            .executor(DEPLOY_THREAD_POOL)
-                            .execute(
-                                () -> updateModelDeployStatusAndTriggerOnNodesAction(
-                                    modelId,
-                                    taskId,
-                                    mlModel,
-                                    localNodeId,
-                                    mlTask,
-                                    eligibleNodes,
-                                    deployToAllNodes
-                                )
-                            );
-                    } catch (Exception ex) {
-                        log.error("Failed to deploy model", ex);
-                        mlTaskManager
-                            .updateMLTask(
-                                taskId,
-                                ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
-                                TASK_SEMAPHORE_TIMEOUT,
-                                true
-                            );
-                        listener.onFailure(ex);
+                SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                    if ((filterByEnabled) && (!access)) {
+                        listener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
+                    } else {
+                        String[] targetNodeIds = deployModelRequest.getModelNodeIds();
+                        boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
+                        if (!allowCustomDeploymentPlan && !deployToAllNodes) {
+                            throw new IllegalArgumentException("Don't allow custom deployment plan");
+                        }
+
+                        // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+                        DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes();
+                        Map<String, DiscoveryNode> nodeMapping = new HashMap<>();
+                        for (DiscoveryNode node : allEligibleNodes) {
+                            nodeMapping.put(node.getId(), node);
+                        }
+
+                        Set<String> allEligibleNodeIds = Arrays
+                            .stream(allEligibleNodes)
+                            .map(DiscoveryNode::getId)
+                            .collect(Collectors.toSet());
+
+                        List<DiscoveryNode> eligibleNodes = new ArrayList<>();
+                        List<String> nodeIds = new ArrayList<>();
+                        if (!deployToAllNodes) {
+                            for (String nodeId : targetNodeIds) {
+                                if (allEligibleNodeIds.contains(nodeId)) {
+                                    eligibleNodes.add(nodeMapping.get(nodeId));
+                                    nodeIds.add(nodeId);
+                                }
+                            }
+                            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+                            if (workerNodes != null && workerNodes.length > 0) {
+                                Set<String> difference = new HashSet<String>(Arrays.asList(workerNodes));
+                                difference.removeAll(Arrays.asList(targetNodeIds));
+                                if (difference.size() > 0) {
+                                    listener
+                                        .onFailure(
+                                            new IllegalArgumentException(
+                                                "Model already deployed to these nodes: "
+                                                    + Arrays.toString(difference.toArray(new String[0]))
+                                                    + ", but they are not included in target node ids. Undeploy model from these nodes if don't need them any more."
+                                            )
+                                        );
+                                    return;
+                                }
+                            }
+                        } else {
+                            nodeIds.addAll(allEligibleNodeIds);
+                            eligibleNodes.addAll(Arrays.asList(allEligibleNodes));
+                        }
+                        if (nodeIds.size() == 0) {
+                            listener.onFailure(new IllegalArgumentException("no eligible node found"));
+                            return;
+                        }
+
+                        log.info("Will deploy model on these nodes: {}", String.join(",", nodeIds));
+                        String localNodeId = clusterService.localNode().getId();
+
+                        FunctionName algorithm = mlModel.getAlgorithm();
+                        // TODO: Track deploy failure
+                        // mlStats.createCounterStatIfAbsent(algorithm, ActionName.DEPLOY,
+                        // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+                        MLTask mlTask = MLTask
+                            .builder()
+                            .async(true)
+                            .modelId(modelId)
+                            .taskType(MLTaskType.DEPLOY_MODEL)
+                            .functionName(algorithm)
+                            .createTime(Instant.now())
+                            .lastUpdateTime(Instant.now())
+                            .state(MLTaskState.CREATED)
+                            .workerNodes(nodeIds)
+                            .build();
+                        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                            String taskId = response.getId();
+                            mlTask.setTaskId(taskId);
+                            try {
+                                mlTaskManager.add(mlTask, nodeIds);
+                                listener.onResponse(new MLDeployModelResponse(taskId, MLTaskState.CREATED.name()));
+                                threadPool
+                                    .executor(DEPLOY_THREAD_POOL)
+                                    .execute(
+                                        () -> updateModelDeployStatusAndTriggerOnNodesAction(
+                                            modelId,
+                                            taskId,
+                                            mlModel,
+                                            localNodeId,
+                                            mlTask,
+                                            eligibleNodes,
+                                            deployToAllNodes
+                                        )
+                                    );
+                            } catch (Exception ex) {
+                                log.error("Failed to deploy model", ex);
+                                mlTaskManager
+                                    .updateMLTask(
+                                        taskId,
+                                        ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
+                                        TASK_SEMAPHORE_TIMEOUT,
+                                        true
+                                    );
+                                listener.onFailure(ex);
+                            }
+                        }, exception -> {
+                            log.error("Failed to create deploy model task for " + modelId, exception);
+                            listener.onFailure(exception);
+                        }));
                     }
-                }, exception -> {
-                    log.error("Failed to create deploy model task for " + modelId, exception);
-                    listener.onFailure(exception);
+                }, e -> {
+                    log.error("Failed to Validate Access for ModelId " + modelId, e);
+                    listener.onFailure(e);
                 }));
             }, e -> {
-                log.error("Failed to get model " + modelId, e);
+                log.error("Failed to deploy model " + modelId, e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to deploy model " + modelId, e);
+            log.error("Failed to get ML model " + modelId, e);
             listener.onFailure(e);
         }
 
