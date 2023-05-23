@@ -6,10 +6,9 @@
 package org.opensearch.ml.action.undeploy;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
-import java.util.Arrays;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
 import lombok.extern.log4j.Log4j2;
@@ -28,7 +27,6 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
@@ -64,6 +62,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
     ModelAccessControlHelper modelAccessControlHelper;
 
+    private volatile Boolean filterByEnabled;
+
     @Inject
     public TransportUndeployModelsAction(
         TransportService transportService,
@@ -98,7 +98,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
-
+        filterByEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> filterByEnabled = it);
     }
 
     @Override
@@ -108,24 +109,31 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
         boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
         modelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
-        Set<String> invalidAccessModels = ConcurrentHashMap.newKeySet();
 
-        User user = RestActionUtils.getUserContext(client);
+        if (filterByEnabled) {
+            // Only allow user undeploy one model if filter by backend role enabled.
+            if (modelIds == null || modelIds.length != 1) {
+                throw new IllegalArgumentException("only support undeploy one model");
+            }
 
-        CountDownLatch latch = new CountDownLatch(modelIds.length);
-        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
-        for (String modelId : modelIds) {
-            validateAccess(modelId, invalidAccessModels, user, excludes, latch);
-        }
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            throw new IllegalArgumentException(e);
-        }
-        if (modelIds.length == invalidAccessModels.size()) {
-            throw new MLException("User doesn't have previlege to perform this Action");
-        } else {
-            modelIds = Arrays.asList(modelIds).stream().filter(modelId -> !invalidAccessModels.contains(modelId)).toArray(String[]::new);
+            String modelId = modelIds[0];
+            String[] finalModelIds = modelIds;
+            validateAccess(modelId, ActionListener.wrap(hasPermissionToUndeploy -> {
+                if (hasPermissionToUndeploy == true) {
+                    MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, finalModelIds);
+
+                    client
+                        .execute(
+                            MLUndeployModelAction.INSTANCE,
+                            mlUndeployModelNodesRequest,
+                            ActionListener
+                                .wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, e -> { listener.onFailure(e); })
+                        );
+                } else {
+                    listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
+                }
+            }, e -> { listener.onFailure(e); }));
+            return;
         }
 
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
@@ -137,6 +145,30 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 mlUndeployModelNodesRequest,
                 ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, e -> { listener.onFailure(e); })
             );
+    }
+
+    private void validateAccess(String modelId, ActionListener<Boolean> listener) {
+        User user = RestActionUtils.getUserContext(client);
+        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            mlModelManager
+                .getModel(
+                    modelId,
+                    null,
+                    excludes,
+                    ActionListener
+                        .wrap(
+                            mlModel -> { modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener); },
+                            e -> {
+                                log.error("Failed to find Model", e);
+                                listener.onFailure(e);
+                            }
+                        )
+                );
+        } catch (Exception e) {
+            log.error("Failed to undeploy ML model");
+            listener.onFailure(e);
+        }
     }
 
     private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
