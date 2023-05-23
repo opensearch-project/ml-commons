@@ -36,7 +36,6 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -138,7 +137,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (Boolean.TRUE.equals(updateModelGroupInput.getIsPublic())) {
             source.put(MLModelGroup.ACCESS, MLModelGroup.PUBLIC);
         } else if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
-            if (!SecurityUtils.isAdmin(user)) {
+            if (!modelAccessControlHelper.isAdmin(user)) {
                 source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
                 source.put(MLModelGroup.ACCESS, null);
             } else

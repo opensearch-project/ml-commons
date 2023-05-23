@@ -42,6 +42,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -87,6 +88,9 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     private DiscoveryNode localNode;
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Before
     @Ignore
     public void setup() throws IOException {
@@ -111,7 +115,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             nodeFilter,
             mlStats,
             xContentRegistry,
-            settings
+            modelAccessControlHelper
         );
         localNode = new DiscoveryNode(
             "foo0",

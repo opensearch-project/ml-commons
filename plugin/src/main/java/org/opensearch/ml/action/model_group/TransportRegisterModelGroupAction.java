@@ -38,7 +38,6 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -107,14 +106,14 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                     } else if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                         if (CollectionUtils.isEmpty(user.getBackendRoles())) {
                             throw new MLValidationException("User doesn't have any backend role");
-                        } else if (SecurityUtils.isAdmin(user))
+                        } else if (modelAccessControlHelper.isAdmin(user))
                             throw new IllegalArgumentException("Admin cannot specify add all backend roles field in the request");
                         input.setBackendRoles(user.getBackendRoles());
                     } else {
                         if (CollectionUtils.isEmpty(input.getBackendRoles()) || CollectionUtils.isEmpty(user.getBackendRoles())) {
                             builder = builder.access(MLModelGroup.PRIVATE);
                         } else if (!new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())
-                            && !SecurityUtils.isAdmin(user)) {
+                            && !modelAccessControlHelper.isAdmin(user)) {
                             throw new MLValidationException("Invalid Backend Roles provided in the input");
                         }
                     }

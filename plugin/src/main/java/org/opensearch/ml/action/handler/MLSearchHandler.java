@@ -29,7 +29,6 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.rest.RestStatus;
 
 import com.google.common.base.Throwables;
@@ -70,7 +69,7 @@ public class MLSearchHandler {
                 actionListener.onFailure(e);
             }
         } else {
-            SearchSourceBuilder sourceBuilder = SecurityUtils.createSearchSourceBuilder(user);
+            SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
             SearchRequest modelGroupSearchRequest = new SearchRequest();
             sourceBuilder
                 .fetchSource(
@@ -97,7 +96,7 @@ public class MLSearchHandler {
                             request.source().query(accessControlledBoolQuery);
                         } else if (queryBuilder instanceof BoolQueryBuilder) {
                             ((BoolQueryBuilder) queryBuilder).must(modelGroupIdTermsQuery);
-                        } else if (SecurityUtils.SUPPORTED_QUERY_TYPES.stream().anyMatch(x -> x.isAssignableFrom(queryBuilder.getClass()))) {
+                        } else if (modelAccessControlHelper.isSupportedQueryType(queryBuilder.getClass())) {
                             BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
                             boolQueryBuilder.must(queryBuilder);
                             boolQueryBuilder.must(modelGroupIdTermsQuery);

@@ -7,7 +7,6 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
 import lombok.AccessLevel;
@@ -24,7 +23,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -33,8 +31,8 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -47,7 +45,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
-    private volatile boolean filterByEnabled;
+    ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public DeleteModelGroupTransportAction(
@@ -55,15 +53,14 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         ActionFilters actionFilters,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        Settings settings,
-        ClusterService clusterService
+        ClusterService clusterService,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLModelGroupDeleteAction.NAME, transportService, actionFilters, MLModelGroupDeleteRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
@@ -74,8 +71,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            SecurityUtils.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
-                if ((filterByEnabled) && (!access)) {
+            modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
+                if (!access){
                     actionListener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                 } else {
                     BoolQueryBuilder query = new BoolQueryBuilder();

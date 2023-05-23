@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
-import static org.opensearch.ml.utils.SecurityUtils.addUserBackendRolesFilter;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -73,7 +72,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
         } else {
             // Security is enabled, filter is enabled and user isn't admin
             try {
-                addUserBackendRolesFilter(user, request.source());
+                modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by " + user.getBackendRoles());
                 client.search(request, listener);
             } catch (Exception e) {

@@ -5,11 +5,8 @@
 
 package org.opensearch.ml.action.prediction;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
-
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
-import lombok.experimental.NonFinal;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -19,7 +16,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -33,7 +29,6 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
