@@ -32,9 +32,9 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -47,7 +47,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 @Log4j2
-public class TransportUndeployModelsAction extends HandledTransportAction<ActionRequest, MLUndeployModelNodesResponse> {
+public class TransportUndeployModelsAction extends HandledTransportAction<ActionRequest, MLUndeployModelsResponse> {
     TransportService transportService;
     ModelHelper modelHelper;
     MLTaskManager mlTaskManager;
@@ -102,7 +102,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLUndeployModelNodesResponse> listener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLUndeployModelsResponse> listener) {
         MLUndeployModelsRequest undeployModelsRequest = MLUndeployModelsRequest.fromActionRequest(request);
         String[] modelIds = undeployModelsRequest.getModelIds();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
@@ -131,7 +131,12 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
 
         // TODO: then you can send out request to undeploy models
-        client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, listener);
+        client
+            .execute(
+                MLUndeployModelAction.INSTANCE,
+                mlUndeployModelNodesRequest,
+                ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, e -> { listener.onFailure(e); })
+            );
     }
 
     private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
