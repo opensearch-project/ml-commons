@@ -170,30 +170,4 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
     }
 
-    private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                modelAccessControlHelper
-                    .validateModelGroupAccess(
-                        user,
-                        mlModel.getModelGroupId(),
-                        client,
-                        new LatchedActionListener<>(ActionListener.wrap(access -> {
-                            if (!access) {
-                                invalidAccessModels.add(modelId);
-                            }
-                        }, e -> {
-                            log.error("Failed to Validate Access for ModelID " + modelId, e);
-                            invalidAccessModels.add(modelId);
-                        }), latch)
-                    );
-            }, e -> {
-                log.error("Failed to find Model", e);
-                latch.countDown();
-            }));
-        } catch (Exception e) {
-            log.error("Failed to undeploy ML model");
-            throw e;
-        }
-    }
 }

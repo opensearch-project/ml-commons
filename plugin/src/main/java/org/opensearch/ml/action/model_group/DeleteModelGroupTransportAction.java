@@ -109,9 +109,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 log.error("Failed to validate Access for Model Group " + modelGroupId, e);
                 actionListener.onFailure(e);
             }));
-        } catch (Exception e) {
-            log.error("Failed to delete ml model group" + modelGroupId, e);
-            actionListener.onFailure(e);
         }
     }
 }
