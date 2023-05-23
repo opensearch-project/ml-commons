@@ -107,8 +107,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         MLUndeployModelsRequest undeployModelsRequest = MLUndeployModelsRequest.fromActionRequest(request);
         String[] modelIds = undeployModelsRequest.getModelIds();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
-        boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
-        modelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
 
         if (filterByEnabled) {
             // Only allow user undeploy one model if filter by backend role enabled.
@@ -138,7 +136,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
 
-        // TODO: then you can send out request to undeploy models
         client
             .execute(
                 MLUndeployModelAction.INSTANCE,
@@ -158,7 +155,9 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                     excludes,
                     ActionListener
                         .wrap(
-                            mlModel -> { modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener); },
+                            mlModel -> {
+                                modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+                            },
                             e -> {
                                 log.error("Failed to find Model", e);
                                 listener.onFailure(e);
