@@ -99,4 +99,7 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    public static final Setting<Boolean> ML_COMMONS_VALIDATE_BACKEND_ROLES = Setting
+        .boolSetting("plugins.ml_commons.filter_by_backend_roles", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

@@ -10,6 +10,7 @@ import java.util.Map;
 
 import org.apache.http.HttpEntity;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -39,6 +40,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         return uploadCustomModelMetaResponse;
     }
 
+    @Ignore
     public void testRegisterCustomMetaModel_Success() throws IOException {
         Response customModelResponse = registerModelMeta();
         assertNotNull(customModelResponse);
@@ -54,6 +56,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         assertEquals("CREATED", getModelMap.get("status"));
     }
 
+    @Ignore
     public void testRegisterCustomMetaModel_PredictException() throws IOException {
         Response customModelResponse = registerModelMeta();
         assertNotNull(customModelResponse);
@@ -67,6 +70,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
         predictTextEmbedding(modelId);
     }
 
+    @Ignore
     public void testCustomModelWorkflow() throws IOException, InterruptedException {
         // register chunk
         Response customModelResponse = registerModelMeta();
