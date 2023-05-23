@@ -15,8 +15,6 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL
 import java.time.Instant;
 import java.util.UUID;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.OpenSearchException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
@@ -61,6 +59,8 @@ import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * MLPredictTaskRunner is responsible for running predict tasks.

@@ -8,8 +8,6 @@ package org.opensearch.ml.action.stats;
 import java.io.IOException;
 import java.util.Set;
 
-import lombok.Getter;
-
 import org.opensearch.action.support.nodes.BaseNodesRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.StreamInput;
@@ -17,6 +15,8 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStatLevel;
 import org.opensearch.ml.stats.MLStatsInput;
+
+import lombok.Getter;
 
 public class MLStatsNodesRequest extends BaseNodesRequest<MLStatsNodesRequest> {
 

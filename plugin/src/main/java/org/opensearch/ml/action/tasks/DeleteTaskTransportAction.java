@@ -9,8 +9,6 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -30,6 +28,8 @@ import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {

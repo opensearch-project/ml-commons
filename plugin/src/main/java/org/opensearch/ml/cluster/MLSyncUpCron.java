@@ -18,8 +18,6 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.search.SearchRequest;
@@ -41,6 +39,8 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLSyncUpCron implements Runnable {
@@ -129,22 +129,16 @@ public class MLSyncUpCron implements Runnable {
                 .execute(
                     MLSyncUpAction.INSTANCE,
                     syncUpRequest,
-                    ActionListener
-                        .wrap(
-                            re -> { log.debug("sync model routing job finished"); },
-                            ex -> { log.error("Failed to sync model routing", ex); }
-                        )
+                    ActionListener.wrap(re -> { log.debug("sync model routing job finished"); }, ex -> {
+                        log.error("Failed to sync model routing", ex);
+                    })
                 );
 
             // refresh model status
             mlIndicesHandler
-                .initModelIndexIfAbsent(
-                    ActionListener
-                        .wrap(
-                            res -> { refreshModelState(modelWorkerNodes, deployingModels); },
-                            e -> { log.error("Failed to init model index", e); }
-                        )
-                );
+                .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
+                    log.error("Failed to init model index", e);
+                }));
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
 

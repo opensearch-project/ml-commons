@@ -12,8 +12,6 @@ import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegist
 import java.util.Base64;
 import java.util.concurrent.Semaphore;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -35,6 +33,8 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLModelChunkUploader {

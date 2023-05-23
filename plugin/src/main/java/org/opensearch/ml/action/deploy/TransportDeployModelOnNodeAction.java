@@ -13,8 +13,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.FailedNodeException;
@@ -48,6 +46,8 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportDeployModelOnNodeAction extends
@@ -139,10 +139,9 @@ public class TransportDeployModelOnNodeAction extends
         String localNodeId = clusterService.localNode().getId();
 
         ActionListener<MLForwardResponse> taskDoneListener = ActionListener
-            .wrap(
-                res -> { log.info("deploy model task done " + taskId); },
-                ex -> { logException("Deploy model task failed: " + taskId, ex, log); }
-            );
+            .wrap(res -> { log.info("deploy model task done " + taskId); }, ex -> {
+                logException("Deploy model task failed: " + taskId, ex, log);
+            });
 
         deployModel(
             modelId,

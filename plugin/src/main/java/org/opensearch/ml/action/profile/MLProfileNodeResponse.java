@@ -8,8 +8,6 @@ package org.opensearch.ml.action.profile;
 import java.io.IOException;
 import java.util.Map;
 
-import lombok.Getter;
-
 import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.StreamInput;
@@ -19,6 +17,8 @@ import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.profile.MLModelProfile;
+
+import lombok.Getter;
 
 @Getter
 public class MLProfileNodeResponse extends BaseNodeResponse implements ToXContentFragment {

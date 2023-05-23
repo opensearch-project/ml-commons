@@ -7,11 +7,11 @@ package org.opensearch.ml.action.profile;
 
 import java.io.IOException;
 
-import lombok.Getter;
-
 import org.opensearch.action.support.nodes.BaseNodeRequest;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+
+import lombok.Getter;
 
 public class MLProfileNodeRequest extends BaseNodeRequest {
     @Getter

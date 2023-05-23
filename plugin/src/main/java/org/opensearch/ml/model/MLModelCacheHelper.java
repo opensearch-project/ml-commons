@@ -15,8 +15,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
@@ -26,6 +24,8 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLModelProfile;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLModelCacheHelper {

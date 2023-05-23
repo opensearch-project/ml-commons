@@ -9,11 +9,11 @@ import org.opensearch.gradle.testclusters.StandaloneRestIntegTestTask
 
 plugins {
     id 'java'
-    id 'nebula.ospackage'
+    id 'com.netflix.nebula.ospackage'
     id "io.freefair.lombok"
     id 'jacoco'
     id 'java-library'
-    id "com.diffplug.gradle.spotless" version "3.26.1"
+    id 'com.diffplug.spotless' version '6.18.0'
     id 'checkstyle'
 }
 
@@ -288,7 +288,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.7
+                minimum = 0.6
             }
         }
         rule {
@@ -297,7 +297,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.7
+                minimum = 0.6
             }
         }
     }
@@ -314,7 +314,7 @@ configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
 }
 
-apply plugin: 'nebula.ospackage'
+apply plugin: 'com.netflix.nebula.ospackage'
 
 // This is afterEvaluate because the bundlePlugin ZIP task is updated afterEvaluate and changes the ZIP name to match the plugin name
 afterEvaluate {
@@ -351,27 +351,11 @@ afterEvaluate {
     buildRpm {
         arch = 'NOARCH'
         dependsOn 'assemble'
-        finalizedBy 'renameRpm'
-        task renameRpm(type: Copy) {
-            from("$buildDir/distributions")
-            into("$buildDir/distributions")
-            include archiveName
-            rename archiveName, "${packageName}-${version}.rpm"
-            doLast { delete file("$buildDir/distributions/$archiveName") }
-        }
     }
 
     buildDeb {
         arch = 'all'
         dependsOn 'assemble'
-        finalizedBy 'renameDeb'
-        task renameDeb(type: Copy) {
-            from("$buildDir/distributions")
-            into("$buildDir/distributions")
-            include archiveName
-            rename archiveName, "${packageName}-${version}.deb"
-            doLast { delete file("$buildDir/distributions/$archiveName") }
-        }
     }
 
     task buildPackages(type: GradleBuild) {

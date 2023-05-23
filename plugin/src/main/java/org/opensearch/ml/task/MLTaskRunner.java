@@ -10,8 +10,6 @@ import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import java.util.HashMap;
 import java.util.Map;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
@@ -27,6 +25,8 @@ import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableMap;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * MLTaskRunner has common code for dispatching and running predict/training tasks.

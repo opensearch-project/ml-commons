@@ -23,8 +23,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -49,6 +47,8 @@ import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * MLTaskManager is responsible for managing MLTask.
@@ -342,15 +342,9 @@ public class MLTaskManager {
     }
 
     public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields) {
-        updateMLTaskDirectly(
-            taskId,
-            updatedFields,
-            ActionListener
-                .wrap(
-                    r -> { log.debug("updated ML task directly: {}", taskId); },
-                    e -> { log.error("Failed to update ML task " + taskId, e); }
-                )
-        );
+        updateMLTaskDirectly(taskId, updatedFields, ActionListener.wrap(r -> { log.debug("updated ML task directly: {}", taskId); }, e -> {
+            log.error("Failed to update ML task " + taskId, e);
+        }));
     }
 
     public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {

@@ -104,32 +104,23 @@ public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
         throws ExecutionException,
         InterruptedException,
         IOException {
-        mlIndicesHandler
-            .shouldUpdateIndex(
-                indexName,
-                1,
-                ActionListener.wrap(shouldUpdate -> { assertFalse(shouldUpdate); }, e -> { throw new RuntimeException(e); })
-            );
+        mlIndicesHandler.shouldUpdateIndex(indexName, 1, ActionListener.wrap(shouldUpdate -> { assertFalse(shouldUpdate); }, e -> {
+            throw new RuntimeException(e);
+        }));
         CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(oldIndexMapping);
         client.admin().indices().create(request).get();
-        mlIndicesHandler
-            .shouldUpdateIndex(
-                indexName,
-                1,
-                ActionListener.wrap(shouldUpdate -> { assertTrue(shouldUpdate); }, e -> { throw new RuntimeException(e); })
-            );
+        mlIndicesHandler.shouldUpdateIndex(indexName, 1, ActionListener.wrap(shouldUpdate -> { assertTrue(shouldUpdate); }, e -> {
+            throw new RuntimeException(e);
+        }));
         assertNull(getIndexSchemaVersion(indexName));
         ActionListener<Boolean> listener = ActionListener.wrap(r -> {
             assertTrue(r);
             Integer indexSchemaVersion = getIndexSchemaVersion(indexName);
             if (indexSchemaVersion != null) {
                 assertEquals(schemaVersion, indexSchemaVersion.intValue());
-                mlIndicesHandler
-                    .shouldUpdateIndex(
-                        indexName,
-                        1,
-                        ActionListener.wrap(shouldUpdate -> { assertFalse(shouldUpdate); }, e -> { throw new RuntimeException(e); })
-                    );
+                mlIndicesHandler.shouldUpdateIndex(indexName, 1, ActionListener.wrap(shouldUpdate -> { assertFalse(shouldUpdate); }, e -> {
+                    throw new RuntimeException(e);
+                }));
             }
         }, e -> { throw new RuntimeException(e); });
         mlIndicesHandler.initModelIndexIfAbsent(listener);
@@ -151,8 +142,9 @@ public class MLIndicesHandlerTests extends OpenSearchIntegTestCase {
             actionListener.onFailure(new RuntimeException(errorMessage));
             return null;
         }).when(adminClient).create(any(), any());
-        ActionListener<Boolean> listener = ActionListener
-            .wrap(r -> { throw new RuntimeException("unexpected result"); }, e -> { assertEquals(errorMessage, e.getMessage()); });
+        ActionListener<Boolean> listener = ActionListener.wrap(r -> { throw new RuntimeException("unexpected result"); }, e -> {
+            assertEquals(errorMessage, e.getMessage());
+        });
         mlIndicesHandler.initModelIndexIfAbsent(listener);
 
         when(mockClient.threadPool()).thenThrow(new RuntimeException(errorMessage));

@@ -10,8 +10,6 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.TRAIN_THREAD_POOL;
 import java.time.Instant;
 import java.util.UUID;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.support.ThreadedActionListener;
@@ -40,6 +38,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * MLPredictTaskRunner is responsible for running predict tasks.
