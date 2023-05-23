@@ -110,10 +110,7 @@ public class MLSearchHandler {
 
         BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
         if (!CollectionUtils.isEmpty(modelGroupIds)) {
-            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(
-                MLModelGroup.MODEL_GROUP_ID_FIELD,
-                modelGroupIds
-            );
+            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD, modelGroupIds);
             accessControlledBoolQuery.should(modelGroupIdTermsQuery);
         }
         accessControlledBoolQuery.should(modelGroupIdMustNotExistBoolQuery);
@@ -128,9 +125,7 @@ public class MLSearchHandler {
             boolQueryBuilder.must(modelGroupIdMustNotExistBoolQuery);
             return boolQueryBuilder;
         }
-        throw new IllegalArgumentException(
-            "Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type"
-        );
+        throw new IllegalArgumentException("Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type");
     }
 
     /**
