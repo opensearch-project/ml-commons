@@ -27,6 +27,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -60,6 +61,9 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
     MLModelGetRequest mlModelGetRequest;
     ThreadContext threadContext;
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -67,7 +71,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
 
         getModelTransportAction = spy(
-            new GetModelTransportAction(transportService, actionFilters, client, xContentRegistry, settings, clusterService)
+            new GetModelTransportAction(transportService, actionFilters, client, xContentRegistry, clusterService, modelAccessControlHelper)
         );
 
         threadContext = new ThreadContext(settings);

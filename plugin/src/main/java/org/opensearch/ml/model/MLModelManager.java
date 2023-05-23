@@ -283,7 +283,7 @@ public class MLModelManager {
                                     updateModelGroupRequest,
                                     ActionListener
                                         .wrap(
-                                            r -> { uploadModel(registerModelInput, mlTask, newVersion + "", seqNo + 1, primaryTerm); },
+                                            r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); },
                                             e -> {
                                                 log.error("Failed to update model group", e);
                                                 handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
@@ -307,7 +307,8 @@ public class MLModelManager {
                     handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
                 }
             } else {
-                uploadModel(registerModelInput, mlTask, null, -1, -1);
+                // TODO Do we need to support register model without model group id?
+                uploadModel(registerModelInput, mlTask, null);
             }
         } catch (Exception e) {
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
@@ -317,21 +318,19 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, long seqNo, long primaryTerm)
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion)
         throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
-            registerModelFromUrl(registerModelInput, mlTask, modelVersion, seqNo, primaryTerm);
+            registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else {
-            registerPrebuiltModel(registerModelInput, mlTask, modelVersion, seqNo, primaryTerm);
+            registerPrebuiltModel(registerModelInput, mlTask, modelVersion);
         }
     }
 
     private void registerModelFromUrl(
         MLRegisterModelInput registerModelInput,
         MLTask mlTask,
-        String modelVersion,
-        long seqNo,
-        long primaryTerm
+        String modelVersion
     ) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
@@ -366,44 +365,8 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for register model task {}", modelId, taskId);
-                    if (modelGroupId != null) {
-                        GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-                        client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
-                            if (modelGroup.isExists()) {
-                                Map<String, Object> source = modelGroup.getSourceAsMap();
-                                UpdateRequest updateModelGroupRequest = new UpdateRequest();
-                                updateModelGroupRequest
-                                    .index(ML_MODEL_GROUP_INDEX)
-                                    .id(modelGroupId)
-                                    .setIfSeqNo(seqNo)
-                                    .setIfPrimaryTerm(primaryTerm)
-                                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                                    .doc(source);
-                                client
-                                    .update(
-                                        updateModelGroupRequest,
-                                        ActionListener
-                                            .wrap(
-                                                r -> {
-                                                    registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
-                                                },
-                                                e -> {
-                                                    log.error("Failed to update model group", e);
-                                                    handleException(functionName, taskId, e);
-                                                }
-                                            )
-                                    );
-                            } else {
-                                log.error("Model group not found");
-                                handleException(functionName, taskId, new MLResourceNotFoundException("model group not found"));
-                            }
-                        }, e -> {
-                            log.error("Failed to get model group", e);
-                            handleException(functionName, taskId, e);
-                        }));
-                    } else {
-                        registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
-                    }
+                    // model group id is not present in request body.
+                    registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
@@ -514,9 +477,7 @@ public class MLModelManager {
     private void registerPrebuiltModel(
         MLRegisterModelInput registerModelInput,
         MLTask mlTask,
-        String modelVersion,
-        long seqNo,
-        long primaryTerm
+        String modelVersion
     ) throws PrivilegedActionException {
         String taskId = mlTask.getTaskId();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
@@ -529,7 +490,7 @@ public class MLModelManager {
                 registerModelInput,
                 ActionListener
                     .wrap(
-                        mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion, seqNo, primaryTerm); },
+                        mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion); },
                         e -> {
                             log.error("Failed to register prebuilt model", e);
                             handleException(registerModelInput.getFunctionName(), taskId, e);

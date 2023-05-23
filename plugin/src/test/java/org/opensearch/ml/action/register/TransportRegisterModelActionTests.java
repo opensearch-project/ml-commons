@@ -38,6 +38,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -113,6 +114,9 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -133,7 +137,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             client,
             nodeFilter,
             mlTaskDispatcher,
-            mlStats
+            mlStats,
+            modelAccessControlHelper
         );
         assertNotNull(transportRegisterModelAction);
 

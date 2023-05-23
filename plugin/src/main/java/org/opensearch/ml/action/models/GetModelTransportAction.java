@@ -37,6 +37,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -51,7 +52,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
-    private volatile boolean filterByEnabled;
+    ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public GetModelTransportAction(
@@ -59,15 +60,14 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         ActionFilters actionFilters,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        Settings settings,
-        ClusterService clusterService
+        ClusterService clusterService,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLModelGetAction.NAME, transportService, actionFilters, MLModelGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
@@ -87,10 +87,10 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
 
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        SecurityUtils.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if ((filterByEnabled) && (!access)) {
+                        modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                            if (!access) {
                                 actionListener
-                                    .onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
+                                    .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
                             } else {
                                 log.debug("Completed Get Model Request, id:{}", modelId);
                                 actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());

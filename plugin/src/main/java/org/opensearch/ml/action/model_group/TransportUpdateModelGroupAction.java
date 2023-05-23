@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.util.Map;
@@ -24,7 +23,6 @@ import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -36,6 +34,7 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
@@ -49,16 +48,16 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private Client client;
     private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
-    private volatile boolean filterByEnabled;
 
+    ModelAccessControlHelper modelAccessControlHelper;
     @Inject
     public TransportUpdateModelGroupAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        Settings settings,
-        ClusterService clusterService
+        ClusterService clusterService,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLUpdateModelGroupAction.NAME, transportService, actionFilters, MLUpdateModelGroupRequest::new);
         this.actionFilters = actionFilters;
@@ -66,8 +65,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
@@ -89,7 +87,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     Map<String, Object> source = modelGroup.getSourceAsMap();
                     Map<String, Object> owner = (Map) source.get(MLModelGroup.OWNER);
 
-                    if (SecurityUtils.isAdmin(user) || !filterByEnabled || user == null) {
+                    if (modelAccessControlHelper.skipModelAccessControl(user)) {
                         updateModelGroup(modelGroupId, source, updateModelGroupInput, listener, user);
                     } else if (user.getName().equals(owner.get("name"))) {
                         if (!CollectionUtils.isEmpty(updateModelGroupInput.getBackendRoles())) {

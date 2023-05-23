@@ -9,10 +9,10 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
 import lombok.extern.log4j.Log4j2;
+import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.client.Client;
@@ -36,6 +36,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
+
 @Log4j2
 public class SecurityUtils {
 
@@ -50,14 +51,18 @@ public class SecurityUtils {
         RangeQueryBuilder.class
     );
 
-    public static void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
+    public static void validateModelGroupAccess(User user, String modelGroupId, Client client, boolean isModelAccessControlEnabled, ActionListener<Boolean> listener) {
+        if (!isModelAccessControlEnabled) listener.onResponse(true);
+        else validateModelGroupAccess(user, modelGroupId, client, listener);
+    }
+
+    private static void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
         if (modelGroupId == null || isAdmin(user) || user == null) {
             listener.onResponse(true);
             return;
         }
 
         List<String> userBackendRoles = user.getBackendRoles();
-
         GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
         try {
             client.get(getModelGroupRequest, ActionListener.wrap(r -> {
@@ -67,24 +72,35 @@ public class SecurityUtils {
                             .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-
                         if (mlModelGroup.getOwner() == null) {
+                            // previous security plugin not enabled, model defaults to public.
                             listener.onResponse(true);
-                        } else if (mlModelGroup.getAccess().equals(MLModelGroup.PUBLIC)) {
-                            listener.onResponse(true);
-                        } else if (mlModelGroup.getAccess().equals(MLModelGroup.PRIVATE)) {
-                            if (isOwner(mlModelGroup.getOwner(), user)) {
+                        } else if (!Strings.isBlank(mlModelGroup.getAccess())) {
+                            // owner is not null and access is not blank means this model group's backend_roles should be null.
+                            if (mlModelGroup.getBackendRoles() != null && mlModelGroup.getBackendRoles().size() > 0) {
+                                throw new IllegalStateException("Backend roles should be null");
+                            } else if (mlModelGroup.getAccess().equals(MLModelGroup.PUBLIC)) {
                                 listener.onResponse(true);
-                                return;
+                            } else if (mlModelGroup.getAccess().equals(MLModelGroup.PRIVATE)) {
+                                if (isOwner(mlModelGroup.getOwner(), user)) {
+                                    listener.onResponse(true);
+                                    return;
+                                }
+                                listener.onResponse(false);
                             }
-                            listener.onResponse(false);
                         } else {
-                            listener
-                                .onResponse(
-                                    userBackendRoles
-                                        .stream()
-                                        .anyMatch(mlModelGroup.getBackendRoles().stream().collect(Collectors.toSet())::contains)
-                                );
+                            // owner is not null access is null means this model is restricted, we should check backend roles.
+                            List<String> backendRoles = mlModelGroup.getBackendRoles();
+                            if (backendRoles == null || backendRoles.isEmpty()) {
+                                throw new IllegalStateException("Backend roles should not be null");
+                            } else {
+                                listener
+                                    .onResponse(
+                                        userBackendRoles
+                                            .stream()
+                                            .anyMatch(backendRoles::contains)
+                                    );
+                            }
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml model group");

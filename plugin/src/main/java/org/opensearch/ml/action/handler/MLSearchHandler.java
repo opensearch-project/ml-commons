@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.handler;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 import static org.opensearch.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
 
@@ -16,8 +15,6 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -30,6 +27,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.rest.RestStatus;
@@ -48,13 +46,13 @@ import java.util.List;
 public class MLSearchHandler {
     private final Client client;
     private NamedXContentRegistry xContentRegistry;
-    private boolean filterByEnabled;
 
-    public MLSearchHandler(Client client, NamedXContentRegistry xContentRegistry, Settings settings, ClusterService clusterService) {
+    private ModelAccessControlHelper modelAccessControlHelper;
+
+    public MLSearchHandler(Client client, NamedXContentRegistry xContentRegistry, ModelAccessControlHelper modelAccessControlHelper) {
+        this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
     }
 
     /**
@@ -64,7 +62,7 @@ public class MLSearchHandler {
      */
     public void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
-        if (user == null || !filterByEnabled || SecurityUtils.isAdmin(user)) {
+        if (modelAccessControlHelper.skipModelAccessControl(user)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.search(request, actionListener);
             } catch (Exception e) {

@@ -42,6 +42,7 @@ import org.opensearch.index.reindex.ScrollableHitSource;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -86,6 +87,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     ThreadContext threadContext;
     MLModel model;
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -94,7 +98,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
         Settings settings = Settings.builder().build();
         deleteModelTransportAction = spy(
-            new DeleteModelTransportAction(transportService, actionFilters, client, xContentRegistry, settings, clusterService)
+            new DeleteModelTransportAction(transportService, actionFilters, client, xContentRegistry, clusterService, modelAccessControlHelper)
         );
 
         threadContext = new ThreadContext(settings);

@@ -27,6 +27,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLPredictTaskRunner;
@@ -51,8 +52,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     MLModelManager mlModelManager;
 
-    @NonFinal
-    volatile boolean filterByEnabled;
+    ModelAccessControlHelper modelAccessControlHelper;
+
 
     @Inject
     public TransportPredictionTaskAction(
@@ -64,7 +65,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         Client client,
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
-        Settings settings
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
@@ -74,8 +75,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
@@ -92,9 +92,9 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
-                SecurityUtils.validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if ((filterByEnabled) && (!access)) {
-                        listener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
+                modelAccessControlHelper.validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                    if (!access) {
+                        listener.onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
                     } else {
                         String requestId = mlPredictionTaskRequest.getRequestID();
                         log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());

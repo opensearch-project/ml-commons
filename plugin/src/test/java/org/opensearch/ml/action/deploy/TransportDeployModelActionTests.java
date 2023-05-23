@@ -48,6 +48,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -110,6 +111,9 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     private MLEngine mlEngine;
     private ModelHelper modelHelper;
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
     @Rule
@@ -155,7 +159,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlTaskDispatcher,
             mlModelManager,
             mlStats,
-            settings
+            settings,
+            modelAccessControlHelper
         );
     }
 
@@ -205,7 +210,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlTaskDispatcher,
             mlModelManager,
             mlStats,
-            settings
+            settings,
+            modelAccessControlHelper
         );
 
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, mock(ActionListener.class));
@@ -229,7 +235,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlTaskDispatcher,
                 mlModelManager,
                 mlStats,
-                settings
+                settings,
+                modelAccessControlHelper
             )
         );
         MLDeployModelRequest MLDeployModelRequest1 = mock(MLDeployModelRequest.class);
