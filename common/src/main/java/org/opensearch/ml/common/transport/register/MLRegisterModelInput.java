@@ -77,8 +77,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
         }
-        if (version == null && modelGroupId == null) {
-            throw new IllegalArgumentException("model version is null");
+        if (modelGroupId == null) {
+            throw new IllegalArgumentException("model group id is null");
         }
         if (modelFormat == null) {
             throw new IllegalArgumentException("model format is null");

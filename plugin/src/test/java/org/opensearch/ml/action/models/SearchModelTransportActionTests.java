@@ -24,6 +24,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.handler.MLSearchHandler;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -55,11 +56,14 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     SearchModelTransportAction searchModelTransportAction;
     ThreadContext threadContext;
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Ignore
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry));
+        mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper));
         searchModelTransportAction = new SearchModelTransportAction(transportService, actionFilters, mlSearchHandler);
 
         Settings settings = Settings.builder().build();

@@ -6,10 +6,9 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES;
 
 import java.time.Instant;
-import java.util.stream.Collectors;
+import java.util.HashSet;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -22,7 +21,6 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
@@ -32,14 +30,14 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.ModelAccessIdentifier;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.ml.utils.SecurityUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -53,7 +51,8 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     private final ThreadPool threadPool;
     private final Client client;
     ClusterService clusterService;
-    private volatile boolean filterByEnabled;
+
+    ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public TransportRegisterModelGroupAction(
@@ -62,8 +61,8 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         MLIndicesHandler mlIndicesHandler,
         ThreadPool threadPool,
         Client client,
-        Settings settings,
-        ClusterService clusterService
+        ClusterService clusterService,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLRegisterModelGroupAction.NAME, transportService, actionFilters, MLRegisterModelGroupRequest::new);
         this.transportService = transportService;
@@ -72,8 +71,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         this.threadPool = threadPool;
         this.client = client;
         this.clusterService = clusterService;
-        filterByEnabled = ML_COMMONS_VALIDATE_BACKEND_ROLES.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_VALIDATE_BACKEND_ROLES, it -> filterByEnabled = it);
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
@@ -100,30 +98,12 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             MLModelGroupBuilder builder = MLModelGroup.builder();
             MLModelGroup mlModelGroup;
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                if (filterByEnabled && user != null) {
-                    if (isInvalidRequest(input)) {
-                        throw new IllegalArgumentException("User cannot specify backend roles to a public/private model grouo");
-                    }
-                    if (Boolean.TRUE.equals(input.getIsPublic())) {
-                        builder = builder.access(MLModelGroup.PUBLIC);
-                    } else if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
-                        if (CollectionUtils.isEmpty(user.getBackendRoles())) {
-                            throw new MLValidationException("User doesn't have any backend role");
-                        } else if (SecurityUtils.isAdmin(user))
-                            throw new IllegalArgumentException("Admin cannot specify add all backend roles field in the request");
+                if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                    validateRequestForAccessControl(input, user);
+                    builder = builder.access(input.getModelAccessIdentifier().getValue());
+                    if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                         input.setBackendRoles(user.getBackendRoles());
-                    } else {
-                        if (CollectionUtils.isEmpty(input.getBackendRoles()) || CollectionUtils.isEmpty(user.getBackendRoles())) {
-                            builder = builder.access(MLModelGroup.PRIVATE);
-                        } else if (!input
-                            .getBackendRoles()
-                            .stream()
-                            .allMatch(user.getBackendRoles().stream().collect(Collectors.toSet())::contains)
-                            && !SecurityUtils.isAdmin(user)) {
-                            throw new MLValidationException("Invalid Backend Roles provided in the input");
-                        }
                     }
-
                     mlModelGroup = builder
                         .name(modelName)
                         .description(input.getDescription())
@@ -134,15 +114,12 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                         .lastUpdatedTime(Instant.now())
                         .build();
                 } else {
-                    if (input.getBackendRoles() != null || input.getIsAddAllBackendRoles() != null) {
-                        throw new IllegalArgumentException("User specified invalid fields in the request");
-                    }
-
+                    validateSecurityDisabledOrModelAccessControlDisabled(input);
                     mlModelGroup = builder
                         .name(modelName)
                         .description(input.getDescription())
                         .tags(input.getTags())
-                        .access(MLModelGroup.PUBLIC)
+                        .access(ModelAccessIdentifier.PUBLIC.getValue())
                         .createdTime(Instant.now())
                         .lastUpdatedTime(Instant.now())
                         .build();
@@ -175,16 +152,39 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         }
     }
 
-    public static boolean isInvalidRequest(MLRegisterModelGroupInput input) {
-        Boolean isPublic = input.getIsPublic() == null ? false : input.getIsPublic();
-        Boolean isAddAllBackendRoles = input.getIsAddAllBackendRoles() == null ? false : input.getIsAddAllBackendRoles();
-        Boolean isBackendRoles = !CollectionUtils.isEmpty(input.getBackendRoles());
-        if (isPublic) {
-            return isAddAllBackendRoles || isBackendRoles;
+    private void validateRequestForAccessControl(MLRegisterModelGroupInput input, User user) {
+        ModelAccessIdentifier modelAccessIdentifier = input.getModelAccessIdentifier();
+        if (modelAccessIdentifier == null) {
+            throw new IllegalArgumentException("Invalid model access identifier");
+        } else if ((ModelAccessIdentifier.PUBLIC == modelAccessIdentifier || ModelAccessIdentifier.PRIVATE == modelAccessIdentifier)
+            && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
+            throw new IllegalArgumentException("User cannot specify backend roles to a public/private model group");
+        } else if (ModelAccessIdentifier.RESTRICTED == modelAccessIdentifier) {
+            if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
+            }
+            if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles()) && CollectionUtils.isEmpty(user.getBackendRoles())) {
+                throw new IllegalArgumentException("Current user doesn't have any backend role");
+            }
+            if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                throw new IllegalArgumentException(
+                    "User have to specify backend roles or set add all backend roles to true for a restricted model group"
+                );
+            }
+            if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                throw new IllegalArgumentException("User cannot specify add all backed roles to true and backend roles not empty");
+            }
+            if (!modelAccessControlHelper.isAdmin(user) && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
+                throw new IllegalArgumentException("User cannot specify backend roles that doesn't belong to the current user");
+            }
         }
-        if (isAddAllBackendRoles) {
-            return isBackendRoles;
+    }
+
+    private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {
+        if (input.getModelAccessIdentifier() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
+            throw new IllegalArgumentException(
+                "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body"
+            );
         }
-        return false;
     }
 }

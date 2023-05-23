@@ -13,6 +13,7 @@ import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.ModelAccessIdentifier;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,7 +30,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public static final String DESCRIPTION_FIELD = "description"; //optional
     public static final String TAGS_FIELD = "tags"; //optional
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String IS_PUBLIC_FIELD = "is_public"; //optional
+    public static final String MODEL_ACCESS_IDENTIFIER = "model_access_identifier"; //mandatory when security and model access control enabled.
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles"; //optional
 
 
@@ -38,29 +39,31 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     private String description;
     private Map<String, Object> tags;
     private List<String> backendRoles;
-    private Boolean isPublic;
+    private ModelAccessIdentifier modelAccessIdentifier;
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, Map<String, Object> tags, List<String> backendRoles, Boolean isPublic, Boolean isAddAllBackendRoles) {
+    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, Map<String, Object> tags, List<String> backendRoles, ModelAccessIdentifier modelAccessIdentifier, Boolean isAddAllBackendRoles) {
         this.modelGroupID = modelGroupID;
         this.name = name;
         this.description = description;
         this.tags = tags;
         this.backendRoles = backendRoles;
-        this.isPublic = isPublic;
+        this.modelAccessIdentifier = modelAccessIdentifier;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
     }
 
     public MLUpdateModelGroupInput(StreamInput in) throws IOException {
         this.modelGroupID = in.readString();
-        this.name = in.readString();
+        this.name = in.readOptionalString();
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
             tags = in.readMap();
         }
         this.backendRoles = in.readOptionalStringList();
-        this.isPublic = in.readOptionalBoolean();
+        if (in.readBoolean()) {
+            modelAccessIdentifier = in.readEnum(ModelAccessIdentifier.class);
+        }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
 
@@ -68,7 +71,9 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(MODEL_GROUP_ID_FIELD, modelGroupID);
-        builder.field(NAME_FIELD, name);
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
@@ -78,8 +83,8 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
-        if (isPublic != null) {
-            builder.field(IS_PUBLIC_FIELD, isPublic);
+        if (modelAccessIdentifier != null) {
+            builder.field(MODEL_ACCESS_IDENTIFIER, modelAccessIdentifier);
         }
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES_FIELD, isAddAllBackendRoles);
@@ -91,7 +96,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(modelGroupID);
-        out.writeString(name);
+        out.writeOptionalString(name);
         out.writeOptionalString(description);
         if (tags != null) {
             out.writeBoolean(true);
@@ -105,7 +110,12 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalBoolean(isPublic);
+        if (modelAccessIdentifier != null) {
+            out.writeBoolean(true);
+            out.writeEnum(modelAccessIdentifier);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalBoolean(isAddAllBackendRoles);
     }
 
@@ -115,7 +125,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         String description = null;
         Map<String, Object> tags = null;
         List<String> backendRoles = null;
-        Boolean isPublic = null;
+        ModelAccessIdentifier modelAccessIdentifier = null;
         Boolean isAddAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -142,8 +152,8 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
                         backendRoles.add(parser.text());
                     }
                     break;
-                case IS_PUBLIC_FIELD:
-                    isPublic = parser.booleanValue();
+                case MODEL_ACCESS_IDENTIFIER:
+                    modelAccessIdentifier = ModelAccessIdentifier.from(parser.text());
                     break;
                 case ADD_ALL_BACKEND_ROLES_FIELD:
                     isAddAllBackendRoles = parser.booleanValue();
@@ -153,6 +163,6 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLUpdateModelGroupInput(modelGroupID, name, description, tags, backendRoles, isPublic, isAddAllBackendRoles);
+        return new MLUpdateModelGroupInput(modelGroupID, name, description, tags, backendRoles, modelAccessIdentifier, isAddAllBackendRoles);
     }
 }
