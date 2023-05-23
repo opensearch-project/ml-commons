@@ -110,8 +110,10 @@ public class TransportUndeployModelAction extends
 
                 if (nodeCounts != null) {
                     for (Map.Entry<String, String[]> entry : nodeCounts.entrySet()) {
-                        if (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
-                            || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length) {
+                        // when undeploy a undeployed model, the entry.getvalue() is null
+                        if (entry.getValue() != null
+                            && (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
+                                || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length)) {
                             modelWorkNodesBeforeRemoval.put(entry.getKey(), entry.getValue());
                         }
                     }
@@ -236,8 +238,10 @@ public class TransportUndeployModelAction extends
 
         Map<String, String[]> modelWorkerNodesMap = new HashMap<>();
 
-        if (modelIds != null) {
-            for (String modelId : modelIds) {
+        boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
+        String[] removedModelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
+        if (removedModelIds != null) {
+            for (String modelId : removedModelIds) {
                 String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
                 modelWorkerNodesMap.put(modelId, workerNodes);
             }
