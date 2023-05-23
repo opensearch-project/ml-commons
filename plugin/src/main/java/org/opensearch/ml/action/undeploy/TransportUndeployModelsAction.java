@@ -137,7 +137,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                    modelAccessControlHelper.validateModelGroupAccess(
+                modelAccessControlHelper
+                    .validateModelGroupAccess(
                         user,
                         mlModel.getModelGroupId(),
                         client,

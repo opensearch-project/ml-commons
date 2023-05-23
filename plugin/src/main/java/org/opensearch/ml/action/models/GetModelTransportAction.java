@@ -84,18 +84,21 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
 
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if (!access) {
-                                actionListener
-                                    .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
-                            } else {
-                                log.debug("Completed Get Model Request, id:{}", modelId);
-                                actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
-                            }
-                        }, e -> {
-                            log.error("Failed to validate Access for Model Id " + modelId, e);
-                            actionListener.onFailure(e);
-                        }));
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                                if (!access) {
+                                    actionListener
+                                        .onFailure(
+                                            new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                        );
+                                } else {
+                                    log.debug("Completed Get Model Request, id:{}", modelId);
+                                    actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
+                                }
+                            }, e -> {
+                                log.error("Failed to validate Access for Model Id " + modelId, e);
+                                actionListener.onFailure(e);
+                            }));
 
                     } catch (Exception e) {
                         log.error("Failed to parse ml model" + r.getId(), e);

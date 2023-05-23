@@ -57,6 +57,7 @@ import java.util.function.Supplier;
 
 import lombok.extern.log4j.Log4j2;
 
+import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
@@ -200,7 +201,6 @@ public class MLModelManager {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             String modelName = mlRegisterModelMetaInput.getName();
-            String version = mlRegisterModelMetaInput.getVersion();
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                     Instant now = Instant.now();
@@ -208,7 +208,6 @@ public class MLModelManager {
                         .builder()
                         .name(modelName)
                         .algorithm(functionName)
-                        .version(version)
                         .description(mlRegisterModelMetaInput.getDescription())
                         .modelFormat(mlRegisterModelMetaInput.getModelFormat())
                         .modelState(MLModelState.REGISTERING)
@@ -259,56 +258,50 @@ public class MLModelManager {
 
             String modelGroupId = registerModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (modelGroupId != null) {
-                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
-                        if (modelGroup.isExists()) {
-                            Map<String, Object> source = modelGroup.getSourceAsMap();
-                            int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
-                            int newVersion = latestVersion + 1;
-                            source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
-                            source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-                            UpdateRequest updateModelGroupRequest = new UpdateRequest();
-                            long seqNo = modelGroup.getSeqNo();
-                            long primaryTerm = modelGroup.getPrimaryTerm();
-                            updateModelGroupRequest
-                                .index(ML_MODEL_GROUP_INDEX)
-                                .id(modelGroupId)
-                                .setIfSeqNo(seqNo)
-                                .setIfPrimaryTerm(primaryTerm)
-                                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                                .doc(source);
-                            client
-                                .update(
-                                    updateModelGroupRequest,
-                                    ActionListener
-                                        .wrap(
-                                            r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); },
-                                            e -> {
-                                                log.error("Failed to update model group", e);
-                                                handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
-                                            }
-                                        )
-                                );
-                        } else {
-                            log.error("Model group not found");
-                            handleException(
-                                registerModelInput.getFunctionName(),
-                                mlTask.getTaskId(),
-                                new MLValidationException("Model group not found")
+            if (Strings.isBlank(modelGroupId)) {
+                throw new IllegalArgumentException("ModelGroupId is blank");
+            }
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
+                    if (modelGroup.isExists()) {
+                        Map<String, Object> source = modelGroup.getSourceAsMap();
+                        int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
+                        int newVersion = latestVersion + 1;
+                        source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
+                        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+                        UpdateRequest updateModelGroupRequest = new UpdateRequest();
+                        long seqNo = modelGroup.getSeqNo();
+                        long primaryTerm = modelGroup.getPrimaryTerm();
+                        updateModelGroupRequest
+                            .index(ML_MODEL_GROUP_INDEX)
+                            .id(modelGroupId)
+                            .setIfSeqNo(seqNo)
+                            .setIfPrimaryTerm(primaryTerm)
+                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+                            .doc(source);
+                        client
+                            .update(
+                                updateModelGroupRequest,
+                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); }, e -> {
+                                    log.error("Failed to update model group", e);
+                                    handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                                })
                             );
-                        }
-                    }, e -> {
-                        log.error("Failed to get model group", e);
-                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
-                    }));
-                } catch (Exception e) {
-                    log.error("Failed to register model", e);
+                    } else {
+                        log.error("Model group not found");
+                        handleException(
+                            registerModelInput.getFunctionName(),
+                            mlTask.getTaskId(),
+                            new MLValidationException("Model group not found")
+                        );
+                    }
+                }, e -> {
+                    log.error("Failed to get model group", e);
                     handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
-                }
-            } else {
-                // TODO Do we need to support register model without model group id?
-                uploadModel(registerModelInput, mlTask, null);
+                }));
+            } catch (Exception e) {
+                log.error("Failed to register model", e);
+                handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
             }
         } catch (Exception e) {
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
@@ -318,8 +311,7 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion)
-        throws PrivilegedActionException {
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else {
@@ -327,11 +319,7 @@ public class MLModelManager {
         }
     }
 
-    private void registerModelFromUrl(
-        MLRegisterModelInput registerModelInput,
-        MLTask mlTask,
-        String modelVersion
-    ) {
+    private void registerModelFromUrl(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -474,11 +462,8 @@ public class MLModelManager {
             );
     }
 
-    private void registerPrebuiltModel(
-        MLRegisterModelInput registerModelInput,
-        MLTask mlTask,
-        String modelVersion
-    ) throws PrivilegedActionException {
+    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion)
+        throws PrivilegedActionException {
         String taskId = mlTask.getTaskId();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         if (!modelHelper.isModelAllowed(registerModelInput, modelMetaList)) {
@@ -488,14 +473,10 @@ public class MLModelManager {
             .downloadPrebuiltModelConfig(
                 taskId,
                 registerModelInput,
-                ActionListener
-                    .wrap(
-                        mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion); },
-                        e -> {
-                            log.error("Failed to register prebuilt model", e);
-                            handleException(registerModelInput.getFunctionName(), taskId, e);
-                        }
-                    )
+                ActionListener.wrap(mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion); }, e -> {
+                    log.error("Failed to register prebuilt model", e);
+                    handleException(registerModelInput.getFunctionName(), taskId, e);
+                })
             );
     }
 

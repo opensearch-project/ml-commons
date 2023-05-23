@@ -104,47 +104,50 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
 
-                        modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if (!access) {
-                                actionListener
-                                    .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
-                            } else {
-                                MLModelState mlModelState = mlModel.getModelState();
-                                if (mlModelState.equals(MLModelState.LOADED)
-                                    || mlModelState.equals(MLModelState.LOADING)
-                                    || mlModelState.equals(MLModelState.PARTIALLY_LOADED)
-                                    || mlModelState.equals(MLModelState.DEPLOYED)
-                                    || mlModelState.equals(MLModelState.DEPLOYING)
-                                    || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                                if (!access) {
                                     actionListener
                                         .onFailure(
-                                            new Exception(
-                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
-                                            )
+                                            new MLValidationException("User Doesn't have privilege to perform this operation on this model")
                                         );
                                 } else {
-                                    DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
-                                    client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-                                        @Override
-                                        public void onResponse(DeleteResponse deleteResponse) {
-                                            deleteModelChunks(modelId, deleteResponse, actionListener);
-                                        }
-
-                                        @Override
-                                        public void onFailure(Exception e) {
-                                            log.error("Failed to delete model meta data for model: " + modelId, e);
-                                            if (e instanceof ResourceNotFoundException) {
-                                                deleteModelChunks(modelId, null, actionListener);
+                                    MLModelState mlModelState = mlModel.getModelState();
+                                    if (mlModelState.equals(MLModelState.LOADED)
+                                        || mlModelState.equals(MLModelState.LOADING)
+                                        || mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+                                        || mlModelState.equals(MLModelState.DEPLOYED)
+                                        || mlModelState.equals(MLModelState.DEPLOYING)
+                                        || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
+                                        actionListener
+                                            .onFailure(
+                                                new Exception(
+                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
+                                                )
+                                            );
+                                    } else {
+                                        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
+                                        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
+                                            @Override
+                                            public void onResponse(DeleteResponse deleteResponse) {
+                                                deleteModelChunks(modelId, deleteResponse, actionListener);
                                             }
-                                            actionListener.onFailure(e);
-                                        }
-                                    });
+
+                                            @Override
+                                            public void onFailure(Exception e) {
+                                                log.error("Failed to delete model meta data for model: " + modelId, e);
+                                                if (e instanceof ResourceNotFoundException) {
+                                                    deleteModelChunks(modelId, null, actionListener);
+                                                }
+                                                actionListener.onFailure(e);
+                                            }
+                                        });
+                                    }
                                 }
-                            }
-                        }, e -> {
-                            log.error("Failed to validate Access for Model Id " + modelId, e);
-                            actionListener.onFailure(e);
-                        }));
+                            }, e -> {
+                                log.error("Failed to validate Access for Model Id " + modelId, e);
+                                actionListener.onFailure(e);
+                            }));
                     } catch (Exception e) {
                         log.error("Failed to parse ml model" + r.getId(), e);
                         actionListener.onFailure(e);

@@ -8,6 +8,10 @@ package org.opensearch.ml.action.handler;
 import static org.opensearch.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.OpenSearchStatusException;
@@ -15,11 +19,13 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
@@ -30,13 +36,9 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.RestStatus;
-
-import com.google.common.base.Throwables;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import com.google.common.base.Throwables;
 
 /**
  * Handle general get and search request in ml common.
@@ -71,44 +73,25 @@ public class MLSearchHandler {
         } else {
             SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
             SearchRequest modelGroupSearchRequest = new SearchRequest();
-            sourceBuilder
-                .fetchSource(
-                    new String[] {
-                        MLModelGroup.MODEL_GROUP_ID_FIELD,
-                    },
-                    null
-                );
+            sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
             modelGroupSearchRequest.source(sourceBuilder);
             modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
             ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
+                ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
                 if (r != null && r.getHits() != null && r.getHits().getTotalHits().value > 0) {
                     List<String> modelGroupIds = new ArrayList<>();
-                    Arrays.stream(r.getHits().getHits()).forEach(hit -> {
-                        modelGroupIds.add(hit.getId());
-                    });
-                    ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
+                    Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                        final QueryBuilder queryBuilder = request.source().query();
-                        TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds);
-                        if (queryBuilder == null) {
-                            BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
-                            accessControlledBoolQuery.must(modelGroupIdTermsQuery);
-                            request.source().query(accessControlledBoolQuery);
-                        } else if (queryBuilder instanceof BoolQueryBuilder) {
-                            ((BoolQueryBuilder) queryBuilder).must(modelGroupIdTermsQuery);
-                        } else if (modelAccessControlHelper.isSupportedQueryType(queryBuilder.getClass())) {
-                            BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-                            boolQueryBuilder.must(queryBuilder);
-                            boolQueryBuilder.must(modelGroupIdTermsQuery);
-                            request.source().query(boolQueryBuilder);
-                        } else {
-                            throw new IllegalArgumentException("Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type");
-                        }
+                        request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
                         client.search(request, listener);
                     } catch (Exception e) {
                         log.error("Failed to search", e);
                         listener.onFailure(e);
                     }
+                } else {
+                    log.debug("No model group found");
+                    request.source().query(rewriteQueryBuilder(request.source().query(), null));
+                    client.search(request, listener);
                 }
             }, e -> {
                 log.error("Fail to search model groups!", e);
@@ -116,6 +99,36 @@ public class MLSearchHandler {
             });
             client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
         }
+    }
+
+    private QueryBuilder rewriteQueryBuilder(QueryBuilder queryBuilder, List<String> modelGroupIds) {
+        ExistsQueryBuilder existsQueryBuilder = new ExistsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD);
+        BoolQueryBuilder modelGroupIdMustNotExistBoolQuery = new BoolQueryBuilder();
+        modelGroupIdMustNotExistBoolQuery.mustNot(existsQueryBuilder);
+
+        BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
+        if (!CollectionUtils.isEmpty(modelGroupIds)) {
+            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(
+                MLModelGroup.MODEL_GROUP_ID_FIELD,
+                modelGroupIds
+            );
+            accessControlledBoolQuery.should(modelGroupIdTermsQuery);
+        }
+        accessControlledBoolQuery.should(modelGroupIdMustNotExistBoolQuery);
+        if (queryBuilder == null) {
+            return accessControlledBoolQuery;
+        } else if (queryBuilder instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) queryBuilder).must(accessControlledBoolQuery);
+            return queryBuilder;
+        } else if (modelAccessControlHelper.isSupportedQueryType(queryBuilder.getClass())) {
+            BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+            boolQueryBuilder.must(queryBuilder);
+            boolQueryBuilder.must(modelGroupIdMustNotExistBoolQuery);
+            return boolQueryBuilder;
+        }
+        throw new IllegalArgumentException(
+            "Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type"
+        );
     }
 
     /**

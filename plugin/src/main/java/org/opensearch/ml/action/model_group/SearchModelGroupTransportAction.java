@@ -34,6 +34,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
+
     @Inject
     public SearchModelGroupTransportAction(
         TransportService transportService,

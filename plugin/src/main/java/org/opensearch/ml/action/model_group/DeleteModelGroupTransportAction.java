@@ -72,7 +72,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
-                if (!access){
+                if (!access) {
                     actionListener.onFailure(new MLValidationException("User Doesn't have previlege to perform this operation"));
                 } else {
                     BoolQueryBuilder query = new BoolQueryBuilder();

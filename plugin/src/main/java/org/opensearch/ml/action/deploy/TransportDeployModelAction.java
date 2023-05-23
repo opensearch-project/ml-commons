@@ -131,7 +131,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                     if (!access) {
-                        listener.onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
+                        listener
+                            .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
                     } else {
                         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
                         boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;

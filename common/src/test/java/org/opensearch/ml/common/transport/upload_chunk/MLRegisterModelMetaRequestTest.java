@@ -49,8 +49,8 @@ public class MLRegisterModelMetaRequestTest {
 				newRequest.getMlRegisterModelMetaInput().getFunctionName());
 		assertEquals(request.getMlRegisterModelMetaInput().getModelConfig().getAllConfig(),
 				newRequest.getMlRegisterModelMetaInput().getModelConfig().getAllConfig());
-		assertEquals(request.getMlRegisterModelMetaInput().getVersion(),
-				newRequest.getMlRegisterModelMetaInput().getVersion());
+		assertEquals(request.getMlRegisterModelMetaInput().getModelGroupId(),
+				newRequest.getMlRegisterModelMetaInput().getModelGroupId());
 	}
 
 	@Test
@@ -83,8 +83,8 @@ public class MLRegisterModelMetaRequestTest {
 				newRequest.getMlRegisterModelMetaInput().getFunctionName());
 		assertEquals(request.getMlRegisterModelMetaInput().getModelConfig().getAllConfig(),
 				newRequest.getMlRegisterModelMetaInput().getModelConfig().getAllConfig());
-		assertEquals(request.getMlRegisterModelMetaInput().getVersion(),
-				newRequest.getMlRegisterModelMetaInput().getVersion());
+		assertEquals(request.getMlRegisterModelMetaInput().getModelGroupId(),
+				newRequest.getMlRegisterModelMetaInput().getModelGroupId());
 	}
 
 	@Test(expected = UncheckedIOException.class)

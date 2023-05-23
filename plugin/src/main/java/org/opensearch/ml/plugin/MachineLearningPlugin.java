@@ -564,7 +564,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
-                MLCommonsSettings.ML_COMMONS_VALIDATE_BACKEND_ROLES
+                MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED
             );
         return settings;
     }

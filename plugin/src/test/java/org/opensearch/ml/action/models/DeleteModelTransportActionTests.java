@@ -98,7 +98,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
         Settings settings = Settings.builder().build();
         deleteModelTransportAction = spy(
-            new DeleteModelTransportAction(transportService, actionFilters, client, xContentRegistry, clusterService, modelAccessControlHelper)
+            new DeleteModelTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                xContentRegistry,
+                clusterService,
+                modelAccessControlHelper
+            )
         );
 
         threadContext = new ThreadContext(settings);

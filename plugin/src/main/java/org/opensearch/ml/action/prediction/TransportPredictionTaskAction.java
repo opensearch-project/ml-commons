@@ -49,7 +49,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     ModelAccessControlHelper modelAccessControlHelper;
 
-
     @Inject
     public TransportPredictionTaskAction(
         TransportService transportService,
@@ -87,24 +86,28 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
-                modelAccessControlHelper.validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if (!access) {
-                        listener.onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
-                    } else {
-                        String requestId = mlPredictionTaskRequest.getRequestID();
-                        log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
-                        long startTime = System.nanoTime();
-                        mlPredictTaskRunner.run(mlPredictionTaskRequest, transportService, ActionListener.runAfter(listener, () -> {
-                            long endTime = System.nanoTime();
-                            double durationInMs = (endTime - startTime) / 1e6;
-                            modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
-                            log.debug("completed predict request " + requestId + " for model " + modelId);
-                        }));
-                    }
-                }, e -> {
-                    log.error("Failed to Validate Access for ModelId " + modelId, e);
-                    listener.onFailure(e);
-                }));
+                modelAccessControlHelper
+                    .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                        if (!access) {
+                            listener
+                                .onFailure(
+                                    new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                );
+                        } else {
+                            String requestId = mlPredictionTaskRequest.getRequestID();
+                            log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
+                            long startTime = System.nanoTime();
+                            mlPredictTaskRunner.run(mlPredictionTaskRequest, transportService, ActionListener.runAfter(listener, () -> {
+                                long endTime = System.nanoTime();
+                                double durationInMs = (endTime - startTime) / 1e6;
+                                modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+                                log.debug("completed predict request " + requestId + " for model " + modelId);
+                            }));
+                        }
+                    }, e -> {
+                        log.error("Failed to Validate Access for ModelId " + modelId, e);
+                        listener.onFailure(e);
+                    }));
             }, e -> {
                 log.error("Failed to find model " + modelId, e);
                 listener.onFailure(e);
