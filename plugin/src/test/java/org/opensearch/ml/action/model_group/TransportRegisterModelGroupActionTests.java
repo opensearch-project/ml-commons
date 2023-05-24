@@ -66,9 +66,6 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
     private ActionListener<MLRegisterModelGroupResponse> actionListener;
 
     @Mock
-    private ActionListener<IndexResponse> indexActionistener;
-
-    @Mock
     private IndexResponse indexResponse;
 
     ThreadContext threadContext;
@@ -156,15 +153,6 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_Success() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PUBLIC, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<MLRegisterModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-    }
-
     public void test_BackendRolesProvidedWithPublic() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -197,7 +185,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("Admin user cannot specify add all backend roles to a model group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_RestrictedAndUserWithNoBackendRolesSetAddAllBackendRolesTrue() {
+    public void test_RestrictedAndUserWithNoBackendRoles() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex||engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -205,7 +193,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Current user doesn't have any backend role", argumentCaptor.getValue().getMessage());
+        assertEquals("Current user has no backend roles to specify the model group as restricted", argumentCaptor.getValue().getMessage());
     }
 
     public void test_RestrictedAndUserSpecifiedNoBackendRolesField() {
