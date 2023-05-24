@@ -167,8 +167,8 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
             }
-            if (Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(user.getBackendRoles())) {
-                throw new IllegalArgumentException("Current user doesn't have any backend role");
+            if (CollectionUtils.isEmpty(user.getBackendRoles())) {
+                throw new IllegalArgumentException("Current user has no backend roles to specify the model group as restricted");
             }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException(

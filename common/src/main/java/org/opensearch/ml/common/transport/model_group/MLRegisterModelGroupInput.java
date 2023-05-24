@@ -38,6 +38,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
 
     @Builder(toBuilder = true)
     public MLRegisterModelGroupInput(String name, String description, List<String> backendRoles, ModelAccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+        if (name == null) {
+            throw new IllegalArgumentException("model group name is null");
+        }
         this.name = name;
         this.description = description;
         this.backendRoles = backendRoles;

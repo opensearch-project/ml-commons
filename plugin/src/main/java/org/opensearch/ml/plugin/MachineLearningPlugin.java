@@ -296,7 +296,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
 
-        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
+        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
         mlTrainingTaskRunner = new MLTrainingTaskRunner(
