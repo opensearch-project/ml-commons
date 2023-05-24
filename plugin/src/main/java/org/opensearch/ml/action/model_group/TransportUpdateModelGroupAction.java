@@ -155,8 +155,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
 
     private void validateRequestForAccessControl(MLUpdateModelGroupInput input, User user, MLModelGroup mlModelGroup) {
         if (hasAccessControlChange(input)) {
-            if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)) {
-                throw new IllegalArgumentException("Only owner has valid privilege to perform update access control data");
+            if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
+                throw new IllegalArgumentException("Only owner/admin has valid privilege to perform update access control data");
             } else if (!modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
                 throw new IllegalArgumentException(
                     "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
