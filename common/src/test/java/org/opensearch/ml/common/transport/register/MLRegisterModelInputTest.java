@@ -42,7 +42,7 @@ public class MLRegisterModelInputTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
+    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
             "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"," +
             "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"" +
             "},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
@@ -50,6 +50,8 @@ public class MLRegisterModelInputTest {
     private final String modelName = "modelName";
     private final String version = "version";
     private final String url = "url";
+
+    private final String modelGroupId = "modelGroupId";
 
     @Before
     public void setUp() throws Exception {
@@ -64,6 +66,7 @@ public class MLRegisterModelInputTest {
                 .functionName(functionName)
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .url(url)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
@@ -86,18 +89,19 @@ public class MLRegisterModelInputTest {
         exceptionRule.expectMessage("model name is null");
         MLRegisterModelInput.builder()
                 .functionName(functionName)
+                .modelGroupId(modelGroupId)
                 .modelName(null)
                 .build();
     }
 
     @Test
-    public void constructor_NullModelVersion() {
+    public void constructor_NullModelGroupId() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model version is null");
+        exceptionRule.expectMessage("model group id is null");
         MLRegisterModelInput.builder()
                 .functionName(functionName)
                 .modelName(modelName)
-                .version(null)
+                .modelGroupId(null)
                 .build();
     }
 
@@ -109,6 +113,7 @@ public class MLRegisterModelInputTest {
                 .functionName(functionName)
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .modelFormat(null)
                 .url(url)
                 .build();
@@ -122,6 +127,7 @@ public class MLRegisterModelInputTest {
                 .functionName(functionName)
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(null)
                 .url(url)
@@ -133,6 +139,7 @@ public class MLRegisterModelInputTest {
         MLRegisterModelInput input = MLRegisterModelInput.builder()
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
                 .url(url)
@@ -158,7 +165,7 @@ public class MLRegisterModelInputTest {
     public void testToXContent_Incomplete() throws Exception {
         String expectedIncompleteInputStr =
                 "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
-                "\"version\":\"version\",\"deploy_model\":true}";
+                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"deploy_model\":true}";
         input.setUrl(null);
         input.setModelConfig(null);
         input.setModelFormat(null);

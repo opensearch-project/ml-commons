@@ -105,7 +105,11 @@ public class MockHelper {
     public static void mock_client_update_failure(Client client) {
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("failed to update"));
+            listener.onResponse(null);
+            return null;
+        }).doAnswer(invocation ->  {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("update failure"));
             return null;
         }).when(client).update(any(), any());
     }
