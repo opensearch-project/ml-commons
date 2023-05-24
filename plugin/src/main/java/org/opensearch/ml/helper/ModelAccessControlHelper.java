@@ -159,6 +159,14 @@ public class ModelAccessControlHelper {
         return owner.getName().equals(user.getName());
     }
 
+    public boolean isUserHasBackendRole(User user, MLModelGroup mlModelGroup) {
+        ModelAccessIdentifier modelAccessIdentifier = ModelAccessIdentifier.from(mlModelGroup.getAccess());
+        if (ModelAccessIdentifier.PUBLIC == modelAccessIdentifier) return true;
+        if (ModelAccessIdentifier.PRIVATE == modelAccessIdentifier) return false;
+        return user.getBackendRoles() != null && mlModelGroup.getBackendRoles() != null &&
+            mlModelGroup.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x));
+    }
+
     public boolean isOwnerStillHasPermission(User user, MLModelGroup mlModelGroup) {
         // when security plugin is disabled, or model access control not enabled, the model is a public model and anyone has permission to
         // it.

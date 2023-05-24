@@ -154,15 +154,18 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     }
 
     private void validateRequestForAccessControl(MLUpdateModelGroupInput input, User user, MLModelGroup mlModelGroup) {
-        if (hasAccessControlChange(input) && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)) {
-            throw new IllegalArgumentException("Only owner has valid privilege to perform update access control data");
+        if (hasAccessControlChange(input)) {
+            if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)) {
+                throw new IllegalArgumentException("Only owner has valid privilege to perform update access control data");
+            } else if (!modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
+                throw new IllegalArgumentException(
+                    "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
+                );
+            }
         }
-        if (hasAccessControlChange(input)
-            && modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
-            && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
-            throw new IllegalArgumentException(
-                "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
-            );
+        if (!modelAccessControlHelper.isAdmin(user) && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
+            && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup) ) {
+            throw new IllegalArgumentException("User doesn't have corresponding backend role to perform update action");
         }
         if (!modelAccessControlHelper.isAdmin(user)
                 && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)) {
