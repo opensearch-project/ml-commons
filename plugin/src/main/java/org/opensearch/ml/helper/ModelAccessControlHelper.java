@@ -161,10 +161,13 @@ public class ModelAccessControlHelper {
 
     public boolean isUserHasBackendRole(User user, MLModelGroup mlModelGroup) {
         ModelAccessMode modelAccessMode = ModelAccessMode.from(mlModelGroup.getAccess());
-        if (ModelAccessMode.PUBLIC == modelAccessMode) return true;
-        if (ModelAccessMode.PRIVATE == modelAccessMode) return false;
-        return user.getBackendRoles() != null && mlModelGroup.getBackendRoles() != null &&
-            mlModelGroup.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x));
+        if (ModelAccessMode.PUBLIC == modelAccessMode)
+            return true;
+        if (ModelAccessMode.PRIVATE == modelAccessMode)
+            return false;
+        return user.getBackendRoles() != null
+            && mlModelGroup.getBackendRoles() != null
+            && mlModelGroup.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x));
     }
 
     public boolean isOwnerStillHasPermission(User user, MLModelGroup mlModelGroup) {

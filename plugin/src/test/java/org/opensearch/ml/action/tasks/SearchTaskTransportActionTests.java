@@ -25,7 +25,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-
 public class SearchTaskTransportActionTests extends OpenSearchTestCase {
     @Mock
     Client client;

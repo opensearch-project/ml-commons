@@ -18,9 +18,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -30,7 +28,6 @@ public class MLModelGroup implements ToXContentObject {
     // We use int type for version in first release 1.3. In 2.4, we changed to
     // use String type for version. Keep this old version field for old models.
     public static final String DESCRIPTION_FIELD = "description"; //description of the model group
-    public static final String TAGS_FIELD = "tags"; //specified by the owner from pre-existing tags in the system
     public static final String LATEST_VERSION_FIELD = "latest_version"; //latest model version added to the model group
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //back_end roles as specified by the owner/admin
     public static final String OWNER = "owner"; //user who creates/owns the model group
@@ -44,7 +41,6 @@ public class MLModelGroup implements ToXContentObject {
     @Setter
     private String name;
     private String description;
-    private Map<String, Object> tags;
     private int latestVersion;
     private List<String> backendRoles;
     private User owner;
@@ -58,14 +54,13 @@ public class MLModelGroup implements ToXContentObject {
 
 
     @Builder(toBuilder = true)
-    public MLModelGroup(String name, String description, Map<String, Object> tags, int latestVersion,
+    public MLModelGroup(String name, String description, int latestVersion,
                         List<String> backendRoles, User owner, String access,
                         String modelGroupId,
                         Instant createdTime,
                         Instant lastUpdatedTime) {
         this.name = name;
         this.description = description;
-        this.tags = tags;
         this.latestVersion = latestVersion;
         this.backendRoles = backendRoles;
         this.owner = owner;
@@ -79,9 +74,6 @@ public class MLModelGroup implements ToXContentObject {
     public MLModelGroup(StreamInput input) throws IOException{
         name = input.readString();
         description = input.readOptionalString();
-        if (input.readBoolean()) {
-            tags = input.readMap();
-        }
         latestVersion = input.readInt();
         backendRoles = input.readOptionalStringList();
         if (input.readBoolean()) {
@@ -98,12 +90,6 @@ public class MLModelGroup implements ToXContentObject {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(name);
         out.writeOptionalString(description);
-        if (tags != null) {
-            out.writeBoolean(true);
-            out.writeMap(tags);
-        } else {
-            out.writeBoolean(false);
-        }
         out.writeInt(latestVersion);
         out.writeStringCollection(backendRoles);
         if (owner != null) {
@@ -124,9 +110,6 @@ public class MLModelGroup implements ToXContentObject {
         builder.field(LATEST_VERSION_FIELD, latestVersion);
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
-        }
-        if (tags != null && tags.size() > 0) {
-            builder.field(TAGS_FIELD, tags);
         }
         if (backendRoles != null) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
@@ -153,7 +136,6 @@ public class MLModelGroup implements ToXContentObject {
     public static MLModelGroup parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
-        Map<String, Object> tags = new HashMap<>();
         List<String> backendRoles = new ArrayList<>();
         Integer latestVersion = null;
         User owner = null;
@@ -173,9 +155,6 @@ public class MLModelGroup implements ToXContentObject {
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
-                    break;
-                case TAGS_FIELD:
-                    tags = parser.map();
                     break;
                 case BACKEND_ROLES_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -208,7 +187,6 @@ public class MLModelGroup implements ToXContentObject {
         return MLModelGroup.builder()
                 .name(name)
                 .description(description)
-                .tags(tags)
                 .backendRoles(backendRoles)
                 .latestVersion(latestVersion)
                 .owner(owner)

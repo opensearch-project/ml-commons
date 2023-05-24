@@ -107,7 +107,7 @@ public class MockHelper {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(null);
             return null;
-        }).doAnswer(invocation ->  {
+        }).doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("update failure"));
             return null;

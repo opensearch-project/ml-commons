@@ -18,7 +18,6 @@ import org.opensearch.ml.common.ModelAccessMode;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -27,23 +26,20 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
 
     public static final String NAME_FIELD = "name"; //mandatory
     public static final String DESCRIPTION_FIELD = "description"; //optional
-    public static final String TAGS_FIELD = "tags"; //optional
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
     public static final String MODEL_ACCESS_MODE = "model_access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
 
     private String name;
     private String description;
-    private Map<String, Object> tags;
     private List<String> backendRoles;
     private ModelAccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelGroupInput(String name, String description, Map<String, Object> tags, List<String> backendRoles, ModelAccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+    public MLRegisterModelGroupInput(String name, String description, List<String> backendRoles, ModelAccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         this.name = name;
         this.description = description;
-        this.tags = tags;
         this.backendRoles = backendRoles;
         this.modelAccessMode = modelAccessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
@@ -52,9 +48,6 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
     public MLRegisterModelGroupInput(StreamInput in) throws IOException{
         this.name = in.readString();
         this.description = in.readOptionalString();
-        if (in.readBoolean()) {
-            tags = in.readMap();
-        }
         this.backendRoles = in.readOptionalStringList();
         this.modelAccessMode = in.readEnum(ModelAccessMode.class);
         this.isAddAllBackendRoles = in.readOptionalBoolean();
@@ -64,12 +57,6 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(name);
         out.writeOptionalString(description);
-        if (tags != null) {
-            out.writeBoolean(true);
-            out.writeMap(tags);
-        } else {
-            out.writeBoolean(false);
-        }
         if (backendRoles != null) {
             out.writeBoolean(true);
             out.writeStringCollection(backendRoles);
@@ -87,9 +74,6 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (tags != null && tags.size() > 0) {
-            builder.field(TAGS_FIELD, tags);
-        }
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
@@ -104,7 +88,6 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
     public static MLRegisterModelGroupInput parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
-        Map<String, Object> tags = null;
         List<String> backendRoles = null;
         ModelAccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
@@ -119,9 +102,6 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
-                    break;
-                case TAGS_FIELD:
-                    tags = parser.map();
                     break;
                 case BACKEND_ROLES_FIELD:
                     backendRoles = new ArrayList<>();
@@ -141,7 +121,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLRegisterModelGroupInput(name, description, tags, backendRoles, modelAccessMode, isAddAllBackendRoles);
+        return new MLRegisterModelGroupInput(name, description, backendRoles, modelAccessMode, isAddAllBackendRoles);
     }
 
 }
