@@ -137,9 +137,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
         }
-        if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
-            source.put(MLModelGroup.TAGS_FIELD, updateModelGroupInput.getTags());
-        }
 
         UpdateRequest updateModelGroupRequest = new UpdateRequest();
         updateModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId).doc(source);
@@ -162,10 +159,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
                 );
             }
-        }
-        if (!modelAccessControlHelper.isAdmin(user) && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
-            && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup) ) {
-            throw new IllegalArgumentException("User doesn't have corresponding backend role to perform update action");
         }
         ModelAccessMode modelAccessMode = input.getModelAccessMode();
         if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
