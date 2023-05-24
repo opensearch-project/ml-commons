@@ -84,7 +84,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                 .wrap(
                     modelGroupId -> { listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name())); },
                     ex -> {
-                        log.error("Failed to init model index", ex);
+                        log.error("Failed to init model group index", ex);
                         listener.onFailure(ex);
                     }
                 )
@@ -107,7 +107,6 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                     mlModelGroup = builder
                         .name(modelName)
                         .description(input.getDescription())
-                        .tags(input.getTags())
                         .backendRoles(input.getBackendRoles())
                         .owner(user)
                         .createdTime(Instant.now())
@@ -118,7 +117,6 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                     mlModelGroup = builder
                         .name(modelName)
                         .description(input.getDescription())
-                        .tags(input.getTags())
                         .access(ModelAccessMode.PUBLIC.getValue())
                         .createdTime(Instant.now())
                         .lastUpdatedTime(Instant.now())
@@ -159,7 +157,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             if (!Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(input.getBackendRoles())) {
                 throw new IllegalArgumentException("User must specify at least one backend role or make the model public/private");
             } else {
-                modelAccessMode = ModelAccessMode.RESTRICTED;
+                input.setModelAccessMode(ModelAccessMode.RESTRICTED);
             }
         }
         if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
