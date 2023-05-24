@@ -24,6 +24,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -51,7 +52,7 @@ import com.google.common.collect.ImmutableList;
 @Log4j2
 public class ModelAccessControlHelper {
 
-    private volatile boolean modelAccessControlEnabled;
+    private volatile Boolean modelAccessControlEnabled;
 
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
@@ -80,7 +81,9 @@ public class ModelAccessControlHelper {
 
         List<String> userBackendRoles = user.getBackendRoles();
         GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-        try {
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             client.get(getModelGroupRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (
@@ -92,12 +95,12 @@ public class ModelAccessControlHelper {
                         ModelAccessIdentifier modelAccessIdentifier = ModelAccessIdentifier.from(mlModelGroup.getAccess());
                         if (mlModelGroup.getOwner() == null) {
                             // previous security plugin not enabled, model defaults to public.
-                            listener.onResponse(true);
+                            wrappedListener.onResponse(true);
                         } else if (ModelAccessIdentifier.RESTRICTED == modelAccessIdentifier) {
                             if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
                                 throw new IllegalStateException("Backend roles shouldn't be null");
                             } else {
-                                listener
+                                wrappedListener
                                     .onResponse(
                                         Optional
                                             .ofNullable(userBackendRoles)
@@ -107,23 +110,23 @@ public class ModelAccessControlHelper {
                                     );
                             }
                         } else if (ModelAccessIdentifier.PUBLIC == modelAccessIdentifier) {
-                            listener.onResponse(true);
+                            wrappedListener.onResponse(true);
                         } else if (ModelAccessIdentifier.PRIVATE == modelAccessIdentifier) {
                             if (isOwner(mlModelGroup.getOwner(), user))
-                                listener.onResponse(true);
+                                wrappedListener.onResponse(true);
                             else
-                                listener.onResponse(false);
+                                wrappedListener.onResponse(false);
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml model group");
-                        listener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 } else {
-                    listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                 }
             }, e -> {
                 log.error("Failed to validate Access", e);
-                listener.onFailure(new MLValidationException("Failed to validate Access"));
+                wrappedListener.onFailure(new MLValidationException("Failed to validate Access"));
             }));
         } catch (Exception e) {
             log.error("Failed to validate Access", e);

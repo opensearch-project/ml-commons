@@ -8,14 +8,10 @@ package org.opensearch.ml.action.undeploy;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -170,30 +166,4 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
     }
 
-    private void validateAccess(String modelId, Set<String> invalidAccessModels, User user, String[] excludes, CountDownLatch latch) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
-                modelAccessControlHelper
-                    .validateModelGroupAccess(
-                        user,
-                        mlModel.getModelGroupId(),
-                        client,
-                        new LatchedActionListener<>(ActionListener.wrap(access -> {
-                            if (!access) {
-                                invalidAccessModels.add(modelId);
-                            }
-                        }, e -> {
-                            log.error("Failed to Validate Access for ModelID " + modelId, e);
-                            invalidAccessModels.add(modelId);
-                        }), latch)
-                    );
-            }, e -> {
-                log.error("Failed to find Model", e);
-                latch.countDown();
-            }));
-        } catch (Exception e) {
-            log.error("Failed to undeploy ML model");
-            throw e;
-        }
-    }
 }

@@ -81,13 +81,9 @@ public class MLSearchHandler {
                 if (r != null && r.getHits() != null && r.getHits().getTotalHits().value > 0) {
                     List<String> modelGroupIds = new ArrayList<>();
                     Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
-                    try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                        request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
-                        client.search(request, listener);
-                    } catch (Exception e) {
-                        log.error("Failed to search", e);
-                        listener.onFailure(e);
-                    }
+
+                    request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
+                    client.search(request, listener);
                 } else {
                     log.debug("No model group found");
                     request.source().query(rewriteQueryBuilder(request.source().query(), null));
@@ -97,7 +93,9 @@ public class MLSearchHandler {
                 log.error("Fail to search model groups!", e);
                 actionListener.onFailure(e);
             });
-            client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
+            }
         }
     }
 
