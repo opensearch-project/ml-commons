@@ -196,6 +196,7 @@ public class MetricsCorrelation extends DLModelExecute {
                 .functionName(functionName)
                 .modelName(FunctionName.METRICS_CORRELATION.name())
                 .version(MCORR_ML_VERSION)
+                .modelGroupId(functionName.name())
                 .modelFormat(modelFormat)
                 .hashValue(MODEL_CONTENT_HASH)
                 .modelConfig(modelConfig)

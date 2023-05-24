@@ -170,6 +170,8 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
                 "all-MiniLM-L6-v3",
                 "version",
                 "1",
+                "model_group_id",
+                "1",
                 "model_format",
                 "TORCH_SCRIPT",
                 "model_task_type",
