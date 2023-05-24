@@ -97,7 +97,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
                             validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                            updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener);
+                            updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener, user);
                         }
                     } else {
                         listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
@@ -112,7 +112,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             }
         } else {
             validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
-            updateModelGroup(modelGroupId, new HashMap<>(), updateModelGroupInput, listener);
+            updateModelGroup(modelGroupId, new HashMap<>(), updateModelGroupInput, listener, user);
         }
     }
 
@@ -120,7 +120,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         String modelGroupId,
         Map<String, Object> source,
         MLUpdateModelGroupInput updateModelGroupInput,
-        ActionListener<MLUpdateModelGroupResponse> listener
+        ActionListener<MLUpdateModelGroupResponse> listener,
+        User user
     ) {
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
@@ -130,6 +131,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         }
         if (updateModelGroupInput.getBackendRoles() != null) {
             source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
+        }
+        if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
+            source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getName())) {
             source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
@@ -159,6 +163,11 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
                 );
             }
+        }
+        if (!modelAccessControlHelper.isAdmin(user)
+            && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
+            && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
+            throw new IllegalArgumentException("User doesn't have corresponding backend role to perform update action");
         }
         ModelAccessMode modelAccessMode = input.getModelAccessMode();
         if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
