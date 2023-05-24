@@ -52,7 +52,7 @@ import com.google.common.collect.ImmutableList;
 @Log4j2
 public class ModelAccessControlHelper {
 
-    private volatile boolean modelAccessControlEnabled;
+    private volatile Boolean modelAccessControlEnabled;
 
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);

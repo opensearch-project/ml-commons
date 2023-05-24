@@ -8,14 +8,10 @@ package org.opensearch.ml.action.undeploy;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
