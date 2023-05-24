@@ -76,6 +76,7 @@ public class MLSearchHandler {
             SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
             SearchRequest modelGroupSearchRequest = new SearchRequest();
             sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
+            sourceBuilder.size(10000);
             modelGroupSearchRequest.source(sourceBuilder);
             modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
             ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
