@@ -30,7 +30,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.ModelAccessIdentifier;
+import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
@@ -100,7 +100,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                     validateRequestForAccessControl(input, user);
-                    builder = builder.access(input.getModelAccessIdentifier().getValue());
+                    builder = builder.access(input.getModelAccessMode().getValue());
                     if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                         input.setBackendRoles(user.getBackendRoles());
                     }
@@ -119,7 +119,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                         .name(modelName)
                         .description(input.getDescription())
                         .tags(input.getTags())
-                        .access(ModelAccessIdentifier.PUBLIC.getValue())
+                        .access(ModelAccessMode.PUBLIC.getValue())
                         .createdTime(Instant.now())
                         .lastUpdatedTime(Instant.now())
                         .build();
@@ -153,14 +153,19 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     }
 
     private void validateRequestForAccessControl(MLRegisterModelGroupInput input, User user) {
-        ModelAccessIdentifier modelAccessIdentifier = input.getModelAccessIdentifier();
+        ModelAccessMode modelAccessMode = input.getModelAccessMode();
         Boolean isAddAllBackendRoles = input.getIsAddAllBackendRoles();
-        if (modelAccessIdentifier == null) {
-            throw new IllegalArgumentException("Invalid model access identifier");
-        } else if ((ModelAccessIdentifier.PUBLIC == modelAccessIdentifier || ModelAccessIdentifier.PRIVATE == modelAccessIdentifier)
+        if (modelAccessMode == null) {
+            if (!Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(input.getBackendRoles())) {
+                throw new IllegalArgumentException("User must specify at least one backend role or make the model public/private");
+            } else {
+                modelAccessMode = ModelAccessMode.RESTRICTED;
+            }
+        }
+        if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles))) {
             throw new IllegalArgumentException("User cannot specify backend roles to a public/private model group");
-        } else if (ModelAccessIdentifier.RESTRICTED == modelAccessIdentifier) {
+        } else if (ModelAccessMode.RESTRICTED == modelAccessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
             }
@@ -184,7 +189,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {
-        if (input.getModelAccessIdentifier() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
+        if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
             throw new IllegalArgumentException(
                 "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body"
             );
