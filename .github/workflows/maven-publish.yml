@@ -25,7 +25,7 @@ jobs:
           distribution: temurin # Temurin is a distribution of adoptium
           java-version: 17
       - uses: actions/checkout@v3
-      - uses: aws-actions/configure-aws-credentials@v1.7.0
+      - uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: ${{ secrets.PUBLISH_SNAPSHOTS_ROLE }}
           aws-region: us-east-1
