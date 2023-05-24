@@ -180,7 +180,20 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         final Map<String, Object> modelConfig = Map
             .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
         final Map<String, Object> model = Map
-            .of("name", "test_model", "version", "2", "model_group_id", "modelGroupId", "url", "testUrl", "model_format", "TORCH_SCRIPT", "model_config", modelConfig);
+            .of(
+                "name",
+                "test_model",
+                "version",
+                "2",
+                "model_group_id",
+                "modelGroupId",
+                "url",
+                "testUrl",
+                "model_format",
+                "TORCH_SCRIPT",
+                "model_config",
+                modelConfig
+            );
         String requestContent = new Gson().toJson(model).toString();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
