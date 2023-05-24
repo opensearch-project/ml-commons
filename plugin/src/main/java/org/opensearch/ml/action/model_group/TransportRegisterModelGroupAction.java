@@ -154,27 +154,30 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
 
     private void validateRequestForAccessControl(MLRegisterModelGroupInput input, User user) {
         ModelAccessIdentifier modelAccessIdentifier = input.getModelAccessIdentifier();
+        Boolean isAddAllBackendRoles = input.getIsAddAllBackendRoles();
         if (modelAccessIdentifier == null) {
             throw new IllegalArgumentException("Invalid model access identifier");
         } else if ((ModelAccessIdentifier.PUBLIC == modelAccessIdentifier || ModelAccessIdentifier.PRIVATE == modelAccessIdentifier)
-            && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
+            && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles))) {
             throw new IllegalArgumentException("User cannot specify backend roles to a public/private model group");
         } else if (ModelAccessIdentifier.RESTRICTED == modelAccessIdentifier) {
-            if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+            if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
             }
-            if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles()) && CollectionUtils.isEmpty(user.getBackendRoles())) {
+            if (Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(user.getBackendRoles())) {
                 throw new IllegalArgumentException("Current user doesn't have any backend role");
             }
-            if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+            if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException(
                     "User have to specify backend roles or set add all backend roles to true for a restricted model group"
                 );
             }
-            if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+            if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("User cannot specify add all backed roles to true and backend roles not empty");
             }
-            if (!modelAccessControlHelper.isAdmin(user) && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
+            if (!modelAccessControlHelper.isAdmin(user)
+                && !Boolean.TRUE.equals(isAddAllBackendRoles)
+                && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
                 throw new IllegalArgumentException("User cannot specify backend roles that doesn't belong to the current user");
             }
         }
