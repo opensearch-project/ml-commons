@@ -32,7 +32,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ModelAccessIdentifier;
+import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
@@ -122,9 +122,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         MLUpdateModelGroupInput updateModelGroupInput,
         ActionListener<MLUpdateModelGroupResponse> listener
     ) {
-        if (updateModelGroupInput.getModelAccessIdentifier() != null) {
-            source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessIdentifier().getValue());
-            if (ModelAccessIdentifier.RESTRICTED != updateModelGroupInput.getModelAccessIdentifier()) {
+        if (updateModelGroupInput.getModelAccessMode() != null) {
+            source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
+            if (ModelAccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
                 source.put(MLModelGroup.BACKEND_ROLES_FIELD, ImmutableList.of());
             }
         }
@@ -154,27 +154,24 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     }
 
     private void validateRequestForAccessControl(MLUpdateModelGroupInput input, User user, MLModelGroup mlModelGroup) {
-        if (hasAccessControlChange(input) && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)) {
-            throw new IllegalArgumentException("Only owner has valid privilege to perform update access control data");
-        }
-        if (hasAccessControlChange(input)
-            && modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
-            && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
-            throw new IllegalArgumentException(
-                "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
-            );
-        }
-        if (!modelAccessControlHelper.isAdmin(user)
-                && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)) {
-            if (ModelAccessIdentifier.PRIVATE.getValue().equals(mlModelGroup.getAccess())) {
-                throw new IllegalArgumentException("User does not have valid privilege to perform update model group");
+        if (hasAccessControlChange(input)) {
+            if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
+                throw new IllegalArgumentException("Only owner/admin has valid privilege to perform update access control data");
+            } else if (!modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
+                throw new IllegalArgumentException(
+                    "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
+                );
             }
         }
-        ModelAccessIdentifier modelAccessIdentifier = input.getModelAccessIdentifier();
-        if ((ModelAccessIdentifier.PUBLIC == modelAccessIdentifier || ModelAccessIdentifier.PRIVATE == modelAccessIdentifier)
+        if (!modelAccessControlHelper.isAdmin(user) && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
+            && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup) ) {
+            throw new IllegalArgumentException("User doesn't have corresponding backend role to perform update action");
+        }
+        ModelAccessMode modelAccessMode = input.getModelAccessMode();
+        if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
             throw new IllegalArgumentException("User cannot specify backend roles to a public/private model group");
-        } else if (modelAccessIdentifier == null || ModelAccessIdentifier.RESTRICTED == modelAccessIdentifier) {
+        } else if (modelAccessMode == null || ModelAccessMode.RESTRICTED == modelAccessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
             }
@@ -196,7 +193,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     }
 
     private boolean hasAccessControlChange(MLUpdateModelGroupInput input) {
-        return input.getModelAccessIdentifier() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null;
+        return input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null;
     }
 
     private boolean inputBackendRolesAndModelBackendRolesBothNotEmpty(MLUpdateModelGroupInput input, MLModelGroup mlModelGroup) {
@@ -204,7 +201,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLUpdateModelGroupInput input) {
-        if (input.getModelAccessIdentifier() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
+        if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
             throw new IllegalArgumentException(
                 "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body"
             );

@@ -12,7 +12,7 @@ import lombok.Getter;
 import java.util.HashMap;
 import java.util.Map;
 
-public enum ModelAccessIdentifier {
+public enum ModelAccessMode {
     PUBLIC("public"),
     PRIVATE("private"),
     RESTRICTED("restricted");
@@ -20,19 +20,19 @@ public enum ModelAccessIdentifier {
     @Getter
     private String value;
 
-    ModelAccessIdentifier(String value) {
+    ModelAccessMode(String value) {
         this.value = value;
     }
 
-    private static final Map<String, ModelAccessIdentifier> cache = new HashMap<>();
+    private static final Map<String, ModelAccessMode> cache = new HashMap<>();
 
     static {
-        for (ModelAccessIdentifier modelAccessIdentifier : values()) {
-            cache.put(modelAccessIdentifier.value, modelAccessIdentifier);
+        for (ModelAccessMode modelAccessMode : values()) {
+            cache.put(modelAccessMode.value, modelAccessMode);
         }
     }
 
-    public static ModelAccessIdentifier from(String value) {
+    public static ModelAccessMode from(String value) {
         try {
             return cache.get(value);
         } catch (Exception e) {
