@@ -13,7 +13,7 @@ import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.ModelAccessIdentifier;
+import org.opensearch.ml.common.ModelAccessMode;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,7 +30,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public static final String DESCRIPTION_FIELD = "description"; //optional
     public static final String TAGS_FIELD = "tags"; //optional
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_IDENTIFIER = "model_access_identifier"; //mandatory when security and model access control enabled.
+    public static final String MODEL_ACCESS_MODE = "model_access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles"; //optional
 
 
@@ -39,17 +39,17 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     private String description;
     private Map<String, Object> tags;
     private List<String> backendRoles;
-    private ModelAccessIdentifier modelAccessIdentifier;
+    private ModelAccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, Map<String, Object> tags, List<String> backendRoles, ModelAccessIdentifier modelAccessIdentifier, Boolean isAddAllBackendRoles) {
+    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, Map<String, Object> tags, List<String> backendRoles, ModelAccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         this.modelGroupID = modelGroupID;
         this.name = name;
         this.description = description;
         this.tags = tags;
         this.backendRoles = backendRoles;
-        this.modelAccessIdentifier = modelAccessIdentifier;
+        this.modelAccessMode = modelAccessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
     }
 
@@ -62,7 +62,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         }
         this.backendRoles = in.readOptionalStringList();
         if (in.readBoolean()) {
-            modelAccessIdentifier = in.readEnum(ModelAccessIdentifier.class);
+            modelAccessMode = in.readEnum(ModelAccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
@@ -83,8 +83,8 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
-        if (modelAccessIdentifier != null) {
-            builder.field(MODEL_ACCESS_IDENTIFIER, modelAccessIdentifier);
+        if (modelAccessMode != null) {
+            builder.field(MODEL_ACCESS_MODE, modelAccessMode);
         }
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES_FIELD, isAddAllBackendRoles);
@@ -110,9 +110,9 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (modelAccessIdentifier != null) {
+        if (modelAccessMode != null) {
             out.writeBoolean(true);
-            out.writeEnum(modelAccessIdentifier);
+            out.writeEnum(modelAccessMode);
         } else {
             out.writeBoolean(false);
         }
@@ -125,7 +125,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         String description = null;
         Map<String, Object> tags = null;
         List<String> backendRoles = null;
-        ModelAccessIdentifier modelAccessIdentifier = null;
+        ModelAccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -152,8 +152,8 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
                         backendRoles.add(parser.text());
                     }
                     break;
-                case MODEL_ACCESS_IDENTIFIER:
-                    modelAccessIdentifier = ModelAccessIdentifier.from(parser.text());
+                case MODEL_ACCESS_MODE:
+                    modelAccessMode = ModelAccessMode.from(parser.text());
                     break;
                 case ADD_ALL_BACKEND_ROLES_FIELD:
                     isAddAllBackendRoles = parser.booleanValue();
@@ -163,6 +163,6 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLUpdateModelGroupInput(modelGroupID, name, description, tags, backendRoles, modelAccessIdentifier, isAddAllBackendRoles);
+        return new MLUpdateModelGroupInput(modelGroupID, name, description, tags, backendRoles, modelAccessMode, isAddAllBackendRoles);
     }
 }
