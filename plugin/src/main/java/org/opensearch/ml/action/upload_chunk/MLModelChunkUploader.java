@@ -4,7 +4,17 @@
  */
 package org.opensearch.ml.action.upload_chunk;
 
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+
+import java.util.Base64;
+import java.util.concurrent.Semaphore;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -29,15 +39,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
-
-import java.util.Base64;
-import java.util.concurrent.Semaphore;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 @Log4j2
 public class MLModelChunkUploader {

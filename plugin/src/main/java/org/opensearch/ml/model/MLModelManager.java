@@ -5,10 +5,59 @@
 
 package org.opensearch.ml.model;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Files;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.common.xcontent.XContentType.JSON;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
+import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
+import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
+import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTaskState.COMPLETED;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
+import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
+import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
+import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
+import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_HELPER;
+import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_ZIP_FILE;
+import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
+import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.stats.ActionName.REGISTER;
+import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
+import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.security.PrivilegedActionException;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteRequest;
@@ -64,56 +113,9 @@ import org.opensearch.rest.RestStatus;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.security.PrivilegedActionException;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.common.xcontent.XContentType.JSON;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
-import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
-import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
-import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTaskState.COMPLETED;
-import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
-import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
-import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
-import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
-import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_HELPER;
-import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_ZIP_FILE;
-import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
-import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.stats.ActionName.REGISTER;
-import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.io.Files;
 
 /**
  * Manager class for ML models. It contains ML model related operations like register, deploy model etc.
@@ -217,46 +219,47 @@ public class MLModelManager {
                         long seqNo = modelGroup.getSeqNo();
                         long primaryTerm = modelGroup.getPrimaryTerm();
                         updateModelGroupRequest
-                                .index(ML_MODEL_GROUP_INDEX)
-                                .id(modelGroupId)
-                                .setIfSeqNo(seqNo)
-                                .setIfPrimaryTerm(primaryTerm)
-                                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                                .doc(source);
+                            .index(ML_MODEL_GROUP_INDEX)
+                            .id(modelGroupId)
+                            .setIfSeqNo(seqNo)
+                            .setIfPrimaryTerm(primaryTerm)
+                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+                            .doc(source);
                         client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
-                              mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
-                                  Instant now = Instant.now();
-                                  MLModel mlModelMeta = MLModel
-                                          .builder()
-                                          .name(modelName)
-                                          .algorithm(functionName)
-                                          .version(newVersion+"")
-                                          .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
-                                          .description(mlRegisterModelMetaInput.getDescription())
-                                          .modelFormat(mlRegisterModelMetaInput.getModelFormat())
-                                          .modelState(MLModelState.REGISTERING)
-                                          .modelConfig(mlRegisterModelMetaInput.getModelConfig())
-                                          .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
-                                          .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
-                                          .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
-                                          .createdTime(now)
-                                          .lastUpdateTime(now)
-                                          .build();
-                                  IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                                  indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
-                                  indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                                Instant now = Instant.now();
+                                MLModel mlModelMeta = MLModel
+                                    .builder()
+                                    .name(modelName)
+                                    .algorithm(functionName)
+                                    .version(newVersion + "")
+                                    .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
+                                    .description(mlRegisterModelMetaInput.getDescription())
+                                    .modelFormat(mlRegisterModelMetaInput.getModelFormat())
+                                    .modelState(MLModelState.REGISTERING)
+                                    .modelConfig(mlRegisterModelMetaInput.getModelConfig())
+                                    .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
+                                    .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
+                                    .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                                    .createdTime(now)
+                                    .lastUpdateTime(now)
+                                    .build();
+                                IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                                indexRequest
+                                    .source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
+                                indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-                                  client.index(indexRequest, ActionListener.wrap(response -> {
-                                      log.debug("Index model meta doc successfully {}", modelName);
-                                      listener.onResponse(response.getId());
-                                  }, e -> {
-                                      log.error("Failed to index model meta doc", e);
-                                      listener.onFailure(e);
-                                  }));
-                              }, ex -> {
-                                  log.error("Failed to init model index", ex);
-                                  listener.onFailure(ex);
-                              }));
+                                client.index(indexRequest, ActionListener.wrap(response -> {
+                                    log.debug("Index model meta doc successfully {}", modelName);
+                                    listener.onResponse(response.getId());
+                                }, e -> {
+                                    log.error("Failed to index model meta doc", e);
+                                    listener.onFailure(e);
+                                }));
+                            }, ex -> {
+                                log.error("Failed to init model index", ex);
+                                listener.onFailure(ex);
+                            }));
                         }, e -> {
                             log.error("Failed to update model group", e);
                             listener.onFailure(e);

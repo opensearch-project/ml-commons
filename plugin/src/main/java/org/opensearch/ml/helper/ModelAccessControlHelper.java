@@ -7,8 +7,16 @@
 
 package org.opensearch.ml.helper;
 
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
@@ -39,13 +47,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
+import com.google.common.collect.ImmutableList;
 
 @Log4j2
 public class ModelAccessControlHelper {

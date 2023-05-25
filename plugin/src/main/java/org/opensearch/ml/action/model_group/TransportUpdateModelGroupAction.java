@@ -5,8 +5,16 @@
 
 package org.opensearch.ml.action.model_group;
 
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+
 import lombok.extern.log4j.Log4j2;
+
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
@@ -36,13 +44,7 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import com.google.common.collect.ImmutableList;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {
@@ -50,8 +52,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final TransportService transportService;
     private final ActionFilters actionFilters;
     private Client client;
-    private
-    NamedXContentRegistry xContentRegistry;
+    private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
@@ -153,8 +154,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (hasAccessControlChange(input)) {
             if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
                 throw new IllegalArgumentException("Only owner/admin has valid privilege to perform update access control data");
-            } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) &&
-                    !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
+            } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
+                && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
                 throw new IllegalArgumentException(
                     "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
                 );

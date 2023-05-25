@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.action.model_group;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -40,15 +49,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     @Rule
@@ -91,19 +91,18 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     private String ownerString = "bob|IT,HR|myTenant";
     private List<String> backendRoles = Arrays.asList("IT");
 
-
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
         transportUpdateModelGroupAction = new TransportUpdateModelGroupAction(
-                transportService,
-                actionFilters,
-                client,
-                xContentRegistry,
-                clusterService,
-                modelAccessControlHelper
+            transportService,
+            actionFilters,
+            client,
+            xContentRegistry,
+            clusterService,
+            modelAccessControlHelper
         );
         assertNotNull(transportUpdateModelGroupAction);
 
@@ -114,14 +113,14 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         }).when(client).update(any(), any());
 
         MLModelGroup mlModelGroup = MLModelGroup
-                .builder()
-                .modelGroupId("testModelGroupId")
-                .name("testModelGroup")
-                .description("This is test model Group")
-                .owner(User.parse(ownerString))
-                .backendRoles(backendRoles)
-                .access("restricted")
-                .build();
+            .builder()
+            .modelGroupId("testModelGroupId")
+            .name("testModelGroup")
+            .description("This is test model Group")
+            .owner(User.parse(ownerString))
+            .backendRoles(backendRoles)
+            .access("restricted")
+            .build();
         XContentBuilder content = mlModelGroup.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult(indexName, "111", 111l, 111l, 111l, true, bytesReference, null, null);
@@ -131,12 +130,11 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
-        
+
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
-
 
     public void test_NonOwnerChangingAccessContentException() {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
@@ -146,9 +144,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-                "Only owner/admin has valid privilege to perform update access control data",
-                argumentCaptor.getValue().getMessage());
+        assertEquals("Only owner/admin has valid privilege to perform update access control data", argumentCaptor.getValue().getMessage());
     }
 
     public void test_OwnerNoMoreHasPermissionException() {
@@ -160,12 +156,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user",
-                argumentCaptor.getValue().getMessage());
+            "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user",
+            argumentCaptor.getValue().getMessage()
+        );
     }
-
-
-
 
     public void test_NonOwnerUpdatingPrivateModelGroupException() {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
@@ -176,9 +170,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-                "User doesn't have corresponding backend role to perform update action",
-                argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have corresponding backend role to perform update action", argumentCaptor.getValue().getMessage());
     }
 
     public void test_BackendRolesProvidedWithPrivate() {
@@ -241,10 +233,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-                "User have to specify backend roles when add all backend roles to false",
-                argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("User have to specify backend roles when add all backend roles to false", argumentCaptor.getValue().getMessage());
     }
 
     public void test_RestrictedAndUserSpecifiedBothBackendRolesFields() {
@@ -258,8 +247,8 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "User cannot specify add all backed roles to true and backend roles not empty",
-                argumentCaptor.getValue().getMessage()
+            "User cannot specify add all backed roles to true and backend roles not empty",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
@@ -387,7 +376,6 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-
     @Ignore
     public void test_ExceptionSecurityDisabledCluster() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
@@ -397,24 +385,25 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Cluster security plugin not enabled or model access control not enabled, can't pass access control data in request body",
-                argumentCaptor.getValue().getMessage());
+            "Cluster security plugin not enabled or model access control not enabled, can't pass access control data in request body",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     private MLUpdateModelGroupRequest prepareRequest(
-            List<String> backendRoles,
-            ModelAccessMode modelAccessMode,
-            Boolean isAddAllBackendRoles
+        List<String> backendRoles,
+        ModelAccessMode modelAccessMode,
+        Boolean isAddAllBackendRoles
     ) {
         MLUpdateModelGroupInput UpdateModelGroupInput = MLUpdateModelGroupInput
-                .builder()
-                .modelGroupID("testModelGroupId")
-                .name("modelGroupName")
-                .description("This is a test model group")
-                .backendRoles(backendRoles)
-                .modelAccessMode(modelAccessMode)
-                .isAddAllBackendRoles(isAddAllBackendRoles)
-                .build();
+            .builder()
+            .modelGroupID("testModelGroupId")
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .backendRoles(backendRoles)
+            .modelAccessMode(modelAccessMode)
+            .isAddAllBackendRoles(isAddAllBackendRoles)
+            .build();
         return new MLUpdateModelGroupRequest(UpdateModelGroupInput);
     }
 
