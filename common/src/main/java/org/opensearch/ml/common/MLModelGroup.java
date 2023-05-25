@@ -173,6 +173,7 @@ public class MLModelGroup implements ToXContentObject {
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
+                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;

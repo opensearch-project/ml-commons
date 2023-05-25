@@ -7,16 +7,8 @@
 
 package org.opensearch.ml.helper;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
-
+import com.google.common.collect.ImmutableList;
 import lombok.extern.log4j.Log4j2;
-
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
@@ -47,7 +39,13 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.collect.ImmutableList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 @Log4j2
 public class ModelAccessControlHelper {
@@ -125,8 +123,8 @@ public class ModelAccessControlHelper {
                     wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                 }
             }, e -> {
-                log.error("Failed to validate Access", e);
-                wrappedListener.onFailure(new MLValidationException("Failed to validate Access"));
+                log.error("Fail to get model group", e);
+                wrappedListener.onFailure(new MLValidationException("Fail to get model group"));
             }));
         } catch (Exception e) {
             log.error("Failed to validate Access", e);

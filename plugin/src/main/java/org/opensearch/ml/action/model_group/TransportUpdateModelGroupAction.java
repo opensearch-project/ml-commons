@@ -5,18 +5,9 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-
+import com.google.common.collect.ImmutableList;
 import lombok.extern.log4j.Log4j2;
-
 import org.apache.commons.lang3.StringUtils;
-import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
@@ -45,7 +36,13 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {
@@ -53,7 +50,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final TransportService transportService;
     private final ActionFilters actionFilters;
     private Client client;
-    private NamedXContentRegistry xContentRegistry;
+    private
+    NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
@@ -81,9 +79,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         MLUpdateModelGroupRequest updateModelGroupRequest = MLUpdateModelGroupRequest.fromActionRequest(request);
         MLUpdateModelGroupInput updateModelGroupInput = updateModelGroupRequest.getUpdateModelGroupInput();
         String modelGroupId = updateModelGroupInput.getModelGroupID();
-        if (Strings.isBlank(modelGroupId)) {
-            throw new IllegalArgumentException("Model Group ID cannot be empty/null");
-        }
         User user = RestActionUtils.getUserContext(client);
         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
@@ -100,10 +95,10 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                             updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener, user);
                         }
                     } else {
-                        listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        listener.onFailure(new MLResourceNotFoundException("Failed to find model group"));
                     }
                 }, e -> {
-                    logException("Failed to Update model model", e, log);
+                    logException("Failed to get model group", e, log);
                     listener.onFailure(e);
                 }));
             } catch (Exception e) {
@@ -158,7 +153,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (hasAccessControlChange(input)) {
             if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
                 throw new IllegalArgumentException("Only owner/admin has valid privilege to perform update access control data");
-            } else if (!modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
+            } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) &&
+                    !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
                 throw new IllegalArgumentException(
                     "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
                 );
@@ -205,7 +201,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLUpdateModelGroupInput input) {
         if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
             throw new IllegalArgumentException(
-                "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body"
+                "Cluster security plugin not enabled or model access control not enabled, can't pass access control data in request body"
             );
         }
     }
