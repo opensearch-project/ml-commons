@@ -11,6 +11,7 @@ import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -36,6 +37,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.RestStatus;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.base.Throwables;
@@ -63,9 +65,10 @@ public class MLSearchHandler {
      */
     public void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
+        ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         if (modelAccessControlHelper.skipModelAccessControl(user)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.search(request, actionListener);
+                client.search(request, listener);
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
                 actionListener.onFailure(e);
@@ -78,8 +81,7 @@ public class MLSearchHandler {
             modelGroupSearchRequest.source(sourceBuilder);
             modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
             ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
-                ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
-                if (r != null && r.getHits() != null && r.getHits().getTotalHits().value > 0) {
+                if (Optional.ofNullable(r).map(SearchResponse::getHits).map(SearchHits::getTotalHits).map(x -> x.value).orElse(0L) > 0) {
                     List<String> modelGroupIds = new ArrayList<>();
                     Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
 
@@ -122,7 +124,9 @@ public class MLSearchHandler {
             boolQueryBuilder.must(modelGroupIdMustNotExistBoolQuery);
             return boolQueryBuilder;
         }
-        throw new IllegalArgumentException("Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type");
+        throw new IllegalArgumentException(
+            "Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type when model access control is enabled"
+        );
     }
 
     /**
@@ -152,7 +156,7 @@ public class MLSearchHandler {
                 String errorMessage = generalErrorMessage;
                 if (isBadRequest(e) || e instanceof MLException) {
                     errorMessage = e.getMessage();
-                } else if (cause != null && (isBadRequest(cause) || cause instanceof MLException)) {
+                } else if (isBadRequest(cause) || cause instanceof MLException) {
                     errorMessage = cause.getMessage();
                 }
                 actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));

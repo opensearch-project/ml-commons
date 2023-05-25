@@ -19,7 +19,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -28,8 +28,6 @@ import org.opensearch.transport.TransportService;
 
 @Log4j2
 public class SearchModelGroupTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
-    private MLSearchHandler mlSearchHandler;
-
     Client client;
     ClusterService clusterService;
 
@@ -39,13 +37,11 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
     public SearchModelGroupTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLSearchHandler mlSearchHandler,
         Client client,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLModelGroupSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
-        this.mlSearchHandler = mlSearchHandler;
         this.client = client;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -55,31 +51,23 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
+        request.indices(CommonValue.ML_MODEL_GROUP_INDEX);
+        preProcessRoleAndPerformSearch(request, user, listener);
+    }
+
+    private void preProcessRoleAndPerformSearch(SearchRequest request, User user, ActionListener<SearchResponse> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            validateRole(request, user, listener);
+            if (modelAccessControlHelper.skipModelAccessControl(user)) {
+                client.search(request, listener);
+            } else {
+                // Security is enabled, filter is enabled and user isn't admin
+                modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
+                log.debug("Filtering result by " + user.getBackendRoles());
+                client.search(request, listener);
+            }
         } catch (Exception e) {
             log.error("Failed to search", e);
             listener.onFailure(e);
         }
     }
-
-    private void validateRole(SearchRequest request, User user, ActionListener<SearchResponse> listener) {
-        if (modelAccessControlHelper.skipModelAccessControl(user)) {
-            // Case 1: user == null when 1. Security is disabled. 2. When user is super-admin
-            // Case 2: If Security is enabled and filter is disabled, proceed with search as
-            // user is already authenticated to hit this API.
-            // case 3: user is admin which means we don't have to check backend role filtering
-            client.search(request, listener);
-        } else {
-            // Security is enabled, filter is enabled and user isn't admin
-            try {
-                modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
-                log.debug("Filtering result by " + user.getBackendRoles());
-                client.search(request, listener);
-            } catch (Exception e) {
-                listener.onFailure(e);
-            }
-        }
-    }
-
 }
