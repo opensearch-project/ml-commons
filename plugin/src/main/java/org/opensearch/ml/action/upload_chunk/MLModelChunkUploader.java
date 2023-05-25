@@ -182,7 +182,7 @@ public class MLModelChunkUploader {
                                 listener.onFailure(e);
                             }));
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model" + r.getId(), e);
+                        log.error("Failed to parse ml model " + r.getId(), e);
                         listener.onFailure(e);
                     }
                 } else {
