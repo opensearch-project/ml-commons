@@ -19,6 +19,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -104,6 +105,8 @@ public class MetricsCorrelationTest {
     @Mock
     Settings settings;
     @Mock
+    private ClusterService clusterService;
+    @Mock
     SearchRequest searchRequest;
     SearchResponse searchResponse;
 
@@ -172,7 +175,7 @@ public class MetricsCorrelationTest {
         params.put(ML_ENGINE, mlEngine);
 
         MockitoAnnotations.openMocks(this);
-        metricsCorrelation = spy(new MetricsCorrelation(client, settings));
+        metricsCorrelation = spy(new MetricsCorrelation(client, settings, clusterService));
         List<float[]> inputData = new ArrayList<>();
         inputData.add(new float[]{-1.0f, 2.0f, 3.0f});
         inputData.add(new float[]{-1.0f, 2.0f, 3.0f});
@@ -435,22 +438,6 @@ public class MetricsCorrelationTest {
 
     public static XContentBuilder builder() throws IOException {
         return XContentBuilder.builder(XContentType.JSON.xContent());
-    }
-
-    @Test
-    public void testSearchModel() {
-        Map<String, Object> modelInfo = new HashMap<>();
-        modelInfo.put(MLModel.MODEL_VERSION_FIELD, MCORR_ML_VERSION);
-        modelInfo.put(MLModel.MODEL_NAME_FIELD, FunctionName.METRICS_CORRELATION.name());
-        modelInfo.put(MLModel.MODEL_ID_FIELD, modelId);
-       doAnswer(invocation -> {
-           ActionListener<SearchResponse> searchListener = invocation.getArgument(2);
-           searchResponse = createSearchModelResponse();
-           searchListener.onResponse(searchResponse);
-           return searchListener;
-       }).when(client).execute(any(MLModelSearchAction.class), any(SearchRequest.class), isA(ActionListener.class));
-       metricsCorrelation.searchModel(searchRequest, searchListener);
-       verify(searchListener).onResponse(modelInfo);
     }
 
     @Test
