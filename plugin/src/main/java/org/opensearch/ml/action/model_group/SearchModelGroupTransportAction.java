@@ -19,7 +19,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
-import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -51,6 +51,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
+        request.indices(CommonValue.ML_MODEL_GROUP_INDEX);
         preProcessRoleAndPerformSearch(request, user, listener);
     }
 

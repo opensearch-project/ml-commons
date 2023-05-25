@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
+import lombok.Getter;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -18,6 +19,7 @@ public class MLRegisterModelGroupResponse extends ActionResponse implements ToXC
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     public static final String STATUS_FIELD = "status";
 
+    @Getter
     private String modelGroupId;
     private String status;
 

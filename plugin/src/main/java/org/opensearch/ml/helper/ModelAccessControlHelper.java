@@ -135,6 +135,10 @@ public class ModelAccessControlHelper {
     }
 
     public boolean skipModelAccessControl(User user) {
+        // Case 1: user == null when 1. Security is disabled. 2. When user is super-admin
+        // Case 2: If Security is enabled and filter is disabled, proceed with search as
+        // user is already authenticated to hit this API.
+        // case 3: user is admin which means we don't have to check backend role filtering
         return user == null || !modelAccessControlEnabled || isAdmin(user);
     }
 
@@ -213,7 +217,7 @@ public class ModelAccessControlHelper {
             searchSourceBuilder.query(rewriteQuery);
         } else {
             throw new MLValidationException(
-                "Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type"
+                "Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type when model access control is enabled"
             );
         }
         return searchSourceBuilder;
