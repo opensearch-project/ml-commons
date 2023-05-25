@@ -173,7 +173,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("User cannot specify backend roles to a public/private model group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_RestrictedAndAdminSpecifiedAddAllBackendRoles() {
+    public void test_AdminSpecifiedAddAllBackendRolesForRestricted() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|admin|all_access");
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -185,7 +185,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("Admin user cannot specify add all backend roles to a model group", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_RestrictedAndUserWithNoBackendRoles() {
+    public void test_UserWithNoBackendRolesSpecifiedRestricted() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex||engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -196,7 +196,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("Current user has no backend roles to specify the model group as restricted", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_RestrictedAndUserSpecifiedNoBackendRolesField() {
+    public void test_UserSpecifiedRestrictedButNoBackendRolesFieldF() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -246,15 +246,6 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ExceptionFailedToInitModelGroupIndex() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-    }
-
     public void test_ExceptionSecurityDisabledCluster() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
@@ -266,6 +257,15 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
             "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    public void test_ExceptionFailedToInitModelGroupIndex() {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
+
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, true);
+        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
     public void test_ExceptionFailedToIndexModelGroup() {

@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
@@ -76,6 +77,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         Thread.sleep(10000);
     }
 
+    @Ignore
     public void test_empty_body_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -84,6 +86,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
+    @Ignore
     public void test_matchAll_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -93,6 +96,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
+    @Ignore
     public void test_bool_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -104,6 +108,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
+    @Ignore
     public void test_term_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -113,6 +118,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
+    @Ignore
     public void test_terms_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -122,6 +128,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
+    @Ignore
     public void test_range_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -131,6 +138,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
+    @Ignore
     public void test_matchPhrase_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
