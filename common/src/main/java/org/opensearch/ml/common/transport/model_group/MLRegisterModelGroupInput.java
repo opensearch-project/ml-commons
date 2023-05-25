@@ -52,7 +52,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         this.name = in.readString();
         this.description = in.readOptionalString();
         this.backendRoles = in.readOptionalStringList();
-        this.modelAccessMode = in.readEnum(ModelAccessMode.class);
+        if (in.readBoolean()) {
+            modelAccessMode = in.readEnum(ModelAccessMode.class);
+        }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
 
@@ -66,7 +68,12 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         } else {
             out.writeBoolean(false);
         }
-        out.writeEnum(modelAccessMode);
+        if (modelAccessMode != null) {
+            out.writeBoolean(true);
+            out.writeEnum(modelAccessMode);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalBoolean(isAddAllBackendRoles);
     }
 
@@ -80,7 +87,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
-        builder.field(MODEL_ACCESS_MODE, modelAccessMode);
+        if (modelAccessMode != null) {
+            builder.field(MODEL_ACCESS_MODE, modelAccessMode);
+        }
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
         }
