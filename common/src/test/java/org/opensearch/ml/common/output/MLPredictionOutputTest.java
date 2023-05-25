@@ -7,7 +7,7 @@ package org.opensearch.ml.common.output;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -31,12 +31,13 @@ import static org.junit.Assert.assertEquals;
 public class MLPredictionOutputTest {
 
     MLPredictionOutput output;
+
     @Before
     public void setUp() {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("test", ColumnType.INTEGER)};
+        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("test", ColumnType.INTEGER) };
         List<Row> rows = new ArrayList<>();
-        rows.add(new Row(new ColumnValue[]{new IntValue(1)}));
-        rows.add(new Row(new ColumnValue[]{new IntValue(2)}));
+        rows.add(new Row(new ColumnValue[] { new IntValue(1) }));
+        rows.add(new Row(new ColumnValue[] { new IntValue(2) }));
         DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
         output = MLPredictionOutput.builder()
                 .taskId("test_task_id")
@@ -44,11 +45,12 @@ public class MLPredictionOutputTest {
                 .predictionResult(dataFrame)
                 .build();
     }
+
     @Test
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":" +
                 "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":" +
                 "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\"," +
@@ -60,7 +62,7 @@ public class MLPredictionOutputTest {
         MLPredictionOutput output = MLPredictionOutput.builder().build();
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{}", jsonStr);
     }
 
@@ -90,7 +92,7 @@ public class MLPredictionOutputTest {
             assertEquals(output.predictionResult, parsedOutput.getPredictionResult());
         } else {
             assertEquals(output.predictionResult.size(), parsedOutput.getPredictionResult().size());
-            for (int i = 0 ;i<output.predictionResult.size(); i++) {
+            for (int i = 0; i < output.predictionResult.size(); i++) {
                 Row row = output.predictionResult.getRow(i);
                 Row parsedRow = parsedOutput.predictionResult.getRow(i);
                 assertEquals(row, parsedRow);

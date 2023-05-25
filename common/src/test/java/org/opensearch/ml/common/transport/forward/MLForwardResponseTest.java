@@ -5,7 +5,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.action.ActionResponse;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -32,9 +32,11 @@ public class MLForwardResponseTest {
     @Before
     public void setUp() throws Exception {
         status = "test";
-        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-            put("key1", 2.0D);
-        }}));
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
         predictionOutput = MLPredictionOutput.builder()
                 .status("Success")
                 .predictionResult(dataFrame)
@@ -63,9 +65,11 @@ public class MLForwardResponseTest {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         // Verify the results
-        assertEquals("{\"result\":{\"task_id\":\"taskId\",\"status\":\"Success\",\"prediction_result\":{\"column_metas\":[{\"name\":\"key1\",\"column_type\":\"DOUBLE\"}],\"rows\":[{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":2.0}]}]}}}", jsonStr);
+        assertEquals(
+                "{\"result\":{\"task_id\":\"taskId\",\"status\":\"Success\",\"prediction_result\":{\"column_metas\":[{\"name\":\"key1\",\"column_type\":\"DOUBLE\"}],\"rows\":[{\"values\":[{\"column_type\":\"DOUBLE\",\"value\":2.0}]}]}}}",
+                jsonStr);
     }
 
     @Test

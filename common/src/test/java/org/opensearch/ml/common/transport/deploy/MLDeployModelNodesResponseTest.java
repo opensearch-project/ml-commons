@@ -9,7 +9,7 @@ import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -35,7 +35,6 @@ public class MLDeployModelNodesResponseTest {
         clusterName = new ClusterName("clusterName");
     }
 
-
     @Test
     public void testSerializationDeserialization() throws IOException {
         List<MLDeployModelNodeResponse> responseList = new ArrayList<>();
@@ -56,8 +55,7 @@ public class MLDeployModelNodesResponseTest {
                 new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
                 Collections.emptyMap(),
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
+                Version.CURRENT);
         Map<String, String> modelToDeployStatus1 = new HashMap<>();
         modelToDeployStatus1.put("modelName:version1", "response");
         nodes.add(new MLDeployModelNodeResponse(node1, modelToDeployStatus1));
@@ -68,8 +66,7 @@ public class MLDeployModelNodesResponseTest {
                 new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
                 Collections.emptyMap(),
                 Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
-        );
+                Version.CURRENT);
         Map<String, String> modelToDeployStatus2 = new HashMap<>();
         modelToDeployStatus2.put("modelName:version2", "response");
         nodes.add(new MLDeployModelNodeResponse(node2, modelToDeployStatus2));
@@ -78,10 +75,9 @@ public class MLDeployModelNodesResponseTest {
         MLDeployModelNodesResponse response = new MLDeployModelNodesResponse(clusterName, nodes, failures);
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals(
                 "{\"foo1\":{\"stats\":{\"modelName:version1\":\"response\"}},\"foo2\":{\"stats\":{\"modelName:version2\":\"response\"}}}",
-                jsonStr
-        );
+                jsonStr);
     }
 }

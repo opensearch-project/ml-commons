@@ -8,7 +8,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
@@ -40,8 +40,10 @@ public class MLRegisterModelInputTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
-            "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"," +
+    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"url\":\"url\",\"model_format\":\"ONNX\","
+            +
+            "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\","
+            +
             "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"" +
             "},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
     private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
@@ -66,7 +68,7 @@ public class MLRegisterModelInputTest {
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
                 .deployModel(true)
-                .modelNodeIds(new String[]{"modelNodeIds" })
+                .modelNodeIds(new String[] { "modelNodeIds" })
                 .build();
 
     }
@@ -135,11 +137,14 @@ public class MLRegisterModelInputTest {
                 .modelConfig(config)
                 .url(url)
                 .build();
-        // MLRegisterModelInput.functionName is set to FunctionName.TEXT_EMBEDDING if not explicitly passed, with no exception thrown
+        // MLRegisterModelInput.functionName is set to FunctionName.TEXT_EMBEDDING if
+        // not explicitly passed, with no exception thrown
         assertEquals(FunctionName.TEXT_EMBEDDING, input.getFunctionName());
-        // MLRegisterModelInput.deployModel is set to false if not explicitly passed, with no exception thrown
+        // MLRegisterModelInput.deployModel is set to false if not explicitly passed,
+        // with no exception thrown
         assertFalse(input.isDeployModel());
-        // MLRegisterModelInput.deployModel is set to null if not explicitly passed, with no exception thrown
+        // MLRegisterModelInput.deployModel is set to null if not explicitly passed,
+        // with no exception thrown
         assertNull(input.getModelNodeIds());
     }
 
@@ -148,14 +153,13 @@ public class MLRegisterModelInputTest {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals(expectedInputStr, jsonStr);
     }
 
     @Test
     public void testToXContent_Incomplete() throws Exception {
-        String expectedIncompleteInputStr =
-                "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
+        String expectedIncompleteInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
                 "\"version\":\"version\",\"deploy_model\":true}";
         input.setUrl(null);
         input.setModelConfig(null);
@@ -164,7 +168,7 @@ public class MLRegisterModelInputTest {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals(expectedIncompleteInputStr, jsonStr);
     }
 
@@ -179,24 +183,30 @@ public class MLRegisterModelInputTest {
 
     @Test
     public void parse_WithoutModel() throws Exception {
-        testParseFromJsonString( false, expectedInputStr, parsedInput -> {
+        testParseFromJsonString(false, expectedInputStr, parsedInput -> {
             assertFalse(parsedInput.isDeployModel());
             assertEquals("modelName", parsedInput.getModelName());
             assertEquals("version", parsedInput.getVersion());
         });
     }
 
-    private void testParseFromJsonString(String modelName, String version, Boolean deployModel, String expectedInputStr, Consumer<MLRegisterModelInput> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
+    private void testParseFromJsonString(String modelName, String version, Boolean deployModel, String expectedInputStr,
+            Consumer<MLRegisterModelInput> verify) throws Exception {
+        XContentParser parser = XContentType.JSON.xContent()
+                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                        Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE,
+                        expectedInputStr);
         parser.nextToken();
         MLRegisterModelInput parsedInput = MLRegisterModelInput.parse(parser, modelName, version, deployModel);
         verify.accept(parsedInput);
     }
 
-    private void testParseFromJsonString(Boolean deployModel,String expectedInputStr, Consumer<MLRegisterModelInput> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
+    private void testParseFromJsonString(Boolean deployModel, String expectedInputStr,
+            Consumer<MLRegisterModelInput> verify) throws Exception {
+        XContentParser parser = XContentType.JSON.xContent()
+                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                        Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE,
+                        expectedInputStr);
         parser.nextToken();
         MLRegisterModelInput parsedInput = MLRegisterModelInput.parse(parser, deployModel);
         verify.accept(parsedInput);
@@ -210,7 +220,6 @@ public class MLRegisterModelInputTest {
         });
     }
 
-
     @Test
     public void readInputStream_SuccessWithNullFields() throws IOException {
         input.setModelFormat(null);
@@ -220,7 +229,6 @@ public class MLRegisterModelInputTest {
             assertNull(parsedInput.getModelFormat());
         });
     }
-
 
     private void readInputStream(MLRegisterModelInput input, Consumer<MLRegisterModelInput> verify) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();

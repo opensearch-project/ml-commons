@@ -4,7 +4,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -45,7 +45,7 @@ public class MLSyncUpResponseTest {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         // Verify the results
         assertEquals("{\"status\":\"test\"}", jsonStr);
     }

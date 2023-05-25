@@ -4,7 +4,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -38,8 +38,10 @@ public class TextDocsMLInputTest {
 
     @Before
     public void setUp() throws Exception {
-        ModelResultFilter resultFilter = ModelResultFilter.builder().returnBytes(true).returnNumber(true).targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
-        MLInputDataset inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2")).resultFilter(resultFilter).build();
+        ModelResultFilter resultFilter = ModelResultFilter.builder().returnBytes(true).returnNumber(true)
+                .targetResponse(Arrays.asList("field1")).targetResponsePositions(Arrays.asList(2)).build();
+        MLInputDataset inputDataset = TextDocsInputDataSet.builder().docs(Arrays.asList("doc1", "doc2"))
+                .resultFilter(resultFilter).build();
         input = new TextDocsMLInput(algorithm, inputDataset);
     }
 
@@ -47,7 +49,7 @@ public class TextDocsMLInputTest {
     public void parseTextDocsMLInput() throws IOException {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         System.out.println(jsonStr);
         parseMLInput(jsonStr);
     }
@@ -65,8 +67,9 @@ public class TextDocsMLInputTest {
     }
 
     private void parseMLInput(String jsonStr) throws IOException {
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON.xContent()
+                .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                        Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
 
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());

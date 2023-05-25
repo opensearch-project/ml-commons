@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -51,7 +51,7 @@ public class DoubleValueTest {
         doubleValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{\"column_type\":\"DOUBLE\",\"value\":5.0}", jsonStr);
     }
 }
