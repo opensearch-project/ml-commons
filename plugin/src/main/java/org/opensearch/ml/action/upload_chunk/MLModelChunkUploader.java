@@ -106,6 +106,8 @@ public class MLModelChunkUploader {
                                         MLModel mlModel = MLModel
                                             .builder()
                                             .algorithm(existingModel.getAlgorithm())
+                                            .modelGroupId(existingModel.getModelGroupId())
+                                            .version(existingModel.getVersion())
                                             .modelId(existingModel.getModelId())
                                             .modelFormat(existingModel.getModelFormat())
                                             .totalChunks(existingModel.getTotalChunks())
@@ -139,6 +141,7 @@ public class MLModelChunkUploader {
                                                     .name(existingModel.getName())
                                                     .algorithm(existingModel.getAlgorithm())
                                                     .version(existingModel.getVersion())
+                                                    .modelGroupId((existingModel.getModelGroupId()))
                                                     .modelFormat(existingModel.getModelFormat())
                                                     .modelState(MLModelState.REGISTERED)
                                                     .modelConfig(existingModel.getModelConfig())

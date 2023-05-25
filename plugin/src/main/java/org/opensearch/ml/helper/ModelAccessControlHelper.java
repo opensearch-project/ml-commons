@@ -125,8 +125,8 @@ public class ModelAccessControlHelper {
                     wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                 }
             }, e -> {
-                log.error("Failed to validate Access", e);
-                wrappedListener.onFailure(new MLValidationException("Failed to validate Access"));
+                log.error("Fail to get model group", e);
+                wrappedListener.onFailure(new MLValidationException("Fail to get model group"));
             }));
         } catch (Exception e) {
             log.error("Failed to validate Access", e);
