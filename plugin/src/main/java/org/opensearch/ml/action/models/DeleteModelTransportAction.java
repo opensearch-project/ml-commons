@@ -149,7 +149,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                 actionListener.onFailure(e);
                             }));
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model" + r.getId(), e);
+                        log.error("Failed to parse ml model " + r.getId(), e);
                         actionListener.onFailure(e);
                     }
                 } else {
