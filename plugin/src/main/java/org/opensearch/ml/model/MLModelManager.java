@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
+import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
@@ -637,7 +638,11 @@ public class MLModelManager {
                             modelCacheHelper.setPredictor(modelId, predictable);
                             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), mlModel.getModelContentSizeInBytes());
+                            Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
+                            long contentSize = modelContentSizeInBytes == null
+                                ? mlModel.getTotalChunks() * CHUNK_SIZE
+                                : modelContentSizeInBytes;
+                            modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), contentSize);
                             listener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);

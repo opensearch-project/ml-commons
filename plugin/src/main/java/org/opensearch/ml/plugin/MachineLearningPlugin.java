@@ -295,7 +295,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             nodeHelper
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
-
+        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
@@ -360,7 +360,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
-        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,

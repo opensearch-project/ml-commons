@@ -101,7 +101,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                             }));
 
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model" + r.getId(), e);
+                        log.error("Failed to parse ml model " + r.getId(), e);
                         actionListener.onFailure(e);
                     }
                 } else {
