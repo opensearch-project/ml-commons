@@ -210,15 +210,11 @@ public class ModelAccessControlHelper {
             searchSourceBuilder.query(boolQueryBuilder);
         } else if (query instanceof BoolQueryBuilder) {
             ((BoolQueryBuilder) query).filter(boolQueryBuilder);
-        } else if (isSupportedQueryType(query.getClass())) {
+        } else {
             BoolQueryBuilder rewriteQuery = new BoolQueryBuilder();
             rewriteQuery.must(query);
             rewriteQuery.filter(boolQueryBuilder);
             searchSourceBuilder.query(rewriteQuery);
-        } else {
-            throw new MLValidationException(
-                "Search API only supports [bool, ids, match, match_all, term, terms, exists, range] query type when model access control is enabled"
-            );
         }
         return searchSourceBuilder;
     }
