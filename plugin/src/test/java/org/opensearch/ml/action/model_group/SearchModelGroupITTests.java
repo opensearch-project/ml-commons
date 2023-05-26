@@ -110,4 +110,14 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    public void test_queryString_search() {
+        SearchRequest searchRequest = new SearchRequest();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchRequest.source(searchSourceBuilder);
+        searchRequest.source().query(QueryBuilders.queryStringQuery("name: mock_model_group_*"));
+        SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
+        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
+    }
+
 }
