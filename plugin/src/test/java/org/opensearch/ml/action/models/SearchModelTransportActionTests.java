@@ -187,6 +187,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         verify(mlSearchHandler).search(searchRequest, actionListener);
         verify(client, times(2)).search(any(), any());
     }
+
     private SearchResponse createModelGroupSearchResponse() throws IOException {
         SearchResponse searchResponse = mock(SearchResponse.class);
         String modelContent = "{\n"
