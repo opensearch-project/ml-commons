@@ -69,7 +69,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
             .url(PRE_BUILD_MODEL_URL)
-            .hashValue("c446f747520bcc6af053813cb1e8d34944a7c4686bbb405aeaa23883b5a806c8")
+            .hashValue("acdc81b652b83121f914c5912ae27c0fca8fabf270e6f191ace6979a19830413")
             .description("mock model desc")
             .build();
         MLRegisterModelRequest registerModelRequest = new MLRegisterModelRequest(input);
