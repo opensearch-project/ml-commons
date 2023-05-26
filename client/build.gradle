@@ -47,6 +47,9 @@ jacocoTestCoverageVerification {
 }
 check.dependsOn jacocoTestCoverageVerification
 
+tasks.named("jar").configure { dependsOn("publishShadowPublicationToMavenLocal") }
+tasks.named("jar").configure { dependsOn("publishShadowPublicationToStagingRepository") }
+
 shadowJar {
     archiveClassifier.set(null)
 }
@@ -107,6 +110,34 @@ publishing {
                 }
             }
         }
+        jars(MavenPublication) { publication ->
+            from components.java
+
+            pom {
+                name = "OpenSearch Machine Learning Client"
+                packaging = "jar"
+                url = "https://github.com/opensearch-project/ml-commons"
+                description = "OpenSearch Machine Learning Client"
+                scm {
+                    connection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    developerConnection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    url = "git@github.com:opensearch-project/ml-commons.git"
+                }
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        name = "OpenSearch"
+                        url = "https://github.com/opensearch-project/ml-commons"
+                    }
+                }
+            }
+        }
+
     }
 
 }
