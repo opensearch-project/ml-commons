@@ -79,6 +79,12 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         Thread.sleep(30000);
     }
 
+    /**
+     * The reason to use one method instead of using different methods is because of the mechanism of OpenSearchIntegTestCase,
+     * for each test method in the test class, after the running the cluster will clear all the data created in the cluster by
+     * the method, so if we use multiple methods, then we always need to wait a long time until the model version registration
+     * completes, making all the tests in one method can make the overall process faster.
+     */
     public void test_all() {
         test_empty_body_search();
         test_matchAll_search();
