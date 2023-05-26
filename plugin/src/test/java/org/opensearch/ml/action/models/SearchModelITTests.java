@@ -6,11 +6,11 @@
 package org.opensearch.ml.action.models;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -37,6 +37,8 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
 
     private String modelGroupId;
 
+    private static final String CHUNK_NUMBER = "chunk_number";
+
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -48,7 +50,6 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
         this.modelGroupId = response.getModelGroupId();
-        System.out.println("#########################model group id is: " + this.modelGroupId);
         registerModelVersion();
     }
 
@@ -69,81 +70,118 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
             .url(PRE_BUILD_MODEL_URL)
-            .hashValue("c446f747520bcc6af053813cb1e8d34944a7c4686bbb405aeaa23883b5a806c8")
+            .hashValue("acdc81b652b83121f914c5912ae27c0fca8fabf270e6f191ace6979a19830413")
             .description("mock model desc")
             .build();
         MLRegisterModelRequest registerModelRequest = new MLRegisterModelRequest(input);
         client().execute(MLRegisterModelAction.INSTANCE, registerModelRequest).actionGet();
-        Thread.sleep(10000);
+        Thread.sleep(30000);
     }
 
-    @Ignore
-    public void test_empty_body_search() {
+    /**
+     * The reason to use one method instead of using different methods is because of the mechanism of OpenSearchIntegTestCase,
+     * for each test method in the test class, after the running the cluster will clear all the data created in the cluster by
+     * the method, so if we use multiple methods, then we always need to wait a long time until the model version registration
+     * completes, making all the tests in one method can make the overall process faster.
+     */
+    public void test_all() {
+        test_empty_body_search();
+        test_matchAll_search();
+        test_bool_search();
+        test_term_search();
+        test_terms_search();
+        test_range_search();
+        test_matchPhrase_search();
+    }
+
+    private void test_empty_body_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
+        searchRequest.source().query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)));
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
-    @Ignore
-    public void test_matchAll_search() {
-        SearchRequest searchRequest = new SearchRequest();
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchRequest.source(searchSourceBuilder);
-        searchRequest.source().query(QueryBuilders.matchAllQuery());
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
-    }
-
-    @Ignore
-    public void test_bool_search() {
+    private void test_matchAll_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest
             .source()
-            .query(QueryBuilders.boolQuery().must(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt")));
+            .query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)).must(QueryBuilders.matchAllQuery()));
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
-    @Ignore
-    public void test_term_search() {
+    private void test_bool_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
-        searchRequest.source().query(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt"));
+        searchRequest
+            .source()
+            .query(
+                QueryBuilders
+                    .boolQuery()
+                    .must(
+                        QueryBuilders
+                            .boolQuery()
+                            .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
+                            .must(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt"))
+                    )
+            );
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
-    @Ignore
-    public void test_terms_search() {
+    private void test_term_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
-        searchRequest.source().query(QueryBuilders.termsQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt", "test_model_group_name"));
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders
+            .boolQuery()
+            .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
+            .must(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt"));
+        searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
-    @Ignore
-    public void test_range_search() {
+    private void test_terms_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
-        searchRequest.source().query(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders
+            .boolQuery()
+            .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
+            .must(QueryBuilders.termsQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt", "test_model_group_name"));
+        searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
-    @Ignore
-    public void test_matchPhrase_search() {
+    private void test_range_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
-        searchRequest.source().query(QueryBuilders.matchPhraseQuery("description", "desc"));
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders
+            .boolQuery()
+            .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
+            .must(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
+        searchRequest.source().query(boolQueryBuilder);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        assertEquals(1, response.getHits().getTotalHits().value);
+    }
+
+    private void test_matchPhrase_search() {
+        SearchRequest searchRequest = new SearchRequest();
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchRequest.source(searchSourceBuilder);
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders
+            .boolQuery()
+            .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
+            .must(QueryBuilders.matchPhraseQuery("description", "desc"));
+        searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }

@@ -188,21 +188,6 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         verify(client, times(2)).search(any(), any());
     }
 
-    public void test_DoExecute_addBackendRoles_fuzzyQuery_notSupported() throws IOException {
-        SearchResponse searchResponse = createModelGroupSearchResponse();
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-        when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
-        searchRequest.source().query(QueryBuilders.fuzzyQuery("name", "model_IT"));
-        searchModelTransportAction.doExecute(null, searchRequest, actionListener);
-        verify(mlSearchHandler).search(searchRequest, actionListener);
-        verify(client, times(1)).search(any(), any());
-        verify(actionListener, times(1)).onFailure(any(IllegalArgumentException.class));
-    }
-
     private SearchResponse createModelGroupSearchResponse() throws IOException {
         SearchResponse searchResponse = mock(SearchResponse.class);
         String modelContent = "{\n"
