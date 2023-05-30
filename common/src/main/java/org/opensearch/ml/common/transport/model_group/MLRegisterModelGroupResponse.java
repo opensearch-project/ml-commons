@@ -14,6 +14,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
+@Getter
 public class MLRegisterModelGroupResponse extends ActionResponse implements ToXContentObject {
 
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
@@ -29,8 +30,8 @@ public class MLRegisterModelGroupResponse extends ActionResponse implements ToXC
         this.status = in.readString();
     }
 
-    public MLRegisterModelGroupResponse(String modelId, String status) {
-        this.modelGroupId = modelId;
+    public MLRegisterModelGroupResponse(String modelGroupId, String status) {
+        this.modelGroupId = modelGroupId;
         this.status= status;
     }
 

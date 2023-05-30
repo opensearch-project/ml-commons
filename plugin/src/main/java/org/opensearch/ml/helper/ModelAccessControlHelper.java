@@ -226,8 +226,4 @@ public class ModelAccessControlHelper {
     public SearchSourceBuilder createSearchSourceBuilder(User user) {
         return addUserBackendRolesFilter(user, new SearchSourceBuilder());
     }
-
-    public boolean isSupportedQueryType(Class<?> queryType) {
-        return SUPPORTED_QUERY_TYPES.stream().anyMatch(x -> x.isAssignableFrom(queryType));
-    }
 }

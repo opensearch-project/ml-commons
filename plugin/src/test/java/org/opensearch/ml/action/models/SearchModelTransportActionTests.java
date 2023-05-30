@@ -5,7 +5,14 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 
@@ -181,7 +188,6 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
-        when(modelAccessControlHelper.isSupportedQueryType(any())).thenReturn(true);
         searchRequest.source().query(QueryBuilders.termQuery("name", "model_IT"));
         searchModelTransportAction.doExecute(null, searchRequest, actionListener);
         verify(mlSearchHandler).search(searchRequest, actionListener);
