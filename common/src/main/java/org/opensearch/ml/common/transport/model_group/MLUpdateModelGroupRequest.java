@@ -58,7 +58,7 @@ public class MLUpdateModelGroupRequest extends ActionRequest {
     }
 
     public static MLUpdateModelGroupRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLRegisterModelGroupRequest) {
+        if (actionRequest instanceof MLUpdateModelGroupRequest) {
             return (MLUpdateModelGroupRequest) actionRequest;
         }
 
