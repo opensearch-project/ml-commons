@@ -13,8 +13,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;

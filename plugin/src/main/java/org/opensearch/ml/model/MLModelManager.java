@@ -56,8 +56,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.delete.DeleteRequest;
@@ -513,15 +511,12 @@ public class MLModelManager {
         if (!modelHelper.isModelAllowed(registerModelInput, modelMetaList)) {
             throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
         }
-        modelHelper
-            .downloadPrebuiltModelConfig(
-                taskId,
-                registerModelInput,
-                ActionListener.wrap(mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion); }, e -> {
-                    log.error("Failed to register prebuilt model", e);
-                    handleException(registerModelInput.getFunctionName(), taskId, e);
-                })
-            );
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
+            registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
+        }, e -> {
+            log.error("Failed to register prebuilt model", e);
+            handleException(registerModelInput.getFunctionName(), taskId, e);
+        }));
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {

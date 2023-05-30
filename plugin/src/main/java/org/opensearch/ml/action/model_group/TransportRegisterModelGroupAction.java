@@ -10,8 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import java.time.Instant;
 import java.util.HashSet;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -41,6 +39,8 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportRegisterModelGroupAction extends HandledTransportAction<ActionRequest, MLRegisterModelGroupResponse> {
@@ -78,17 +78,12 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelGroupResponse> listener) {
         MLRegisterModelGroupRequest createModelGroupRequest = MLRegisterModelGroupRequest.fromActionRequest(request);
         MLRegisterModelGroupInput createModelGroupInput = createModelGroupRequest.getRegisterModelGroupInput();
-        createModelGroup(
-            createModelGroupInput,
-            ActionListener
-                .wrap(
-                    modelGroupId -> { listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name())); },
-                    ex -> {
-                        log.error("Failed to init model group index", ex);
-                        listener.onFailure(ex);
-                    }
-                )
-        );
+        createModelGroup(createModelGroupInput, ActionListener.wrap(modelGroupId -> {
+            listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name()));
+        }, ex -> {
+            log.error("Failed to init model group index", ex);
+            listener.onFailure(ex);
+        }));
     }
 
     public void createModelGroup(MLRegisterModelGroupInput input, ActionListener<String> listener) {

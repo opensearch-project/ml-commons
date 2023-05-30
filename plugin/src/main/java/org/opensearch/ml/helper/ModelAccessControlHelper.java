@@ -15,8 +15,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
@@ -48,6 +46,8 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class ModelAccessControlHelper {

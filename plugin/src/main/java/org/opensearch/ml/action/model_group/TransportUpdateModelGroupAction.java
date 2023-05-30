@@ -13,8 +13,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
@@ -45,6 +43,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {

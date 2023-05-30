@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.undeploy;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -34,6 +32,8 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportUndeployModelsAction extends HandledTransportAction<ActionRequest, MLUndeployModelsResponse> {
@@ -95,12 +95,9 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 if (hasPermissionToUndeploy) {
                     MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
 
-                    client
-                        .execute(
-                            MLUndeployModelAction.INSTANCE,
-                            mlUndeployModelNodesRequest,
-                            ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, listener::onFailure)
-                        );
+                    client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
+                        listener.onResponse(new MLUndeployModelsResponse(r));
+                    }, listener::onFailure));
                 } else {
                     listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
                 }
@@ -110,34 +107,21 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
 
-        client
-            .execute(
-                MLUndeployModelAction.INSTANCE,
-                mlUndeployModelNodesRequest,
-                ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, listener::onFailure)
-            );
+        client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
+            listener.onResponse(new MLUndeployModelsResponse(r));
+        }, listener::onFailure));
     }
 
     private void validateAccess(String modelId, ActionListener<Boolean> listener) {
         User user = RestActionUtils.getUserContext(client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager
-                .getModel(
-                    modelId,
-                    null,
-                    excludes,
-                    ActionListener
-                        .wrap(
-                            mlModel -> {
-                                modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
-                            },
-                            e -> {
-                                log.error("Failed to find Model", e);
-                                listener.onFailure(e);
-                            }
-                        )
-                );
+            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+            }, e -> {
+                log.error("Failed to find Model", e);
+                listener.onFailure(e);
+            }));
         } catch (Exception e) {
             log.error("Failed to undeploy ML model");
             listener.onFailure(e);
