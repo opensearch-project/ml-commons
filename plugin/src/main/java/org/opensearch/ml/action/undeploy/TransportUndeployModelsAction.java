@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.undeploy;
 
-
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.action.ActionListener;
@@ -100,8 +99,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                         .execute(
                             MLUndeployModelAction.INSTANCE,
                             mlUndeployModelNodesRequest,
-                            ActionListener
-                                .wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, listener::onFailure)
+                            ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, listener::onFailure)
                         );
                 } else {
                     listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));

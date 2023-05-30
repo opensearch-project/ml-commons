@@ -7,6 +7,17 @@
 
 package org.opensearch.ml.action.undeploy;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
+
+import java.io.IOException;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -36,17 +47,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.io.IOException;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 
 public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
@@ -91,9 +91,9 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     TransportUndeployModelsAction transportUndeployModelsAction;
 
-    private String[] modelIds = {"modelId1"};
+    private String[] modelIds = { "modelId1" };
 
-    private String[] nodeIds = {"nodeId1", "nodeId2"};
+    private String[] nodeIds = { "nodeId1", "nodeId2" };
 
     private ActionListener<MLUndeployModelsResponse> actionListener = mock(ActionListener.class);
 
@@ -106,8 +106,18 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         transportUndeployModelsAction = new TransportUndeployModelsAction(
-                transportService, actionFilters, modelHelper, mlTaskManager, clusterService, threadPool, client, xContentRegistry,
-            nodeFilter, mlTaskDispatcher, mlModelManager, modelAccessControlHelper
+            transportService,
+            actionFilters,
+            modelHelper,
+            mlTaskManager,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            nodeFilter,
+            mlTaskDispatcher,
+            mlModelManager,
+            modelAccessControlHelper
         );
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(true);
 
@@ -209,7 +219,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_modelIds_moreThan1() {
         expectedException.expect(IllegalArgumentException.class);
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(new String[]{"modelId1", "modelId2"}, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(new String[] { "modelId1", "modelId2" }, nodeIds);
         transportUndeployModelsAction.doExecute(task, request, actionListener);
     }
 }
