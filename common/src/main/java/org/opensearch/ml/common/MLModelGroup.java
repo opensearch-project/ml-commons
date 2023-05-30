@@ -25,8 +25,6 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 @Getter
 public class MLModelGroup implements ToXContentObject {
     public static final String MODEL_GROUP_NAME_FIELD = "name"; //name of the model group
-    // We use int type for version in first release 1.3. In 2.4, we changed to
-    // use String type for version. Keep this old version field for old models.
     public static final String DESCRIPTION_FIELD = "description"; //description of the model group
     public static final String LATEST_VERSION_FIELD = "latest_version"; //latest model version added to the model group
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //back_end roles as specified by the owner/admin

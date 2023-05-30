@@ -28,7 +28,7 @@ public class RestMLCustomModelActionIT extends MLCommonsRestTestCase {
 
     @Before
     public void setup() {
-        registerModelInput = createRegisterModelInput();
+        registerModelInput = createRegisterModelInput("testModelGroupID");
     }
 
     @Ignore

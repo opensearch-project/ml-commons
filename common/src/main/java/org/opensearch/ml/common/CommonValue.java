@@ -67,6 +67,15 @@ public class CommonValue {
             "   \""+MLModelGroup.MODEL_GROUP_ID_FIELD+"\": {\n" +
             "      \"type\": \"keyword\"\n" +
             "    },\n" +
+            "    \""+MLModelGroup.BACKEND_ROLES_FIELD+"\": {\n" +
+            "      \"type\": \"text\",\n" +
+            "      \"fields\": {\n" +
+            "        \"keyword\": {\n" +
+            "          \"type\": \"keyword\",\n" +
+            "          \"ignore_above\": 256\n" +
+            "        }\n" +
+            "      }\n" +
+            "    },\n" +
             "   \""+MLModelGroup.ACCESS+"\": {\n" +
             "      \"type\": \"keyword\"\n" +
             "    },\n" +
