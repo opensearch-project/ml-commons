@@ -6,7 +6,20 @@
 package org.opensearch.ml.action.deploy;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 
 import java.lang.reflect.Field;
@@ -144,6 +157,12 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         executorService = mock(ExecutorService.class);
         when(threadPool.executor(anyString())).thenReturn(executorService);
 
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT))).thenReturn(mlStat);
         transportDeployModelAction = new TransportDeployModelAction(
@@ -164,7 +183,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void testDoExecute_success() {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
@@ -185,6 +203,50 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
         verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
+    }
+
+    public void testDoExecute_userHasNoAccessException() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_ValidationFailedException() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Failed to validate access"));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
 
     @Ignore
@@ -246,7 +308,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(deployModelResponseListener).onFailure(any(IllegalArgumentException.class));
     }
 
-    @Ignore
     public void testDoExecute_whenGetModelHasNPE_exception() {
         doThrow(NullPointerException.class)
             .when(mlModelManager)
@@ -257,7 +318,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(deployModelResponseListener).onFailure(any(Exception.class));
     }
 
-    @Ignore
     public void testDoExecute_whenThreadPoolExecutorException_TaskRemoved() {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
@@ -283,7 +343,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    @Ignore
     public void testUpdateModelDeployStatusAndTriggerOnNodesAction_success() throws NoSuchFieldException, IllegalAccessException {
         Field clientField = MLModelManager.class.getDeclaredField("client");
         clientField.setAccessible(true);
@@ -328,7 +387,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         assertEquals(1, (((List) map.get(MLModel.PLANNING_WORKER_NODES_FIELD)).size()));
     }
 
-    @Ignore
     public void testUpdateModelDeployStatusAndTriggerOnNodesAction_whenMLTaskManagerThrowException_ListenerOnFailureExecuted() {
         doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(ImmutableMap.class), isA(ActionListener.class));
         transportDeployModelAction

@@ -112,6 +112,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                         .createdTime(Instant.now())
                         .lastUpdatedTime(Instant.now())
                         .build();
+                    log.info(mlModelGroup.getAccess());
                 } else {
                     validateSecurityDisabledOrModelAccessControlDisabled(input);
                     mlModelGroup = builder

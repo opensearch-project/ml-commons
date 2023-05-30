@@ -69,7 +69,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         String modelGroupId = mlModelGroupDeleteRequest.getModelGroupId();
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
         User user = RestActionUtils.getUserContext(client);
-
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
                 if (!access) {
@@ -107,6 +106,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 }
             }, e -> {
                 log.error("Failed to validate Access for Model Group " + modelGroupId, e);
+                log.info(e);
                 actionListener.onFailure(e);
             }));
         }

@@ -6,8 +6,14 @@
 package org.opensearch.ml.action.models;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-import static org.opensearch.ml.action.models.DeleteModelTransportAction.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.action.models.DeleteModelTransportAction.BULK_FAILURE_MSG;
+import static org.opensearch.ml.action.models.DeleteModelTransportAction.OS_STATUS_EXCEPTION_MESSAGE;
+import static org.opensearch.ml.action.models.DeleteModelTransportAction.SEARCH_FAILURE_MSG;
+import static org.opensearch.ml.action.models.DeleteModelTransportAction.TIMEOUT_MSG;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
@@ -39,6 +45,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.ScrollableHitSource;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
@@ -108,12 +115,17 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             )
         );
 
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    @Ignore
     public void testDeleteModel_Success() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
@@ -139,7 +151,60 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(deleteResponse);
     }
 
-    @Ignore
+    public void testDeleteModel_Success_AlgorithmNotNull() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
+            listener.onResponse(response);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        MLModel mlModel = MLModel
+            .builder()
+            .modelId("test_id")
+            .modelState(MLModelState.REGISTERED)
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .build();
+        XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        verify(actionListener).onResponse(deleteResponse);
+    }
+
+    public void test_UserHasNoAccessException() throws IOException {
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+    }
+
     public void testDeleteModel_CheckModelState() throws IOException {
         GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING);
         doAnswer(invocation -> {
@@ -157,7 +222,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void testDeleteModel_ModelNotFoundException() throws IOException {
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
@@ -171,7 +235,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("Fail to find model", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void testDeleteModel_ResourceNotFoundException() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
@@ -199,7 +262,38 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
+    public void test_ValidationFailedException() throws IOException {
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Failed to validate access"));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testModelNotFound() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(null);
+            return null;
+        }).when(client).get(any(), any());
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find model to delete with the provided model id: test_id", argumentCaptor.getValue().getMessage());
+    }
+
     public void testDeleteModelChunks_Success() {
         when(bulkByScrollResponse.getBulkFailures()).thenReturn(null);
         doAnswer(invocation -> {
@@ -212,7 +306,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(deleteResponse);
     }
 
-    @Ignore
     public void testDeleteModel_RuntimeException() throws IOException {
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
         doAnswer(invocation -> {
@@ -242,7 +335,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("thread context error", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_FailToDeleteModel() {
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -256,7 +348,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_FailToDeleteAllModelChunks() {
         BulkItemResponse.Failure failure = new BulkItemResponse.Failure(ML_MODEL_INDEX, "test_id", new RuntimeException("Error!"));
         when(bulkByScrollResponse.getBulkFailures()).thenReturn(Arrays.asList(failure));
@@ -272,7 +363,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + BULK_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_FailToDeleteAllModelChunks_TimeOut() {
         BulkItemResponse.Failure failure = new BulkItemResponse.Failure(ML_MODEL_INDEX, "test_id", new RuntimeException("Error!"));
         when(bulkByScrollResponse.getBulkFailures()).thenReturn(Arrays.asList(failure));
@@ -289,7 +379,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + TIMEOUT_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_FailToDeleteAllModelChunks_SearchFailure() {
         ScrollableHitSource.SearchFailure searchFailure = new ScrollableHitSource.SearchFailure(
             new RuntimeException("error"),

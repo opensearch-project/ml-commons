@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
+import lombok.Getter;
 import org.opensearch.action.ActionResponse;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
@@ -13,6 +14,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
 
+@Getter
 public class MLUpdateModelGroupResponse extends ActionResponse implements ToXContentObject {
 
     public static final String STATUS_FIELD = "status";
