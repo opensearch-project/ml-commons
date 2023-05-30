@@ -193,6 +193,10 @@ public class ModelAccessControlHelper {
         throw new IllegalStateException("Access shouldn't be null");
     }
 
+    public boolean isModelAccessControlEnabled() {
+        return modelAccessControlEnabled;
+    }
+
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termQuery(MLModelGroup.ACCESS, ModelAccessMode.PUBLIC.getValue()));

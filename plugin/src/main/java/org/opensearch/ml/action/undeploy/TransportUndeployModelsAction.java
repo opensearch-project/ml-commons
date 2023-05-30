@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.undeploy;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -17,7 +15,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -32,7 +29,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -52,13 +48,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     DiscoveryNodeHelper nodeFilter;
     MLTaskDispatcher mlTaskDispatcher;
     MLModelManager mlModelManager;
-    MLStats mlStats;
-
-    private volatile boolean allowCustomDeploymentPlan;
-
     ModelAccessControlHelper modelAccessControlHelper;
-
-    private volatile Boolean filterByEnabled;
 
     @Inject
     public TransportUndeployModelsAction(
@@ -73,8 +63,6 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
         MLModelManager mlModelManager,
-        MLStats mlStats,
-        Settings settings,
         ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLUndeployModelsAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
@@ -88,14 +76,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.nodeFilter = nodeFilter;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
-        this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
-        allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN, it -> allowCustomDeploymentPlan = it);
-        filterByEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> filterByEnabled = it);
     }
 
     @Override
@@ -104,29 +85,28 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         String[] modelIds = undeployModelsRequest.getModelIds();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
 
-        if (filterByEnabled) {
-            // Only allow user undeploy one model if filter by backend role enabled.
+        if (modelAccessControlHelper.isModelAccessControlEnabled()) {
+            // Only allow user undeploy one model if model access control enabled.
             if (modelIds == null || modelIds.length != 1) {
                 throw new IllegalArgumentException("only support undeploy one model");
             }
 
             String modelId = modelIds[0];
-            String[] finalModelIds = modelIds;
             validateAccess(modelId, ActionListener.wrap(hasPermissionToUndeploy -> {
-                if (hasPermissionToUndeploy == true) {
-                    MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, finalModelIds);
+                if (hasPermissionToUndeploy) {
+                    MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
 
                     client
                         .execute(
                             MLUndeployModelAction.INSTANCE,
                             mlUndeployModelNodesRequest,
                             ActionListener
-                                .wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, e -> { listener.onFailure(e); })
+                                .wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, listener::onFailure)
                         );
                 } else {
                     listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
                 }
-            }, e -> { listener.onFailure(e); }));
+            }, listener::onFailure));
             return;
         }
 
@@ -136,7 +116,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
             .execute(
                 MLUndeployModelAction.INSTANCE,
                 mlUndeployModelNodesRequest,
-                ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, e -> { listener.onFailure(e); })
+                ActionListener.wrap(r -> { listener.onResponse(new MLUndeployModelsResponse(r)); }, listener::onFailure)
             );
     }
 
