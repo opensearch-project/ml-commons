@@ -10,11 +10,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
+import org.apache.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
@@ -29,6 +32,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";
@@ -56,6 +60,17 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
 
     @Before
     public void setup() throws IOException {
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.model_access_control_enabled\":true}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
+
         if (!isHttps()) {
             throw new IllegalArgumentException("Secure Tests are running but HTTPS is not set");
         }
