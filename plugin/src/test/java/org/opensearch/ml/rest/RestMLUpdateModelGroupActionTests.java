@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -103,6 +104,13 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("This is test description", UpdateModelGroupInput.getDescription());
     }
 
+    public void testUpdateModelGroupRequestWithEmptyContent() throws Exception {
+        exceptionRule.expect(IOException.class);
+        exceptionRule.expectMessage("Model group request has empty body");
+        RestRequest request = getRestRequestWithEmptyContent();
+        restMLUpdateModelGroupAction.handleRequest(request, channel, client);
+    }
+
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelGroup = Map.of("name", "testModelGroupName", "description", "This is test description");
@@ -118,7 +126,7 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
         return request;
     }
 
-    private RestRequest getRestRequest_NoContent() {
+    private RestRequest getRestRequestWithEmptyContent() {
         RestRequest.Method method = RestRequest.Method.POST;
         Map<String, String> params = new HashMap<>();
         params.put("model_group_id", "test_modelGroupId");
@@ -126,9 +134,8 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
             .withMethod(method)
             .withPath("/_plugins/_ml/model_groups/{model_group_id}/_update")
             .withParams(params)
-            .withContent(null, XContentType.JSON)
+            .withContent(new BytesArray(""), XContentType.JSON)
             .build();
         return request;
     }
-
 }

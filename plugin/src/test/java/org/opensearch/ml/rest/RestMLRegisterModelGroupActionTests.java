@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -102,6 +103,13 @@ public class RestMLRegisterModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("This is test description", registerModelGroupInput.getDescription());
     }
 
+    public void testRegisterModelGroupRequestWithEmptyContent() throws Exception {
+        exceptionRule.expect(IOException.class);
+        exceptionRule.expectMessage("Model group request has empty body");
+        RestRequest request = getRestRequestWithEmptyContent();
+        restMLRegisterModelGroupAction.handleRequest(request, channel, client);
+    }
+
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelGroup = Map.of("name", "testModelGroupName", "description", "This is test description");
@@ -114,4 +122,13 @@ public class RestMLRegisterModelGroupActionTests extends OpenSearchTestCase {
         return request;
     }
 
+    private RestRequest getRestRequestWithEmptyContent() {
+        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/model_groups/_register")
+            .withContent(new BytesArray(""), XContentType.JSON)
+            .build();
+        return request;
+    }
 }
