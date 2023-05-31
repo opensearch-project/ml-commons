@@ -55,7 +55,12 @@ public class MLSearchHandler {
 
     private ClusterService clusterService;
 
-    public MLSearchHandler(Client client, NamedXContentRegistry xContentRegistry, ModelAccessControlHelper modelAccessControlHelper, ClusterService clusterService) {
+    public MLSearchHandler(
+        Client client,
+        NamedXContentRegistry xContentRegistry,
+        ModelAccessControlHelper modelAccessControlHelper,
+        ClusterService clusterService
+    ) {
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
@@ -74,7 +79,6 @@ public class MLSearchHandler {
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, listener);
             } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
-                request.source().query(rewriteQueryBuilder(request.source().query(), null));
                 client.search(request, listener);
             } else {
                 SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
@@ -84,9 +88,14 @@ public class MLSearchHandler {
                 modelGroupSearchRequest.source(sourceBuilder);
                 modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
                 ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
-                    if (Optional.ofNullable(r).map(SearchResponse::getHits).map(SearchHits::getTotalHits).map(x -> x.value).orElse(0L) > 0) {
+                    if (Optional
+                        .ofNullable(r)
+                        .map(SearchResponse::getHits)
+                        .map(SearchHits::getTotalHits)
+                        .map(x -> x.value)
+                        .orElse(0L) > 0) {
                         List<String> modelGroupIds = new ArrayList<>();
-                        Arrays.stream(r.getHits().getHits()).forEach(hit -> {modelGroupIds.add(hit.getId());});
+                        Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
 
                         request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
                         client.search(request, listener);
@@ -102,8 +111,8 @@ public class MLSearchHandler {
                 client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
             }
         } catch (Exception e) {
-                log.error(e.getMessage(), e);
-                actionListener.onFailure(e);
+            log.error(e.getMessage(), e);
+            actionListener.onFailure(e);
         }
     }
 
