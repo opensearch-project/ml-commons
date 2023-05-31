@@ -76,7 +76,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 } else {
                     BoolQueryBuilder query = new BoolQueryBuilder();
                     query.filter(new TermQueryBuilder(PARAMETER_MODEL_GROUP_ID, modelGroupId));
-                    log.info(query.toString());
 
                     SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
                     SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
@@ -106,7 +105,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 }
             }, e -> {
                 log.error("Failed to validate Access for Model Group " + modelGroupId, e);
-                log.info(e);
                 actionListener.onFailure(e);
             }));
         }
