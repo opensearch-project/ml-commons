@@ -18,6 +18,7 @@ import org.opensearch.ml.common.ModelAccessMode;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -123,7 +124,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
                     }
                     break;
                 case MODEL_ACCESS_MODE:
-                    modelAccessMode = ModelAccessMode.from(parser.text());
+                    modelAccessMode = ModelAccessMode.from(parser.text().toLowerCase(Locale.ROOT));
                     break;
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
