@@ -148,8 +148,10 @@ integTest {
     }
 
     if (System.getProperty("https") == null || System.getProperty("https") == "false") {
-        exclude "org.opensearch.ml.rest.SecureMLRestIT"
-        exclude "org.opensearch.ml.rest.MLModelGroupRestIT"
+        filter {
+            excludeTestsMatching "org.opensearch.ml.rest.SecureMLRestIT"
+            excludeTestsMatching "org.opensearch.ml.rest.MLModelGroupRestIT"
+        }
     }
 
     // BWC test can only run within the BWC gradle task bwcsuite or its dependent tasks.
