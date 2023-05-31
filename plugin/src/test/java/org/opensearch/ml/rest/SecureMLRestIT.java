@@ -30,7 +30,6 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";
@@ -53,6 +52,8 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    private String modelGroupId;
 
     @Before
     public void setup() throws IOException, ParseException {
@@ -103,8 +104,13 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.size(1000);
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
-        mlRegisterModelInput = createRegisterModelInput("testModelGroupID");
-        mlRegisterModelGroupInput = createRegisterModelGroupInput(ImmutableList.of("role-1"), ModelAccessMode.RESTRICTED, false);
+        // Create public model group
+        mlRegisterModelGroupInput = createRegisterModelGroupInput(null, ModelAccessMode.PUBLIC, false);
+
+        registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
+            this.modelGroupId = (String) registerModelGroupResult.get("model_group_id");
+        });
+        mlRegisterModelInput = createRegisterModelInput(modelGroupId);
     }
 
     @After
@@ -158,29 +164,26 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     }
 
     public void testRegisterModelWithFullAccess() throws IOException {
-        registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
-            try {
-                String modelGroupId = (String) registerModelGroupResult.get("model_group_id");
-                MLRegisterModelInput mlRegisterModelInput = createRegisterModelInput(modelGroupId);
-                registerModel(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelInput), registerModelResult -> {
-                    assertFalse(registerModelResult.containsKey("model_id"));
-                    String taskId = (String) registerModelResult.get("task_id");
-                    assertNotNull(taskId);
-                    String status = (String) registerModelResult.get("status");
-                    assertEquals(MLTaskState.CREATED.name(), status);
-                    try {
-                        getTask(mlFullAccessClient, taskId, task -> {
-                            String algorithm = (String) task.get("function_name");
-                            assertEquals(FunctionName.TEXT_EMBEDDING.name(), algorithm);
-                        });
-                    } catch (IOException e) {
-                        assertNull(e);
-                    }
-                });
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        try {
+            MLRegisterModelInput mlRegisterModelInput = createRegisterModelInput(modelGroupId);
+            registerModel(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelInput), registerModelResult -> {
+                assertFalse(registerModelResult.containsKey("model_id"));
+                String taskId = (String) registerModelResult.get("task_id");
+                assertNotNull(taskId);
+                String status = (String) registerModelResult.get("status");
+                assertEquals(MLTaskState.CREATED.name(), status);
+                try {
+                    getTask(mlFullAccessClient, taskId, task -> {
+                        String algorithm = (String) task.get("function_name");
+                        assertEquals(FunctionName.TEXT_EMBEDDING.name(), algorithm);
+                    });
+                } catch (IOException e) {
+                    assertNull(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void testDeployModelWithNoAccess() throws IOException, InterruptedException {
