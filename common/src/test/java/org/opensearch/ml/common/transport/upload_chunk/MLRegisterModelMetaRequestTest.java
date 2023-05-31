@@ -32,7 +32,7 @@ public class MLRegisterModelMetaRequestTest {
 	public void setUp() {
 		config = new TextEmbeddingModelConfig("Model Type", 123, FrameworkType.SENTENCE_TRANSFORMERS, "All Config",
 				TextEmbeddingModelConfig.PoolingMode.MEAN, true, 512);
-		mlRegisterModelMetaInput = new MLRegisterModelMetaInput("Model Name", FunctionName.BATCH_RCF, "1.0",
+		mlRegisterModelMetaInput = new MLRegisterModelMetaInput("Model Name", FunctionName.BATCH_RCF, "Model Group Id",
 				"Model Description", MLModelFormat.TORCH_SCRIPT, MLModelState.DEPLOYING, 200L, "123", config, 2);
 	}
 
@@ -49,8 +49,8 @@ public class MLRegisterModelMetaRequestTest {
 				newRequest.getMlRegisterModelMetaInput().getFunctionName());
 		assertEquals(request.getMlRegisterModelMetaInput().getModelConfig().getAllConfig(),
 				newRequest.getMlRegisterModelMetaInput().getModelConfig().getAllConfig());
-		assertEquals(request.getMlRegisterModelMetaInput().getVersion(),
-				newRequest.getMlRegisterModelMetaInput().getVersion());
+		assertEquals(request.getMlRegisterModelMetaInput().getModelGroupId(),
+				newRequest.getMlRegisterModelMetaInput().getModelGroupId());
 	}
 
 	@Test
@@ -83,8 +83,8 @@ public class MLRegisterModelMetaRequestTest {
 				newRequest.getMlRegisterModelMetaInput().getFunctionName());
 		assertEquals(request.getMlRegisterModelMetaInput().getModelConfig().getAllConfig(),
 				newRequest.getMlRegisterModelMetaInput().getModelConfig().getAllConfig());
-		assertEquals(request.getMlRegisterModelMetaInput().getVersion(),
-				newRequest.getMlRegisterModelMetaInput().getVersion());
+		assertEquals(request.getMlRegisterModelMetaInput().getModelGroupId(),
+				newRequest.getMlRegisterModelMetaInput().getModelGroupId());
 	}
 
 	@Test(expected = UncheckedIOException.class)
