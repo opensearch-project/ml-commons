@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.action.model_group;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+
+import java.time.Instant;
+import java.util.HashSet;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -36,10 +40,7 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import java.time.Instant;
-import java.util.HashSet;
-
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportRegisterModelGroupAction extends HandledTransportAction<ActionRequest, MLRegisterModelGroupResponse> {

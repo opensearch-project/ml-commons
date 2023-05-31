@@ -5,6 +5,25 @@
 
 package org.opensearch.ml.action.undeploy;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -37,25 +56,6 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import java.io.IOException;
-import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
@@ -135,11 +135,9 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         when(clusterService.localNode()).thenReturn(localNode);
     }
 
-
     public void testConstructor() {
         assertNotNull(action);
     }
-
 
     public void testNewNodeRequest() {
         final MLUndeployModelNodesRequest request = new MLUndeployModelNodesRequest(
@@ -149,7 +147,6 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final MLUndeployModelNodeRequest undeployRequest = action.newNodeRequest(request);
         assertNotNull(undeployRequest);
     }
-
 
     public void testNewNodeStreamRequest() throws IOException {
         Map<String, String> modelToDeployStatus = new HashMap<>();
@@ -163,7 +160,6 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         assertNotNull(undeployResponse);
     }
 
-
     public void testNodeOperation() {
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(any())).thenReturn(mlStat);
@@ -174,7 +170,6 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final MLUndeployModelNodeResponse response = action.nodeOperation(new MLUndeployModelNodeRequest(request));
         assertNotNull(response);
     }
-
 
     public void testNewResponseWithUndeployedModelStatus() {
         final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
@@ -200,7 +195,6 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         Map<String, Object> updateContent = updateRequest.doc().sourceAsMap();
         assertEquals(MLModelState.UNDEPLOYED.name(), updateContent.get(MLModel.MODEL_STATE_FIELD));
     }
-
 
     public void testNewResponseWithNotFoundModelStatus() {
         final MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
