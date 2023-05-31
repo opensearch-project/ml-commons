@@ -101,5 +101,5 @@ public final class MLCommonsSettings {
         );
 
     public static final Setting<Boolean> ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.model_access_control_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.model_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
