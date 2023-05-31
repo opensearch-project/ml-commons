@@ -114,7 +114,7 @@ public class MLSearchHandler {
 
         BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
         if (!CollectionUtils.isEmpty(modelGroupIds)) {
-            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds);
+            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD, modelGroupIds);
             accessControlledBoolQuery.should(modelGroupIdTermsQuery);
         }
         accessControlledBoolQuery.should(modelGroupIdMustNotExistBoolQuery);
