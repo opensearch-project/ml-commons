@@ -10,8 +10,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import lombok.Setter;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -28,28 +30,34 @@ import org.opensearch.ml.common.transport.MLTaskRequest;
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 @Getter
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
 public class MLPredictionTaskRequest extends MLTaskRequest {
 
     String modelId;
     MLInput mlInput;
+    @Setter
+    User user;
 
     @Builder
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask) {
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask, User user) {
         super(dispatchTask);
         this.mlInput = mlInput;
         this.modelId = modelId;
+        this.user = user;
     }
 
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput) {
-        this(modelId, mlInput, true);
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, User user) {
+        this(modelId, mlInput, true, user);
     }
 
     public MLPredictionTaskRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readOptionalString();
         this.mlInput = new MLInput(in);
+        if (in.readBoolean()) {
+            this.user = new User(in);
+        }
     }
 
     @Override
@@ -57,6 +65,12 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         super.writeTo(out);
         out.writeOptionalString(this.modelId);
         this.mlInput.writeTo(out);
+        if (user != null) {
+            out.writeBoolean(true);
+            user.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override

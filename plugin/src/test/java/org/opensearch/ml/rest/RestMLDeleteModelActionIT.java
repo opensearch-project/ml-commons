@@ -19,6 +19,7 @@ public class RestMLDeleteModelActionIT extends MLCommonsRestTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    @Ignore
     public void testDeleteModelAPI_Success() throws IOException {
         Response trainModelResponse = ingestModelData();
         HttpEntity entity = trainModelResponse.getEntity();

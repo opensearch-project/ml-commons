@@ -89,24 +89,10 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLRegisterModelRequest getRequest(RestRequest request) throws IOException {
-        String modelName = request.param(PARAMETER_MODEL_ID);
-        String version = request.param(PARAMETER_VERSION);
         boolean loadModel = request.paramAsBoolean(PARAMETER_DEPLOY_MODEL, false);
-        if (modelName != null && !request.hasContent()) {
-            MLRegisterModelInput mlInput = MLRegisterModelInput
-                .builder()
-                .deployModel(loadModel)
-                .modelName(modelName)
-                .version(version)
-                .build();
-            return new MLRegisterModelRequest(mlInput);
-        }
-
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLRegisterModelInput mlInput = modelName == null
-            ? MLRegisterModelInput.parse(parser, loadModel)
-            : MLRegisterModelInput.parse(parser, modelName, version, loadModel);
+        MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
         if (mlInput.getUrl() != null && !isModelUrlAllowed) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."

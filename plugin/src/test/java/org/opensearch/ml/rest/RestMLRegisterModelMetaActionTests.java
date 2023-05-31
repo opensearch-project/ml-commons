@@ -122,7 +122,7 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLRegisterModelMetaAction.INSTANCE), argumentCaptor.capture(), any());
         MLRegisterModelMetaInput metaModelRequest = argumentCaptor.getValue().getMlRegisterModelMetaInput();
         assertEquals("all-MiniLM-L6-v3", metaModelRequest.getName());
-        assertEquals("1", metaModelRequest.getVersion());
+        assertEquals("1", metaModelRequest.getModelGroupId());
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
     }
 
@@ -169,6 +169,8 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
                 "name",
                 "all-MiniLM-L6-v3",
                 "version",
+                "1",
+                "model_group_id",
                 "1",
                 "model_format",
                 "TORCH_SCRIPT",

@@ -8,6 +8,7 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
@@ -18,11 +19,12 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
+import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
+import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
+import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_HELPER;
+import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_ZIP_FILE;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
@@ -54,6 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -81,9 +84,11 @@ import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -193,44 +198,82 @@ public class MLModelManager {
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
         try {
-            String modelName = mlRegisterModelMetaInput.getName();
-            String version = mlRegisterModelMetaInput.getVersion();
             FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+            mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
+            String modelName = mlRegisterModelMetaInput.getName();
+            String modelGroupId = mlRegisterModelMetaInput.getModelGroupId();
+            GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
+            if (Strings.isBlank(modelGroupId)) {
+                throw new IllegalArgumentException("ModelGroupId is blank");
+            }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
-                    Instant now = Instant.now();
-                    MLModel mlModelMeta = MLModel
-                        .builder()
-                        .name(modelName)
-                        .algorithm(functionName)
-                        .version(version)
-                        .description(mlRegisterModelMetaInput.getDescription())
-                        .modelFormat(mlRegisterModelMetaInput.getModelFormat())
-                        .modelState(MLModelState.REGISTERING)
-                        .modelConfig(mlRegisterModelMetaInput.getModelConfig())
-                        .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
-                        .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
-                        .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
-                        .createdTime(now)
-                        .lastUpdateTime(now)
-                        .build();
-                    IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                    indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
-                    indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
+                    if (modelGroup.isExists()) {
+                        Map<String, Object> source = modelGroup.getSourceAsMap();
+                        int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
+                        int newVersion = latestVersion + 1;
+                        source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
+                        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+                        UpdateRequest updateModelGroupRequest = new UpdateRequest();
+                        long seqNo = modelGroup.getSeqNo();
+                        long primaryTerm = modelGroup.getPrimaryTerm();
+                        updateModelGroupRequest
+                            .index(ML_MODEL_GROUP_INDEX)
+                            .id(modelGroupId)
+                            .setIfSeqNo(seqNo)
+                            .setIfPrimaryTerm(primaryTerm)
+                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+                            .doc(source);
+                        client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
+                            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                                Instant now = Instant.now();
+                                MLModel mlModelMeta = MLModel
+                                    .builder()
+                                    .name(modelName)
+                                    .algorithm(functionName)
+                                    .version(newVersion + "")
+                                    .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
+                                    .description(mlRegisterModelMetaInput.getDescription())
+                                    .modelFormat(mlRegisterModelMetaInput.getModelFormat())
+                                    .modelState(MLModelState.REGISTERING)
+                                    .modelConfig(mlRegisterModelMetaInput.getModelConfig())
+                                    .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
+                                    .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
+                                    .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                                    .createdTime(now)
+                                    .lastUpdateTime(now)
+                                    .build();
+                                IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                                indexRequest
+                                    .source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
+                                indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-                    client.index(indexRequest, ActionListener.wrap(r -> {
-                        log.debug("Index model meta doc successfully {}", modelName);
-                        listener.onResponse(r.getId());
-                    }, e -> {
-                        log.error("Failed to index model meta doc", e);
-                        listener.onFailure(e);
-                    }));
-                }, ex -> {
-                    log.error("Failed to init model index", ex);
-                    listener.onFailure(ex);
+                                client.index(indexRequest, ActionListener.wrap(response -> {
+                                    log.debug("Index model meta doc successfully {}", modelName);
+                                    listener.onResponse(response.getId());
+                                }, e -> {
+                                    log.error("Failed to index model meta doc", e);
+                                    listener.onFailure(e);
+                                }));
+                            }, ex -> {
+                                log.error("Failed to init model index", ex);
+                                listener.onFailure(ex);
+                            }));
+                        }, e -> {
+                            log.error("Failed to update model group", e);
+                            listener.onFailure(e);
+                        }));
+                    } else {
+                        log.error("Model group not found");
+                        listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                    }
+                }, e -> {
+                    log.error("Failed to get model group", e);
+                    listener.onFailure(new MLValidationException("Failed to get model group"));
                 }));
             } catch (Exception e) {
-                log.error("Failed to register model meta doc", e);
+                log.error("Failed to register model", e);
                 listener.onFailure(e);
             }
         } catch (final Exception e) {
@@ -251,10 +294,53 @@ public class MLModelManager {
         try {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
-            if (registerModelInput.getUrl() != null) {
-                registerModelFromUrl(registerModelInput, mlTask);
-            } else {
-                registerPrebuiltModel(registerModelInput, mlTask);
+
+            String modelGroupId = registerModelInput.getModelGroupId();
+            GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
+            if (Strings.isBlank(modelGroupId)) {
+                throw new IllegalArgumentException("ModelGroupId is blank");
+            }
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
+                    if (modelGroup.isExists()) {
+                        Map<String, Object> source = modelGroup.getSourceAsMap();
+                        int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
+                        int newVersion = latestVersion + 1;
+                        source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
+                        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+                        UpdateRequest updateModelGroupRequest = new UpdateRequest();
+                        long seqNo = modelGroup.getSeqNo();
+                        long primaryTerm = modelGroup.getPrimaryTerm();
+                        updateModelGroupRequest
+                            .index(ML_MODEL_GROUP_INDEX)
+                            .id(modelGroupId)
+                            .setIfSeqNo(seqNo)
+                            .setIfPrimaryTerm(primaryTerm)
+                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+                            .doc(source);
+                        client
+                            .update(
+                                updateModelGroupRequest,
+                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); }, e -> {
+                                    log.error("Failed to update model group", e);
+                                    handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                                })
+                            );
+                    } else {
+                        log.error("Model group not found");
+                        handleException(
+                            registerModelInput.getFunctionName(),
+                            mlTask.getTaskId(),
+                            new MLValidationException("Model group not found")
+                        );
+                    }
+                }, e -> {
+                    log.error("Failed to get model group", e);
+                    handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                }));
+            } catch (Exception e) {
+                log.error("Failed to register model", e);
+                handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
             }
         } catch (Exception e) {
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
@@ -264,7 +350,15 @@ public class MLModelManager {
         }
     }
 
-    private void registerModelFromUrl(MLRegisterModelInput registerModelInput, MLTask mlTask) {
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws PrivilegedActionException {
+        if (registerModelInput.getUrl() != null) {
+            registerModelFromUrl(registerModelInput, mlTask, modelVersion);
+        } else {
+            registerPrebuiltModel(registerModelInput, mlTask, modelVersion);
+        }
+    }
+
+    private void registerModelFromUrl(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -273,12 +367,14 @@ public class MLModelManager {
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
             String modelName = registerModelInput.getModelName();
-            String version = registerModelInput.getVersion();
+            String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
+            String modelGroupId = registerModelInput.getModelGroupId();
             Instant now = Instant.now();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
+                    .modelGroupId(modelGroupId)
                     .algorithm(functionName)
                     .version(version)
                     .description(registerModelInput.getDescription())
@@ -289,6 +385,9 @@ public class MLModelManager {
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (functionName == FunctionName.METRICS_CORRELATION) {
+                    indexModelMetaRequest.id(functionName.name());
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 // create model meta doc
@@ -296,7 +395,7 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for register model task {}", modelId, taskId);
-
+                    // model group id is not present in request body.
                     registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
@@ -405,14 +504,15 @@ public class MLModelManager {
             );
     }
 
-    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask) throws PrivilegedActionException {
+    private void registerPrebuiltModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion)
+        throws PrivilegedActionException {
         String taskId = mlTask.getTaskId();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         if (!modelHelper.isModelAllowed(registerModelInput, modelMetaList)) {
             throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
         }
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
-            registerModelFromUrl(mlRegisterModelInput, mlTask);
+            registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
             handleException(registerModelInput.getFunctionName(), taskId, e);
@@ -573,7 +673,11 @@ public class MLModelManager {
                             modelCacheHelper.setPredictor(modelId, predictable);
                             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), mlModel.getModelContentSizeInBytes());
+                            Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
+                            long contentSize = modelContentSizeInBytes == null
+                                ? mlModel.getTotalChunks() * CHUNK_SIZE
+                                : modelContentSizeInBytes;
+                            modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), contentSize);
                             listener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
@@ -924,4 +1028,5 @@ public class MLModelManager {
     public boolean isModelRunningOnNode(String modelId) {
         return modelCacheHelper.isModelRunningOnNode(modelId);
     }
+
 }
