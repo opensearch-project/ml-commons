@@ -1,7 +1,7 @@
 package org.opensearch.ml.common.transport.register;
 
-import org.junit.Rule;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
@@ -11,7 +11,9 @@ import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.*;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -19,15 +21,17 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.search.SearchModule;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-
+import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.function.Consumer;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 @RunWith(MockitoJUnitRunner.class)
 public class MLRegisterModelInputTest {
@@ -38,7 +42,7 @@ public class MLRegisterModelInputTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
+    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"ONNX\"," +
             "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\"," +
             "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"" +
             "},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
@@ -46,6 +50,8 @@ public class MLRegisterModelInputTest {
     private final String modelName = "modelName";
     private final String version = "version";
     private final String url = "url";
+
+    private final String modelGroupId = "modelGroupId";
 
     @Before
     public void setUp() throws Exception {
@@ -60,6 +66,7 @@ public class MLRegisterModelInputTest {
                 .functionName(functionName)
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .url(url)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
@@ -82,18 +89,19 @@ public class MLRegisterModelInputTest {
         exceptionRule.expectMessage("model name is null");
         MLRegisterModelInput.builder()
                 .functionName(functionName)
+                .modelGroupId(modelGroupId)
                 .modelName(null)
                 .build();
     }
 
     @Test
-    public void constructor_NullModelVersion() {
+    public void constructor_NullModelGroupId() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model version is null");
+        exceptionRule.expectMessage("model group id is null");
         MLRegisterModelInput.builder()
                 .functionName(functionName)
                 .modelName(modelName)
-                .version(null)
+                .modelGroupId(null)
                 .build();
     }
 
@@ -105,6 +113,7 @@ public class MLRegisterModelInputTest {
                 .functionName(functionName)
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .modelFormat(null)
                 .url(url)
                 .build();
@@ -118,6 +127,7 @@ public class MLRegisterModelInputTest {
                 .functionName(functionName)
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(null)
                 .url(url)
@@ -129,6 +139,7 @@ public class MLRegisterModelInputTest {
         MLRegisterModelInput input = MLRegisterModelInput.builder()
                 .modelName(modelName)
                 .version(version)
+                .modelGroupId(modelGroupId)
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
                 .url(url)
@@ -154,7 +165,7 @@ public class MLRegisterModelInputTest {
     public void testToXContent_Incomplete() throws Exception {
         String expectedIncompleteInputStr =
                 "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\"," +
-                "\"version\":\"version\",\"deploy_model\":true}";
+                "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"deploy_model\":true}";
         input.setUrl(null);
         input.setModelConfig(null);
         input.setModelFormat(null);
