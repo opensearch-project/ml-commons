@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -680,7 +679,15 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         ModelAccessMode modelAccessMode,
         Boolean isAddAllBackendRoles
     ) {
-        return MLUpdateModelGroupInput.builder().modelGroupID(modelGroupId).name(name).description(description).backendRoles(backendRoles).modelAccessMode(modelAccessMode).isAddAllBackendRoles(isAddAllBackendRoles).build();
+        return MLUpdateModelGroupInput
+            .builder()
+            .modelGroupID(modelGroupId)
+            .name(name)
+            .description(description)
+            .backendRoles(backendRoles)
+            .modelAccessMode(modelAccessMode)
+            .isAddAllBackendRoles(isAddAllBackendRoles)
+            .build();
     }
 
     public void registerModelGroup(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
@@ -688,7 +695,8 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         verifyResponse(function, response);
     }
 
-    public void updateModelGroup(RestClient client, String modelGroupId, String input, Consumer<Map<String, Object>> function) throws IOException {
+    public void updateModelGroup(RestClient client, String modelGroupId, String input, Consumer<Map<String, Object>> function)
+        throws IOException {
         Response response = TestHelper
             .makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId + "/_update", null, input, null);
         verifyResponse(function, response);
