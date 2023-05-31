@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -274,7 +275,7 @@ public class HttpConnector implements Connector {
             return;
         }
         if (response instanceof String && isJson((String)response)) {
-            Map<String, Object> data = gson.fromJson((String) response, Map.class);
+            Map<String, Object> data = StringUtils.fromJson((String) response, "response");
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
         } else {
             Map<String, Object> map = new HashMap<>();
