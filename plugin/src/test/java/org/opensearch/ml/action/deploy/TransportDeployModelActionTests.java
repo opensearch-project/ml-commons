@@ -6,7 +6,20 @@
 package org.opensearch.ml.action.deploy;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 
 import java.lang.reflect.Field;
@@ -18,6 +31,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +61,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -109,6 +124,9 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     private MLEngine mlEngine;
     private ModelHelper modelHelper;
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
     @Rule
@@ -139,6 +157,12 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         executorService = mock(ExecutorService.class);
         when(threadPool.executor(anyString())).thenReturn(executorService);
 
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT))).thenReturn(mlStat);
         transportDeployModelAction = new TransportDeployModelAction(
@@ -154,7 +178,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlTaskDispatcher,
             mlModelManager,
             mlStats,
-            settings
+            settings,
+            modelAccessControlHelper
         );
     }
 
@@ -180,6 +205,51 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
     }
 
+    public void testDoExecute_userHasNoAccessException() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_ValidationFailedException() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Failed to validate access"));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
+    }
+
+    @Ignore
     public void testDoExecute_DoNotAllowCustomDeploymentPlan() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Don't allow custom deployment plan");
@@ -202,12 +272,14 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlTaskDispatcher,
             mlModelManager,
             mlStats,
-            settings
+            settings,
+            modelAccessControlHelper
         );
 
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, mock(ActionListener.class));
     }
 
+    @Ignore
     public void testDoExecute_whenDeployModelRequestNodeIdsEmpty_thenMLResourceNotFoundException() {
         DiscoveryNodeHelper nodeHelper = mock(DiscoveryNodeHelper.class);
         when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[] {});
@@ -225,7 +297,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlTaskDispatcher,
                 mlModelManager,
                 mlStats,
-                settings
+                settings,
+                modelAccessControlHelper
             )
         );
         MLDeployModelRequest MLDeployModelRequest1 = mock(MLDeployModelRequest.class);

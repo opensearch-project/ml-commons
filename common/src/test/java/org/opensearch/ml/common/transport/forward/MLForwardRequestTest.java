@@ -79,6 +79,7 @@ public class MLForwardRequestTest {
                 .functionName(functionName)
                 .modelName("testModelName")
                 .version("testModelVersion")
+                .modelGroupId("modelGroupId")
                 .url("url")
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)

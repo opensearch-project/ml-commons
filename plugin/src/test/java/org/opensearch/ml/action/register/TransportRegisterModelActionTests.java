@@ -7,7 +7,10 @@ package org.opensearch.ml.action.register;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -38,6 +41,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -113,6 +117,9 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
 
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -133,9 +140,16 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             client,
             nodeFilter,
             mlTaskDispatcher,
-            mlStats
+            mlStats,
+            modelAccessControlHelper
         );
         assertNotNull(transportRegisterModelAction);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT))).thenReturn(mlStat);
@@ -160,6 +174,19 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
+    public void testDoExecute_userHasNoAccessException() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        transportRegisterModelAction.doExecute(task, prepareRequest("test url"), actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("User doesn't have valid privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+    }
+
     public void testDoExecute_successWithLocalNodeEqualToClusterNode() {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId1");
@@ -176,11 +203,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecute_invalidURL() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("URL can't match trusted url regex");
         transportRegisterModelAction.doExecute(task, prepareRequest("test url"), actionListener);
-        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("URL can't match trusted url regex", argumentCaptor.getValue().getMessage());
     }
 
     public void testDoExecute_successWithLocalNodeNotEqualToClusterNode() {
@@ -221,6 +247,19 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
+    public void test_ValidationFailedException() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Failed to validate access"));
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        transportRegisterModelAction.doExecute(task, prepareRequest(), actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
+    }
+
     public void testTransportRegisterModelActionDoExecuteWithCreateTaskException() {
         doAnswer(invocation -> {
             ActionListener<Exception> listener = invocation.getArgument(1);
@@ -243,6 +282,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             .builder()
             .functionName(FunctionName.BATCH_RCF)
             .deployModel(true)
+            .modelGroupId("testModelGroupsID")
             .version("1.0")
             .modelName("Test Model")
             .modelConfig(

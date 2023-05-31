@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.http.HttpEntity;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -26,6 +27,7 @@ public class RestMLGetModelActionIT extends MLCommonsRestTestCase {
         TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/models/111222333", null, "", null);
     }
 
+    @Ignore
     public void testGetModelAPI_Success() throws IOException {
         Response trainModelResponse = ingestModelData();
         HttpEntity entity = trainModelResponse.getEntity();

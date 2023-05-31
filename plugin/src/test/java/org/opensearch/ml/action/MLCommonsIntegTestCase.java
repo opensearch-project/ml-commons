@@ -350,7 +350,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
         int size
     ) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).parameters(parameters).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
@@ -361,7 +361,7 @@ public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
 
     public MLTaskResponse predict(String modelId, FunctionName functionName, MLInputDataset inputDataset, MLAlgoParams parameters) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).parameters(parameters).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
         return predictionResponse;
