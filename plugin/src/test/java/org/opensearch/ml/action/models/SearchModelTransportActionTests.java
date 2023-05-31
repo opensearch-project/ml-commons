@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.isA;
@@ -27,6 +28,10 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -75,13 +80,16 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private ClusterService clusterService;
+
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper));
+        mlSearchHandler = spy(new MLSearchHandler(client, namedXContentRegistry, modelAccessControlHelper, clusterService));
         searchModelTransportAction = new SearchModelTransportAction(transportService, actionFilters, mlSearchHandler);
 
         Settings settings = Settings.builder().build();
@@ -91,6 +99,11 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         when(searchRequest.source()).thenReturn(searchSourceBuilder);
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
+
+        Metadata metadata = mock(Metadata.class);
+        when(metadata.hasIndex(anyString())).thenReturn(true);
+        ClusterState testState = new ClusterState(new ClusterName("mock"), 123l, "111111", metadata, null, null, null, null, 0, false);
+        when(clusterService.state()).thenReturn(testState);
     }
 
     public void test_DoExecute_admin() {
