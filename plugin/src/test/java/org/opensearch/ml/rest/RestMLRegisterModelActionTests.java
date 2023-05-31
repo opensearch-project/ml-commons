@@ -7,11 +7,14 @@ package org.opensearch.ml.rest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -112,11 +115,8 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertNotNull(replacedRoutes);
         assertFalse(replacedRoutes.isEmpty());
         RestHandler.Route route1 = replacedRoutes.get(0);
-        RestHandler.Route route2 = replacedRoutes.get(1);
         assertEquals(RestRequest.Method.POST, route1.getMethod());
-        assertEquals(RestRequest.Method.POST, route2.getMethod());
         assertEquals("/_plugins/_ml/models/_register", route1.getPath());
-        assertEquals("/_plugins/_ml/models/{model_id}/{version}/_register", route2.getPath());
     }
 
     public void testRegisterModelRequest() throws Exception {
@@ -125,7 +125,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
         verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
         MLRegisterModelInput registerModelInput = argumentCaptor.getValue().getRegisterModelInput();
-        assertEquals("test_model_with_modelId", registerModelInput.getModelName());
+        assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
     }
@@ -144,8 +144,33 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         restMLRegisterModelAction.handleRequest(request, channel, client);
     }
 
-    public void testRegisterModelRequest_NullModelID() throws Exception {
-        RestRequest request = getRestRequest_NullModelId();
+    public void testRegisterModelRequestWithNullUrlAndUrlNotAllowed() throws Exception {
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        RestRequest request = getRestRequestWithNullUrl();
+        restMLRegisterModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
+        verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
+        MLRegisterModelInput registerModelInput = argumentCaptor.getValue().getRegisterModelInput();
+        assertEquals("test_model", registerModelInput.getModelName());
+        assertEquals("2", registerModelInput.getVersion());
+        assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
+    }
+
+    public void testRegisterModelRequestWithNullUrl() throws Exception {
+        RestRequest request = getRestRequestWithNullUrl();
+        restMLRegisterModelAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
+        verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
+        MLRegisterModelInput registerModelInput = argumentCaptor.getValue().getRegisterModelInput();
+        assertEquals("test_model", registerModelInput.getModelName());
+        assertEquals("2", registerModelInput.getVersion());
+        assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
+    }
+
+    public void testRegisterModelRequestWithNullModelID() throws Exception {
+        RestRequest request = getRestRequestWithNullModelId();
         restMLRegisterModelAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLRegisterModelRequest> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelRequest.class);
         verify(client, times(1)).execute(eq(MLRegisterModelAction.INSTANCE), argumentCaptor.capture(), any());
@@ -158,30 +183,83 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
             .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
-        final Map<String, Object> model = Map.of("url", "testUrl", "model_format", "TORCH_SCRIPT", "model_config", modelConfig);
+        final Map<String, Object> model = Map
+            .of(
+                "name",
+                "test_model",
+                "model_id",
+                "test_model_with_modelId",
+                "version",
+                "1",
+                "model_group_id",
+                "modelGroupId",
+                "url",
+                "testUrl",
+                "model_format",
+                "TORCH_SCRIPT",
+                "model_config",
+                modelConfig
+            );
         String requestContent = new Gson().toJson(model).toString();
-        Map<String, String> params = new HashMap<>();
-        params.put("model_id", "test_model_with_modelId");
-        params.put("version", "1");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}/{version}/_register")
-            .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
     }
 
-    private RestRequest getRestRequest_NullModelId() {
+    private RestRequest getRestRequestWithNullModelId() {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> modelConfig = Map
             .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
         final Map<String, Object> model = Map
-            .of("name", "test_model", "version", "2", "url", "testUrl", "model_format", "TORCH_SCRIPT", "model_config", modelConfig);
+            .of(
+                "name",
+                "test_model",
+                "version",
+                "2",
+                "model_group_id",
+                "modelGroupId",
+                "url",
+                "testUrl",
+                "model_format",
+                "TORCH_SCRIPT",
+                "model_config",
+                modelConfig
+            );
         String requestContent = new Gson().toJson(model).toString();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/_register")
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithNullUrl() {
+        RestRequest.Method method = RestRequest.Method.POST;
+        final Map<String, Object> modelConfig = Map
+            .of("model_type", "bert", "embedding_dimension", 384, "framework_type", "sentence_transformers", "all_config", "All Config");
+        final Map<String, Object> model = Map
+            .of(
+                "name",
+                "test_model",
+                "model_id",
+                "test_model_with_modelId",
+                "version",
+                "2",
+                "model_group_id",
+                "modelGroupId",
+                "model_format",
+                "TORCH_SCRIPT",
+                "model_config",
+                modelConfig
+            );
+        String requestContent = new Gson().toJson(model).toString();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}/{version}/_register")
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;

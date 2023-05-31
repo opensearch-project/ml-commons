@@ -261,6 +261,11 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.profile.MLModelProfile',
         'org.opensearch.ml.profile.MLPredictRequestStats',
         'org.opensearch.ml.action.deploy.TransportDeployModelAction',
+        'org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction',
+        'org.opensearch.ml.action.undeploy.TransportUndeployModelAction',
+        'org.opensearch.ml.action.prediction.TransportPredictionTaskAction',
+        'org.opensearch.ml.action.tasks.GetTaskTransportAction',
+        'org.opensearch.ml.action.tasks.SearchTaskTransportAction',
         'org.opensearch.ml.model.MLModelManager',
         'org.opensearch.ml.stats.MLClusterLevelStat',
         'org.opensearch.ml.stats.MLStatLevel',
@@ -275,10 +280,15 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.task.MLTrainAndPredictTaskRunner',
         'org.opensearch.ml.task.MLExecuteTaskRunner',
         'org.opensearch.ml.action.profile.MLProfileTransportAction',
-        'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
         'org.opensearch.ml.rest.RestMLPredictionAction',
         'org.opensearch.ml.breaker.DiskCircuitBreaker',
-        'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory'
+        'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory',
+        'org.opensearch.ml.action.training.TrainingITTests',
+        'org.opensearch.ml.action.prediction.PredictionITTests',
+        'org.opensearch.ml.rest.RestMLRegisterModelAction',
+        'org.opensearch.ml.rest.RestMLRegisterModelGroupAction',
+        'org.opensearch.ml.rest.RestMLUpdateModelGroupAction',
+        'org.opensearch.ml.cluster.MLSyncUpCron'
 ]
 
 jacocoTestCoverageVerification {
@@ -288,7 +298,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.6
+                minimum = 0.7  //TODO: change this value to 0.7
             }
         }
         rule {
@@ -297,7 +307,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.6
+                minimum = 0.8  //TODO: change this value to 0.8
             }
         }
     }

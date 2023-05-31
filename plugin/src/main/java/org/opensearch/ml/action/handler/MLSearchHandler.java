@@ -8,18 +8,35 @@ package org.opensearch.ml.action.handler;
 import static org.opensearch.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.RestStatus;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.base.Throwables;
 
@@ -33,18 +50,79 @@ public class MLSearchHandler {
     private final Client client;
     private NamedXContentRegistry xContentRegistry;
 
-    public MLSearchHandler(Client client, NamedXContentRegistry xContentRegistry) {
+    private ModelAccessControlHelper modelAccessControlHelper;
+
+    public MLSearchHandler(Client client, NamedXContentRegistry xContentRegistry, ModelAccessControlHelper modelAccessControlHelper) {
+        this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
     }
 
+    /**
+     * Fetch all the models from the model group index, and then create a combined query to model version index.
+     * @param request
+     * @param actionListener
+     */
     public void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
-        ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, listener);
-        } catch (Exception e) {
-            log.error("Failed to search", e);
-            listener.onFailure(e);
+        User user = RestActionUtils.getUserContext(client);
+        ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
+        if (modelAccessControlHelper.skipModelAccessControl(user)) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                client.search(request, listener);
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+                actionListener.onFailure(e);
+            }
+        } else {
+            SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
+            SearchRequest modelGroupSearchRequest = new SearchRequest();
+            sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
+            sourceBuilder.size(10000);
+            modelGroupSearchRequest.source(sourceBuilder);
+            modelGroupSearchRequest.indices(CommonValue.ML_MODEL_GROUP_INDEX);
+            ActionListener<SearchResponse> modelGroupSearchActionListener = ActionListener.wrap(r -> {
+                if (Optional.ofNullable(r).map(SearchResponse::getHits).map(SearchHits::getTotalHits).map(x -> x.value).orElse(0L) > 0) {
+                    List<String> modelGroupIds = new ArrayList<>();
+                    Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
+
+                    request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
+                    client.search(request, listener);
+                } else {
+                    log.debug("No model group found");
+                    request.source().query(rewriteQueryBuilder(request.source().query(), null));
+                    client.search(request, listener);
+                }
+            }, e -> {
+                log.error("Fail to search model groups!", e);
+                actionListener.onFailure(e);
+            });
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
+            }
+        }
+    }
+
+    private QueryBuilder rewriteQueryBuilder(QueryBuilder queryBuilder, List<String> modelGroupIds) {
+        ExistsQueryBuilder existsQueryBuilder = new ExistsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD);
+        BoolQueryBuilder modelGroupIdMustNotExistBoolQuery = new BoolQueryBuilder();
+        modelGroupIdMustNotExistBoolQuery.mustNot(existsQueryBuilder);
+
+        BoolQueryBuilder accessControlledBoolQuery = new BoolQueryBuilder();
+        if (!CollectionUtils.isEmpty(modelGroupIds)) {
+            TermsQueryBuilder modelGroupIdTermsQuery = new TermsQueryBuilder(MLModelGroup.MODEL_GROUP_ID_FIELD, modelGroupIds);
+            accessControlledBoolQuery.should(modelGroupIdTermsQuery);
+        }
+        accessControlledBoolQuery.should(modelGroupIdMustNotExistBoolQuery);
+        if (queryBuilder == null) {
+            return accessControlledBoolQuery;
+        } else if (queryBuilder instanceof BoolQueryBuilder) {
+            ((BoolQueryBuilder) queryBuilder).must(accessControlledBoolQuery);
+            return queryBuilder;
+        } else {
+            BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+            boolQueryBuilder.must(queryBuilder);
+            boolQueryBuilder.must(modelGroupIdMustNotExistBoolQuery);
+            return boolQueryBuilder;
         }
     }
 
@@ -75,7 +153,7 @@ public class MLSearchHandler {
                 String errorMessage = generalErrorMessage;
                 if (isBadRequest(e) || e instanceof MLException) {
                     errorMessage = e.getMessage();
-                } else if (cause != null && (isBadRequest(cause) || cause instanceof MLException)) {
+                } else if (isBadRequest(cause) || cause instanceof MLException) {
                     errorMessage = cause.getMessage();
                 }
                 actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));

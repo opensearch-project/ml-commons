@@ -75,6 +75,7 @@ public class MLForwardInputTest {
                 .functionName(functionName)
                 .modelName("testModelName")
                 .version("testModelVersion")
+                .modelGroupId("mockModelGroupId")
                 .url("url")
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)

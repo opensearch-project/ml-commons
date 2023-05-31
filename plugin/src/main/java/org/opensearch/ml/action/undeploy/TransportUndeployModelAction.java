@@ -28,6 +28,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -39,6 +40,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
@@ -57,6 +59,9 @@ public class TransportUndeployModelAction extends
     private final Client client;
     private DiscoveryNodeHelper nodeFilter;
     private final MLStats mlStats;
+    private NamedXContentRegistry xContentRegistry;
+
+    private ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
     public TransportUndeployModelAction(
@@ -67,7 +72,9 @@ public class TransportUndeployModelAction extends
         ThreadPool threadPool,
         Client client,
         DiscoveryNodeHelper nodeFilter,
-        MLStats mlStats
+        MLStats mlStats,
+        NamedXContentRegistry xContentRegistry,
+        ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(
             MLUndeployModelAction.NAME,
@@ -85,6 +92,8 @@ public class TransportUndeployModelAction extends
         this.client = client;
         this.nodeFilter = nodeFilter;
         this.mlStats = mlStats;
+        this.xContentRegistry = xContentRegistry;
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     @Override
@@ -98,10 +107,13 @@ public class TransportUndeployModelAction extends
             Map<String, String[]> modelWorkNodesBeforeRemoval = new HashMap<>();
             responses.forEach(r -> {
                 Map<String, String[]> nodeCounts = r.getModelWorkerNodeBeforeRemoval();
+
                 if (nodeCounts != null) {
                     for (Map.Entry<String, String[]> entry : nodeCounts.entrySet()) {
-                        if (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
-                            || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length) {
+                        // when undeploy a undeployed model, the entry.getvalue() is null
+                        if (entry.getValue() != null
+                            && (!modelWorkNodesBeforeRemoval.containsKey(entry.getKey())
+                                || modelWorkNodesBeforeRemoval.get(entry.getKey()).length < entry.getValue().length)) {
                             modelWorkNodesBeforeRemoval.put(entry.getKey(), entry.getValue());
                         }
                     }
@@ -221,6 +233,7 @@ public class TransportUndeployModelAction extends
         String[] modelIds = MLUndeployModelNodesRequest.getModelIds();
 
         Map<String, String[]> modelWorkerNodesMap = new HashMap<>();
+
         boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
         String[] removedModelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
         if (removedModelIds != null) {

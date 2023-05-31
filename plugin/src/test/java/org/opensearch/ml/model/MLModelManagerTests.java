@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -64,7 +65,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -178,7 +182,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelName = "model_name1";
         modelId = randomAlphaOfLength(10);
         modelContentHashValue = "c446f747520bcc6af053813cb1e8d34944a7c4686bbb405aeaa23883b5a806c8";
-        version = "1.0.0";
+        version = "1";
         url = "http://testurl";
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
@@ -191,6 +195,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .builder()
             .modelName(modelName)
             .version(version)
+            .modelGroupId("modelGroupId")
             .functionName(FunctionName.TEXT_EMBEDDING)
             .modelFormat(modelFormat)
             .modelConfig(modelConfig)
@@ -263,6 +268,23 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .build();
         modelChunk0 = model.toBuilder().content(Base64.getEncoder().encodeToString("test chunk1".getBytes(StandardCharsets.UTF_8))).build();
         modelChunk1 = model.toBuilder().content(Base64.getEncoder().encodeToString("test chunk2".getBytes(StandardCharsets.UTF_8))).build();
+
+        GetResponse getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        Map<String, Object> sourceMap = new HashMap<>();
+        sourceMap.put("latest_version", 0);
+        when(getResponse.getSourceAsMap()).thenReturn(sourceMap);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getResponseActionListener = invocation.getArgument(1);
+            getResponseActionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Void> updateActionListener = invocation.getArgument(1);
+            updateActionListener.onResponse(null);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
     }
 
     public void testRegisterMLModel_ExceedMaxRunningTask() {
@@ -847,7 +869,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MLRegisterModelMetaInput input = MLRegisterModelMetaInput
             .builder()
             .name("Model Name")
-            .version("1")
+            .modelGroupId("1")
             .description("Custom Model Test")
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .functionName(FunctionName.BATCH_RCF)
