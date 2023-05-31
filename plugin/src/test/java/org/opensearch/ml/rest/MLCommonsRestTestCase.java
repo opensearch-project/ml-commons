@@ -76,6 +76,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
+import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -457,7 +458,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             );
     }
 
-    public Response createUser(String name, String password, ArrayList<String> backendRoles) throws IOException {
+    public Response createUser(String name, String password, List<String> backendRoles) throws IOException {
         JsonArray backendRolesString = new JsonArray();
         for (int i = 0; i < backendRoles.size(); i++) {
             backendRolesString.add(backendRoles.get(i));
@@ -496,7 +497,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             );
     }
 
-    public Response createRoleMapping(String role, ArrayList<String> users) throws IOException {
+    public Response createRoleMapping(String role, List<String> users) throws IOException {
         JsonArray usersString = new JsonArray();
         for (int i = 0; i < users.size(); i++) {
             usersString.add(users.get(i));
@@ -671,14 +672,25 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .build();
     }
 
+    public MLUpdateModelGroupInput createUpdateModelGroupInput(
+        String modelGroupId,
+        String name,
+        String description,
+        List<String> backendRoles,
+        ModelAccessMode modelAccessMode,
+        Boolean isAddAllBackendRoles
+    ) {
+        return MLUpdateModelGroupInput.builder().modelGroupID(modelGroupId).name(name).description(description).backendRoles(backendRoles).modelAccessMode(modelAccessMode).isAddAllBackendRoles(isAddAllBackendRoles).build();
+    }
+
     public void registerModelGroup(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
         Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/model_groups/_register", null, input, null);
         verifyResponse(function, response);
     }
 
-    public void updateModelGroup(RestClient client, String modelGroupId, Consumer<Map<String, Object>> function) throws IOException {
+    public void updateModelGroup(RestClient client, String modelGroupId, String input, Consumer<Map<String, Object>> function) throws IOException {
         Response response = TestHelper
-            .makeRequest(client, "POST", "/_plugins/_ml/model_groups/" + modelGroupId + "/_update", null, "", null);
+            .makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId + "/_update", null, input, null);
         verifyResponse(function, response);
     }
 
