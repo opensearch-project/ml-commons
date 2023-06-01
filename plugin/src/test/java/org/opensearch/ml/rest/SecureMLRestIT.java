@@ -57,6 +57,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private String modelGroupId;
+    private String password = "IntegTest@SecureMLRestIT123";
 
     @Before
     public void setup() throws IOException {
@@ -76,37 +77,28 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         }
         createSearchRole(indexSearchAccessRole, "*");
 
-        createUser(mlNoAccessUser, mlNoAccessUser, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlNoAccessClient = new SecureRestClientBuilder(
-            getClusterHosts().toArray(new HttpHost[0]),
-            isHttps(),
-            mlNoAccessUser,
-            mlNoAccessUser
-        ).setSocketTimeout(60000).build();
+        createUser(mlNoAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, password)
+            .setSocketTimeout(60000)
+            .build();
 
-        createUser(mlReadOnlyUser, mlReadOnlyUser, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlReadOnlyClient = new SecureRestClientBuilder(
-            getClusterHosts().toArray(new HttpHost[0]),
-            isHttps(),
-            mlReadOnlyUser,
-            mlReadOnlyUser
-        ).setSocketTimeout(60000).build();
+        createUser(mlReadOnlyUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, password)
+            .setSocketTimeout(60000)
+            .build();
 
-        createUser(mlFullAccessNoIndexAccessUser, mlFullAccessNoIndexAccessUser, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        createUser(mlFullAccessNoIndexAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
         mlFullAccessNoIndexAccessClient = new SecureRestClientBuilder(
             getClusterHosts().toArray(new HttpHost[0]),
             isHttps(),
             mlFullAccessNoIndexAccessUser,
-            mlFullAccessNoIndexAccessUser
+            password
         ).setSocketTimeout(60000).build();
 
-        createUser(mlFullAccessUser, mlFullAccessUser, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
-        mlFullAccessClient = new SecureRestClientBuilder(
-            getClusterHosts().toArray(new HttpHost[0]),
-            isHttps(),
-            mlFullAccessUser,
-            mlFullAccessUser
-        ).setSocketTimeout(60000).build();
+        createUser(mlFullAccessUser, password, new ArrayList<>(Arrays.asList(opensearchBackendRole)));
+        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, password)
+            .setSocketTimeout(60000)
+            .build();
 
         createRoleMapping("ml_read_access", new ArrayList<>(Arrays.asList(mlReadOnlyUser)));
         createRoleMapping("ml_full_access", new ArrayList<>(Arrays.asList(mlFullAccessNoIndexAccessUser, mlFullAccessUser)));
