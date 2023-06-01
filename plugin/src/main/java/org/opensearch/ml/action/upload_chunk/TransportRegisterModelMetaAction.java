@@ -61,9 +61,8 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
 
         modelAccessControlHelper.validateModelGroupAccess(user, mlUploadInput.getModelGroupId(), client, ActionListener.wrap(access -> {
             if (!access) {
-                log.error("User doesn't have valid privilege to perform this operation on this model");
-                listener
-                    .onFailure(new IllegalArgumentException("User doesn't have valid privilege to perform this operation on this model"));
+                log.error("You don't have permissions to perform this operation on this model.");
+                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
             } else {
                 mlModelManager.registerModelMeta(mlUploadInput, ActionListener.wrap(modelId -> {
                     listener.onResponse(new MLRegisterModelMetaResponse(modelId, MLTaskState.CREATED.name()));
