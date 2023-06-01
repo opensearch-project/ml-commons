@@ -121,11 +121,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
                 if (!access) {
-                    log.error("User doesn't have valid privilege to perform this operation on this model");
-                    listener
-                        .onFailure(
-                            new IllegalArgumentException("User doesn't have valid privilege to perform this operation on this model")
-                        );
+                    log.error("You don't have permissions to perform this operation on this model.");
+                    listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
                 } else {
                     if (url != null) {
                         boolean validUrl = pattern.matcher(url).find();
