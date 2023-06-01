@@ -140,14 +140,19 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
 
         UpdateRequest updateModelGroupRequest = new UpdateRequest();
         updateModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId).doc(source);
-        client
-            .update(
-                updateModelGroupRequest,
-                ActionListener.wrap(r -> { listener.onResponse(new MLUpdateModelGroupResponse("Updated")); }, e -> {
-                    log.error("Failed to update Model Group", e);
-                    throw new MLException("Failed to update Model Group", e);
-                })
-            );
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client
+                .update(
+                    updateModelGroupRequest,
+                    ActionListener.wrap(r -> { listener.onResponse(new MLUpdateModelGroupResponse("Updated")); }, e -> {
+                        log.error("Failed to update Model Group", e);
+                        throw new MLException("Failed to update Model Group", e);
+                    })
+                );
+        } catch (Exception e) {
+            logException("Failed to Update model group ", e, log);
+            listener.onFailure(e);
+        }
     }
 
     private void validateRequestForAccessControl(MLUpdateModelGroupInput input, User user, MLModelGroup mlModelGroup) {
