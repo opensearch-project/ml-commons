@@ -188,6 +188,15 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("User cannot specify add all backed roles to true and backend roles not empty");
             }
+            // To avoid user update only the model access mode value. For a private model, only change model access mode can cause data
+            // inconsistency since backend roles are empty.
+            if (ModelAccessMode.RESTRICTED == modelAccessMode
+                && CollectionUtils.isEmpty(input.getBackendRoles())
+                && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                throw new IllegalArgumentException(
+                    "User have to specify backend roles or set add all backend roles to true for a restricted model group"
+                );
+            }
             if (!modelAccessControlHelper.isAdmin(user)
                 && inputBackendRolesAndModelBackendRolesBothNotEmpty(input, mlModelGroup)
                 && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {

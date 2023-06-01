@@ -154,6 +154,9 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
             } else {
                 input.setModelAccessMode(ModelAccessMode.RESTRICTED);
             }
+            if (modelAccessControlHelper.isUserHasAllPassedBackendRoles(user, input.getBackendRoles())) {
+                throw new IllegalArgumentException("Cannot specify backend roles that doesn't belong to the current user");
+            }
         }
         if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles))) {

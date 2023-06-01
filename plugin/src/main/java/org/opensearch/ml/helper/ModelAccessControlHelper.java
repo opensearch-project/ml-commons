@@ -174,6 +174,10 @@ public class ModelAccessControlHelper {
             && mlModelGroup.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x));
     }
 
+    public boolean isUserHasAllPassedBackendRoles(User user, List<String> backendRoles) {
+        return !CollectionUtils.isEmpty(backendRoles) && backendRoles.stream().anyMatch(x -> !user.getBackendRoles().contains(x));
+    }
+
     public boolean isOwnerStillHasPermission(User user, MLModelGroup mlModelGroup) {
         // when security plugin is disabled, or model access control not enabled, the model is a public model and anyone has permission to
         // it.
@@ -188,7 +192,8 @@ public class ModelAccessControlHelper {
             if (CollectionUtils.isEmpty(mlModelGroup.getBackendRoles())) {
                 throw new IllegalStateException("Backend roles should not be null");
             }
-            return user.getBackendRoles() != null && new HashSet<>(mlModelGroup.getBackendRoles()).containsAll(user.getBackendRoles());
+            return user.getBackendRoles() != null
+                && new HashSet<>(mlModelGroup.getBackendRoles()).stream().anyMatch(x -> user.getBackendRoles().contains(x));
         }
         throw new IllegalStateException("Access shouldn't be null");
     }
