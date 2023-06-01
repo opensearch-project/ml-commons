@@ -5,8 +5,14 @@
 
 package org.opensearch.ml.action.model_group;
 
-import com.google.common.collect.ImmutableList;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
@@ -36,13 +42,9 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import com.google.common.collect.ImmutableList;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {
@@ -191,10 +193,10 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
             }
             if (ModelAccessMode.RESTRICTED == modelAccessMode
-                    && CollectionUtils.isEmpty(input.getBackendRoles())
-                    && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                && CollectionUtils.isEmpty(input.getBackendRoles())
+                && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException(
-                        "You must specify one or more backend roles or add all backend roles to register a restricted model group."
+                    "You must specify one or more backend roles or add all backend roles to register a restricted model group."
                 );
             }
             if (!modelAccessControlHelper.isAdmin(user)
