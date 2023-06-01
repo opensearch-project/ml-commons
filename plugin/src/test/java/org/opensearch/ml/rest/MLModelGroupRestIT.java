@@ -58,6 +58,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private String modelGroupId;
+    private String password = "IntegTest@MLModelGroupRestIT123";
 
     @Before
     public void setup() throws IOException {
@@ -77,56 +78,43 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
         }
         createSearchRole(indexSearchAccessRole, "*");
 
-        createUser(mlNoAccessUser, mlNoAccessUser, ImmutableList.of(opensearchBackendRole));
-        mlNoAccessClient = new SecureRestClientBuilder(
-            getClusterHosts().toArray(new HttpHost[0]),
-            isHttps(),
-            mlNoAccessUser,
-            mlNoAccessUser
-        ).setSocketTimeout(60000).build();
+        createUser(mlNoAccessUser, password, ImmutableList.of(opensearchBackendRole));
+        mlNoAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlNoAccessUser, password)
+            .setSocketTimeout(60000)
+            .build();
 
-        createUser(mlReadOnlyUser, mlReadOnlyUser, ImmutableList.of(opensearchBackendRole));
-        mlReadOnlyClient = new SecureRestClientBuilder(
-            getClusterHosts().toArray(new HttpHost[0]),
-            isHttps(),
-            mlReadOnlyUser,
-            mlReadOnlyUser
-        ).setSocketTimeout(60000).build();
+        createUser(mlReadOnlyUser, password, ImmutableList.of(opensearchBackendRole));
+        mlReadOnlyClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlReadOnlyUser, password)
+            .setSocketTimeout(60000)
+            .build();
 
-        createUser(mlFullAccessNoIndexAccessUser, mlFullAccessNoIndexAccessUser, ImmutableList.of(opensearchBackendRole));
+        createUser(mlFullAccessNoIndexAccessUser, password, ImmutableList.of(opensearchBackendRole));
         mlFullAccessNoIndexAccessClient = new SecureRestClientBuilder(
             getClusterHosts().toArray(new HttpHost[0]),
             isHttps(),
             mlFullAccessNoIndexAccessUser,
-            mlFullAccessNoIndexAccessUser
+            password
         ).setSocketTimeout(60000).build();
 
-        createUser(mlFullAccessUser, mlFullAccessUser, ImmutableList.of(opensearchBackendRole));
-        mlFullAccessClient = new SecureRestClientBuilder(
-            getClusterHosts().toArray(new HttpHost[0]),
-            isHttps(),
-            mlFullAccessUser,
-            mlFullAccessUser
-        ).setSocketTimeout(60000).build();
+        createUser(mlFullAccessUser, password, ImmutableList.of(opensearchBackendRole));
+        mlFullAccessClient = new SecureRestClientBuilder(getClusterHosts().toArray(new HttpHost[0]), isHttps(), mlFullAccessUser, password)
+            .setSocketTimeout(60000)
+            .build();
 
-        createUser(mlNonAdminFullAccessWithoutBackendRoleUser, mlNonAdminFullAccessWithoutBackendRoleUser, ImmutableList.of());
+        createUser(mlNonAdminFullAccessWithoutBackendRoleUser, password, ImmutableList.of());
         mlNonAdminFullAccessWithoutBackendRoleClient = new SecureRestClientBuilder(
             getClusterHosts().toArray(new HttpHost[0]),
             isHttps(),
             mlNonAdminFullAccessWithoutBackendRoleUser,
-            mlNonAdminFullAccessWithoutBackendRoleUser
+            password
         ).setSocketTimeout(60000).build();
 
-        createUser(
-            mlNonOwnerFullAccessWithBackendRoleUser,
-            mlNonOwnerFullAccessWithBackendRoleUser,
-            ImmutableList.of(opensearchBackendRole)
-        );
+        createUser(mlNonOwnerFullAccessWithBackendRoleUser, password, ImmutableList.of(opensearchBackendRole));
         mlNonOwnerFullAccessWithBackendRoleClient = new SecureRestClientBuilder(
             getClusterHosts().toArray(new HttpHost[0]),
             isHttps(),
             mlNonOwnerFullAccessWithBackendRoleUser,
-            mlNonOwnerFullAccessWithBackendRoleUser
+            password
         ).setSocketTimeout(60000).build();
 
         createRoleMapping("ml_read_access", ImmutableList.of(mlReadOnlyUser));
