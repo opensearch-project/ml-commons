@@ -184,7 +184,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, prepareRequest("test url"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User doesn't have valid privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permissions to perform this operation on this model.", argumentCaptor.getValue().getMessage());
     }
 
     public void testDoExecute_successWithLocalNodeEqualToClusterNode() {

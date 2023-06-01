@@ -124,6 +124,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             if (ModelAccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
                 source.put(MLModelGroup.BACKEND_ROLES_FIELD, ImmutableList.of());
             }
+        } else if (updateModelGroupInput.getBackendRoles() != null
+            || Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
+            source.put(MLModelGroup.ACCESS, ModelAccessMode.RESTRICTED.getValue());
         }
         if (updateModelGroupInput.getBackendRoles() != null) {
             source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
@@ -158,40 +161,48 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private void validateRequestForAccessControl(MLUpdateModelGroupInput input, User user, MLModelGroup mlModelGroup) {
         if (hasAccessControlChange(input)) {
             if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
-                throw new IllegalArgumentException("Only owner/admin has valid privilege to perform update access control data");
+                throw new IllegalArgumentException("Only owner or admin can update access control data.");
             } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
+                && !modelAccessControlHelper.isAdmin(user)
                 && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
                 throw new IllegalArgumentException(
-                    "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user"
+                    "You don’t have the specified backend role to update access control data. For more information, contact your administrator."
                 );
             }
         }
         if (!modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
-            throw new IllegalArgumentException("User doesn't have corresponding backend role to perform update action");
+            throw new IllegalArgumentException("You don't have permissions to perform this operation on this model group.");
         }
         ModelAccessMode modelAccessMode = input.getModelAccessMode();
         if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
-            throw new IllegalArgumentException("User cannot specify backend roles to a public/private model group");
+            throw new IllegalArgumentException("You can specify backend roles only for a model group with the restricted access mode.");
         } else if (modelAccessMode == null || ModelAccessMode.RESTRICTED == modelAccessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
-                throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
+                throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles()) && CollectionUtils.isEmpty(user.getBackendRoles())) {
-                throw new IllegalArgumentException("Current user doesn't have any backend role");
+                throw new IllegalArgumentException("You don’t have any backend roles.");
+            }
+            if (ModelAccessMode.RESTRICTED == modelAccessMode
+                && CollectionUtils.isEmpty(input.getBackendRoles())
+                && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                throw new IllegalArgumentException(
+                    "You must specify one or more backend roles or add all backend roles to register a restricted model group."
+                );
             }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.FALSE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("User have to specify backend roles when add all backend roles to false");
             }
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
-                throw new IllegalArgumentException("User cannot specify add all backed roles to true and backend roles not empty");
+                throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
             }
             if (!modelAccessControlHelper.isAdmin(user)
-                && inputBackendRolesAndModelBackendRolesBothNotEmpty(input, mlModelGroup)
+                && !CollectionUtils.isEmpty(input.getBackendRoles())
                 && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
-                throw new IllegalArgumentException("User cannot specify backend roles that doesn't belong to the current user");
+                throw new IllegalArgumentException("You don't have the backend roles specified.");
             }
         }
     }
@@ -200,14 +211,10 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         return input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null;
     }
 
-    private boolean inputBackendRolesAndModelBackendRolesBothNotEmpty(MLUpdateModelGroupInput input, MLModelGroup mlModelGroup) {
-        return !CollectionUtils.isEmpty(input.getBackendRoles()) && !CollectionUtils.isEmpty(mlModelGroup.getBackendRoles());
-    }
-
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLUpdateModelGroupInput input) {
         if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
             throw new IllegalArgumentException(
-                "Cluster security plugin not enabled or model access control not enabled, can't pass access control data in request body"
+                "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
             );
         }
     }

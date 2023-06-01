@@ -138,7 +138,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User must specify at least one backend role or make the model public/private",
+            "You must specify at least one backend role or make the model group public/private for registering it.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -160,7 +160,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User cannot specify backend roles to a public/private model group", argumentCaptor.getValue().getMessage());
+        assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_BackendRolesProvidedWithPrivate() {
@@ -170,7 +170,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User cannot specify backend roles to a public/private model group", argumentCaptor.getValue().getMessage());
+        assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_AdminSpecifiedAddAllBackendRolesForRestricted() {
@@ -182,7 +182,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Admin user cannot specify add all backend roles to a model group", argumentCaptor.getValue().getMessage());
+        assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_UserWithNoBackendRolesSpecifiedRestricted() {
@@ -193,7 +193,10 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Current user has no backend roles to specify the model group as restricted", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "You must have at least one backend role to register a restricted model group.",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_UserSpecifiedRestrictedButNoBackendRolesFieldF() {
@@ -205,7 +208,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User have to specify backend roles or set add all backend roles to true for a restricted model group",
+            "You must specify one or more backend roles or add all backend roles to register a restricted model group.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -219,7 +222,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User cannot specify add all backed roles to true and backend roles not empty",
+            "You cannot specify backend roles and add all backend roles at the same time.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -234,7 +237,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User cannot specify backend roles that doesn't belong to the current user", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_SuccessSecurityDisabledCluster() {

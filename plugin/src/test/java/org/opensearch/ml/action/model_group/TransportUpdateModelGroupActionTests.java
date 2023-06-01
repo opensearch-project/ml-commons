@@ -144,7 +144,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Only owner/admin has valid privilege to perform update access control data", argumentCaptor.getValue().getMessage());
+        assertEquals("Only owner or admin can update access control data.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_OwnerNoMoreHasPermissionException() {
@@ -156,7 +156,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Owner doesn't have corresponding backend role to perform update access control data, please check with admin user",
+            "You don’t have the specified backend role to update access control data. For more information, contact your administrator.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -170,7 +170,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User doesn't have corresponding backend role to perform update action", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permissions to perform this operation on this model group.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_BackendRolesProvidedWithPrivate() {
@@ -183,7 +183,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User cannot specify backend roles to a public/private model group", argumentCaptor.getValue().getMessage());
+        assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_BackendRolesProvidedWithPublic() {
@@ -196,7 +196,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User cannot specify backend roles to a public/private model group", argumentCaptor.getValue().getMessage());
+        assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_AdminSpecifiedAddAllBackendRolesForRestricted() {
@@ -207,7 +207,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Admin user cannot specify add all backend roles to a model group", argumentCaptor.getValue().getMessage());
+        assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_UserWithNoBackendRolesSpecifiedRestricted() {
@@ -220,7 +220,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Current user doesn't have any backend role", argumentCaptor.getValue().getMessage());
+        assertEquals("You don’t have any backend roles.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_UserSpecifiedRestrictedButNoBackendRolesFieldF() {
@@ -247,7 +247,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "User cannot specify add all backed roles to true and backend roles not empty",
+            "You cannot specify backend roles and add all backend roles at the same time.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -264,7 +264,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User cannot specify backend roles that doesn't belong to the current user", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_SuccessPrivateWithOwnerAsUser() {
@@ -385,7 +385,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Cluster security plugin not enabled or model access control not enabled, can't pass access control data in request body",
+            "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster.",
             argumentCaptor.getValue().getMessage()
         );
     }

@@ -177,7 +177,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
         mlModelChunkUploader.uploadModelChunk(uploadModelChunkInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User doesn't have valid privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permissions to perform this operation on this model.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_ExceptionFailedToIndexModelGroup() {
