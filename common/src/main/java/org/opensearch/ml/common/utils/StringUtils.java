@@ -59,4 +59,8 @@ public class StringUtils {
         }
         return result;
     }
+
+    public static String toJson(Map<String, String> map) {
+        return new JSONObject(map).toString();
+    }
 }

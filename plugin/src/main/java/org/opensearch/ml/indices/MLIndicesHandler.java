@@ -6,6 +6,7 @@
 package org.opensearch.ml.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
@@ -43,6 +44,7 @@ public class MLIndicesHandler {
     static {
         indexMappingUpdated.put(ML_MODEL_INDEX, new AtomicBoolean(false));
         indexMappingUpdated.put(ML_TASK_INDEX, new AtomicBoolean(false));
+        indexMappingUpdated.put(ML_CONNECTOR_INDEX, new AtomicBoolean(false));
     }
 
     public void initModelIndexIfAbsent(ActionListener<Boolean> listener) {
@@ -51,6 +53,10 @@ public class MLIndicesHandler {
 
     public void initMLTaskIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.TASK, listener);
+    }
+
+    public void initMLConnectorIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.CONNECTOR, listener);
     }
 
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {

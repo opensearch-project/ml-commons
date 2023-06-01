@@ -8,6 +8,7 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
@@ -85,6 +86,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
@@ -294,7 +296,9 @@ public class MLModelManager {
             String modelName = registerModelInput.getModelName();
             String version = registerModelInput.getVersion();
             Instant now = Instant.now();
-            registerModelInput.getConnector().encrypt((credential) -> mlEngine.encrypt(credential));
+            if (registerModelInput.getConnector() != null) {
+                registerModelInput.getConnector().encrypt((credential) -> mlEngine.encrypt(credential));
+            }
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel
                     .builder()
@@ -305,6 +309,7 @@ public class MLModelManager {
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
+                    .connectorId(registerModelInput.getConnectorId())
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
@@ -623,6 +628,25 @@ public class MLModelManager {
                             clusterService
                         );
                     // deploy remote model or model trained by built-in algorithm like kmeans
+                    if (mlModel.getConnector() == null) {
+                        GetRequest getConnectorRequest = new GetRequest();
+                        FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
+                        getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
+                        client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
+                            if (getResponse != null && getResponse.isExists()) {
+                                try (
+                                    XContentParser parser = createXContentParserFromRegistry(
+                                        xContentRegistry,
+                                        getResponse.getSourceAsBytesRef()
+                                    )
+                                ) {
+                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                    DetachedConnector connector = DetachedConnector.parse(parser);
+                                    mlModel.setConnector(connector);
+                                }
+                            }
+                        }, e -> { listener.onFailure(e); }));
+                    }
                     Predictable predictable = mlEngine.deploy(mlModel, params);
                     modelCacheHelper.setPredictor(modelId, predictable);
                     mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();

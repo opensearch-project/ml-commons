@@ -16,8 +16,10 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
@@ -42,18 +44,18 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processO
 
 @Log4j2
 @ConnectorExecutor(HTTP_V1)
-public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor{
+public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
-    private HttpConnector connector;
+    private AbstractConnector connector;
     @Setter
     private ScriptService scriptService;
 
     public HttpJsonConnectorExecutor(Connector connector) {
-        this.connector = (HttpConnector)connector;
+        this.connector = (AbstractConnector)connector;
     }
 
     @Override
-    public ModelTensorOutput execute(MLInput mlInput) {
+    public ModelTensorOutput executePredict(MLInput mlInput) {
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         List<ModelTensor> modelTensors = new ArrayList<>();
 
@@ -94,6 +96,8 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor{
                     throw new IllegalArgumentException("unsupported http method");
             }
 
+            // Map<String, ?> headers = (connector instanceof DetachedConnector)?
+            //        ((DetachedConnector) connector).getPredictSchema().getDecryptedHeaders():connector.createHeaders();
             Map<String, ?> headers = connector.createHeaders();
             boolean hasContentTypeHeader = false;
             for (String key : headers.keySet()) {
