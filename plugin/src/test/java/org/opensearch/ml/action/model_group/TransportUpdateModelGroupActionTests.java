@@ -5,15 +5,6 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -49,6 +40,15 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     @Rule
@@ -223,7 +223,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("You don’t have any backend roles.", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_UserSpecifiedRestrictedButNoBackendRolesFieldF() {
+    public void test_UserSpecifiedRestrictedButNoBackendRolesField() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
@@ -233,7 +233,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User have to specify backend roles when add all backend roles to false", argumentCaptor.getValue().getMessage());
+        assertEquals("User have to specify backend roles when add all backend roles is set to false.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_RestrictedAndUserSpecifiedBothBackendRolesFields() {

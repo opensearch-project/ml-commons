@@ -5,14 +5,6 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
-import java.util.Arrays;
-import java.util.List;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -37,6 +29,14 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import java.util.Arrays;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
     @Rule
@@ -257,7 +257,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body",
+            "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster.",
             argumentCaptor.getValue().getMessage()
         );
     }

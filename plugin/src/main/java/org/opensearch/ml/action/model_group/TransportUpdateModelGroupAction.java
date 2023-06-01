@@ -5,14 +5,8 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-
+import com.google.common.collect.ImmutableList;
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
@@ -42,9 +36,13 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {
@@ -186,18 +184,18 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles()) && CollectionUtils.isEmpty(user.getBackendRoles())) {
                 throw new IllegalArgumentException("You don’t have any backend roles.");
             }
-            if (ModelAccessMode.RESTRICTED == modelAccessMode
-                && CollectionUtils.isEmpty(input.getBackendRoles())
-                && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
-                throw new IllegalArgumentException(
-                    "You must specify one or more backend roles or add all backend roles to register a restricted model group."
-                );
-            }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.FALSE.equals(input.getIsAddAllBackendRoles())) {
-                throw new IllegalArgumentException("User have to specify backend roles when add all backend roles to false");
+                throw new IllegalArgumentException("User have to specify backend roles when add all backend roles is set to false.");
             }
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
+            }
+            if (ModelAccessMode.RESTRICTED == modelAccessMode
+                    && CollectionUtils.isEmpty(input.getBackendRoles())
+                    && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
+                throw new IllegalArgumentException(
+                        "You must specify one or more backend roles or add all backend roles to register a restricted model group."
+                );
             }
             if (!modelAccessControlHelper.isAdmin(user)
                 && !CollectionUtils.isEmpty(input.getBackendRoles())
