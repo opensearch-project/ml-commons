@@ -5,6 +5,12 @@
 
 package org.opensearch.ml.common;
 
+import org.opensearch.ml.common.connector.template.DetachedConnector;
+
+import static org.opensearch.ml.common.connector.template.APISchema.HEADERS_FIELD;
+import static org.opensearch.ml.common.connector.template.APISchema.METHOD_FIELD;
+import static org.opensearch.ml.common.connector.template.APISchema.REQUEST_BODY_FIELD;
+import static org.opensearch.ml.common.connector.template.APISchema.URL_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD;
@@ -32,7 +38,9 @@ public class CommonValue {
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 1;
     public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 5;
+    public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
+    public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 1;
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
@@ -227,6 +235,57 @@ public class CommonValue {
             + "      \""
             + MLTask.IS_ASYNC_TASK_FIELD
             + "\" : {\"type\" : \"boolean\"}, \n"
+            + USER_FIELD_MAPPING
+            + "    }\n"
+            + "}";
+
+    public static final String ML_CONNECTOR_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_CONNECTOR_SCHEMA_VERSION
+            + "},\n"
+            + "    \"properties\": {\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_NAME_FIELD
+            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_VERSION_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_DESCRIPTION_FIELD
+            + "\" : {\"type\": \"text\"},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_PROTOCOL_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_PARAMETERS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_CREDENTIAL_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + DetachedConnector.PREDICT_API_SCHEMA_FIELD
+            + "\" : {\"properties\":{\""
+            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
+            + URL_FIELD + "\":{\"type\":\"text\"},\""
+            + HEADERS_FIELD + "\":{\"type\":\"flat_object\"},\""
+            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
+            + "      \""
+            + DetachedConnector.METADATA_API_SCHEMA_FIELD
+            + "\" : {\"properties\":{\""
+            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
+            + URL_FIELD + "\":{\"type\":\"text\"},\""
+            + HEADERS_FIELD + "\":{\"type\":\"flat_object\"},\""
+            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_STATE_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + DetachedConnector.CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + DetachedConnector.LAST_UPDATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
             + USER_FIELD_MAPPING
             + "    }\n"
             + "}";
