@@ -243,7 +243,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 
     public void test_updateModelGroup_userIsNonOwnerNoBackendRole_withPermissionFields() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("Only owner/admin has valid privilege to perform update access control data");
+        exceptionRule.expectMessage("Only owner or admin can update access control data.");
         updateModelGroup(
             mlNonAdminFullAccessWithoutBackendRoleClient,
             this.modelGroupId,
@@ -254,7 +254,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 
     public void test_updateModelGroup_userIsNonOwner_withoutPermissionFields() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("User doesn't have corresponding backend role to perform update action");
+        exceptionRule.expectMessage("You don't have permissions to perform this operation on this model group.");
         MLUpdateModelGroupInput mlUpdateModelGroupInput = createUpdateModelGroupInput(
             this.modelGroupId,
             "new_name",
