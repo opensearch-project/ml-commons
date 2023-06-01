@@ -19,10 +19,10 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Getter
 public class ConnectorTemplate implements ToXContentObject, NamedWriteable {
-    public static final String PARSE_FIELD_NAME = "Connector_Template";
+    public static final String PARSE_FIELD_NAME = "connector_template";
 
-    public static final String PREDICT_FIELD = "Predict";
-    public static final String META_DARA_FIELD = "Metadata";
+    public static final String PREDICT_FIELD = "predict";
+    public static final String META_DARA_FIELD = "metadata";
 
     private APISchema predictSchema;
     private APISchema metadataSchema;
@@ -66,14 +66,14 @@ public class ConnectorTemplate implements ToXContentObject, NamedWriteable {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
+        builder.startArray();
         if (predictSchema != null) {
             builder.field(PREDICT_FIELD, predictSchema);
         }
         if (metadataSchema != null) {
             builder.field(META_DARA_FIELD, metadataSchema);
         }
-        builder.endObject();
+        builder.startArray();
         return builder;
     }
 

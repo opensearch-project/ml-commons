@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import com.google.gson.Gson;
 import lombok.Builder;
 import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
@@ -24,27 +23,31 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
-    public static final String CONNECTOR_META_DATA_FIELD = "Metadata";
-    public static final String CONNECTOR_PARAMETERS_FIELD = "Parameters";
-    public static final String CONNECTOR_TEMPLATE_FIELD = "Template";
+    public static final String CONNECTOR_META_DATA_FIELD = "metadata";
+    public static final String CONNECTOR_PARAMETERS_FIELD = "parameters";
+    public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
+    public static final String CONNECTOR_TEMPLATE_FIELD = "template";
 
     private Map<String, String> metadata;
     private Map<String, String> parameters;
+    private Map<String, String> credential;
     private ConnectorTemplate connectorTemplate;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(Map<String, String> metadata,
                                   Map<String, String> parameters,
+                                  Map<String, String> credential,
                                   ConnectorTemplate connectorTemplate) {
         this.metadata = metadata;
         this.parameters = parameters;
+        this.credential = credential;
         this.connectorTemplate = connectorTemplate;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
         Map<String, String> metadata = new HashMap<>();
         Map<String, String> parameters = new HashMap<>();
-        Gson gson = new Gson();
+        Map<String, String> credential = new HashMap<>();
         ConnectorTemplate connectorTemplate = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -59,6 +62,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case CONNECTOR_PARAMETERS_FIELD:
                     parameters = parser.mapStrings();
                     break;
+                case CONNECTOR_CREDENTIAL_FIELD:
+                    credential = parser.mapStrings();
+                    break;
                 case CONNECTOR_TEMPLATE_FIELD:
                     connectorTemplate = connectorTemplate.parse(parser);
                     break;
@@ -68,7 +74,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
 
-        return new MLCreateConnectorInput(metadata, parameters, connectorTemplate);
+        return new MLCreateConnectorInput(metadata, parameters, credential, connectorTemplate);
     }
 
     @Override
@@ -79,6 +85,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (parameters != null) {
             builder.field(CONNECTOR_PARAMETERS_FIELD, parameters);
+        }
+        if (credential != null) {
+            builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
         }
         if (connectorTemplate != null) {
             builder.field(CONNECTOR_TEMPLATE_FIELD, connectorTemplate);
@@ -102,6 +111,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
+        if (credential != null) {
+            output.writeBoolean(true);
+            output.writeMap(credential, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            output.writeBoolean(false);
+        }
         if (connectorTemplate != null) {
             output.writeBoolean(true);
             connectorTemplate.writeTo(output);
@@ -116,6 +131,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (input.readBoolean()) {
             parameters = input.readMap(s -> s.readString(), s -> s.readString());
+        }
+        if (input.readBoolean()) {
+            credential = input.readMap(s -> s.readString(), s-> s.readString());
         }
         if (input.readBoolean()) {
             this.connectorTemplate = new ConnectorTemplate(input);

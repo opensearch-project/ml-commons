@@ -70,6 +70,7 @@ public class MLModel implements ToXContentObject {
     public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
     public static final String DEPLOY_TO_ALL_NODES_FIELD = "deploy_to_all_nodes";
     public static final String CONNECTOR_FIELD = "connector";
+    public static final String CONNECTOR_ID_FIELD = "connector_id";
 
     private String name;
     private FunctionName algorithm;
@@ -100,7 +101,9 @@ public class MLModel implements ToXContentObject {
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
 
+    @Setter
     private Connector connector;
+    private String connectorId;
 
     @Builder(toBuilder = true)
     public MLModel(String name,
@@ -125,7 +128,8 @@ public class MLModel implements ToXContentObject {
                    Integer currentWorkerNodeCount,
                    String[] planningWorkerNodes,
                    boolean deployToAllNodes,
-                   Connector connector) {
+                   Connector connector,
+                   String connectorId) {
         this.name = name;
         this.algorithm = algorithm;
         this.version = version;
@@ -150,6 +154,7 @@ public class MLModel implements ToXContentObject {
         this.planningWorkerNodes = planningWorkerNodes;
         this.deployToAllNodes = deployToAllNodes;
         this.connector = connector;
+        this.connectorId = connectorId;
     }
 
     public MLModel(StreamInput input) throws IOException{
@@ -191,6 +196,7 @@ public class MLModel implements ToXContentObject {
                 String connectorName = input.readString();
                 connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, input}, String.class, StreamInput.class);
             }
+            connectorId = input.readOptionalString();
         }
     }
 
@@ -245,6 +251,7 @@ public class MLModel implements ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(connectorId);
     }
 
     @Override
@@ -322,6 +329,9 @@ public class MLModel implements ToXContentObject {
         if (connector != null) {
             builder.field(CONNECTOR_FIELD, connector);
         }
+        if (connectorId != null) {
+            builder.field(CONNECTOR_ID_FIELD, connectorId);
+        }
         builder.endObject();
         return builder;
     }
@@ -357,6 +367,7 @@ public class MLModel implements ToXContentObject {
         List<String> planningWorkerNodes = new ArrayList<>();
         boolean deployToAllNodes = false;
         Connector connector = null;
+        String connectorId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -435,6 +446,9 @@ public class MLModel implements ToXContentObject {
                     connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
                     parser.nextToken();
                     break;
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.text();
+                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
@@ -489,6 +503,7 @@ public class MLModel implements ToXContentObject {
                 .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
                 .deployToAllNodes(deployToAllNodes)
                 .connector(connector)
+                .connectorId(connectorId)
                 .build();
     }
 

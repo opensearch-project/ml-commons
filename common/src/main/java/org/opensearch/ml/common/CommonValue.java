@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.common;
 
-import org.opensearch.ml.common.connector.template.Connector;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 
 import static org.opensearch.ml.common.connector.template.APISchema.HEADERS_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.METHOD_FIELD;
@@ -187,43 +187,47 @@ public class CommonValue {
             + "},\n"
             + "    \"properties\": {\n"
             + "      \""
-            + Connector.CONNECTOR_ID_FIELD
-            + "\": {\"type\": \"keyword\"},\n"
-            + "      \""
-            + Connector.CONNECTOR_NAME_FIELD
+            + DetachedConnector.CONNECTOR_NAME_FIELD
             + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
-            + Connector.CONNECTOR_VERSION_FIELD
+            + DetachedConnector.CONNECTOR_VERSION_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
-            + Connector.DESCRIPTION_FIELD
+            + DetachedConnector.CONNECTOR_DESCRIPTION_FIELD
             + "\" : {\"type\": \"text\"},\n"
             + "      \""
-            + Connector.PREDICT_API_SCHEMA_FIELD
-            + "\" : {\"properties\":{\""
-            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
-            + URL_FIELD + "\":{\"type\":\"text\"},\""
-            + HEADERS_FIELD + "\":{\"type\":\"text\"},\""
-            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
-            + "      \""
-            + Connector.METADATA_API_SCHEMA_FIELD
-            + "\" : {\"properties\":{\""
-            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
-            + URL_FIELD + "\":{\"type\":\"text\"},\""
-            + HEADERS_FIELD + "\":{\"type\":\"text\"},\""
-            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
-            + "      \""
-            + Connector.CONNECTOR_STATE_FIELD
+            + DetachedConnector.CONNECTOR_PROTOCOL_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
-            + Connector.CREATED_TIME_FIELD
+            + DetachedConnector.CONNECTOR_PARAMETERS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_CREDENTIAL_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + DetachedConnector.PREDICT_API_SCHEMA_FIELD
+            + "\" : {\"properties\":{\""
+            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
+            + URL_FIELD + "\":{\"type\":\"text\"},\""
+            + HEADERS_FIELD + "\":{\"type\":\"flat_object\"},\""
+            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
+            + "      \""
+            + DetachedConnector.METADATA_API_SCHEMA_FIELD
+            + "\" : {\"properties\":{\""
+            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
+            + URL_FIELD + "\":{\"type\":\"text\"},\""
+            + HEADERS_FIELD + "\":{\"type\":\"flat_object\"},\""
+            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
+            + "      \""
+            + DetachedConnector.CONNECTOR_STATE_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + DetachedConnector.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + Connector.LAST_UPDATED_TIME_FIELD
+            + DetachedConnector.LAST_UPDATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
-            + Connector.CREDENTIAL_ID_FIELD
-            + "\": {\"type\": \"keyword\"},\n"
             + USER_FIELD_MAPPING
             + "    }\n"
             + "}";

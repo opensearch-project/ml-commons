@@ -25,7 +25,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.ml.common.connector.template.Connector;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
@@ -67,7 +67,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        Connector mlConnector = Connector.parse(parser);
+                        DetachedConnector mlConnector = DetachedConnector.parse(parser);
                         actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                     } catch (Exception e) {
                         log.error("Failed to parse ml connector" + r.getId(), e);

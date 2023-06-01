@@ -6,11 +6,10 @@
 package org.opensearch.ml.action.remote;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.connector.template.DetachedConnector.CONNECTOR_PROTOCOL_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.time.Instant;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -28,13 +27,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.connector.template.APISchema;
-import org.opensearch.ml.common.connector.template.Connector;
 import org.opensearch.ml.common.connector.template.ConnectorState;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -49,6 +48,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final ClusterService clusterService;
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final MLEngine mlEngine;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -56,13 +56,15 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         ActionFilters actionFilters,
         ClusterService clusterService,
         MLIndicesHandler mlIndicesHandler,
-        Client client
+        Client client,
+        MLEngine mlEngine
     ) {
         super(MLCreateConnectorAction.NAME, transportService, actionFilters, MLCreateConnectorRequest::new);
         this.transportService = transportService;
         this.clusterService = clusterService;
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.mlEngine = mlEngine;
     }
 
     @Override
@@ -75,30 +77,23 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         String connectorName = mlCreateConnectorInput.getMetadata().get(CONNECTOR_NAME_FIELD);
 
         try {
-            System.out.println("resolving connector template placeholders!");
-            resolveAPIPlaceholders(
-                mlCreateConnectorInput.getConnectorTemplate().getPredictSchema(),
-                mlCreateConnectorInput.getParameters()
-            );
-            resolveAPIPlaceholders(
-                mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema(),
-                mlCreateConnectorInput.getParameters()
-            );
-
             Instant now = Instant.now();
-
-            Connector connector = Connector
+            DetachedConnector connector = DetachedConnector
                 .builder()
                 .name(connectorName)
                 .version(mlCreateConnectorInput.getMetadata().get(CONNECTOR_VERSION_FIELD))
                 .description(mlCreateConnectorInput.getMetadata().get(CONNECTOR_DESCRIPTION_FIELD))
-                .predictSchema(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema())
-                .metadataSchema(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema())
+                .protocol(mlCreateConnectorInput.getMetadata().get(CONNECTOR_PROTOCOL_FIELD))
+                .parameters(toJson(mlCreateConnectorInput.getParameters()))
+                .credential(toJson(mlCreateConnectorInput.getCredential()))
+                .predictAPI(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema().toString())
+                .metadataAPI(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema().toString())
                 .connectorState(ConnectorState.CREATED)
                 .createdTime(now)
                 .lastUpdateTime(now)
                 .build();
-            System.out.println("connector created, saving into index!");
+            connector.encrypt((credential) -> mlEngine.encrypt(credential));
+            log.info("connector created, indexing into the connector system index");
             mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {
                 if (!indexCreated) {
                     listener.onFailure(new RuntimeException("No response to create ML Connector index"));
@@ -118,11 +113,11 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                     client.index(indexRequest, ActionListener.runBefore(indexResponseListener, () -> context.restore()));
                 } catch (Exception e) {
-                    log.error("Failed to save ML model", e);
+                    log.error("Failed to save ML connector", e);
                     listener.onFailure(e);
                 }
             }, e -> {
-                log.error("Failed to init ML model index", e);
+                log.error("Failed to init ML connector index", e);
                 listener.onFailure(e);
             }));
 
@@ -136,31 +131,31 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
     }
 
-    private void resolveAPIPlaceholders(APISchema apiSchema, Map<String, String> parameters) {
-        apiSchema.setMethod(replacePlaceholders(apiSchema.getMethod(), parameters));
-        apiSchema.setUrl(replacePlaceholders(apiSchema.getUrl(), parameters));
-        apiSchema.setHeaders(replacePlaceholders(apiSchema.getHeaders(), parameters));
-        apiSchema.setRequestBody(replacePlaceholders(apiSchema.getRequestBody(), parameters));
-    }
-
-    private String replacePlaceholders(String content, Map<String, String> parameters) {
-        if (content == null) {
-            return null;
-        }
-        Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
-        Matcher matcher = pattern.matcher(content);
-        StringBuffer sb = new StringBuffer();
-
-        while (matcher.find()) {
-            String key = matcher.group(1);
-            String value = parameters.get(key);
-            if (value == null) {
-                throw new IllegalArgumentException("Cannot resolve parameter " + key + " in the connector template");
-            }
-            matcher.appendReplacement(sb, value);
-        }
-        matcher.appendTail(sb);
-
-        return sb.toString();
-    }
+    // private void resolveAPIPlaceholders(APISchema apiSchema, Map<String, String> parameters) {
+    // apiSchema.setMethod(replacePlaceholders(apiSchema.getMethod(), parameters));
+    // apiSchema.setUrl(replacePlaceholders(apiSchema.getUrl(), parameters));
+    // apiSchema.setHeaders(replacePlaceholders(apiSchema.getHeaders(), parameters));
+    // apiSchema.setRequestBody(replacePlaceholders(apiSchema.getRequestBody(), parameters));
+    // }
+    //
+    // private String replacePlaceholders(String content, Map<String, String> parameters) {
+    // if (content == null) {
+    // return null;
+    // }
+    // Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
+    // Matcher matcher = pattern.matcher(content);
+    // StringBuffer sb = new StringBuffer();
+    //
+    // while (matcher.find()) {
+    // String key = matcher.group(1);
+    // String value = parameters.get(key);
+    // if (value == null) {
+    // throw new IllegalArgumentException("Cannot resolve parameter " + key + " in the connector template");
+    // }
+    // matcher.appendReplacement(sb, value);
+    // }
+    // matcher.appendTail(sb);
+    //
+    // return sb.toString();
+    // }
 }

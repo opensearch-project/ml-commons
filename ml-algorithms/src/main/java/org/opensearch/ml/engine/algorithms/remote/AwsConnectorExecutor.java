@@ -62,7 +62,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
     }
 
     @Override
-    public ModelTensorOutput execute(MLInput mlInput) {
+    public ModelTensorOutput executePredict(MLInput mlInput) {
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         List<ModelTensor> modelTensors = new ArrayList<>();
 

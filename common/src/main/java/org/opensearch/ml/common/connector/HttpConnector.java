@@ -36,7 +36,7 @@ import static org.opensearch.ml.common.utils.StringUtils.toUTF8;
 @Log4j2
 @NoArgsConstructor
 @org.opensearch.ml.common.annotation.Connector(HTTP_V1)
-public class HttpConnector implements Connector {
+public class HttpConnector extends AbstractConnector {
     public static final String HTTP_METHOD_FIELD = "http_method";
     public static final String ENDPOINT_FIELD = "endpoint";
     public static final String CREDENTIAL_FIELD = "credential";
@@ -54,16 +54,10 @@ public class HttpConnector implements Connector {
     @Getter
     protected String name;
     @Getter
-    protected String httpMethod;
-    @Getter
     protected String endpoint;
 
     protected Map<String, String> headers ;
-    protected Map<String, String> credential ;
     protected Map<String, String> decryptedCredential;
-    protected Map<String, String> decryptedHeaders;
-    @Getter
-    protected Map<String, String> parameters;
 
     @Getter
     protected String bodyTemplate;
@@ -173,7 +167,8 @@ public class HttpConnector implements Connector {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        Connector.super.writeTo(out);
+        out.writeString(getName());
+        out.writeOptionalString(getEndpoint());
         out.writeOptionalString(httpMethod);
         if (parameters != null) {
             out.writeBoolean(true);
@@ -196,10 +191,6 @@ public class HttpConnector implements Connector {
         out.writeOptionalString(bodyTemplate);
         out.writeOptionalString(preProcessFunction);
         out.writeOptionalString(postProcessFunction);
-    }
-
-    public Map<String, String> createHeaders() {
-        return decryptedHeaders;
     }
 
     @Override
@@ -248,15 +239,6 @@ public class HttpConnector implements Connector {
     }
 
     @Override
-    public void encrypt(Function<String, String> function) {
-        for (String key : credential.keySet()) {
-            String encrypted = function.apply(credential.get(key));
-            credential.put(key, encrypted);
-        }
-    }
-
-
-    @Override
     @SuppressWarnings("unchecked")
     public <T> void parseResponse(T response, List<ModelTensor> modelTensors, boolean modelTensorJson) throws IOException {
         if (modelTensorJson) {
@@ -285,13 +267,21 @@ public class HttpConnector implements Connector {
     }
 
     @Override
-    public Connector clone() {
+    public Connector cloneConnector() {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
             return new HttpConnector(streamInput);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void encrypt(Function<String, String> function) {
+        for (String key : credential.keySet()) {
+            String encrypted = function.apply(credential.get(key));
+            credential.put(key, encrypted);
         }
     }
 
