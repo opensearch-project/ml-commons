@@ -29,7 +29,7 @@ public interface Connector extends ToXContentObject, Writeable {
     void decrypt(Function<String, String> function);
     void encrypt(Function<String, String> function);
 
-    Connector clone();
+    Connector cloneConnector();
 
     default void writeTo(StreamOutput out) throws IOException {
         out.writeString(getName());

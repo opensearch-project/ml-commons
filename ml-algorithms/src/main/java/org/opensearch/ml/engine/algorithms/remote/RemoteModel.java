@@ -17,6 +17,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -52,13 +53,13 @@ public class RemoteModel extends DLModel {
 
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
-        return connectorExecutor.execute(mlInput);
+        return connectorExecutor.executePredict(mlInput);
     }
 
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
-            Connector connector = model.getConnector().clone();
+            Connector connector = model.getConnector().cloneConnector();
             connector.decrypt((credential) -> encryptor.decrypt(credential));
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getName(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));

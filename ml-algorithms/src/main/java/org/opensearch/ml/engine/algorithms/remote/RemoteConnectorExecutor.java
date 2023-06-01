@@ -14,7 +14,7 @@ import org.opensearch.script.ScriptService;
 
 public interface RemoteConnectorExecutor {
 
-    ModelTensorOutput execute(MLInput mlInput);
+    ModelTensorOutput executePredict(MLInput mlInput);
 
     default void setScriptService(ScriptService scriptService){}
     default void setClient(Client client){}
