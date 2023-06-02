@@ -90,7 +90,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -100,7 +99,6 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
@@ -364,8 +362,7 @@ public class MLModelManager {
 
     private void indexRemoteModel(
         MLRegisterModelInput registerModelInput,
-        MLTask mlTask,
-        ActionListener<MLRegisterModelResponse> listener
+        MLTask mlTask
     ) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
@@ -401,7 +398,6 @@ public class MLModelManager {
                 // create model meta doc
                 ActionListener<IndexResponse> indexListener = ActionListener.wrap(modelMetaRes -> {
                     String modelId = modelMetaRes.getId();
-                    listener.onResponse(new MLRegisterModelResponse(taskId, modelId, MLTaskState.CREATED.name()));
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
                     mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
@@ -411,19 +407,16 @@ public class MLModelManager {
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
-                    listener.onFailure(e);
                 });
 
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, indexListener));
             }, e -> {
                 log.error("Failed to init model index", e);
                 handleException(functionName, taskId, e);
-                listener.onFailure(e);
             }));
         } catch (Exception e) {
             logException("Failed to upload model", e, log);
             handleException(functionName, taskId, e);
-            listener.onFailure(e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
         }
@@ -432,6 +425,8 @@ public class MLModelManager {
     private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
+        } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE) {
+            indexRemoteModel(registerModelInput, mlTask);
         } else {
             registerPrebuiltModel(registerModelInput, mlTask, modelVersion);
         }
