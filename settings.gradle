@@ -14,3 +14,4 @@ project(":plugin").name = rootProject.name + "-plugin"
 include 'ml-algorithms'
 project(":ml-algorithms").name = rootProject.name + "-algorithms"
 
+startParameter.excludedTaskNames=["publishShadowPublicationToStagingRepository", "publishShadowPublicationToMavenLocal"]
