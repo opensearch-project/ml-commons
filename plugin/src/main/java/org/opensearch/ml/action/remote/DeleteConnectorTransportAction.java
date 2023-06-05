@@ -7,8 +7,6 @@ package org.opensearch.ml.action.remote;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -23,6 +21,8 @@ import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class DeleteConnectorTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
