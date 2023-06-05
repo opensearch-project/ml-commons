@@ -276,7 +276,7 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
         newParameters.putAll(parameters);
         newParameters.put("question", question);
         newParameters.put("context", contextRef.get());
-        String payload = connector.createPayload(newParameters);
+        String payload = connector.createPredictPayload(newParameters);
 
         if (connector.hasAwsCredential()) {
             try {
@@ -286,7 +286,7 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
                         .method(POST)
                         .uri(URI.create(connector.getEndpoint()))
                         .contentStreamProvider(requestBody.contentStreamProvider());
-                Map<String, String> headers = connector.createHeaders();
+                Map<String, String> headers = connector.getDecryptedHeaders();
                 for (String key : headers.keySet()) {
                     builder.putHeader(key, headers.get(key));
                 }
@@ -338,7 +338,7 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
 
         try {
             HttpUriRequest request;
-            switch (connector.getHttpMethod().toUpperCase(Locale.ROOT)) {
+            switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
                 case "POST":
                     try {
                         request = new HttpPost(connector.getEndpoint());
@@ -359,7 +359,7 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
                     throw new IllegalArgumentException("unsupported http method");
             }
 
-            Map<String, ?> headers = connector.createHeaders();
+            Map<String, ?> headers = connector.getDecryptedHeaders();
             boolean hasContentTypeHeader = false;
             for (String key : headers.keySet()) {
                 request.addHeader(key, (String)headers.get(key));

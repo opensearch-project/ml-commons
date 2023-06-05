@@ -22,9 +22,11 @@ public interface Connector extends ToXContentObject, Writeable {
 
     String getName();
 
-    String getEndpoint();
+    String getPredictEndpoint();
 
-    <T> T createPayload(Map<String, String> parameters);
+    String getPredictHttpMethod();
+
+    <T> T createPredictPayload(Map<String, String> parameters);
 
     void decrypt(Function<String, String> function);
     void encrypt(Function<String, String> function);
@@ -33,7 +35,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     default void writeTo(StreamOutput out) throws IOException {
         out.writeString(getName());
-        out.writeOptionalString(getEndpoint());
+        out.writeOptionalString(getPredictEndpoint());
     }
 
     default String getPreProcessFunction() {
