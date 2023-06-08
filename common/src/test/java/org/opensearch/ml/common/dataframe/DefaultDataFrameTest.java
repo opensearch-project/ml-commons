@@ -5,11 +5,16 @@
 
 package org.opensearch.ml.common.dataframe;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.core.common.Strings;
+import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -18,12 +23,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Function;
-
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class DefaultDataFrameTest {
 
@@ -173,21 +175,21 @@ public class DefaultDataFrameTest {
     }
 
     @Test
-    public void remove_Exception_InputColumnIndexBiggerThanColumensLength() {
+    public void remove_Exception_InputColumnIndexBiggerThanColumensLength(){
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:4");
         defaultDataFrame.remove(4);
     }
 
     @Test
-    public void remove_Exception_InputColumnIndexNegtiveColumensLength() {
+    public void remove_Exception_InputColumnIndexNegtiveColumensLength(){
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:4");
         defaultDataFrame.remove(-1);
     }
 
     @Test
-    public void remove_EmptyColumnMeta() {
+    public void remove_EmptyColumnMeta(){
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length:0");
         DefaultDataFrame dataFrame = new DefaultDataFrame(new ColumnMeta[0]);
@@ -196,31 +198,31 @@ public class DefaultDataFrameTest {
     }
 
     @Test
-    public void remove_Success() {
+    public void remove_Success(){
         DataFrame dataFrame = defaultDataFrame.remove(3);
         assertEquals(3, dataFrame.columnMetas().length);
         assertEquals(3, dataFrame.getRow(0).size());
     }
 
     @Test
-    public void select_Success() {
-        DataFrame dataFrame = defaultDataFrame.select(new int[] { 1, 3 });
+    public void select_Success(){
+        DataFrame dataFrame = defaultDataFrame.select(new int[]{1, 3});
         assertEquals(2, dataFrame.columnMetas().length);
         assertEquals(2, dataFrame.getRow(0).size());
     }
 
     @Test
-    public void select_Exception_EmptyInputColumns() {
+    public void select_Exception_EmptyInputColumns(){
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("columns can't be null or empty");
         defaultDataFrame.select(new int[0]);
     }
 
     @Test
-    public void select_Exception_InvalidColumn() {
+    public void select_Exception_InvalidColumn(){
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("columnIndex can't be negative or bigger than columns length");
-        defaultDataFrame.select(new int[] { 5 });
+        defaultDataFrame.select(new int[]{5});
     }
 
     @Test
@@ -231,44 +233,43 @@ public class DefaultDataFrameTest {
         builder.endObject();
 
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = Strings.toString(builder);
         assertEquals("{\"column_metas\":[" +
-                "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
-                "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +
-                "{\"name\":\"c3\",\"column_type\":\"DOUBLE\"}," +
-                "{\"name\":\"c4\",\"column_type\":\"BOOLEAN\"}]," +
-                "\"rows\":[" +
-                "{\"values\":[" +
-                "{\"column_type\":\"STRING\",\"value\":\"string\"}," +
-                "{\"column_type\":\"INTEGER\",\"value\":1}," +
-                "{\"column_type\":\"DOUBLE\",\"value\":2.0}," +
-                "{\"column_type\":\"BOOLEAN\",\"value\":true}]}]}", jsonStr);
+             "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
+             "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +
+             "{\"name\":\"c3\",\"column_type\":\"DOUBLE\"}," +
+             "{\"name\":\"c4\",\"column_type\":\"BOOLEAN\"}]," +
+             "\"rows\":[" +
+             "{\"values\":[" +
+             "{\"column_type\":\"STRING\",\"value\":\"string\"}," +
+             "{\"column_type\":\"INTEGER\",\"value\":1}," +
+             "{\"column_type\":\"DOUBLE\",\"value\":2.0}," +
+             "{\"column_type\":\"BOOLEAN\",\"value\":true}]}]}", jsonStr);
     }
 
     @Test
     public void testParse_EmptyDataFrame() throws IOException {
-        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("test_int", ColumnType.INTEGER) };
+        ColumnMeta[] columnMetas = new ColumnMeta[] {new ColumnMeta("test_int", ColumnType.INTEGER)};
         DefaultDataFrame dataFrame = new DefaultDataFrame(columnMetas);
         TestHelper.testParse(dataFrame, function, true);
     }
 
     @Test
     public void testParse_DataFrame() throws IOException {
-        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("test_int", ColumnType.INTEGER) };
+        ColumnMeta[] columnMetas = new ColumnMeta[] {new ColumnMeta("test_int", ColumnType.INTEGER)};
         DefaultDataFrame dataFrame = new DefaultDataFrame(columnMetas);
-        dataFrame.appendRow(new Integer[] { 1 });
-        dataFrame.appendRow(new Integer[] { 2 });
+        dataFrame.appendRow(new Integer[]{1});
+        dataFrame.appendRow(new Integer[]{2});
         TestHelper.testParse(dataFrame, function, true);
     }
 
     @Test
     public void testParse_WrongExtraField() throws IOException {
-        ColumnMeta[] columnMetas = new ColumnMeta[] { new ColumnMeta("test_int", ColumnType.INTEGER) };
+        ColumnMeta[] columnMetas = new ColumnMeta[] {new ColumnMeta("test_int", ColumnType.INTEGER)};
         DefaultDataFrame dataFrame = new DefaultDataFrame(columnMetas);
-        dataFrame.appendRow(new Integer[] { 1 });
-        dataFrame.appendRow(new Integer[] { 2 });
-        String jsonStr = "{\"wrong_field\":{\"test\":\"abc\"},\"column_metas\":[{\"name\":\"test_int\",\"column_type\":"
-                +
+        dataFrame.appendRow(new Integer[]{1});
+        dataFrame.appendRow(new Integer[]{2});
+        String jsonStr = "{\"wrong_field\":{\"test\":\"abc\"},\"column_metas\":[{\"name\":\"test_int\",\"column_type\":" +
                 "\"INTEGER\"}],\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":" +
                 "[{\"column_type\":\"INTEGER\",\"value\":2}]}]}";
         TestHelper.testParseFromString(dataFrame, jsonStr, function);

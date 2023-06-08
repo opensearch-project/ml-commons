@@ -12,6 +12,7 @@ import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLTask;
@@ -74,7 +75,7 @@ public class MLProfileNodeResponse extends BaseNodeResponse implements ToXConten
         }
     }
 
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         if (mlNodeTasks != null && mlNodeTasks.size() > 0) {
             builder.startObject("tasks");
             for (Map.Entry<String, MLTask> entry : mlNodeTasks.entrySet()) {

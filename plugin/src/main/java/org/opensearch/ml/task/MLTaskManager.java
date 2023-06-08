@@ -68,7 +68,7 @@ public class MLTaskManager {
     /**
      * Constructor to create ML task manager.
      *
-     * @param client           client
+     * @param client client
      * @param mlIndicesHandler ML indices handler
      */
     public MLTaskManager(Client client, ThreadPool threadPool, MLIndicesHandler mlIndicesHandler) {
@@ -141,11 +141,9 @@ public class MLTaskManager {
             MLTask mlTask = taskCache.getMlTask();
 
             if (mlTask.getState() != MLTaskState.CREATED) {
-                // Task initial state is CREATED. It will move forward to RUNNING state once it
-                // starts on worker node.
+                // Task initial state is CREATED. It will move forward to RUNNING state once it starts on worker node.
                 // When finished or failed, it's possible to move to COMPLETED/FAILED state.
-                // So if its state is not CREATED when remove it, the task already started on
-                // worker node, we should
+                // So if its state is not CREATED when remove it, the task already started on worker node, we should
                 // decrement running task count.
                 AtomicInteger runningTaskCount = runningTasksCount.get(mlTask.getTaskType());
                 if (runningTaskCount != null) {
@@ -192,7 +190,6 @@ public class MLTaskManager {
 
     /**
      * Get all taskIds from cache
-     * 
      * @return an array of all the keys in the taskCaches
      */
     public String[] getAllTaskIds() {
@@ -224,8 +221,7 @@ public class MLTaskManager {
 
     /**
      * Create ML task. Will init ML task index first if absent.
-     * 
-     * @param mlTask   ML task
+     * @param mlTask ML task
      * @param listener action listener
      */
     public void createMLTask(MLTask mlTask, ActionListener<IndexResponse> listener) {
@@ -264,11 +260,9 @@ public class MLTaskManager {
 
     /**
      * Update ML task with default listener.
-     * 
-     * @param taskId          task id
-     * @param updatedFields   updated field and values
-     * @param timeoutInMillis time out waiting for updating task semaphore, zero or
-     *                        negative means don't wait at all
+     * @param taskId task id
+     * @param updatedFields updated field and values
+     * @param timeoutInMillis time out waiting for updating task semaphore, zero or negative means don't wait at all
      * @param removeFromCache remove ML task from cache
      */
     public void updateMLTask(String taskId, Map<String, Object> updatedFields, long timeoutInMillis, boolean removeFromCache) {
@@ -284,12 +278,10 @@ public class MLTaskManager {
 
     /**
      * Update ML task.
-     * 
-     * @param taskId          task id
-     * @param updatedFields   updated field and values
-     * @param listener        action listener
-     * @param timeoutInMillis time out waiting for updating task semaphore, zero or
-     *                        negative means don't wait at all
+     * @param taskId task id
+     * @param updatedFields updated field and values
+     * @param listener action listener
+     * @param timeoutInMillis time out waiting for updating task semaphore, zero or negative means don't wait at all
      * @param removeFromCache remove ML task from cache
      */
     public void updateMLTask(

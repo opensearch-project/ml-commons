@@ -10,16 +10,19 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.dataset.*;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
+import org.opensearch.ml.common.dataset.MLInputDataType;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
@@ -120,7 +123,7 @@ public class MLInput implements Input {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(ALGORITHM_FIELD, algorithm.name());
         if (parameters != null) {

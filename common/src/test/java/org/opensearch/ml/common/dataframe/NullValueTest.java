@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.core.common.Strings;
+import org.opensearch.common.Strings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
@@ -34,7 +34,7 @@ public class NullValueTest {
         value.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = Strings.toString(builder);
         assertEquals("{\"column_type\":\"NULL\"}", jsonStr);
     }
 }
