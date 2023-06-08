@@ -722,30 +722,33 @@ public class MLModelManager {
                             clusterService
                         );
                     // deploy remote model or model trained by built-in algorithm like kmeans
-                    if (mlModel.getConnector() == null) {
-                        GetRequest getConnectorRequest = new GetRequest();
-                        FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
-                        getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
-                        client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
-                            if (getResponse != null && getResponse.isExists()) {
-                                try (
-                                    XContentParser parser = createXContentParserFromRegistry(
-                                        xContentRegistry,
-                                        getResponse.getSourceAsBytesRef()
-                                    )
-                                ) {
-                                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                    DetachedConnector connector = DetachedConnector.parse(parser);
-                                    mlModel.setConnector(connector);
-                                }
-                            }
-                        }, e -> { listener.onFailure(e); }));
+                    if (mlModel.getConnector() != null) {
+                        setupPredictable(modelId, mlModel, params);
+                        listener.onResponse("successful");
+                        return;
                     }
-                    Predictable predictable = mlEngine.deploy(mlModel, params);
-                    modelCacheHelper.setPredictor(modelId, predictable);
-                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
-                    modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                    listener.onResponse("successful");
+                    log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
+                    GetRequest getConnectorRequest = new GetRequest();
+                    FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
+                    getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
+                    client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
+                        if (getResponse != null && getResponse.isExists()) {
+                            try (
+                                XContentParser parser = createXContentParserFromRegistry(
+                                    xContentRegistry,
+                                    getResponse.getSourceAsBytesRef()
+                                )
+                            ) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                DetachedConnector connector = DetachedConnector.parse(parser);
+                                mlModel.setConnector(connector);
+                                setupPredictable(modelId, mlModel, params);
+                                listener.onResponse("successful");
+                                log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
+                            }
+                        }
+                    }, e -> { listener.onFailure(e); }));
+
                     return;
                 }
                 // check circuit breaker before deploying custom model chunks
@@ -809,6 +812,13 @@ public class MLModelManager {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
         removeModel(modelId);
         listener.onFailure(e);
+    }
+
+    private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
+        Predictable predictable = mlEngine.deploy(mlModel, params);
+        modelCacheHelper.setPredictor(modelId, predictable);
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+        modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
     }
 
     /**

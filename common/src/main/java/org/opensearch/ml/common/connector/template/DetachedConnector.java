@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.common.connector.template;
 
-import com.google.gson.reflect.TypeToken;
 import lombok.Builder;
 import lombok.Getter;
+import org.apache.commons.text.StringSubstitutor;
 import org.json.JSONObject;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
@@ -18,16 +18,22 @@ import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Function;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.common.connector.template.APISchema.HEADERS_FIELD;
+import static org.opensearch.ml.common.connector.template.APISchema.METHOD_FIELD;
+import static org.opensearch.ml.common.connector.template.APISchema.REQUEST_BODY_FIELD;
+import static org.opensearch.ml.common.connector.template.APISchema.URL_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.fromJson;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.opensearch.ml.common.utils.StringUtils.toUTF8;
 
 public class DetachedConnector extends AbstractConnector {
     public static final String CONNECTOR_NAME_FIELD = "name";
@@ -42,14 +48,12 @@ public class DetachedConnector extends AbstractConnector {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
 
-    protected Map<String, String> decryptedCredential;
-
     private String name;
     private String version;
     private String description;
     private String protocol;
-    private String parameters;
-    private String credential;
+    private String parameterStr;
+    private String credentialStr;
     @Getter
     private String predictAPI;
     @Getter
@@ -58,13 +62,15 @@ public class DetachedConnector extends AbstractConnector {
     private Instant createdTime;
     private Instant lastUpdateTime;
 
+    private Map<String, String> predictMap;
+
     @Builder(toBuilder = true)
     public DetachedConnector(String name,
                      String version,
                      String description,
                      String protocol,
-                     String parameters,
-                     String credential,
+                     String parameterStr,
+                     String credentialStr,
                      String predictAPI,
                      String metadataAPI,
                      ConnectorState connectorState,
@@ -75,8 +81,8 @@ public class DetachedConnector extends AbstractConnector {
         this.version = version;
         this.description = description;
         this.protocol = protocol;
-        this.parameters = parameters;
-        this.credential = credential;
+        this.parameterStr = parameterStr;
+        this.credentialStr = credentialStr;
         this.predictAPI = predictAPI;
         this.metadataAPI = metadataAPI;
         this.connectorState = connectorState;
@@ -89,8 +95,8 @@ public class DetachedConnector extends AbstractConnector {
         version = input.readString();
         description = input.readString();
         protocol = input.readString();
-        parameters = input.readOptionalString();
-        credential = input.readString();
+        parameterStr = input.readOptionalString();
+        credentialStr = input.readString();
         predictAPI = input.readOptionalString();
         metadataAPI = input.readOptionalString();
         if (input.readBoolean()) {
@@ -105,8 +111,8 @@ public class DetachedConnector extends AbstractConnector {
         out.writeString(version);
         out.writeString(description);
         out.writeString(protocol);
-        out.writeOptionalString(parameters);
-        out.writeString(credential);
+        out.writeOptionalString(parameterStr);
+        out.writeString(credentialStr);
         out.writeOptionalString(predictAPI);
         out.writeOptionalString(metadataAPI);
         if (connectorState != null) {
@@ -134,11 +140,11 @@ public class DetachedConnector extends AbstractConnector {
         if (protocol != null) {
             builder.field(CONNECTOR_PROTOCOL_FIELD, protocol);
         }
-        if (parameters != null) {
-            builder.field(CONNECTOR_PARAMETERS_FIELD, parameters);
+        if (parameterStr != null) {
+            builder.field(CONNECTOR_PARAMETERS_FIELD, parameterStr);
         }
-        if (credential != null) {
-            builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
+        if (credentialStr != null) {
+            builder.field(CONNECTOR_CREDENTIAL_FIELD, credentialStr);
         }
         if (predictAPI != null) {
             builder.field(PREDICT_API_SCHEMA_FIELD, predictAPI);
@@ -164,8 +170,8 @@ public class DetachedConnector extends AbstractConnector {
         String version = null;
         String description = null;
         String protocol = null;
-        String parameters = null;
-        String credential = null;
+        String parameterStr = null;
+        String credentialStr = null;
         String predictAPI = null;
         String metadataAPI = null;
         ConnectorState connectorState = null;
@@ -191,10 +197,10 @@ public class DetachedConnector extends AbstractConnector {
                     protocol = parser.text();
                     break;
                 case CONNECTOR_PARAMETERS_FIELD:
-                    parameters = parser.text();
+                    parameterStr = parser.text();
                     break;
                 case CONNECTOR_CREDENTIAL_FIELD:
-                    credential = parser.text();
+                    credentialStr = parser.text();
                     break;
                 case PREDICT_API_SCHEMA_FIELD:
                     predictAPI = parser.text();
@@ -222,8 +228,8 @@ public class DetachedConnector extends AbstractConnector {
                 .version(version)
                 .description(description)
                 .protocol(protocol)
-                .parameters(parameters)
-                .credential(credential)
+                .parameterStr(parameterStr)
+                .credentialStr(credentialStr)
                 .predictAPI(predictAPI)
                 .metadataAPI(metadataAPI)
                 .connectorState(connectorState)
@@ -240,7 +246,7 @@ public class DetachedConnector extends AbstractConnector {
     @Override
     public void encrypt(Function<String, String> function) {
         HashMap<String, String> credentialMap = new HashMap<>();
-        JSONObject jObject = new JSONObject(credential);
+        JSONObject jObject = new JSONObject(credentialStr);
         Iterator<?> keys = jObject.keys();
 
         while( keys.hasNext() ){
@@ -249,24 +255,29 @@ public class DetachedConnector extends AbstractConnector {
             credentialMap.put(key, value);
         }
 
-        credential = toJson(credentialMap);
+        credentialStr = toJson(credentialMap);
     }
 
     @Override
-    public String getEndpoint() {
-        return null;
+    public String getPredictEndpoint() {
+        Map<String, String> predictSchema = fromJson(predictAPI);
+        return predictSchema.get(URL_FIELD);
     }
 
     @Override
     public void decrypt(Function<String, String> function) {
-        Type type = new TypeToken<HashMap<String, String>>() {}.getType();
-        HashMap<String, String> credentialMap = gson.fromJson(credential, type);
+        Map<String, String> credentialMap = fromJson(credentialStr);
 
         Map<String, String> decrypted = new HashMap<>();
         for (String key : credentialMap.keySet()) {
             decrypted.put(key, function.apply(credentialMap.get(key)));
         }
-        this.decryptedCredential = decrypted;
+        setDecryptedCredential(decrypted);
+        if (parameters == null) {
+            parameters = fromJson(parameterStr);
+        }
+        Map<String, String> headers = fromJson(getPredictMap().get(HEADERS_FIELD));
+        this.decryptedHeaders = createPredictDecryptedHeaders(headers);
     }
 
     @Override
@@ -287,7 +298,38 @@ public class DetachedConnector extends AbstractConnector {
     }
 
     @Override
-    public <T> T createPayload(Map<String, String> parameters) {
-        return null;
+    public <T> T createPredictPayload(Map<String, String> parameters) {
+        if (predictAPI != null) {
+            Map<String, String> predictSchema = getPredictMap();
+            String payload = predictSchema.get(REQUEST_BODY_FIELD);
+            Map<String, String> values = new HashMap<>();
+            for (Map.Entry<String, String> entry : parameters.entrySet()) {
+                if (isJson(entry.getValue())) {
+                    values.put(entry.getKey(), toUTF8(entry.getValue()));
+                } else {
+                    values.put(entry.getKey(), escapeJson(entry.getValue()));
+                }
+            }
+            StringSubstitutor substitutor = new StringSubstitutor(values, "${parameters.", "}");
+            payload = substitutor.replace(payload);
+
+            if (!isJson(payload)) {
+                throw new IllegalArgumentException("Invalid JSON: " + payload);
+            }
+            return (T) payload;
+        }
+        return (T) parameters.get("http_body");
+    }
+
+    public String getPredictHttpMethod() {
+        return getPredictMap().get(METHOD_FIELD);
+    }
+
+    private Map<String, String> getPredictMap() {
+        if (predictMap == null) {
+            predictMap = fromJson(predictAPI);
+        }
+
+        return predictMap;
     }
 }

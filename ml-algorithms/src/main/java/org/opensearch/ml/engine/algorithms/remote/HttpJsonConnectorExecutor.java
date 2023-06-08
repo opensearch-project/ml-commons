@@ -18,8 +18,6 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
@@ -32,6 +30,7 @@ import org.opensearch.script.ScriptService;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -69,16 +68,14 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             if (inputData.getParameters() != null) {
                 parameters.putAll(inputData.getParameters());
             }
-
-            String payload = connector.createPayload(parameters);
-
+            String payload = connector.createPredictPayload(parameters);
             AtomicReference<String> responseRef = new AtomicReference<>("");
 
             HttpUriRequest request;
-            switch (connector.getHttpMethod().toUpperCase(Locale.ROOT)) {
+            switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
                 case "POST":
                     try {
-                        request = new HttpPost(connector.getEndpoint());
+                        request = new HttpPost(connector.getPredictEndpoint());
                         HttpEntity entity = new StringEntity(payload);
                         ((HttpPost)request).setEntity(entity);
                     } catch (Exception e) {
@@ -87,7 +84,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     break;
                 case "GET":
                     try {
-                        request = new HttpGet(connector.getEndpoint());
+                        request = new HttpGet(connector.getPredictEndpoint());
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }
@@ -96,9 +93,8 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     throw new IllegalArgumentException("unsupported http method");
             }
 
-            // Map<String, ?> headers = (connector instanceof DetachedConnector)?
-            //        ((DetachedConnector) connector).getPredictSchema().getDecryptedHeaders():connector.createHeaders();
-            Map<String, ?> headers = connector.createHeaders();
+            Map<String, ?> headers = connector.getDecryptedHeaders();
+
             boolean hasContentTypeHeader = false;
             for (String key : headers.keySet()) {
                 request.addHeader(key, (String)headers.get(key));
@@ -109,6 +105,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             if (!hasContentTypeHeader) {
                 request.addHeader("Content-Type", "application/json");
             }
+
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 try (CloseableHttpClient httpClient = HttpClientBuilder.create().build();
                      CloseableHttpResponse response = httpClient.execute(request)) {
