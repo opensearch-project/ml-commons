@@ -60,6 +60,11 @@ public class StringUtils {
         return result;
     }
 
+    public static Map<String, String> fromJson(String jsonStr) {
+        JsonElement jsonElement = JsonParser.parseString(jsonStr);
+        return gson.fromJson(jsonElement, Map.class);
+    }
+
     public static String toJson(Map<String, String> map) {
         return new JSONObject(map).toString();
     }

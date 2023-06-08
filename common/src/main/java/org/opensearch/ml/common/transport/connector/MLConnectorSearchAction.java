@@ -16,5 +16,4 @@ public class MLConnectorSearchAction extends ActionType<SearchResponse> {
     private MLConnectorSearchAction() {
         super(NAME, SearchResponse::new);
     }
-
 }

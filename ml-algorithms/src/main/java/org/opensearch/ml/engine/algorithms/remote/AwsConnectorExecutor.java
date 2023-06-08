@@ -78,7 +78,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
                 parameters.putAll(inputData.getParameters());
             }
 
-            String payload = connector.createPayload(parameters);
+            String payload = connector.createPredictPayload(parameters);
 
             String endpoint = connector.getEndpoint();
             RequestBody requestBody = RequestBody.fromString(payload);
@@ -87,7 +87,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
                     .method(POST)
                     .uri(URI.create(endpoint))
                     .contentStreamProvider(requestBody.contentStreamProvider());
-            Map<String, String> headers = connector.createHeaders();
+            Map<String, String> headers = connector.getDecryptedHeaders();
             for (String key : headers.keySet()) {
                 builder.putHeader(key, headers.get(key));
             }

@@ -84,8 +84,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 .version(mlCreateConnectorInput.getMetadata().get(CONNECTOR_VERSION_FIELD))
                 .description(mlCreateConnectorInput.getMetadata().get(CONNECTOR_DESCRIPTION_FIELD))
                 .protocol(mlCreateConnectorInput.getMetadata().get(CONNECTOR_PROTOCOL_FIELD))
-                .parameters(toJson(mlCreateConnectorInput.getParameters()))
-                .credential(toJson(mlCreateConnectorInput.getCredential()))
+                .parameterStr(toJson(mlCreateConnectorInput.getParameters()))
+                .credentialStr(toJson(mlCreateConnectorInput.getCredential()))
                 .predictAPI(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema().toString())
                 .metadataAPI(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema().toString())
                 .connectorState(ConnectorState.CREATED)
@@ -130,32 +130,4 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             listener.onFailure(e);
         }
     }
-
-    // private void resolveAPIPlaceholders(APISchema apiSchema, Map<String, String> parameters) {
-    // apiSchema.setMethod(replacePlaceholders(apiSchema.getMethod(), parameters));
-    // apiSchema.setUrl(replacePlaceholders(apiSchema.getUrl(), parameters));
-    // apiSchema.setHeaders(replacePlaceholders(apiSchema.getHeaders(), parameters));
-    // apiSchema.setRequestBody(replacePlaceholders(apiSchema.getRequestBody(), parameters));
-    // }
-    //
-    // private String replacePlaceholders(String content, Map<String, String> parameters) {
-    // if (content == null) {
-    // return null;
-    // }
-    // Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
-    // Matcher matcher = pattern.matcher(content);
-    // StringBuffer sb = new StringBuffer();
-    //
-    // while (matcher.find()) {
-    // String key = matcher.group(1);
-    // String value = parameters.get(key);
-    // if (value == null) {
-    // throw new IllegalArgumentException("Cannot resolve parameter " + key + " in the connector template");
-    // }
-    // matcher.appendReplacement(sb, value);
-    // }
-    // matcher.appendTail(sb);
-    //
-    // return sb.toString();
-    // }
 }

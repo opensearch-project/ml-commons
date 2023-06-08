@@ -7,7 +7,6 @@ package org.opensearch.ml.common.connector.template;
 
 import lombok.Data;
 import lombok.Getter;
-import org.apache.commons.text.StringSubstitutor;
 import org.json.JSONObject;
 import org.opensearch.common.io.stream.NamedWriteable;
 import org.opensearch.common.io.stream.StreamInput;
@@ -17,14 +16,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Data
 public class APISchema implements ToXContentObject, NamedWriteable {
@@ -52,7 +47,7 @@ public class APISchema implements ToXContentObject, NamedWriteable {
     public static APISchema parse(XContentParser parser) throws IOException {
         String method = null;
         String url = null;
-        Map<String, ?> headerObjs = new HashMap<>();
+        Map<String, String> headers = new HashMap<>();
         String requestBody = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -68,7 +63,7 @@ public class APISchema implements ToXContentObject, NamedWriteable {
                     url = parser.text();
                     break;
                 case HEADERS_FIELD:
-                    headerObjs = parser.map();
+                    headers = parser.mapStrings();
                     break;
                 case REQUEST_BODY_FIELD:
                     requestBody = parser.text();
@@ -76,22 +71,6 @@ public class APISchema implements ToXContentObject, NamedWriteable {
                 default:
                     parser.skipChildren();
                     break;
-            }
-        }
-        Map<String, String> headers = new HashMap<>();
-        for (String key : headerObjs.keySet()) {
-            Object value = headerObjs.get(key);
-            try {
-                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    if (value instanceof String) {
-                        headers.put(key, (String)value);
-                    } else {
-                        headers.put(key, gson.toJson(value));
-                    }
-                    return null;
-                });
-            } catch (PrivilegedActionException e) {
-                throw new RuntimeException(e);
             }
         }
         return new APISchema(method, url, headers, requestBody);
@@ -143,26 +122,11 @@ public class APISchema implements ToXContentObject, NamedWriteable {
         requestBody = input.readOptionalString();
     }
 
-    public void decrypt(Map<String, String> decryptedCredential, Map<String, String> parameters) {
-        Map<String, String> decryptedHeaders = new HashMap<>();
-        StringSubstitutor substitutor = new StringSubstitutor(decryptedCredential, "${credential.", "}");
-        for (String key : headers.keySet()) {
-            decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
-        }
-        if (parameters != null && parameters.size() > 0) {
-            substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            for (String key : decryptedHeaders.keySet()) {
-                decryptedHeaders.put(key, substitutor.replace(decryptedHeaders.get(key)));
-            }
-        }
-        this.decryptedHeaders = decryptedHeaders;
-    }
-
     public String toString() {
         JSONObject api = new JSONObject();
         api.put(METHOD_FIELD, this.method);
         api.put(URL_FIELD, this.url);
-        api.put(HEADERS_FIELD, this.headers.toString());
+        api.put(HEADERS_FIELD, new JSONObject(this.headers).toString());
         api.put(REQUEST_BODY_FIELD, this.requestBody);
         return api.toString();
     }
