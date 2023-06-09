@@ -8,8 +8,8 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
@@ -360,10 +360,7 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(
-        MLRegisterModelInput registerModelInput,
-        MLTask mlTask
-    ) {
+    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -427,7 +424,7 @@ public class MLModelManager {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE) {
             indexRemoteModel(registerModelInput, mlTask);
-        }else {
+        } else {
             registerPrebuiltModel(registerModelInput, mlTask, modelVersion);
         }
     }
@@ -706,7 +703,15 @@ public class MLModelManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
-                if (FunctionName.REMOTE == mlModel.getAlgorithm() || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {// deploy model trained by built-in algorithm like kmeans
+                if (FunctionName.REMOTE == mlModel.getAlgorithm()
+                    || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {// deploy
+                                                                                                                                         // model
+                                                                                                                                         // trained
+                                                                                                                                         // by
+                                                                                                                                         // built-in
+                                                                                                                                         // algorithm
+                                                                                                                                         // like
+                                                                                                                                         // kmeans
                     // deploy remote model or model trained by built-in algorithm like kmeans
                     Map<String, Object> params = ImmutableMap
                         .of(

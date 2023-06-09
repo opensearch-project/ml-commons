@@ -11,8 +11,6 @@ import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.time.Instant;
 
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -37,6 +35,8 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportCreateConnectorAction extends HandledTransportAction<ActionRequest, MLCreateConnectorResponse> {
