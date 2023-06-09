@@ -75,7 +75,14 @@ public class SentenceTransformerTextEmbeddingTranslator implements ServingTransl
             DataType dataType = ndArray.getDataType();
             MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
             ByteBuffer buffer = ndArray.toByteBuffer();
-            outputs.add(new ModelTensor(name, data, shape, mlResultDataType, buffer));
+            ModelTensor tensor = ModelTensor.builder()
+                    .name(name)
+                    .data(data)
+                    .shape(shape)
+                    .dataType(mlResultDataType)
+                    .byteBuffer(buffer)
+                    .build();
+            outputs.add(tensor);
         }
 
         ModelTensors modelTensorOutput = new ModelTensors(outputs);

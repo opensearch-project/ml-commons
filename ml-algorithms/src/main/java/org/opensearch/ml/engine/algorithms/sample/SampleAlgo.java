@@ -19,6 +19,7 @@ import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
 import java.util.Map;
@@ -38,7 +39,7 @@ public class SampleAlgo implements Trainable, Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         throw new MLException("Sample Algo doesn't support init model");
     }
 

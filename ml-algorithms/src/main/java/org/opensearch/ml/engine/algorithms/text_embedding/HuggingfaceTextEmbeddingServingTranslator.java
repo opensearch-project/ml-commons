@@ -58,7 +58,12 @@ public class HuggingfaceTextEmbeddingServingTranslator implements Translator<Inp
             data[i] = ret[i];
         }
         long[] shape = new long[]{1, ret.length};
-        ModelTensor tensor = new ModelTensor(SENTENCE_EMBEDDING, data, shape, MLResultDataType.FLOAT32, null);
+        ModelTensor tensor = ModelTensor.builder()
+                .name(SENTENCE_EMBEDDING)
+                .data(data)
+                .shape(shape)
+                .dataType(MLResultDataType.FLOAT32)
+                .build();
         List<ModelTensor> outputs = Collections.singletonList(tensor);
 
         Output output = new Output();
