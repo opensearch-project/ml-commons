@@ -333,6 +333,10 @@ configurations.all {
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
     resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'org.apache.httpcomponents:httpcore:4.4.15'
+    resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
+    resolutionStrategy.force 'commons-codec:commons-codec:1.15'
+    resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

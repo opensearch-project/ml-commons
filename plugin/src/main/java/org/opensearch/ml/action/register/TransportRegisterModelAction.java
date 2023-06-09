@@ -157,6 +157,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                             String taskId = response.getId();
                             mlTask.setTaskId(taskId);
                             mlModelManager.registerMLModel(registerModelInput, mlTask);
+                            listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
                         }, e -> {
                             logException("Failed to register model", e, log);
                             listener.onFailure(e);
