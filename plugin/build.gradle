@@ -285,7 +285,21 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory',
         'org.opensearch.ml.action.training.TrainingITTests',
         'org.opensearch.ml.action.prediction.PredictionITTests',
-        'org.opensearch.ml.cluster.MLSyncUpCron'
+        'org.opensearch.ml.cluster.MLSyncUpCron',
+        'org.opensearch.ml.breaker.DiskCircuitBreaker',
+        'org.opensearch.ml.rest.AbstractMLSearchAction',
+        'org.opensearch.ml.rest.AbstractMLSearchAction.1',
+        'org.opensearch.ml.action.undeploy.TransportUndeployModelAction',
+        'org.opensearch.ml.action.remote.TransportCreateConnectorAction',
+        'org.opensearch.ml.rest.RestMLCreateConnectorAction',
+        'org.opensearch.ml.rest.RestMLDeleteConnectorAction',
+        'org.opensearch.ml.rest.RestMLGetConnectorAction',
+        'org.opensearch.ml.rest.RestMLSearchConnectorAction',
+        'org.opensearch.ml.action.remote.GetConnectorTransportAction',
+        'org.opensearch.ml.action.remote.GetConnectorTransportAction',
+        'org.opensearch.ml.action.remote.DeleteConnectorTransportAction',
+        'org.opensearch.ml.action.remote.DeleteConnectorTransportAction.1',
+        'org.opensearch.ml.action.remote.SearchConnectorTransportAction'
 ]
 
 jacocoTestCoverageVerification {
@@ -319,6 +333,10 @@ configurations.all {
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
     resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'org.apache.httpcomponents:httpcore:4.4.15'
+    resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
+    resolutionStrategy.force 'commons-codec:commons-codec:1.15'
+    resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

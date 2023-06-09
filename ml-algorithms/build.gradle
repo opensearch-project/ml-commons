@@ -56,6 +56,12 @@ dependencies {
             implementation "com.microsoft.onnxruntime:onnxruntime_gpu:1.13.1"
         }
     }
+
+    implementation platform('software.amazon.awssdk:bom:2.20.19')
+    implementation 'software.amazon.awssdk:auth'
+    implementation 'software.amazon.awssdk:apache-client'
+    implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.0'
+    implementation 'com.jayway.jsonpath:json-path:2.8.0'
 }
 
 configurations.all {

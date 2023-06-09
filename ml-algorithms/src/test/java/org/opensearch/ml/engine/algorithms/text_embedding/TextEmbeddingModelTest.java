@@ -26,6 +26,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.FileUtils;
 
 import java.io.File;
@@ -65,11 +66,12 @@ public class TextEmbeddingModelTest {
     private TextDocsInputDataSet inputDataSet;
     private int dimension = 384;
     private MLEngine mlEngine;
+    private Encryptor encryptor;
 
     @Before
     public void setUp() throws URISyntaxException {
         djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        mlEngine = new MLEngine(djlCachePath);
+        mlEngine = new MLEngine(djlCachePath, encryptor);
         modelId = "test_model_id";
         modelName = "test_model_name";
         functionName = FunctionName.TEXT_EMBEDDING;
@@ -107,7 +109,7 @@ public class TextEmbeddingModelTest {
         params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
         MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
-        textEmbeddingModel.initModel(smallModel, params);
+        textEmbeddingModel.initModel(smallModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
@@ -124,7 +126,7 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void initModel_predict_TorchScript_SentenceTransformer() {
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
@@ -141,7 +143,7 @@ public class TextEmbeddingModelTest {
 
     @Test
     public void initModel_predict_TorchScript_SentenceTransformer_ResultFilter() {
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
         ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList(SENTENCE_EMBEDDING)).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
@@ -192,8 +194,8 @@ public class TextEmbeddingModelTest {
     }
 
     private void initModel_predict_HuggingfaceModel(String modelFile, String modelType, TextEmbeddingModelConfig.PoolingMode poolingMode,
-                                        boolean normalizeResult, Integer modelMaxLength,
-                                   MLModelFormat modelFormat, int dimension) throws URISyntaxException {
+                                                    boolean normalizeResult, Integer modelMaxLength,
+                                                    MLModelFormat modelFormat, int dimension) throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource(modelFile).toURI()));
@@ -206,7 +208,7 @@ public class TextEmbeddingModelTest {
                 .modelMaxLength(modelMaxLength)
                 .build();
         MLModel mlModel = model.toBuilder().modelFormat(modelFormat).modelConfig(onnxModelConfig).build();
-        textEmbeddingModel.initModel(mlModel, params);
+        textEmbeddingModel.initModel(mlModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
@@ -229,7 +231,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model file is null");
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -238,7 +240,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -248,7 +250,7 @@ public class TextEmbeddingModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -256,7 +258,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model id is null");
         model.setModelId(null);
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -266,7 +268,7 @@ public class TextEmbeddingModelTest {
             params.put(MODEL_HELPER, modelHelper);
             params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
             params.put(ML_ENGINE, mlEngine);
-            textEmbeddingModel.initModel(model, params);
+            textEmbeddingModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals(MLException.class, e.getClass());
             Throwable rootCause = ExceptionUtils.getRootCause(e);
@@ -280,7 +282,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("wrong function name");
         MLModel mlModel = model.toBuilder().algorithm(FunctionName.KMEANS).build();
-        textEmbeddingModel.initModel(mlModel, params);
+        textEmbeddingModel.initModel(mlModel, params, encryptor);
     }
 
     @Test
@@ -296,7 +298,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model not deployed");
         model.setModelId(null);
         try {
-            textEmbeddingModel.initModel(model, params);
+            textEmbeddingModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals("model id is null", e.getMessage());
         }
@@ -307,7 +309,7 @@ public class TextEmbeddingModelTest {
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("Failed to inference TEXT_EMBEDDING");
-        textEmbeddingModel.initModel(model, params);
+        textEmbeddingModel.initModel(model, params, encryptor);
         textEmbeddingModel.close();
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
