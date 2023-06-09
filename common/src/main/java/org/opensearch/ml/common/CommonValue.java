@@ -258,10 +258,10 @@ public class CommonValue {
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
             + DetachedConnector.CONNECTOR_PARAMETERS_FIELD
-            + "\" : {\"type\": \"flat_object\"},\n"
+            + "\" : {\"type\": \"text\"},\n"
             + "      \""
             + DetachedConnector.CONNECTOR_CREDENTIAL_FIELD
-            + "\" : {\"type\": \"flat_object\"},\n"
+            + "\" : {\"type\": \"text\"},\n"
             + "      \""
             + DetachedConnector.CONNECTOR_STATE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
@@ -271,7 +271,6 @@ public class CommonValue {
             + "      \""
             + DetachedConnector.LAST_UPDATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-            + "      \""
             + USER_FIELD_MAPPING
             + "    }\n"
             + "}";
