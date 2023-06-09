@@ -8,8 +8,7 @@
 package org.opensearch.ml.helper;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 
 import java.util.HashSet;
 import java.util.List;
@@ -32,7 +31,8 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -43,42 +43,48 @@ import com.google.common.collect.ImmutableList;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class ModelAccessControlHelper {
+public class ConnectorAccessControlHelper {
 
-    private volatile Boolean modelAccessControlEnabled;
+    private volatile Boolean connectorAccessControlEnabled;
 
-    public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
-        modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
+    public ConnectorAccessControlHelper(ClusterService clusterService, Settings settings) {
+        connectorAccessControlEnabled = ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.get(settings);
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> modelAccessControlEnabled = it);
+            .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED, it -> connectorAccessControlEnabled = it);
     }
 
-    public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
-        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+    public boolean hasPermission(User user, DetachedConnector connector) {
+        return accessControlNotEnabled(user)
+            || isAdmin(user)
+            || (isOwner(user, connector.getOwner()) && isOwnerStillHasPermission(user, connector))
+            || isUserHasBackendRole(user, connector);
+    }
+
+    public void validateConnectorAccess(User user, Client client, String connectorId, ActionListener<Boolean> listener) {
+        if (isAdmin(user) || accessControlNotEnabled(user)) {
             listener.onResponse(true);
             return;
         }
 
         List<String> userBackendRoles = user.getBackendRoles();
-        GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-
+        GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
-            client.get(getModelGroupRequest, ActionListener.wrap(r -> {
+            ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (
                         XContentParser parser = MLNodeUtils
                             .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
                     ) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
-                        if (mlModelGroup.getOwner() == null) {
+                        DetachedConnector detachedConnector = DetachedConnector.parse(parser);
+                        AccessMode modelAccessMode = AccessMode.from(detachedConnector.getAccess());
+                        if (detachedConnector.getOwner() == null) {
                             // previous security plugin not enabled, model defaults to public.
                             wrappedListener.onResponse(true);
                         } else if (AccessMode.RESTRICTED == modelAccessMode) {
-                            if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
+                            if (detachedConnector.getBackendRoles() == null || detachedConnector.getBackendRoles().size() == 0) {
                                 throw new IllegalStateException("Backend roles shouldn't be null");
                             } else {
                                 wrappedListener
@@ -87,44 +93,45 @@ public class ModelAccessControlHelper {
                                             .ofNullable(userBackendRoles)
                                             .orElse(ImmutableList.of())
                                             .stream()
-                                            .anyMatch(mlModelGroup.getBackendRoles()::contains)
+                                            .anyMatch(detachedConnector.getBackendRoles()::contains)
                                     );
                             }
                         } else if (AccessMode.PUBLIC == modelAccessMode) {
                             wrappedListener.onResponse(true);
                         } else if (AccessMode.PRIVATE == modelAccessMode) {
-                            if (isOwner(mlModelGroup.getOwner(), user))
+                            if (isOwner(detachedConnector.getOwner(), user))
                                 wrappedListener.onResponse(true);
                             else
                                 wrappedListener.onResponse(false);
                         }
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model group");
+                        log.error("Failed to parse connector");
                         wrappedListener.onFailure(e);
                     }
                 } else {
-                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find connector"));
                 }
             }, e -> {
-                log.error("Fail to get model group", e);
-                wrappedListener.onFailure(new MLValidationException("Fail to get model group"));
+                log.error("Fail to get connector", e);
+                wrappedListener.onFailure(new MLValidationException("Fail to get connector"));
             }));
         } catch (Exception e) {
             log.error("Failed to validate Access", e);
             listener.onFailure(e);
         }
+
     }
 
-    public boolean skipModelAccessControl(User user) {
+    public boolean skipConnectorAccessControl(User user) {
         // Case 1: user == null when 1. Security is disabled. 2. When user is super-admin
         // Case 2: If Security is enabled and filter is disabled, proceed with search as
         // user is already authenticated to hit this API.
         // case 3: user is admin which means we don't have to check backend role filtering
-        return user == null || !modelAccessControlEnabled || isAdmin(user);
+        return user == null || !connectorAccessControlEnabled || isAdmin(user);
     }
 
-    public boolean isSecurityEnabledAndModelAccessControlEnabled(User user) {
-        return user != null && modelAccessControlEnabled;
+    public boolean accessControlNotEnabled(User user) {
+        return user == null || !connectorAccessControlEnabled;
     }
 
     public boolean isAdmin(User user) {
@@ -144,52 +151,52 @@ public class ModelAccessControlHelper {
         return owner.getName().equals(user.getName());
     }
 
-    public boolean isUserHasBackendRole(User user, MLModelGroup mlModelGroup) {
-        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
+    public boolean isUserHasBackendRole(User user, DetachedConnector detachedConnector) {
+        AccessMode modelAccessMode = AccessMode.from(detachedConnector.getAccess());
         if (AccessMode.PUBLIC == modelAccessMode)
             return true;
         if (AccessMode.PRIVATE == modelAccessMode)
             return false;
         return user.getBackendRoles() != null
-            && mlModelGroup.getBackendRoles() != null
-            && mlModelGroup.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x));
+            && detachedConnector.getBackendRoles() != null
+            && detachedConnector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x));
     }
 
-    public boolean isOwnerStillHasPermission(User user, MLModelGroup mlModelGroup) {
+    public boolean isOwnerStillHasPermission(User user, DetachedConnector connector) {
         // when security plugin is disabled, or model access control not enabled, the model is a public model and anyone has permission to
         // it.
-        if (!isSecurityEnabledAndModelAccessControlEnabled(user))
+        if (accessControlNotEnabled(user))
             return true;
-        AccessMode access = AccessMode.from(mlModelGroup.getAccess());
+        AccessMode access = AccessMode.from(connector.getAccess());
         if (AccessMode.PUBLIC == access) {
             return true;
         } else if (AccessMode.PRIVATE == access) {
-            return isOwner(user, mlModelGroup.getOwner());
+            return isOwner(user, connector.getOwner());
         } else if (AccessMode.RESTRICTED == access) {
-            if (CollectionUtils.isEmpty(mlModelGroup.getBackendRoles())) {
+            if (CollectionUtils.isEmpty(connector.getBackendRoles())) {
                 throw new IllegalStateException("Backend roles should not be null");
             }
             return user.getBackendRoles() != null
-                && new HashSet<>(mlModelGroup.getBackendRoles()).stream().anyMatch(x -> user.getBackendRoles().contains(x));
+                && new HashSet<>(connector.getBackendRoles()).stream().anyMatch(x -> user.getBackendRoles().contains(x));
         }
         throw new IllegalStateException("Access shouldn't be null");
     }
 
-    public boolean isModelAccessControlEnabled() {
-        return modelAccessControlEnabled;
+    public boolean getConnectorAccessControlEnabled() {
+        return connectorAccessControlEnabled;
     }
 
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        boolQueryBuilder.should(QueryBuilders.termQuery(MLModelGroup.ACCESS, AccessMode.PUBLIC.getValue()));
-        boolQueryBuilder.should(QueryBuilders.termsQuery(MLModelGroup.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
+        boolQueryBuilder.should(QueryBuilders.termQuery(DetachedConnector.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));
+        boolQueryBuilder.should(QueryBuilders.termsQuery(DetachedConnector.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
 
         BoolQueryBuilder privateBoolQuery = new BoolQueryBuilder();
         String ownerName = "owner.name.keyword";
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery(ownerName, user.getName());
-        NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(MLModelGroup.OWNER, ownerNameTermQuery, ScoreMode.None);
+        NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(DetachedConnector.OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
         privateBoolQuery.must(nestedQueryBuilder);
-        privateBoolQuery.must(QueryBuilders.termQuery(MLModelGroup.ACCESS, AccessMode.PRIVATE.getValue()));
+        privateBoolQuery.must(QueryBuilders.termQuery(DetachedConnector.ACCESS_FIELD, AccessMode.PRIVATE.getValue()));
         boolQueryBuilder.should(privateBoolQuery);
         QueryBuilder query = searchSourceBuilder.query();
         if (query == null) {
@@ -203,9 +210,5 @@ public class ModelAccessControlHelper {
             searchSourceBuilder.query(rewriteQuery);
         }
         return searchSourceBuilder;
-    }
-
-    public SearchSourceBuilder createSearchSourceBuilder(User user) {
-        return addUserBackendRolesFilter(user, new SearchSourceBuilder());
     }
 }

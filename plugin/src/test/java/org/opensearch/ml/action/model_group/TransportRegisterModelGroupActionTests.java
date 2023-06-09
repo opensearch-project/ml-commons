@@ -27,7 +27,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
@@ -124,7 +124,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
     public void test_SuccessPublic() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PUBLIC, null);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, null);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<MLRegisterModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -156,7 +156,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
     public void test_BackendRolesProvidedWithPublic() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PUBLIC, true);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, true);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -166,7 +166,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
     public void test_BackendRolesProvidedWithPrivate() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PRIVATE, true);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PRIVATE, true);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -178,7 +178,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -189,7 +189,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex||engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -203,7 +203,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, null);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -217,7 +217,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(backendRoles, ModelAccessMode.RESTRICTED, true);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(backendRoles, AccessMode.RESTRICTED, true);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -233,7 +233,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
 
         List<String> incorrectBackendRole = Arrays.asList("Finance");
 
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(incorrectBackendRole, ModelAccessMode.RESTRICTED, null);
+        MLRegisterModelGroupRequest actionRequest = prepareRequest(incorrectBackendRole, AccessMode.RESTRICTED, null);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -303,7 +303,7 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
 
     private MLRegisterModelGroupRequest prepareRequest(
         List<String> backendRoles,
-        ModelAccessMode modelAccessMode,
+        AccessMode modelAccessMode,
         Boolean isAddAllBackendRoles
     ) {
         MLRegisterModelGroupInput registerModelGroupInput = MLRegisterModelGroupInput

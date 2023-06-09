@@ -12,6 +12,7 @@ import org.json.JSONObject;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.AbstractConnector;
@@ -19,8 +20,10 @@ import org.opensearch.ml.common.connector.Connector;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -50,6 +53,9 @@ public class DetachedConnector extends AbstractConnector {
     public static final String PREDICT_API_SCHEMA_FIELD = "predict_API";
     public static final String METADATA_API_SCHEMA_FIELD = "metadata_API";
     public static final String CONNECTOR_STATE_FIELD = "connector_state";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles";
+    public static final String OWNER_FIELD = "owner";
+    public static final String ACCESS_FIELD = "access";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
 
@@ -64,6 +70,9 @@ public class DetachedConnector extends AbstractConnector {
     @Getter
     private String metadataAPI;
     private ConnectorState connectorState;
+    private List<String> backendRoles;
+    private User owner;
+    private String access;
     private Instant createdTime;
     private Instant lastUpdateTime;
 
@@ -79,6 +88,9 @@ public class DetachedConnector extends AbstractConnector {
                      String predictAPI,
                      String metadataAPI,
                      ConnectorState connectorState,
+                     List<String> backendRoles,
+                     User owner,
+                     String access,
                      Instant createdTime,
                      Instant lastUpdateTime
     ) {
@@ -91,6 +103,9 @@ public class DetachedConnector extends AbstractConnector {
         this.predictAPI = predictAPI;
         this.metadataAPI = metadataAPI;
         this.connectorState = connectorState;
+        this.backendRoles = backendRoles;
+        this.owner = owner;
+        this.access = access;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
     }
@@ -107,6 +122,13 @@ public class DetachedConnector extends AbstractConnector {
         if (input.readBoolean()) {
             connectorState = input.readEnum(ConnectorState.class);
         }
+        backendRoles = input.readOptionalStringList();
+        if (input.readBoolean()) {
+            this.owner = new User(input);
+        } else {
+            this.owner = null;
+        }
+        access = input.readString();
         createdTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
     }
@@ -126,6 +148,13 @@ public class DetachedConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalStringCollection(backendRoles);
+        if (owner != null) {
+            owner.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeString(access);
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
     }
@@ -160,6 +189,15 @@ public class DetachedConnector extends AbstractConnector {
         if (connectorState != null) {
             builder.field(CONNECTOR_STATE_FIELD, connectorState);
         }
+        if (backendRoles != null) {
+            builder.field(BACKEND_ROLES_FIELD, backendRoles);
+        }
+        if (owner != null) {
+            builder.field(OWNER_FIELD, owner);
+        }
+        if (access != null) {
+            builder.field(ACCESS_FIELD, access);
+        }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
@@ -180,6 +218,9 @@ public class DetachedConnector extends AbstractConnector {
         String predictAPI = null;
         String metadataAPI = null;
         ConnectorState connectorState = null;
+        List<String> backendRoles = new ArrayList<>();
+        User owner = null;
+        String access = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
 
@@ -216,6 +257,18 @@ public class DetachedConnector extends AbstractConnector {
                 case CONNECTOR_STATE_FIELD:
                     connectorState = ConnectorState.from(parser.text());
                     break;
+                case BACKEND_ROLES_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        backendRoles.add(parser.text());
+                    }
+                    break;
+                case OWNER_FIELD:
+                    owner = User.parse(parser);
+                    break;
+                case ACCESS_FIELD:
+                    access = parser.text();
+                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
@@ -238,6 +291,9 @@ public class DetachedConnector extends AbstractConnector {
                 .predictAPI(predictAPI)
                 .metadataAPI(metadataAPI)
                 .connectorState(connectorState)
+            .backendRoles(backendRoles)
+            .owner(owner)
+            .access(access)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
                 .build();
@@ -300,6 +356,21 @@ public class DetachedConnector extends AbstractConnector {
     @Override
     public String getName() {
         return this.protocol;
+    }
+
+    @Override
+    public List<String> getBackendRoles() {
+        return backendRoles;
+    }
+
+    @Override
+    public User getOwner() {
+        return owner;
+    }
+
+    @Override
+    public String getAccess() {
+        return access;
     }
 
     @Override

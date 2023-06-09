@@ -118,6 +118,7 @@ import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelatio
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
@@ -215,6 +216,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private NamedXContentRegistry xContentRegistry;
 
     private ModelAccessControlHelper modelAccessControlHelper;
+
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
@@ -319,6 +322,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
+        connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
@@ -422,6 +426,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlTrainAndPredictTaskRunner,
                 mlExecuteTaskRunner,
                 modelAccessControlHelper,
+                connectorAccessControlHelper,
                 mlSearchHandler,
                 mlTaskDispatcher,
                 mlModelChunkUploader,
@@ -596,7 +601,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY
+                MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY,
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
             );
         return settings;
     }
