@@ -27,6 +27,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -115,6 +116,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+
+        FunctionName functionName = registerModelInput.getFunctionName();
+
         Pattern pattern = Pattern.compile(trustedUrlRegex);
         String url = registerModelInput.getUrl();
 
@@ -136,9 +140,10 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     // mlStats.createCounterStatIfAbsent(FunctionName.TEXT_EMBEDDING,
                     // ActionName.REGISTER,
                     // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+                    boolean isAsync = functionName != FunctionName.REMOTE;
                     MLTask mlTask = MLTask
                         .builder()
-                        .async(true)
+                        .async(isAsync)
                         .taskType(MLTaskType.DEPLOY_MODEL)
                         .functionName(registerModelInput.getFunctionName())
                         .createTime(Instant.now())
@@ -147,6 +152,18 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
                         .build();
 
+                    if (!isAsync) {
+                        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                            String taskId = response.getId();
+                            mlTask.setTaskId(taskId);
+                            mlModelManager.registerMLModel(registerModelInput, mlTask);
+                            listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
+                        }, e -> {
+                            logException("Failed to register model", e, log);
+                            listener.onFailure(e);
+                        }));
+                        return;
+                    }
                     mlTaskDispatcher.dispatch(ActionListener.wrap(node -> {
                         String nodeId = node.getId();
                         mlTask.setWorkerNodes(ImmutableList.of(nodeId));
