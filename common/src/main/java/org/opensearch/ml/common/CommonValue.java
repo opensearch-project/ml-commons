@@ -263,20 +263,6 @@ public class CommonValue {
             + DetachedConnector.CONNECTOR_CREDENTIAL_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
             + "      \""
-            + DetachedConnector.PREDICT_API_SCHEMA_FIELD
-            + "\" : {\"properties\":{\""
-            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
-            + URL_FIELD + "\":{\"type\":\"text\"},\""
-            + HEADERS_FIELD + "\":{\"type\":\"flat_object\"},\""
-            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
-            + "      \""
-            + DetachedConnector.METADATA_API_SCHEMA_FIELD
-            + "\" : {\"properties\":{\""
-            + METHOD_FIELD + "\":{\"type\":\"keyword\"},\""
-            + URL_FIELD + "\":{\"type\":\"text\"},\""
-            + HEADERS_FIELD + "\":{\"type\":\"flat_object\"},\""
-            + REQUEST_BODY_FIELD + "\":{\"type\":\"text\"}}},\n"
-            + "      \""
             + DetachedConnector.CONNECTOR_STATE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
             + "      \""
