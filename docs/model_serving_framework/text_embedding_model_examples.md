@@ -49,22 +49,40 @@ opensearch-py-ml code: [sentencetransformermodel.py#save_as_pt](https://github.c
 
 Sentence transformer model already includes post-processing logic. So no need to specify `pooling_mode`/`normalize_result` when upload model.
 
+From 2.7 release we are supporting register pre-trained models. 
+And from 2.8, we need model group id to register model. More details about model group [here](../model_access_control.md)
+
+- create a model group:
+```
+POST /_plugins/_ml/model_groups/_register
+{
+    "name": "test_model_group_public",
+    "description": "This is a public model group"
+}
+```
+
+# Sample response
+
+```
+{
+  "model_group_id": "7IjOsYgBFp6IJxCceZ1-",
+  "status": "CREATED"
+}
+```
+
+Now we can use that model group id to register model.
+
 - Step 1: upload model. This step will save model to model index.
 ```
 # Sample request
-POST /_plugins/_ml/models/_upload
+POST /_plugins/_ml/models/_register
 {
-  "name": "sentence-transformers/all-MiniLM-L6-v2",
-  "version": "1.0.0",
-  "description": "test model",
-  "model_format": "TORCH_SCRIPT",
-  "model_config": {
-    "model_type": "bert",
-    "embedding_dimension": 384,
-    "framework_type": "sentence_transformers"
-  },
-  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true"
+  "name": "huggingface/sentence-transformers/all-MiniLM-L12-v2",
+  "version": "1.0.1",
+  "model_format": "TORCH_SCRIPT"
+  "model_group_id": "7IjOsYgBFp6IJxCceZ1-"
 }
+
 
 # Sample response
 {
