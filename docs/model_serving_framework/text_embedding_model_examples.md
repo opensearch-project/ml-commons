@@ -49,7 +49,7 @@ opensearch-py-ml code: [sentencetransformermodel.py#save_as_pt](https://github.c
 
 Sentence transformer model already includes post-processing logic. So no need to specify `pooling_mode`/`normalize_result` when upload model.
 
-From 2.7 release we are supporting register pre-trained models. 
+From 2.6 release we are supporting to register pre-trained models. 
 And from 2.8, we need model group id to register model. More details about model group [here](../model_access_control.md)
 
 - create a model group:
