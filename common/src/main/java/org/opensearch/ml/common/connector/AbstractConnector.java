@@ -73,4 +73,12 @@ public abstract class AbstractConnector implements Connector {
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(map).build());
         }
     }
+
+    abstract public String getAccessKey();
+
+    abstract public String getSecretKey();
+
+    abstract public String getServiceName();
+
+    abstract public String getRegion();
 }
