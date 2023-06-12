@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -49,14 +50,14 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 @ConnectorExecutor(AWS_V1)
 public class AwsConnectorExecutor implements RemoteConnectorExecutor{
 
-    private AwsConnector connector;
+    private AbstractConnector connector;
     private final Aws4Signer signer;
     private final SdkHttpClient httpClient;
     @Setter
     private ScriptService scriptService;
 
     public AwsConnectorExecutor(Connector connector) {
-        this.connector = (AwsConnector)connector;
+        this.connector = (AbstractConnector)connector;
         this.signer = Aws4Signer.create();
         this.httpClient = new DefaultSdkHttpClientBuilder().build();
     }
@@ -80,7 +81,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
 
             String payload = connector.createPredictPayload(parameters);
 
-            String endpoint = connector.getEndpoint();
+            String endpoint = connector.getPredictEndpoint();
             RequestBody requestBody = RequestBody.fromString(payload);
 
             SdkHttpFullRequest.Builder builder = SdkHttpFullRequest.builder()

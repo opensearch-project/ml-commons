@@ -22,10 +22,15 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.HttpConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.HEADERS_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.METHOD_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.REQUEST_BODY_FIELD;
@@ -331,5 +336,26 @@ public class DetachedConnector extends AbstractConnector {
         }
 
         return predictMap;
+    }
+
+    public String getAccessKey() {
+        return decryptedCredential.get(ACCESS_KEY_FIELD);
+    }
+
+    public String getSecretKey() {
+        return decryptedCredential.get(SECRET_KEY_FIELD);
+    }
+    public String getServiceName() {
+        if (parameters == null) {
+            return decryptedCredential.get(SERVICE_NAME_FIELD);
+        }
+        return Optional.ofNullable(parameters.get(SERVICE_NAME_FIELD)).orElse(decryptedCredential.get(SERVICE_NAME_FIELD));
+    }
+
+    public String getRegion() {
+        if (parameters == null) {
+            return decryptedCredential.get(REGION_FIELD);
+        }
+        return Optional.ofNullable(parameters.get(REGION_FIELD)).orElse(decryptedCredential.get(REGION_FIELD));
     }
 }
