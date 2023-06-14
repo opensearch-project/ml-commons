@@ -66,9 +66,10 @@ public class MLExecuteTaskRequest extends MLTaskRequest {
         ActionRequestValidationException exception = null;
         if(this.input == null) {
             exception = addValidationError("ML input can't be null", exception);
-        }
-        if(this.input.getFunctionName() == null) {
-            exception = addValidationError("function name can't be null or empty", exception);
+        } else {
+            if (this.input.getFunctionName() == null) {
+                exception = addValidationError("function name can't be null or empty", exception);
+            }
         }
 
         return exception;

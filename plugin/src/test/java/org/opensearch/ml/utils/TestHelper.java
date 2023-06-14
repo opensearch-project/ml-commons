@@ -65,6 +65,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.profile.MLProfileInput;
@@ -253,6 +254,16 @@ public class TestHelper {
         return request;
     }
 
+    public static RestRequest getMetricsCorrelationRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.METRICS_CORRELATION.name());
+        final String requestContent = "{\"metrics\":[[1.0, 2.0, 3.0], [1.0 ,2.0, 3.0]]}";
+        return new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+    }
+
     public static RestRequest getSearchAllRestRequest() {
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
             .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
@@ -276,6 +287,7 @@ public class TestHelper {
         entries.addAll(searchModule.getNamedXContents());
         entries.add(KMeansParams.XCONTENT_REGISTRY);
         entries.add(LocalSampleCalculatorInput.XCONTENT_REGISTRY);
+        entries.add(MetricsCorrelationInput.XCONTENT_REGISTRY);
         return new NamedXContentRegistry(entries);
     }
 

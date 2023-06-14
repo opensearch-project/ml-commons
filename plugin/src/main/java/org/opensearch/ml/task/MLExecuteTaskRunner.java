@@ -6,6 +6,7 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ENABLE_MCORR;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
@@ -41,6 +42,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     private final MLInputDatasetHandler mlInputDatasetHandler;
     protected final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
+    private volatile Boolean isMcorrEnabled;
 
     public MLExecuteTaskRunner(
         ThreadPool threadPool,
@@ -61,6 +63,8 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
+        isMcorrEnabled = ML_COMMONS_ENABLE_MCORR.get(this.clusterService.getSettings());
+        this.clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ENABLE_MCORR, it -> isMcorrEnabled = it);
     }
 
     @Override
@@ -89,9 +93,15 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                     .increment();
 
                 // ActionListener<MLExecuteTaskResponse> wrappedListener = ActionListener.runBefore(listener, )
-
                 Input input = request.getInput();
                 FunctionName functionName = request.getFunctionName();
+                if (FunctionName.METRICS_CORRELATION.equals(functionName)) {
+                    if (!isMcorrEnabled) {
+                        Exception exception = new IllegalArgumentException("This algorithm is not enabled from settings");
+                        listener.onFailure(exception);
+                        return;
+                    }
+                }
                 Output output = mlEngine.execute(input);
                 MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
                 listener.onResponse(response);
