@@ -27,19 +27,12 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.ExistsQueryBuilder;
-import org.opensearch.index.query.IdsQueryBuilder;
-import org.opensearch.index.query.MatchAllQueryBuilder;
-import org.opensearch.index.query.MatchPhraseQueryBuilder;
-import org.opensearch.index.query.MatchQueryBuilder;
 import org.opensearch.index.query.NestedQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -61,18 +54,6 @@ public class ModelAccessControlHelper {
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> modelAccessControlEnabled = it);
     }
 
-    private static final List<Class<?>> SUPPORTED_QUERY_TYPES = ImmutableList
-        .of(
-            IdsQueryBuilder.class,
-            MatchQueryBuilder.class,
-            MatchAllQueryBuilder.class,
-            MatchPhraseQueryBuilder.class,
-            TermQueryBuilder.class,
-            TermsQueryBuilder.class,
-            ExistsQueryBuilder.class,
-            RangeQueryBuilder.class
-        );
-
     public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
         if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
@@ -92,11 +73,11 @@ public class ModelAccessControlHelper {
                     ) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                        ModelAccessMode modelAccessMode = ModelAccessMode.from(mlModelGroup.getAccess());
+                        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
                         if (mlModelGroup.getOwner() == null) {
                             // previous security plugin not enabled, model defaults to public.
                             wrappedListener.onResponse(true);
-                        } else if (ModelAccessMode.RESTRICTED == modelAccessMode) {
+                        } else if (AccessMode.RESTRICTED == modelAccessMode) {
                             if (mlModelGroup.getBackendRoles() == null || mlModelGroup.getBackendRoles().size() == 0) {
                                 throw new IllegalStateException("Backend roles shouldn't be null");
                             } else {
@@ -109,9 +90,9 @@ public class ModelAccessControlHelper {
                                             .anyMatch(mlModelGroup.getBackendRoles()::contains)
                                     );
                             }
-                        } else if (ModelAccessMode.PUBLIC == modelAccessMode) {
+                        } else if (AccessMode.PUBLIC == modelAccessMode) {
                             wrappedListener.onResponse(true);
-                        } else if (ModelAccessMode.PRIVATE == modelAccessMode) {
+                        } else if (AccessMode.PRIVATE == modelAccessMode) {
                             if (isOwner(mlModelGroup.getOwner(), user))
                                 wrappedListener.onResponse(true);
                             else
@@ -164,10 +145,10 @@ public class ModelAccessControlHelper {
     }
 
     public boolean isUserHasBackendRole(User user, MLModelGroup mlModelGroup) {
-        ModelAccessMode modelAccessMode = ModelAccessMode.from(mlModelGroup.getAccess());
-        if (ModelAccessMode.PUBLIC == modelAccessMode)
+        AccessMode modelAccessMode = AccessMode.from(mlModelGroup.getAccess());
+        if (AccessMode.PUBLIC == modelAccessMode)
             return true;
-        if (ModelAccessMode.PRIVATE == modelAccessMode)
+        if (AccessMode.PRIVATE == modelAccessMode)
             return false;
         return user.getBackendRoles() != null
             && mlModelGroup.getBackendRoles() != null
@@ -179,12 +160,12 @@ public class ModelAccessControlHelper {
         // it.
         if (!isSecurityEnabledAndModelAccessControlEnabled(user))
             return true;
-        ModelAccessMode access = ModelAccessMode.from(mlModelGroup.getAccess());
-        if (ModelAccessMode.PUBLIC == access) {
+        AccessMode access = AccessMode.from(mlModelGroup.getAccess());
+        if (AccessMode.PUBLIC == access) {
             return true;
-        } else if (ModelAccessMode.PRIVATE == access) {
+        } else if (AccessMode.PRIVATE == access) {
             return isOwner(user, mlModelGroup.getOwner());
-        } else if (ModelAccessMode.RESTRICTED == access) {
+        } else if (AccessMode.RESTRICTED == access) {
             if (CollectionUtils.isEmpty(mlModelGroup.getBackendRoles())) {
                 throw new IllegalStateException("Backend roles should not be null");
             }
@@ -200,7 +181,7 @@ public class ModelAccessControlHelper {
 
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        boolQueryBuilder.should(QueryBuilders.termQuery(MLModelGroup.ACCESS, ModelAccessMode.PUBLIC.getValue()));
+        boolQueryBuilder.should(QueryBuilders.termQuery(MLModelGroup.ACCESS, AccessMode.PUBLIC.getValue()));
         boolQueryBuilder.should(QueryBuilders.termsQuery(MLModelGroup.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
 
         BoolQueryBuilder privateBoolQuery = new BoolQueryBuilder();
@@ -208,7 +189,7 @@ public class ModelAccessControlHelper {
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery(ownerName, user.getName());
         NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(MLModelGroup.OWNER, ownerNameTermQuery, ScoreMode.None);
         privateBoolQuery.must(nestedQueryBuilder);
-        privateBoolQuery.must(QueryBuilders.termQuery(MLModelGroup.ACCESS, ModelAccessMode.PRIVATE.getValue()));
+        privateBoolQuery.must(QueryBuilders.termQuery(MLModelGroup.ACCESS, AccessMode.PRIVATE.getValue()));
         boolQueryBuilder.should(privateBoolQuery);
         QueryBuilder query = searchSourceBuilder.query();
         if (query == null) {

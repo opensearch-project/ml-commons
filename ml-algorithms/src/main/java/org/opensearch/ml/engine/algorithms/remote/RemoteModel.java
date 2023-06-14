@@ -17,7 +17,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;

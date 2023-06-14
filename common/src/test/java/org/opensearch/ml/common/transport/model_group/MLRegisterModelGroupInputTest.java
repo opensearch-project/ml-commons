@@ -4,7 +4,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -22,7 +22,7 @@ public class MLRegisterModelGroupInputTest {
                 .name("name")
                 .description("description")
                 .backendRoles(Arrays.asList("IT"))
-                .modelAccessMode(ModelAccessMode.RESTRICTED)
+                .modelAccessMode(AccessMode.RESTRICTED)
                 .isAddAllBackendRoles(true)
                 .build();
     }

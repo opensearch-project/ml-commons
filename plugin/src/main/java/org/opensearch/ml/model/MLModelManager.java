@@ -360,7 +360,7 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
+    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -369,7 +369,7 @@ public class MLModelManager {
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
             String modelName = registerModelInput.getModelName();
-            String version = registerModelInput.getVersion();
+            String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
                 registerModelInput.getConnector().encrypt((credential) -> mlEngine.encrypt(credential));
@@ -379,6 +379,7 @@ public class MLModelManager {
                     .builder()
                     .name(modelName)
                     .algorithm(functionName)
+                    .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
                     .modelFormat(registerModelInput.getModelFormat())
@@ -423,7 +424,7 @@ public class MLModelManager {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE) {
-            indexRemoteModel(registerModelInput, mlTask);
+            indexRemoteModel(registerModelInput, mlTask, modelVersion);
         } else {
             registerPrebuiltModel(registerModelInput, mlTask, modelVersion);
         }
@@ -704,14 +705,7 @@ public class MLModelManager {
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
-                    || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {// deploy
-                                                                                                                                         // model
-                                                                                                                                         // trained
-                                                                                                                                         // by
-                                                                                                                                         // built-in
-                                                                                                                                         // algorithm
-                                                                                                                                         // like
-                                                                                                                                         // kmeans
+                    || (!FunctionName.isDLModel(mlModel.getAlgorithm()) && mlModel.getAlgorithm() != FunctionName.METRICS_CORRELATION)) {
                     // deploy remote model or model trained by built-in algorithm like kmeans
                     Map<String, Object> params = ImmutableMap
                         .of(

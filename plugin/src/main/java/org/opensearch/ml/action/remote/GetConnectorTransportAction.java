@@ -18,14 +18,18 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -41,16 +45,20 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
     Client client;
     NamedXContentRegistry xContentRegistry;
 
+    ConnectorAccessControlHelper connectorAccessControlHelper;
+
     @Inject
     public GetConnectorTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        ConnectorAccessControlHelper connectorAccessControlHelper
     ) {
         super(MLConnectorGetAction.NAME, transportService, actionFilters, MLConnectorGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        this.connectorAccessControlHelper = connectorAccessControlHelper;
     }
 
     @Override
@@ -59,7 +67,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         String connectorId = mlConnectorGetRequest.getConnectorId();
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_CONNECTOR_INDEX).id(connectorId).fetchSourceContext(fetchSourceContext);
-
+        User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 log.debug("Completed Get Connector Request, id:{}", connectorId);
@@ -68,7 +76,11 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         DetachedConnector mlConnector = DetachedConnector.parse(parser);
-                        actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
+                        if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
+                            actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
+                        } else {
+                            actionListener.onFailure(new MLValidationException("You don't have permission to access this connector"));
+                        }
                     } catch (Exception e) {
                         log.error("Failed to parse ml connector" + r.getId(), e);
                         actionListener.onFailure(e);
@@ -83,7 +95,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     log.error("Failed to get ML connector " + connectorId, e);
                     actionListener.onFailure(e);
                 }
-            }), () -> context.restore()));
+            }), context::restore));
         } catch (Exception e) {
             log.error("Failed to get ML connector " + connectorId, e);
             actionListener.onFailure(e);

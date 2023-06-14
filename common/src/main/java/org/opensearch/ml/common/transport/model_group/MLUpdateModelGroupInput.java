@@ -13,7 +13,7 @@ import org.opensearch.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,11 +37,11 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     private String name;
     private String description;
     private List<String> backendRoles;
-    private ModelAccessMode modelAccessMode;
+    private AccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, List<String> backendRoles, ModelAccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         this.modelGroupID = modelGroupID;
         this.name = name;
         this.description = description;
@@ -56,7 +56,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         this.description = in.readOptionalString();
         this.backendRoles = in.readOptionalStringList();
         if (in.readBoolean()) {
-            modelAccessMode = in.readEnum(ModelAccessMode.class);
+            modelAccessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
@@ -109,7 +109,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         String name = null;
         String description = null;
         List<String> backendRoles = null;
-        ModelAccessMode modelAccessMode = null;
+        AccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -134,7 +134,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
                     }
                     break;
                 case MODEL_ACCESS_MODE:
-                    modelAccessMode = ModelAccessMode.from(parser.text().toLowerCase(Locale.ROOT));
+                    modelAccessMode = AccessMode.from(parser.text());
                     break;
                 case ADD_ALL_BACKEND_ROLES_FIELD:
                     isAddAllBackendRoles = parser.booleanValue();

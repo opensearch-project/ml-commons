@@ -10,13 +10,18 @@ import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.template.ConnectorTemplate;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
@@ -28,20 +33,35 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
     public static final String CONNECTOR_TEMPLATE_FIELD = "template";
 
+    public static final String BACKEND_ROLES_FIELD = "backend_roles";
+    public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
+    public static final String OWNER_FIELD = "owner";
+    public static final String ACCESS_MODE_FIELD = "access_mode";
+
     private Map<String, String> metadata;
     private Map<String, String> parameters;
     private Map<String, String> credential;
     private ConnectorTemplate connectorTemplate;
+    private List<String> backendRoles;
+    private Boolean addAllBackendRoles;
+    private AccessMode access;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(Map<String, String> metadata,
                                   Map<String, String> parameters,
                                   Map<String, String> credential,
-                                  ConnectorTemplate connectorTemplate) {
+                                  ConnectorTemplate connectorTemplate,
+                                  List<String> backendRoles,
+                                  Boolean addAllBackendRoles,
+                                  AccessMode access
+                                  ) {
         this.metadata = metadata;
         this.parameters = parameters;
         this.credential = credential;
         this.connectorTemplate = connectorTemplate;
+        this.backendRoles = backendRoles;
+        this.addAllBackendRoles = addAllBackendRoles;
+        this.access = access;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -49,6 +69,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Map<String, String> parameters = new HashMap<>();
         Map<String, String> credential = new HashMap<>();
         ConnectorTemplate connectorTemplate = null;
+        List<String> backendRoles = new ArrayList<>();
+        Boolean addAllBackendRoles = null;
+        AccessMode access = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -68,13 +91,24 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case CONNECTOR_TEMPLATE_FIELD:
                     connectorTemplate = connectorTemplate.parse(parser);
                     break;
+                case BACKEND_ROLES_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        backendRoles.add(parser.text());
+                    }
+                    break;
+                case ADD_ALL_BACKEND_ROLES_FIELD:
+                    addAllBackendRoles = parser.booleanValue();
+                    break;
+                case ACCESS_MODE_FIELD:
+                    access = AccessMode.from(parser.text());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-
-        return new MLCreateConnectorInput(metadata, parameters, credential, connectorTemplate);
+        return new MLCreateConnectorInput(metadata, parameters, credential, connectorTemplate, backendRoles, addAllBackendRoles, access);
     }
 
     @Override
@@ -91,6 +125,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (connectorTemplate != null) {
             builder.field(CONNECTOR_TEMPLATE_FIELD, connectorTemplate);
+        }
+        if (backendRoles != null) {
+            builder.field(BACKEND_ROLES_FIELD, backendRoles);
+        }
+        if (addAllBackendRoles != null) {
+            builder.field(ADD_ALL_BACKEND_ROLES_FIELD, addAllBackendRoles);
+        }
+        if (access != null) {
+            builder.field(ACCESS_MODE_FIELD, access);
         }
         builder.endObject();
         return builder;
@@ -123,6 +166,21 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
+        if (backendRoles != null) {
+            output.writeBoolean(true);
+            output.writeOptionalStringCollection(backendRoles);
+        } else {
+            output.writeBoolean(false);
+        }
+        if (addAllBackendRoles != null) {
+            output.writeBoolean(addAllBackendRoles);
+        }
+        if (access != null) {
+            output.writeBoolean(true);
+            output.writeEnum(access);
+        } else {
+            output.writeBoolean(false);
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -137,6 +195,13 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (input.readBoolean()) {
             this.connectorTemplate = new ConnectorTemplate(input);
+        }
+        if (input.readBoolean()) {
+            this.backendRoles = input.readList(StreamInput::readString);
+        }
+        this.addAllBackendRoles = input.readOptionalBoolean();
+        if (input.readBoolean()) {
+            this.access = input.readEnum(AccessMode.class);
         }
     }
 }

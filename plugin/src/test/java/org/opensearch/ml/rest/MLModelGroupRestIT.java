@@ -21,7 +21,7 @@ import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.utils.TestHelper;
@@ -133,11 +133,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             ImmutableList.of(mlFullAccessUser, mlNonAdminFullAccessWithoutBackendRoleUser, mlNonOwnerFullAccessWithBackendRoleUser)
         );
 
-        mlRegisterModelGroupInput = createRegisterModelGroupInput(
-            ImmutableList.of(opensearchBackendRole),
-            ModelAccessMode.RESTRICTED,
-            false
-        );
+        mlRegisterModelGroupInput = createRegisterModelGroupInput(ImmutableList.of(opensearchBackendRole), AccessMode.RESTRICTED, false);
 
         registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             this.modelGroupId = (String) registerModelGroupResult.get("model_group_id");
@@ -148,7 +144,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
             "new_name",
             "new description",
             ImmutableList.of(opensearchBackendRole),
-            ModelAccessMode.RESTRICTED,
+            AccessMode.RESTRICTED,
             false
         );
     }
