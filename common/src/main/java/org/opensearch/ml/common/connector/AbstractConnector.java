@@ -46,6 +46,11 @@ public abstract class AbstractConnector implements Connector {
         return decryptedHeaders;
     }
 
+    protected String parseURL(String url) {
+        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+        return substitutor.replace(url);
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     public <T> void parseResponse(T response, List<ModelTensor> modelTensors, boolean modelTensorJson) throws IOException {
