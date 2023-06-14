@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.connector.AbstractConnector;
-import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
