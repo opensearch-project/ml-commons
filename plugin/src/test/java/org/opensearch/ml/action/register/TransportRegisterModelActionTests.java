@@ -41,6 +41,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
@@ -120,6 +121,9 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -141,7 +145,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             nodeFilter,
             mlTaskDispatcher,
             mlStats,
-            modelAccessControlHelper
+            modelAccessControlHelper,
+            connectorAccessControlHelper
         );
         assertNotNull(transportRegisterModelAction);
 
