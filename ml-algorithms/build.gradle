@@ -55,6 +55,10 @@ dependencies {
     }
 }
 
+lombok {
+    version = "1.18.28"
+}
+
 configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
 }

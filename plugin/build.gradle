@@ -35,6 +35,10 @@ checkstyle {
     toolVersion = '8.38'
 }
 
+lombok {
+    version = "1.18.28"
+}
+
 opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
