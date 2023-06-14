@@ -57,8 +57,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            User user = RestActionUtils.getUserContext(client);
-            connectorAccessControlHelper.validateConnectorAccess(user, client, connectorId, ActionListener.wrap(x -> {
+            connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
                 if (Boolean.TRUE.equals(x)) {
                     client.delete(deleteRequest, new ActionListener<>() {
                         @Override
@@ -69,7 +68,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
                         @Override
                         public void onFailure(Exception e) {
-                            log.error("Failed to delete ML connector " + connectorId, e);
+                            log.error("Failed to delete ML connector: " + connectorId, e);
                             actionListener.onFailure(e);
                         }
                     });

@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
@@ -198,6 +199,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.backendRoles = input.readList(StreamInput::readString);
         }
+        this.addAllBackendRoles = input.readOptionalBoolean();
         if (input.readBoolean()) {
             this.access = input.readEnum(AccessMode.class);
         }

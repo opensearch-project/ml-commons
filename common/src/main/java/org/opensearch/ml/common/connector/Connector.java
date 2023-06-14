@@ -7,7 +7,6 @@ package org.opensearch.ml.common.connector;
 
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
@@ -44,18 +43,6 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     default String getPostProcessFunction() {
-        return null;
-    }
-
-    default List<String> getBackendRoles() {
-        return null;
-    }
-
-    default User getOwner() {
-        return null;
-    }
-
-    default String getAccess() {
         return null;
     }
 

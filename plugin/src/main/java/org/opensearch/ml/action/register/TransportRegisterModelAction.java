@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.regex.Pattern;
@@ -41,6 +40,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
@@ -59,6 +59,7 @@ import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
+
 @Log4j2
 public class TransportRegisterModelAction extends HandledTransportAction<ActionRequest, MLRegisterModelResponse> {
     TransportService transportService;
@@ -76,6 +77,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     ModelAccessControlHelper modelAccessControlHelper;
 
+    ConnectorAccessControlHelper connectorAccessControlHelper;
+
     @Inject
     public TransportRegisterModelAction(
         TransportService transportService,
@@ -91,7 +94,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
         MLStats mlStats,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        ConnectorAccessControlHelper connectorAccessControlHelper
     ) {
         super(MLRegisterModelAction.NAME, transportService, actionFilters, MLRegisterModelRequest::new);
         this.transportService = transportService;
@@ -106,6 +110,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.connectorAccessControlHelper = connectorAccessControlHelper;
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
@@ -119,107 +124,117 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
         FunctionName functionName = registerModelInput.getFunctionName();
 
-        Pattern pattern = Pattern.compile(trustedUrlRegex);
-        String url = registerModelInput.getUrl();
-
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
                 if (!access) {
                     log.error("You don't have permissions to perform this operation on this model.");
                     listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
                 } else {
-                    if (url != null) {
-                        boolean validUrl = pattern.matcher(url).find();
-                        if (!validUrl) {
-                            throw new IllegalArgumentException("URL can't match trusted url regex");
-                        }
-                    }
-                    // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-                    // //TODO: track executing task; track register failures
-                    // mlStats.createCounterStatIfAbsent(FunctionName.TEXT_EMBEDDING,
-                    // ActionName.REGISTER,
-                    // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
-                    boolean isAsync = functionName != FunctionName.REMOTE;
-                    MLTask mlTask = MLTask
-                        .builder()
-                        .async(isAsync)
-                        .taskType(MLTaskType.DEPLOY_MODEL)
-                        .functionName(registerModelInput.getFunctionName())
-                        .createTime(Instant.now())
-                        .lastUpdateTime(Instant.now())
-                        .state(MLTaskState.CREATED)
-                        .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
-                        .build();
-
-                    if (!isAsync) {
-                        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-                            String taskId = response.getId();
-                            mlTask.setTaskId(taskId);
-                            mlModelManager.registerMLModel(registerModelInput, mlTask);
-                            listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
-                        }, e -> {
-                            logException("Failed to register model", e, log);
-                            listener.onFailure(e);
-                        }));
-                        return;
-                    }
-                    mlTaskDispatcher.dispatch(ActionListener.wrap(node -> {
-                        String nodeId = node.getId();
-                        mlTask.setWorkerNodes(ImmutableList.of(nodeId));
-
-                        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-                            String taskId = response.getId();
-                            mlTask.setTaskId(taskId);
-                            listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
-
-                            ActionListener<MLForwardResponse> forwardActionListener = ActionListener.wrap(res -> {
-                                log.debug("Register model response: " + res);
-                                if (!clusterService.localNode().getId().equals(nodeId)) {
-                                    mlTaskManager.remove(taskId);
-                                }
-                            }, ex -> {
-                                logException("Failed to register model", ex, log);
-                                mlTaskManager
-                                    .updateMLTask(
-                                        taskId,
-                                        ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
-                                        TASK_SEMAPHORE_TIMEOUT,
-                                        true
-                                    );
-                            });
-                            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                                mlTaskManager.add(mlTask, Arrays.asList(nodeId));
-                                MLForwardInput forwardInput = MLForwardInput
-                                    .builder()
-                                    .requestType(MLForwardRequestType.REGISTER_MODEL)
-                                    .registerModelInput(registerModelInput)
-                                    .mlTask(mlTask)
-                                    .build();
-                                MLForwardRequest forwardRequest = new MLForwardRequest(forwardInput);
-                                transportService
-                                    .sendRequest(
-                                        node,
-                                        MLForwardAction.NAME,
-                                        forwardRequest,
-                                        new ActionListenerResponseHandler<>(forwardActionListener, MLForwardResponse::new)
-                                    );
-                            } catch (Exception e) {
-                                forwardActionListener.onFailure(e);
+                    if (FunctionName.REMOTE == functionName) {
+                        connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
+                            if (Boolean.TRUE.equals(r)) {
+                                registerModel(registerModelInput, listener);
+                            } else {
+                                log.error("You don't have permissions to perform this operation on this connector:" + registerModelInput.getConnectorId());
+                                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this connector:" + registerModelInput.getConnectorId()));
                             }
-                        }, e -> {
-                            logException("Failed to register model", e, log);
-                            listener.onFailure(e);
-                        }));
-                    }, e -> {
-                        logException("Failed to register model", e, log);
-                        listener.onFailure(e);
-                    }));
+                        }, listener::onFailure));
+                    } else {
+                        registerModel(registerModelInput, listener);
+                    }
                 }
+            }, listener::onFailure));
+    }
+
+    private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
+        Pattern pattern = Pattern.compile(trustedUrlRegex);
+        String url = registerModelInput.getUrl();
+        if (url != null) {
+            boolean validUrl = pattern.matcher(url).find();
+            if (!validUrl) {
+                throw new IllegalArgumentException("URL can't match trusted url regex");
+            }
+        }
+        // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        // //TODO: track executing task; track register failures
+        // mlStats.createCounterStatIfAbsent(FunctionName.TEXT_EMBEDDING,
+        // ActionName.REGISTER,
+        // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+        boolean isAsync = registerModelInput.getFunctionName() != FunctionName.REMOTE;
+        MLTask mlTask = MLTask
+            .builder()
+            .async(isAsync)
+            .taskType(MLTaskType.REGISTER_MODEL)
+            .functionName(registerModelInput.getFunctionName())
+            .createTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .state(MLTaskState.CREATED)
+            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .build();
+
+        if (!isAsync) {
+            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                String taskId = response.getId();
+                mlTask.setTaskId(taskId);
+                mlModelManager.registerMLModel(registerModelInput, mlTask);
+                listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
             }, e -> {
-                logException("Failed to validate model access", e, log);
+                logException("Failed to register model", e, log);
                 listener.onFailure(e);
             }));
+            return;
+        }
+        mlTaskDispatcher.dispatch(ActionListener.wrap(node -> {
+            String nodeId = node.getId();
+            mlTask.setWorkerNodes(ImmutableList.of(nodeId));
 
+            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                String taskId = response.getId();
+                mlTask.setTaskId(taskId);
+                listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
+
+                ActionListener<MLForwardResponse> forwardActionListener = ActionListener.wrap(res -> {
+                    log.debug("Register model response: " + res);
+                    if (!clusterService.localNode().getId().equals(nodeId)) {
+                        mlTaskManager.remove(taskId);
+                    }
+                }, ex -> {
+                    logException("Failed to register model", ex, log);
+                    mlTaskManager
+                        .updateMLTask(
+                            taskId,
+                            ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
+                            TASK_SEMAPHORE_TIMEOUT,
+                            true
+                        );
+                });
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    mlTaskManager.add(mlTask, Arrays.asList(nodeId));
+                    MLForwardInput forwardInput = MLForwardInput
+                        .builder()
+                        .requestType(MLForwardRequestType.REGISTER_MODEL)
+                        .registerModelInput(registerModelInput)
+                        .mlTask(mlTask)
+                        .build();
+                    MLForwardRequest forwardRequest = new MLForwardRequest(forwardInput);
+                    transportService
+                        .sendRequest(
+                            node,
+                            MLForwardAction.NAME,
+                            forwardRequest,
+                            new ActionListenerResponseHandler<>(forwardActionListener, MLForwardResponse::new)
+                        );
+                } catch (Exception e) {
+                    forwardActionListener.onFailure(e);
+                }
+            }, e -> {
+                logException("Failed to register model", e, log);
+                listener.onFailure(e);
+            }));
+        }, e -> {
+            logException("Failed to register model", e, log);
+            listener.onFailure(e);
+        }));
     }
 }

@@ -44,7 +44,7 @@ public class AwsConnector extends HttpConnector {
     }
 
     @Override
-    public Connector clone() {
+    public Connector cloneConnector() {
         try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()){
             this.writeTo(bytesStreamOutput);
             StreamInput streamInput = bytesStreamOutput.bytes().streamInput();

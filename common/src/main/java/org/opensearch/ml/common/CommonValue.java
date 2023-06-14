@@ -265,13 +265,39 @@ public class CommonValue {
             + "      \""
             + DetachedConnector.CONNECTOR_STATE_FIELD
             + "\" : {\"type\": \"keyword\"},\n"
-            + "      \""
+            + "   \""
+            + MLModelGroup.BACKEND_ROLES_FIELD
+            + "\": {\n"
+            + "   \"type\": \"text\",\n"
+            + "      \"fields\": {\n"
+            + "        \"keyword\": {\n"
+            + "          \"type\": \"keyword\",\n"
+            + "          \"ignore_above\": 256\n"
+            + "        }\n"
+            + "      }\n"
+            + "    },\n"
+            + "   \""
+            + MLModelGroup.ACCESS
+            + "\": {\n"
+            + "   \"type\": \"keyword\"\n"
+            + "    },\n"
+            + "  \""
+            + MLModelGroup.OWNER
+            + "\": {\n"
+            + "    \"type\": \"nested\",\n"
+            + "        \"properties\": {\n"
+            + "          \"name\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\", \"ignore_above\":256}}},\n"
+            + "          \"backend_roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
+            + "          \"roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
+            + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
+            + "        }\n"
+            + "    },\n"
+            + "  \""
             + DetachedConnector.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
             + DetachedConnector.LAST_UPDATED_TIME_FIELD
-            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-            + USER_FIELD_MAPPING
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
             + "    }\n"
             + "}";
 }

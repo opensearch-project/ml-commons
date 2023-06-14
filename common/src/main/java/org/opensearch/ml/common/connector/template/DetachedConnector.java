@@ -7,6 +7,7 @@ package org.opensearch.ml.common.connector.template;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.text.StringSubstitutor;
 import org.json.JSONObject;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -15,6 +16,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 
@@ -70,9 +72,15 @@ public class DetachedConnector extends AbstractConnector {
     @Getter
     private String metadataAPI;
     private ConnectorState connectorState;
+    @Setter
+    @Getter
     private List<String> backendRoles;
+    @Setter
+    @Getter
     private User owner;
-    private String access;
+    @Setter
+    @Getter
+    private AccessMode access;
     private Instant createdTime;
     private Instant lastUpdateTime;
 
@@ -90,7 +98,7 @@ public class DetachedConnector extends AbstractConnector {
                      ConnectorState connectorState,
                      List<String> backendRoles,
                      User owner,
-                     String access,
+                     AccessMode access,
                      Instant createdTime,
                      Instant lastUpdateTime
     ) {
@@ -128,7 +136,9 @@ public class DetachedConnector extends AbstractConnector {
         } else {
             this.owner = null;
         }
-        access = input.readString();
+        if (input.readBoolean()) {
+            this.access = input.readEnum(AccessMode.class);
+        }
         createdTime = input.readOptionalInstant();
         lastUpdateTime = input.readOptionalInstant();
     }
@@ -150,11 +160,17 @@ public class DetachedConnector extends AbstractConnector {
         }
         out.writeOptionalStringCollection(backendRoles);
         if (owner != null) {
+            out.writeBoolean(true);
             owner.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
-        out.writeString(access);
+        if (access != null) {
+            out.writeBoolean(true);
+            out.writeEnum(access);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
     }
@@ -196,7 +212,7 @@ public class DetachedConnector extends AbstractConnector {
             builder.field(OWNER_FIELD, owner);
         }
         if (access != null) {
-            builder.field(ACCESS_FIELD, access);
+            builder.field(ACCESS_FIELD, access.getValue());
         }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
@@ -220,7 +236,7 @@ public class DetachedConnector extends AbstractConnector {
         ConnectorState connectorState = null;
         List<String> backendRoles = new ArrayList<>();
         User owner = null;
-        String access = null;
+        AccessMode access = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
 
@@ -267,7 +283,7 @@ public class DetachedConnector extends AbstractConnector {
                     owner = User.parse(parser);
                     break;
                 case ACCESS_FIELD:
-                    access = parser.text();
+                    access = AccessMode.from(parser.text());
                     break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
@@ -291,9 +307,9 @@ public class DetachedConnector extends AbstractConnector {
                 .predictAPI(predictAPI)
                 .metadataAPI(metadataAPI)
                 .connectorState(connectorState)
-            .backendRoles(backendRoles)
-            .owner(owner)
-            .access(access)
+                .backendRoles(backendRoles)
+                .owner(owner)
+                .access(access)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
                 .build();
@@ -356,21 +372,6 @@ public class DetachedConnector extends AbstractConnector {
     @Override
     public String getName() {
         return this.protocol;
-    }
-
-    @Override
-    public List<String> getBackendRoles() {
-        return backendRoles;
-    }
-
-    @Override
-    public User getOwner() {
-        return owner;
-    }
-
-    @Override
-    public String getAccess() {
-        return access;
     }
 
     @Override

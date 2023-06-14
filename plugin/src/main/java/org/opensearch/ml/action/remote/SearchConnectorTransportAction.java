@@ -30,21 +30,17 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
 
     private final Client client;
 
-    private final ClusterService clusterService;
-
-    private ConnectorAccessControlHelper connectorAccessControlHelper;
+    private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Inject
     public SearchConnectorTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        ClusterService clusterService,
         ConnectorAccessControlHelper connectorAccessControlHelper
     ) {
         super(MLConnectorSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
         this.client = client;
-        this.clusterService = clusterService;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
     }
 
@@ -56,22 +52,17 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
 
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
-        ActionListener<SearchResponse> listener = ActionListener.wrap(r -> {
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
-                    client.search(request, actionListener);
-                } else {
-                    SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
-                    request.source(sourceBuilder);
-                    client.search(request, actionListener);
-                }
-            } catch (Exception e) {
-                log.error(e.getMessage(), e);
-                actionListener.onFailure(e);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
+                client.search(request, actionListener);
+            } else {
+                SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
+                request.source(sourceBuilder);
+                client.search(request, actionListener);
             }
-        }, e -> {
+        } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
-        });
+        }
     }
 }

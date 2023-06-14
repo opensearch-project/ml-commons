@@ -124,7 +124,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
                     }
                     break;
                 case MODEL_ACCESS_MODE:
-                    modelAccessMode = AccessMode.from(parser.text().toLowerCase(Locale.ROOT));
+                    modelAccessMode = AccessMode.from(parser.text());
                     break;
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
