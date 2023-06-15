@@ -32,6 +32,7 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
@@ -47,15 +48,21 @@ public class ModelAccessControlHelper {
 
     private volatile Boolean modelAccessControlEnabled;
 
+    private final ClusterService clusterService;
+
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED, it -> modelAccessControlEnabled = it);
+        this.clusterService = clusterService;
     }
 
     public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
-        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+        if (modelGroupId == null
+            || isAdmin(user)
+            || !isSecurityEnabledAndModelAccessControlEnabled(user)
+            || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
             listener.onResponse(true);
             return;
         }

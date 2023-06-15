@@ -10,7 +10,6 @@ package org.opensearch.ml.helper;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 
-
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetRequest;
@@ -51,8 +50,8 @@ public class ConnectorAccessControlHelper {
 
     public boolean hasPermission(User user, DetachedConnector connector) {
         return accessControlNotEnabled(user)
-            || previouslyPublicConnector(connector)
             || isAdmin(user)
+            || previouslyPublicConnector(connector)
             || isPublicConnector(connector)
             || (isPrivateConnector(connector) && isOwner(user, connector.getOwner()))
             || (isRestrictedConnector(connector) && isUserHasBackendRole(user, connector));
@@ -89,7 +88,7 @@ public class ConnectorAccessControlHelper {
                 wrappedListener.onFailure(new IllegalStateException("Fail to get connector:" + connectorId));
             }));
         } catch (Exception e) {
-            log.error("Failed to validate Access for connector:" + connectorId , e);
+            log.error("Failed to validate Access for connector:" + connectorId, e);
             listener.onFailure(e);
         }
 
@@ -117,18 +116,19 @@ public class ConnectorAccessControlHelper {
         return user.getRoles().contains("all_access");
     }
 
-    public boolean isOwner(User owner, User user) {
+    private boolean isOwner(User owner, User user) {
         if (user == null || owner == null) {
             return false;
         }
         return owner.getName().equals(user.getName());
     }
 
-    public boolean isUserHasBackendRole(User user, DetachedConnector detachedConnector) {
+    private boolean isUserHasBackendRole(User user, DetachedConnector detachedConnector) {
         AccessMode modelAccessMode = detachedConnector.getAccess();
-        return AccessMode.RESTRICTED == modelAccessMode && (user.getBackendRoles() != null
-            && detachedConnector.getBackendRoles() != null
-            && detachedConnector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x)));
+        return AccessMode.RESTRICTED == modelAccessMode
+            && (user.getBackendRoles() != null
+                && detachedConnector.getBackendRoles() != null
+                && detachedConnector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x)));
     }
 
     private boolean previouslyPublicConnector(DetachedConnector detachedConnector) {
@@ -146,6 +146,7 @@ public class ConnectorAccessControlHelper {
     private boolean isRestrictedConnector(DetachedConnector detachedConnector) {
         return AccessMode.RESTRICTED == detachedConnector.getAccess();
     }
+
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
         boolQueryBuilder.should(QueryBuilders.termQuery(DetachedConnector.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));

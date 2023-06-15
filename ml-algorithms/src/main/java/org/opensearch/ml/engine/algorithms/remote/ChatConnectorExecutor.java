@@ -15,7 +15,6 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.LatchedActionListener;
@@ -41,6 +40,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -371,7 +371,7 @@ public class ChatConnectorExecutor implements RemoteConnectorExecutor{
                 request.addHeader("Content-Type", "application/json");
             }
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = HttpClientBuilder.create().build();
+                try (CloseableHttpClient httpClient = MLHttpClientFactory.getCloseableHttpClient();
                      CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);

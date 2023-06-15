@@ -51,7 +51,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final MLEngine mlEngine;
-    private ConnectorAccessControlHelper connectorAccessControlHelper;
+    private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -99,6 +99,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 indexConnector(connector, listener);
             } else {
                 validateRequest4AccessControl(mlCreateConnectorInput, user);
+                if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
+                    mlCreateConnectorInput.setBackendRoles(user.getBackendRoles());
+                }
                 connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
                 connector.setOwner(user);
                 connector.setAccess(mlCreateConnectorInput.getAccess());
@@ -130,10 +133,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 }, listener::onFailure);
 
                 IndexRequest indexRequest = new IndexRequest(ML_CONNECTOR_INDEX);
-                indexRequest
-                    .source(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
+                indexRequest.source(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                client.index(indexRequest, ActionListener.runBefore(indexResponseListener, () -> context.restore()));
+                client.index(indexRequest, ActionListener.runBefore(indexResponseListener, context::restore));
             } catch (Exception e) {
                 log.error("Failed to save ML connector", e);
                 listener.onFailure(e);
@@ -153,31 +155,31 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         } else {
             AccessMode accessMode = input.getAccess();
             if (accessMode == null) {
-                if (!Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(input.getBackendRoles())) {
-                    throw new IllegalArgumentException("You must specify at least one backend role or make the connector public/private for registering it.");
-                } else {
-                    input.setAccess(AccessMode.RESTRICTED);
-                    accessMode = AccessMode.RESTRICTED;
-                    if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                        input.setBackendRoles(user.getBackendRoles());
-                    }
-                }
+                input.setAccess(AccessMode.RESTRICTED);
+                accessMode = AccessMode.RESTRICTED;
             }
             if (AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode) {
                 if (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                    throw new IllegalArgumentException("You can specify backend roles only for a connector with the restricted access mode.");
+                    throw new IllegalArgumentException(
+                        "You can specify backend roles only for a connector with the restricted access mode."
+                    );
                 }
             }
             if (AccessMode.RESTRICTED == accessMode) {
-
-                if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                    throw new IllegalArgumentException("You must have at least one backend role to create a connector.");
-                }
-                if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                    throw new IllegalArgumentException("You can't specify backend roles and add all backend roles to true at same time.");
-                }
-                if (!new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
-                    throw new IllegalArgumentException("You don't have the backend roles specified.");
+                if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
+                    if (!CollectionUtils.isEmpty(input.getBackendRoles())) {
+                        throw new IllegalArgumentException("You can't specify backend roles and add all backend roles to true at same time.");
+                    }
+                    if (CollectionUtils.isEmpty(user.getBackendRoles())) {
+                        throw new IllegalArgumentException("You must have at least one backend role to create a connector.");
+                    }
+                } else {
+                    // check backend_roles parameter
+                    if (CollectionUtils.isEmpty(input.getBackendRoles())) {
+                        throw new IllegalArgumentException("You must specify at least one backend role or make the connector public/private for registering it.");
+                    } else if (!new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
+                        throw new IllegalArgumentException("You don't have the backend roles specified.");
+                    }
                 }
             }
         }
