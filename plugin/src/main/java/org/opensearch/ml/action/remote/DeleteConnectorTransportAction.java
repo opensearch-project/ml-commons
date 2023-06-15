@@ -16,13 +16,11 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -55,10 +53,9 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
-
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
-                if (Boolean.TRUE.equals(x)) {
+        connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
+            if (Boolean.TRUE.equals(x)) {
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     client.delete(deleteRequest, new ActionListener<>() {
                         @Override
                         public void onResponse(DeleteResponse deleteResponse) {
@@ -72,17 +69,16 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                             actionListener.onFailure(e);
                         }
                     });
-                } else {
-                    actionListener.onFailure(new MLValidationException("You are not allowed to delete this connector"));
+                } catch (Exception e) {
+                    log.error("Failed to delete ML connector: " + connectorId, e);
+                    actionListener.onFailure(e);
                 }
-            }, e -> {
-                log.error("Failed to delete ML connector: " + connectorId, e);
-                actionListener.onFailure(e);
-            }));
-
-        } catch (Exception e) {
+            } else {
+                actionListener.onFailure(new MLValidationException("You are not allowed to delete this connector"));
+            }
+        }, e -> {
             log.error("Failed to delete ML connector: " + connectorId, e);
             actionListener.onFailure(e);
-        }
+        }));
     }
 }

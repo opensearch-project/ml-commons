@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.regex.Pattern;
@@ -58,7 +59,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
-
 
 @Log4j2
 public class TransportRegisterModelAction extends HandledTransportAction<ActionRequest, MLRegisterModelResponse> {
@@ -131,14 +131,25 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
                 } else {
                     if (FunctionName.REMOTE == functionName) {
-                        connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
-                            if (Boolean.TRUE.equals(r)) {
-                                registerModel(registerModelInput, listener);
-                            } else {
-                                log.error("You don't have permissions to perform this operation on this connector:" + registerModelInput.getConnectorId());
-                                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this connector:" + registerModelInput.getConnectorId()));
-                            }
-                        }, listener::onFailure));
+                        connectorAccessControlHelper
+                            .validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
+                                if (Boolean.TRUE.equals(r)) {
+                                    registerModel(registerModelInput, listener);
+                                } else {
+                                    log
+                                        .error(
+                                            "You don't have permissions to perform this operation on this connector:"
+                                                + registerModelInput.getConnectorId()
+                                        );
+                                    listener
+                                        .onFailure(
+                                            new IllegalArgumentException(
+                                                "You don't have permissions to perform this operation on this connector:"
+                                                    + registerModelInput.getConnectorId()
+                                            )
+                                        );
+                                }
+                            }, listener::onFailure));
                     } else {
                         registerModel(registerModelInput, listener);
                     }
