@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.clustering;
 
+import com.amazon.randomcutforest.returntypes.SampleSummary;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -17,6 +18,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.RCFSummarizeParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
 
@@ -59,6 +61,13 @@ public class RCFSummarizeTest {
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(predictionSize, predictions.size());
         predictions.forEach(row -> Assert.assertTrue(row.getValue(0).intValue() == 0 || row.getValue(0).intValue() == 1));
+    }
+
+    @Test
+    public void testModelSerDeSer() {
+        MLModel model = rcfSummarize.train(trainDataFrameInput);
+        SampleSummary deserializedModel = ((SerializableSummary) ModelSerDeSer.deserialize(model)).getSummary();
+        Assert.assertNotNull(deserializedModel);
     }
 
     @Test

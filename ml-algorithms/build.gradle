@@ -18,6 +18,8 @@ repositories {
 dependencies {
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation project(':opensearch-ml-common')
+    implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
+    implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
     implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.2.1'
@@ -34,6 +36,7 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.3.1'
     implementation group: 'com.google.guava', name: 'guava', version: '31.0.1-jre'
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.1'
     implementation platform("ai.djl:bom:0.19.0")
     implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
     implementation group: 'ai.djl', name: 'api'

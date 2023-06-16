@@ -24,11 +24,13 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.tribuo.Dataset;
 import org.tribuo.Example;
 import org.tribuo.Feature;
 import org.tribuo.anomaly.Event;
 import org.tribuo.anomaly.example.AnomalyDataGenerator;
+import org.tribuo.common.libsvm.LibSVMModel;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -115,6 +117,13 @@ public class AnomalyDetectionLibSVMTest {
         Assert.assertEquals(FunctionName.AD_LIBSVM.name(), model.getName());
         Assert.assertEquals(AnomalyDetectionLibSVM.VERSION, model.getVersion());
         Assert.assertNotNull(model.getContent());
+    }
+
+    @Test
+    public void testModelSerDeSer() {
+        MLModel model = anomalyDetection.train(trainDataFrameInput);
+        LibSVMModel deserializedModel = (LibSVMModel) ModelSerDeSer.deserialize(model);
+        Assert.assertNotNull(deserializedModel);
     }
 
     @Test
