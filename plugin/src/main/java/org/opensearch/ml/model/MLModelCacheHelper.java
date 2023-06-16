@@ -19,6 +19,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
+import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
@@ -64,6 +65,59 @@ public class MLModelCacheHelper {
     public synchronized void setModelState(String modelId, MLModelState state) {
         log.debug("Updating State of Model {}  to state {}", modelId, state);
         getExistingModelCache(modelId).setModelState(state);
+    }
+
+    /**
+     * Set memory size estimation CPU/GPU
+     * @param modelId model id
+     * @param format model format like onnx
+     * @param size memory size
+     */
+    public synchronized void setMemSizeEstimation(String modelId, MLModelFormat format, Long size) {
+        Long memSize = getMemSizeEstimation(format, size);
+        log.debug("Updating memSizeEstimation of Model {}  to {}", modelId, memSize);
+        getExistingModelCache(modelId).setMemSizeEstimationCPU(memSize);
+        getExistingModelCache(modelId).setMemSizeEstimationGPU(memSize);
+    }
+
+    private Long getMemSizeEstimation(MLModelFormat format, Long size) {
+        Double scale = 1.0;
+        switch (format) {
+            case ONNX:
+                scale = 1.5;
+                break;
+            case TORCH_SCRIPT:
+                scale = 1.2;
+                break;
+        }
+        Long memSize = Double.valueOf(scale * size).longValue();
+        return memSize;
+    }
+
+    /**
+     * Get CPU memory estimation.
+     * @param modelId model id
+     * @return Long
+     */
+    public Long getMemEstCPU(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getMemSizeEstimationCPU();
+    }
+
+    /**
+     * Get GPU memory estimation.
+     * @param modelId model id
+     * @return Long
+     */
+    public Long getMemEstGPU(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getMemSizeEstimationGPU();
     }
 
     /**
@@ -293,6 +347,8 @@ public class MLModelCacheHelper {
         }
         builder.modelInferenceStats(modelCache.getInferenceStats(true));
         builder.predictRequestStats(modelCache.getInferenceStats(false));
+        builder.memSizeEstimationCPU(modelCache.getMemSizeEstimationCPU());
+        builder.memSizeEstimationGPU(modelCache.getMemSizeEstimationGPU());
         return builder.build();
     }
 
