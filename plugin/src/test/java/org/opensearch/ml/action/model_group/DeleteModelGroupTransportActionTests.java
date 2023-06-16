@@ -147,7 +147,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User Doesn't have privilege to perform this operation", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have privilege to perform this operation", argumentCaptor.getValue().getMessage());
     }
 
     public void test_ValidationFailedException() {
