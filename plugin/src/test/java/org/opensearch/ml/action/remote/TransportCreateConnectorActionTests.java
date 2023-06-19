@@ -1,7 +1,17 @@
 package org.opensearch.ml.action.remote;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+
+import java.util.Map;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -31,17 +41,8 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
-import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
-import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
@@ -83,7 +84,14 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        action = new TransportCreateConnectorAction(transportService, actionFilters, mlIndicesHandler, client, mlEngine, connectorAccessControlHelper);
+        action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mlEngine,
+            connectorAccessControlHelper
+        );
         when(request.getMlCreateConnectorInput()).thenReturn(input);
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build();
         threadContext = new ThreadContext(settings);
@@ -266,14 +274,18 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             listener.onResponse(mock(IndexResponse.class));
             return null;
         }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
-        TransportCreateConnectorAction action = new TransportCreateConnectorAction(transportService, actionFilters, mlIndicesHandler, client, mlEngine, connectorAccessControlHelper);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mlEngine,
+            connectorAccessControlHelper
+        );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You must have at least one backend role to create a connector.",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("You must have at least one backend role to create a connector.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_execute_connectorAccessControlEnabled_parameterConflict_exception() {
@@ -300,7 +312,14 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             listener.onResponse(mock(IndexResponse.class));
             return null;
         }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
-        TransportCreateConnectorAction action = new TransportCreateConnectorAction(transportService, actionFilters, mlIndicesHandler, client, mlEngine, connectorAccessControlHelper);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mlEngine,
+            connectorAccessControlHelper
+        );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -334,13 +353,17 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             listener.onResponse(mock(IndexResponse.class));
             return null;
         }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
-        TransportCreateConnectorAction action = new TransportCreateConnectorAction(transportService, actionFilters, mlIndicesHandler, client, mlEngine, connectorAccessControlHelper);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mlEngine,
+            connectorAccessControlHelper
+        );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You don't have the backend roles specified.",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
     }
 }

@@ -28,6 +28,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.template.APISchema;
 import org.opensearch.ml.common.connector.template.ConnectorState;
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -88,8 +89,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 .protocol(mlCreateConnectorInput.getMetadata().get(CONNECTOR_PROTOCOL_FIELD))
                 .parameterStr(toJson(mlCreateConnectorInput.getParameters()))
                 .credentialStr(toJson(mlCreateConnectorInput.getCredential()))
-                .predictAPI(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema().toString())
-                .metadataAPI(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema().toString())
+                .predictAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema()))
+                .metadataAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema()))
                 .connectorState(ConnectorState.CREATED)
                 .createdTime(now)
                 .lastUpdateTime(now)
@@ -168,7 +169,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             if (AccessMode.RESTRICTED == accessMode) {
                 if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
                     if (!CollectionUtils.isEmpty(input.getBackendRoles())) {
-                        throw new IllegalArgumentException("You can't specify backend roles and add all backend roles to true at same time.");
+                        throw new IllegalArgumentException(
+                            "You can't specify backend roles and add all backend roles to true at same time."
+                        );
                     }
                     if (CollectionUtils.isEmpty(user.getBackendRoles())) {
                         throw new IllegalArgumentException("You must have at least one backend role to create a connector.");
@@ -176,7 +179,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 } else {
                     // check backend_roles parameter
                     if (CollectionUtils.isEmpty(input.getBackendRoles())) {
-                        throw new IllegalArgumentException("You must specify at least one backend role or make the connector public/private for registering it.");
+                        throw new IllegalArgumentException(
+                            "You must specify at least one backend role or make the connector public/private for registering it."
+                        );
                     } else if (!new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
                         throw new IllegalArgumentException("You don't have the backend roles specified.");
                     }
@@ -191,5 +196,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
             );
         }
+    }
+
+    private String getAPIStringValue(APISchema apiSchema) {
+        if (apiSchema == null) {
+            return null;
+        }
+        return apiSchema.toString();
     }
 }
