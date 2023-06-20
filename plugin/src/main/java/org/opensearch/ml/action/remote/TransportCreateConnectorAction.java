@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.remote;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.connector.template.DetachedConnector.CONNECTOR_PROTOCOL_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.time.Instant;
@@ -77,16 +76,16 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         if (mlCreateConnectorInput.getConnectorTemplate() == null) {
             throw new IllegalArgumentException("Invalid Connector template, APIs are missing");
         }
-        String connectorName = mlCreateConnectorInput.getMetadata().get(CONNECTOR_NAME_FIELD);
+        String connectorName = mlCreateConnectorInput.getName();
         try {
             User user = RestActionUtils.getUserContext(client);
             Instant now = Instant.now();
             DetachedConnector connector = DetachedConnector
                 .builder()
                 .name(connectorName)
-                .version(mlCreateConnectorInput.getMetadata().get(CONNECTOR_VERSION_FIELD))
-                .description(mlCreateConnectorInput.getMetadata().get(CONNECTOR_DESCRIPTION_FIELD))
-                .protocol(mlCreateConnectorInput.getMetadata().get(CONNECTOR_PROTOCOL_FIELD))
+                .version(mlCreateConnectorInput.getVersion())
+                .description(mlCreateConnectorInput.getDescription())
+                .protocol(mlCreateConnectorInput.getProtocol())
                 .parameterStr(toJson(mlCreateConnectorInput.getParameters()))
                 .credentialStr(toJson(mlCreateConnectorInput.getCredential()))
                 .predictAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema()))
