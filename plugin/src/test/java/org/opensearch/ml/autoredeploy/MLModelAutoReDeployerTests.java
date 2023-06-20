@@ -21,8 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import javax.swing.*;
-
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.Mock;
