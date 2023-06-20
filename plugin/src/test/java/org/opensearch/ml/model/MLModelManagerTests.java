@@ -51,6 +51,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,6 +103,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
@@ -417,7 +419,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
         mock_client_ThreadContext(client, threadPool, threadContext);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -436,7 +438,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -455,7 +457,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NotExist(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -477,7 +479,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModel(model);
         setUpMock_GetModel(modelChunk0);
         setUpMock_GetModel(modelChunk0);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -505,7 +507,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         setUpMock_GetModelChunks(model);
         // setUpMock_GetModel(modelChunk0);
         // setUpMock_GetModel(modelChunk1);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
@@ -521,7 +523,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testDeployModel_ModelAlreadyDeployed() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(true);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         ArgumentCaptor<String> response = ArgumentCaptor.forClass(String.class);
         verify(listener).onResponse(response.capture());
         assertEquals("successful", response.getValue());
@@ -535,7 +537,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }
         when(modelCacheHelper.getDeployedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Exceed max model per node limit", failure.getValue().getMessage());
@@ -548,7 +550,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
@@ -661,6 +663,15 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.getWorkerNodes(modelId, true);
     }
 
+    public void test_addModelWorkerNodes_success() {
+        List<String> nodeIds = ImmutableList.of("node1", "node2");
+        String[] modelIds = new String[] { "model1" };
+        when(modelCacheHelper.getAllModels()).thenReturn(modelIds);
+        modelManager.addModelWorkerNode("model1", "node0");
+        modelManager.addModelWorkerNodes(nodeIds);
+        verify(modelCacheHelper, times(3)).addWorkerNode(anyString(), anyString());
+    }
+
     private void testDeployModel_FailedToRetrieveModelChunks(boolean lastChunk) {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
@@ -675,7 +686,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
 
-        modelManager.deployModel(modelId, modelContentHashValue, functionName, mlTask, listener);
+        modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
         verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
     }
