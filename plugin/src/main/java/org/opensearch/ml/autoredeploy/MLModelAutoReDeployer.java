@@ -18,10 +18,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.extern.log4j.Log4j2;
-
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequestBuilder;
@@ -29,8 +25,8 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -51,6 +47,10 @@ import org.opensearch.search.sort.SortOrder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
+
+import lombok.Builder;
+import lombok.Data;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLModelAutoReDeployer {
@@ -108,7 +108,7 @@ public class MLModelAutoReDeployer {
 
     private void undeployModelsOnDataNodes() {
         List<String> dataNodeIds = new ArrayList<>();
-        clusterService.state().nodes().getDataNodes().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
+        clusterService.state().nodes().getDataNodes().values().iterator().forEachRemaining(x -> { dataNodeIds.add(x.getId()); });
         if (dataNodeIds.size() > 0)
             triggerUndeployModelsOnDataNodes(dataNodeIds);
     }
@@ -189,11 +189,9 @@ public class MLModelAutoReDeployer {
             if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value > 0) {
                 Arrays.stream(res.getHits().getHits()).forEach(x -> modelIds.add(x.getId()));
                 if (modelIds.size() > 0) {
-                    ActionListener<MLUndeployModelNodesResponse> undeployModelListener = ActionListener
-                        .wrap(
-                            r -> { log.info("Undeploy models on data nodes successfully!"); },
-                            e -> { log.error("Failed to undeploy models on data nodes, error is: {}", e.getMessage(), e); }
-                        );
+                    ActionListener<MLUndeployModelNodesResponse> undeployModelListener = ActionListener.wrap(r -> {
+                        log.info("Undeploy models on data nodes successfully!");
+                    }, e -> { log.error("Failed to undeploy models on data nodes, error is: {}", e.getMessage(), e); });
                     MLUndeployModelNodesRequest undeployModelNodesRequest = new MLUndeployModelNodesRequest(
                         dataNodeIds.toArray(new String[0]),
                         modelIds.toArray(new String[0])
@@ -275,20 +273,18 @@ public class MLModelAutoReDeployer {
             return;
         }
 
-        ActionListener<MLDeployModelResponse> listener = ActionListener
-            .wrap(
-                res -> { log.info("Triggered model auto redeploy, task id is: {}, task status is: {}", res.getTaskId(), res.getStatus()); },
-                e -> {
-                    log
-                        .error(
-                            "Exception occurred when auto redeploying the model, model id is: {}, exception is: {}, skipping current model auto redeploy and starting next model redeploy!",
-                            modelId,
-                            e.getMessage(),
-                            e
-                        );
-                    redeployAModel();
-                }
-            );
+        ActionListener<MLDeployModelResponse> listener = ActionListener.wrap(res -> {
+            log.info("Triggered model auto redeploy, task id is: {}, task status is: {}", res.getTaskId(), res.getStatus());
+        }, e -> {
+            log
+                .error(
+                    "Exception occurred when auto redeploying the model, model id is: {}, exception is: {}, skipping current model auto redeploy and starting next model redeploy!",
+                    modelId,
+                    e.getMessage(),
+                    e
+                );
+            redeployAModel();
+        });
 
         mlModelManager
             .updateModel(
