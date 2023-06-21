@@ -24,11 +24,13 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
@@ -45,7 +47,11 @@ public class ConnectorUtils {
         RemoteInferenceInputDataSet inputData;
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet inputDataSet = (TextDocsInputDataSet)mlInput.getInputDataset();
-            Map<String, Object> params = ImmutableMap.of("text_docs", inputDataSet.getDocs());
+            List<String> docs = new ArrayList<>();
+            for (String doc : inputDataSet.getDocs()) {
+                docs.add(escapeJson(doc));
+            }
+            Map<String, Object> params = ImmutableMap.of("text_docs", docs);
             String preProcessFunction = connector.getPreProcessFunction();
             Optional<String> processedResponse = executePreprocessFunction(scriptService, preProcessFunction, params);
             if (!processedResponse.isPresent()) {
@@ -58,7 +64,7 @@ public class ConnectorUtils {
                 try {
                     AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                         if (parametersMap.get(key) instanceof String) {
-                            processedParameters.put(key, (String)parametersMap.get(key));
+                            processedParameters.put(key, escapeJson((String)parametersMap.get(key)));
                         } else {
                             processedParameters.put(key, gson.toJson(parametersMap.get(key)));
                         }
