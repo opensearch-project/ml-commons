@@ -29,6 +29,8 @@ public class APISchema implements ToXContentObject, NamedWriteable {
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
     public static final String REQUEST_BODY_FIELD = "request_body";
+    public static final String PRE_PROCESS_FUNCTION_FIELD = "pre_process_function";
+    public static final String POST_PROCESS_FUNCTION_FIELD = "post_process_function";
     @Getter
     protected Map<String, String> decryptedHeaders;
 
@@ -36,12 +38,18 @@ public class APISchema implements ToXContentObject, NamedWriteable {
     private String url;
     private Map<String, String> headers;
     private String requestBody;
+    @Getter
+    private String preProcessFunction;
+    @Getter
+    private String postProcessFunction;
 
-    public APISchema(String method, String url, Map<String, String> headers, String requestBody) {
+    public APISchema(String method, String url, Map<String, String> headers, String requestBody, String preProcessFunction, String postProcessFunction) {
         this.method = method;
         this.url = url;
         this.headers = headers;
         this.requestBody = requestBody;
+        this.preProcessFunction = preProcessFunction;
+        this.postProcessFunction = postProcessFunction;
     }
 
     public static APISchema parse(XContentParser parser) throws IOException {
@@ -49,6 +57,8 @@ public class APISchema implements ToXContentObject, NamedWriteable {
         String url = null;
         Map<String, String> headers = new HashMap<>();
         String requestBody = null;
+        String preProcessFunction = null;
+        String postProcessFunction = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) { // Method
@@ -68,12 +78,18 @@ public class APISchema implements ToXContentObject, NamedWriteable {
                 case REQUEST_BODY_FIELD:
                     requestBody = parser.text();
                     break;
+                case PRE_PROCESS_FUNCTION_FIELD:
+                    preProcessFunction = parser.text();
+                    break;
+                case POST_PROCESS_FUNCTION_FIELD:
+                    postProcessFunction = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new APISchema(method, url, headers, requestBody);
+        return new APISchema(method, url, headers, requestBody, preProcessFunction, postProcessFunction);
     }
 
     @Override
@@ -96,6 +112,12 @@ public class APISchema implements ToXContentObject, NamedWriteable {
         if (requestBody != null) {
             builder.field(REQUEST_BODY_FIELD, requestBody);
         }
+        if (preProcessFunction != null) {
+            builder.field(PRE_PROCESS_FUNCTION_FIELD, preProcessFunction);
+        }
+        if (postProcessFunction != null) {
+            builder.field(POST_PROCESS_FUNCTION_FIELD, postProcessFunction);
+        }
         builder.endObject();
         return builder;
     }
@@ -111,6 +133,8 @@ public class APISchema implements ToXContentObject, NamedWriteable {
             out.writeBoolean(false);
         }
         out.writeOptionalString(requestBody);
+        out.writeOptionalString(preProcessFunction);
+        out.writeOptionalString(postProcessFunction);
     }
 
     public APISchema(StreamInput input) throws IOException {
@@ -120,6 +144,8 @@ public class APISchema implements ToXContentObject, NamedWriteable {
             headers = input.readMap(s -> s.readString(), s-> s.readString());
         }
         requestBody = input.readOptionalString();
+        preProcessFunction = input.readOptionalString();
+        postProcessFunction = input.readOptionalString();
     }
 
     public String toString() {
@@ -128,6 +154,8 @@ public class APISchema implements ToXContentObject, NamedWriteable {
         api.put(URL_FIELD, this.url);
         api.put(HEADERS_FIELD, new JSONObject(this.headers).toString());
         api.put(REQUEST_BODY_FIELD, this.requestBody);
+        api.put(PRE_PROCESS_FUNCTION_FIELD, this.preProcessFunction);
+        api.put(POST_PROCESS_FUNCTION_FIELD, this.postProcessFunction);
         return api.toString();
     }
 }

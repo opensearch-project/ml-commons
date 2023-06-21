@@ -19,7 +19,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Getter
 public class ConnectorTemplate implements ToXContentObject, NamedWriteable {
-    public static final String PARSE_FIELD_NAME = "connector_template";
+    public static final String PARSE_FIELD_NAME = "connector_actions";
 
     public static final String PREDICT_FIELD = "predict";
     public static final String META_DARA_FIELD = "metadata";
