@@ -236,7 +236,7 @@ public class DetachedConnector extends AbstractConnector {
         String predictAPI = null;
         String metadataAPI = null;
         ConnectorState connectorState = null;
-        List<String> backendRoles = new ArrayList<>();
+        List<String> backendRoles = null;
         User owner = null;
         AccessMode access = null;
         Instant createdTime = null;
@@ -277,6 +277,7 @@ public class DetachedConnector extends AbstractConnector {
                     break;
                 case BACKEND_ROLES_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    backendRoles = new ArrayList<>();
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                         backendRoles.add(parser.text());
                     }
