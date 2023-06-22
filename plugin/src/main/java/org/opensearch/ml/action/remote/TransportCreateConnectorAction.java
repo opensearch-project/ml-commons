@@ -152,38 +152,37 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin can't add all backend roles");
             }
-        } else {
-            AccessMode accessMode = input.getAccess();
-            if (accessMode == null) {
-                input.setAccess(AccessMode.RESTRICTED);
-                accessMode = AccessMode.RESTRICTED;
+        }
+        AccessMode accessMode = input.getAccess();
+        if (accessMode == null) {
+            input.setAccess(AccessMode.RESTRICTED);
+            accessMode = AccessMode.RESTRICTED;
+        }
+        if (AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode) {
+            if (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles)) {
+                throw new IllegalArgumentException(
+                    "You can specify backend roles only for a connector with the restricted access mode."
+                );
             }
-            if (AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode) {
-                if (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles)) {
+        }
+        if (AccessMode.RESTRICTED == accessMode) {
+            if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
+                if (!CollectionUtils.isEmpty(input.getBackendRoles())) {
                     throw new IllegalArgumentException(
-                        "You can specify backend roles only for a connector with the restricted access mode."
+                        "You can't specify backend roles and add all backend roles to true at same time."
                     );
                 }
-            }
-            if (AccessMode.RESTRICTED == accessMode) {
-                if (Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                    if (!CollectionUtils.isEmpty(input.getBackendRoles())) {
-                        throw new IllegalArgumentException(
-                            "You can't specify backend roles and add all backend roles to true at same time."
-                        );
-                    }
-                    if (CollectionUtils.isEmpty(user.getBackendRoles())) {
-                        throw new IllegalArgumentException("You must have at least one backend role to create a connector.");
-                    }
-                } else {
-                    // check backend_roles parameter
-                    if (CollectionUtils.isEmpty(input.getBackendRoles())) {
-                        throw new IllegalArgumentException(
-                            "You must specify at least one backend role or make the connector public/private for registering it."
-                        );
-                    } else if (!new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
-                        throw new IllegalArgumentException("You don't have the backend roles specified.");
-                    }
+                if (CollectionUtils.isEmpty(user.getBackendRoles())) {
+                    throw new IllegalArgumentException("You must have at least one backend role to create a connector.");
+                }
+            } else {
+                // check backend_roles parameter
+                if (CollectionUtils.isEmpty(input.getBackendRoles())) {
+                    throw new IllegalArgumentException(
+                        "You must specify at least one backend role or make the connector public/private for registering it."
+                    );
+                } else if (!connectorAccessControlHelper.isAdmin(user) && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
+                    throw new IllegalArgumentException("You don't have the backend roles specified.");
                 }
             }
         }

@@ -64,7 +64,7 @@ public class ConnectorUtils {
                 try {
                     AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                         if (parametersMap.get(key) instanceof String) {
-                            processedParameters.put(key, escapeJson((String)parametersMap.get(key)));
+                            processedParameters.put(key, (String) parametersMap.get(key));
                         } else {
                             processedParameters.put(key, gson.toJson(parametersMap.get(key)));
                         }
@@ -80,6 +80,9 @@ public class ConnectorUtils {
         } else {
             throw new IllegalArgumentException("Wrong input type");
         }
+        inputData.getParameters().entrySet().forEach(entry -> {
+            entry.setValue(escapeJson(entry.getValue()));
+        });
         return inputData;
     }
 
