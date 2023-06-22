@@ -83,7 +83,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         Map<String, String> parameters = new HashMap<>();
         Map<String, String> credential = new HashMap<>();
         ConnectorTemplate connectorTemplate = null;
-        List<String> backendRoles = new ArrayList<>();
+        List<String> backendRoles = null;
         Boolean addAllBackendRoles = null;
         AccessMode access = null;
 
@@ -116,6 +116,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     break;
                 case BACKEND_ROLES_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    backendRoles = new ArrayList<>();
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                         backendRoles.add(parser.text());
                     }
