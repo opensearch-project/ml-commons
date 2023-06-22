@@ -106,7 +106,6 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(template.getMetadataSchema()).thenReturn(mock(APISchema.class));
         when(input.getConnectorTemplate()).thenReturn(template);
         Map<String, String> metadata = ImmutableMap.of("connector_name", "mock_connector_name");
-        when(input.getMetadata()).thenReturn(metadata);
     }
 
     public void test_execute_connectorAccessControl_notEnabled_success() {
@@ -149,7 +148,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster.",
+            "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled on your cluster.",
             argumentCaptor.getValue().getMessage()
         );
     }
