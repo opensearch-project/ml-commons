@@ -67,6 +67,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .builder()
             .modelName("msmarco-distilbert-base-tas-b-pt")
             .modelGroupId(modelGroupId)
+            .version("1")
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
             .url(PRE_BUILD_MODEL_URL)

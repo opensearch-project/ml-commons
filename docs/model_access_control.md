@@ -90,7 +90,27 @@ The following table lists the available response fields.
 | `model_group_id` | String    | The model group ID that user can use to access this model group. |
 | `status`         | String    | The operation status.                                            |
 
-Any user who has appropriate permissions can create a model group on model group index. Lets say User1 wants to create one. User has three options for the model group — he/she can make it public, private, or restricted (attach the back-end roles HR or IT or both).
+### Note
+If security or _model_access_control_enabled_ setting is disabled in the cluster, every user is null and by default, on such cluster, all model groups are public. User can register a model group with a `name` and `description` but cannot specify any of the access parameters (`model_access_name`, `backend_roles`, or `add_backend_roles`).  User can then proceed with [registering a model.](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/model_access_control.md#registering-a-model-version-to-a-model-group)
+
+#### Sample request
+```
+POST /_plugins/_ml/model_groups/_register
+{
+    "name": "model_group_test",
+    "description": "This is an example description"
+}
+```
+
+```
+# Response
+{
+    "model_group_id": "GDNmQ4gBYW0Qyy5ZcBcg",
+    "status": "CREATED"
+}
+```
+
+On a _security/model_access_control_ enabled cluster , any user who has permission to create model group can create one. For example, User1 has three options for creating model group on such cluster -- public, private, or restricted (attach the back-end roles HR or IT or both).
 - To create a public Model Group: User should set `model_access_mode` field to `public`
 Any user in the cluster can access this model group and its model versions.
 
@@ -157,18 +177,6 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-### Note
-- If security or `model_access_control_enabled` setting is disabled in the cluster, every user is null and by default, in such cluster, all model groups are public. User can register a model group with a `name` and `description` but cannot specify any of the access parameters (`model_access_name`, `backend_roles`, or `add_backend_roles`). 
-
-#### Sample request
-```
-POST /_plugins/_ml/model_groups/_register
-{
-    "name": "model_group_test",
-    "description": "This is an example description"
-}
-```
-
 
 ## Updating a model group
 
@@ -183,14 +191,13 @@ PUT /_plugins/_ml/model_groups/<model_group_id>/_update
 
 A user can make updates to a model group to which he/she has access which is determined by the access mode of the model group.
 
-On a _model_access_control_ enabled cluster, the model group owner or an admin user can update all fields. Whereas, any other user who shares one or more backend roles with the model group can update the `name` and `description` fields only.
+On a _model_access_control_ enabled cluster, the model group owner or an admin user can update all fields. Whereas, any other user with access to it can update the `name` and `description` fields only.
 
-On a security/model_access_control disabled cluster, any user can make updates to any model group but cannot specify any of the access fields.
+On a _security/model_access_control_ disabled cluster, any user can make updates to any model group but cannot specify any of the access fields.
 
 For example,
-* Consider a model group created by User1 with IT backend_role set to it. Since user1 is the owner, he/she will be able to update all the fields of the model group.
-* If User2 tries to send update request to the same model group, only name, and description will be allowed to be updated but not other fields because user2 has access to the model group but is not the owner/admin.
-* If User3 tries to send update request, exception will be thrown because user3 has no matching backend_roles of the model group and therefore has no access to it at all.
+* Consider a restricted model group created by User1 with IT backend_role set to it. 
+* To update it, User1 and admin can update all the fields. User2 can update only name and description while User3 cannot update any fields.
 
 
 Sample request allowed by admin/owner
@@ -562,9 +569,9 @@ DELETE _plugins/_ml/model_groups/<model_group_id>
 
 Register model version API would have same old path and all the old fields. For information on register version API, please refer: [Registering a model] (https://opensearch.org/docs/latest/ml-commons-plugin/api/#registering-a-model)
 
-Additionally, user should specify the `model_group_id` for registering a new version to a model group. If the model group id is null, an exception will be thrown. 
+Additionally, if user wants to register a new version to a model group, they should specify the `model_group_id`.
 
-Everytime a new model is registered to a model group, it is assigned a new version number automatically. Hence, user need not specify the version field while registering a model version.
+Everytime a new model is registered to a model group, it is assigned a new version number automatically. Hence, user need not specify the version field while registering the version to a model group.
 
 On a model_access_control enabled cluster:
 * To register a new version to a restricted model group, only owner or users with atleast one of their backend roles matching with that of the model group will be allowed.
@@ -577,7 +584,7 @@ On a security/model_access_control disabled cluster,
 
 For example:
 * For a model group created by User1 with IT backend_role, only User1, User2, and admin can register new versions. User3 and User4 cannot register/access versions of this model group
-* For a private model group of User1, only User1 or admin will be able to create new versions. For any other user, above exception will be thrown.
+* For a private model group of User1, only User1 or admin will be able to create new versions. For any other user, exception will be thrown.
 * For a public model group of User1, any user can register a version.
 
 

@@ -869,7 +869,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MLRegisterModelMetaInput input = MLRegisterModelMetaInput
             .builder()
             .name("Model Name")
-            .modelGroupId("1")
+            .modelGroupId("model_group_id")
+            .version("1")
             .description("Custom Model Test")
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .functionName(FunctionName.BATCH_RCF)

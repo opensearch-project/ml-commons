@@ -7,6 +7,7 @@ package org.opensearch.ml.action.upload_chunk;
 
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -56,8 +57,11 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelMetaResponse> listener) {
         MLRegisterModelMetaRequest registerModelMetaRequest = MLRegisterModelMetaRequest.fromActionRequest(request);
         MLRegisterModelMetaInput mlUploadInput = registerModelMetaRequest.getMlRegisterModelMetaInput();
-
         User user = RestActionUtils.getUserContext(client);
+
+        if (Strings.isBlank(mlUploadInput.getModelGroupId()) && (mlUploadInput.getVersion() == null)) {
+            throw new IllegalArgumentException("Model Version cannot be null");
+        }
 
         modelAccessControlHelper.validateModelGroupAccess(user, mlUploadInput.getModelGroupId(), client, ActionListener.wrap(access -> {
             if (!access) {

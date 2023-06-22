@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
@@ -117,6 +118,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
         Pattern pattern = Pattern.compile(trustedUrlRegex);
         String url = registerModelInput.getUrl();
+        if (Strings.isBlank(registerModelInput.getModelGroupId()) && (registerModelInput.getVersion() == null)) {
+            throw new IllegalArgumentException("Model Version cannot be null");
+        }
 
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
