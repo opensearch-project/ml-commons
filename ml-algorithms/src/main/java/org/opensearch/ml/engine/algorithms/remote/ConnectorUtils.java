@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
@@ -47,10 +46,7 @@ public class ConnectorUtils {
         RemoteInferenceInputDataSet inputData;
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet inputDataSet = (TextDocsInputDataSet)mlInput.getInputDataset();
-            List<String> docs = new ArrayList<>();
-            for (String doc : inputDataSet.getDocs()) {
-                docs.add(escapeJson(doc));
-            }
+            List<String> docs = new ArrayList<>(inputDataSet.getDocs());
             Map<String, Object> params = ImmutableMap.of("text_docs", docs);
             String preProcessFunction = connector.getPreProcessFunction();
             Optional<String> processedResponse = executePreprocessFunction(scriptService, preProcessFunction, params);
@@ -80,9 +76,6 @@ public class ConnectorUtils {
         } else {
             throw new IllegalArgumentException("Wrong input type");
         }
-        inputData.getParameters().entrySet().forEach(entry -> {
-            entry.setValue(escapeJson(entry.getValue()));
-        });
         return inputData;
     }
 
