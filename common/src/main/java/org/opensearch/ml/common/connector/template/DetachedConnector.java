@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.HttpConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
@@ -382,15 +381,7 @@ public class DetachedConnector extends AbstractConnector {
         if (predictAPI != null) {
             Map<String, String> predictSchema = getPredictMap();
             String payload = predictSchema.get(REQUEST_BODY_FIELD);
-            Map<String, String> values = new HashMap<>();
-            for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                if (isJson(entry.getValue())) {
-                    values.put(entry.getKey(), toUTF8(entry.getValue()));
-                } else {
-                    values.put(entry.getKey(), escapeJson(entry.getValue()));
-                }
-            }
-            StringSubstitutor substitutor = new StringSubstitutor(values, "${parameters.", "}");
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
             if (!isJson(payload)) {
