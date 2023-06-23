@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJava;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
@@ -76,6 +77,9 @@ public class ConnectorUtils {
         } else {
             throw new IllegalArgumentException("Wrong input type");
         }
+        inputData.getParameters().entrySet().forEach(entry -> {
+            entry.setValue(escapeJava(entry.getValue()));
+        });
         return inputData;
     }
 
