@@ -11,8 +11,9 @@ import java.util.Map;
 public class MLPostProcessFunction {
 
     private static Map<String, String> POST_PROCESS_FUNCTIONS;
-    public static final String COHERE_EMBEDDING = "cohere_embedding";
-    public static final String OPENAI_EMBEDDING = "openai_embedding";
+    public static final String POST_PROCESS_FUNCTION = "connector.post_process_function";
+    public static final String COHERE_EMBEDDING = "connector.post_process.cohere.embedding";
+    public static final String OPENAI_EMBEDDING = "connector.post_process.openai.embedding";
 
     static {
         POST_PROCESS_FUNCTIONS = new HashMap<>();

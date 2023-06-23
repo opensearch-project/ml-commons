@@ -11,11 +11,13 @@ import java.util.Map;
 public class MLPreProcessFunction {
 
     private static Map<String, String> PRE_PROCESS_FUNCTIONS;
-    public static final String TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT = "text_docs_to_cohere_embedding_input";
-    public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "text_docs_to_openai_embedding_input";
+    public static final String PRE_PROCESS_FUNCTION = "connector.pre_process_function";
+    public static final String TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT = "connector.pre_process.cohere.embedding";
+    public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "connector.pre_process.openai.embedding";
 
     static {
         PRE_PROCESS_FUNCTIONS = new HashMap<>();
+        //TODO: change to java for openAI, embedding and Titan
         PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, "\n    StringBuilder builder = new StringBuilder();\n" +
                 "    builder.append(\"[\");\n" +
                 "    for (int i=0; i< params.text_docs.length; i++) {\n" +

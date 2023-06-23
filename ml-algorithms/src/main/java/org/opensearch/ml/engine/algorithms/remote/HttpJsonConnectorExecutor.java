@@ -58,11 +58,11 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
         List<ModelTensor> modelTensors = new ArrayList<>();
 
         try {
-            RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, scriptService);
             Map<String, String> parameters = new HashMap<>();
             if (connector.getParameters() != null) {
                 parameters.putAll(connector.getParameters());
             }
+            RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, scriptService);
             if (inputData.getParameters() != null) {
                 parameters.putAll(inputData.getParameters());
             }

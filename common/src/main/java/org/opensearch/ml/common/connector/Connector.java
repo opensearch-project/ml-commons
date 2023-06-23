@@ -22,6 +22,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     String getName();
 
+    Map<String, String> getParameters();
     String getPredictEndpoint();
 
     String getPredictHttpMethod();
@@ -36,14 +37,6 @@ public interface Connector extends ToXContentObject, Writeable {
     default void writeTo(StreamOutput out) throws IOException {
         out.writeString(getName());
         out.writeOptionalString(getPredictEndpoint());
-    }
-
-    default String getPreProcessFunction() {
-        return null;
-    }
-
-    default String getPostProcessFunction() {
-        return null;
     }
 
     default <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException {}

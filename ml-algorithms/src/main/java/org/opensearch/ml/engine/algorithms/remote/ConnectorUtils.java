@@ -32,6 +32,8 @@ import java.util.Optional;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJava;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.POST_PROCESS_FUNCTION;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.PRE_PROCESS_FUNCTION;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.gson;
@@ -49,7 +51,10 @@ public class ConnectorUtils {
             TextDocsInputDataSet inputDataSet = (TextDocsInputDataSet)mlInput.getInputDataset();
             List<String> docs = new ArrayList<>(inputDataSet.getDocs());
             Map<String, Object> params = ImmutableMap.of("text_docs", docs);
-            String preProcessFunction = connector.getPreProcessFunction();
+            String preProcessFunction = null;
+            if (connector.getParameters() != null && connector.getParameters().containsKey(PRE_PROCESS_FUNCTION)) {
+                preProcessFunction = connector.getParameters().get(PRE_PROCESS_FUNCTION);
+            }
             Optional<String> processedResponse = executePreprocessFunction(scriptService, preProcessFunction, params);
             if (!processedResponse.isPresent()) {
                 throw new IllegalArgumentException("Wrong input");
@@ -85,7 +90,10 @@ public class ConnectorUtils {
 
     public static ModelTensors processOutput(String modelResponse, Connector connector, ScriptService scriptService, Map<String, String> parameters, List<ModelTensor> modelTensors) throws IOException {
 
-        String postProcessFunction = connector.getPostProcessFunction();
+        String postProcessFunction = null;
+        if (parameters != null && parameters.containsKey(POST_PROCESS_FUNCTION)) {
+            postProcessFunction = parameters.get(POST_PROCESS_FUNCTION);
+        }
         Optional<String> processedResponse = executePostprocessFunction(scriptService, postProcessFunction, parameters, modelResponse);
 
         String response = processedResponse.orElse(modelResponse);
