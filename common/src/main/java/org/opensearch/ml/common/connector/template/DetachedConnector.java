@@ -37,14 +37,11 @@ import static org.opensearch.ml.common.connector.HttpConnector.SECRET_KEY_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.HEADERS_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.METHOD_FIELD;
-import static org.opensearch.ml.common.connector.template.APISchema.POST_PROCESS_FUNCTION_FIELD;
-import static org.opensearch.ml.common.connector.template.APISchema.PRE_PROCESS_FUNCTION_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.REQUEST_BODY_FIELD;
 import static org.opensearch.ml.common.connector.template.APISchema.URL_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.fromJson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
-import static org.opensearch.ml.common.utils.StringUtils.toUTF8;
 
 public class DetachedConnector extends AbstractConnector {
     public static final String CONNECTOR_NAME_FIELD = "name";
@@ -423,23 +420,5 @@ public class DetachedConnector extends AbstractConnector {
             return decryptedCredential.get(REGION_FIELD);
         }
         return Optional.ofNullable(parameters.get(REGION_FIELD)).orElse(decryptedCredential.get(REGION_FIELD));
-    }
-
-    @Override
-    public String getPreProcessFunction() {
-        if (this.predictMap == null) {
-            this.predictMap = fromJson(predictAPI);
-        }
-
-        return this.predictMap.get(PRE_PROCESS_FUNCTION_FIELD);
-    }
-
-    @Override
-    public String getPostProcessFunction() {
-        if (this.predictMap == null) {
-            this.predictMap = fromJson(predictAPI);
-        }
-
-        return this.predictMap.get(POST_PROCESS_FUNCTION_FIELD);
     }
 }
