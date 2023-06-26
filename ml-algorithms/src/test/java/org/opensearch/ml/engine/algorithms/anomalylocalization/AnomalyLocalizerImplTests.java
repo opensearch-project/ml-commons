@@ -438,19 +438,18 @@ public class AnomalyLocalizerImplTests {
                 new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
                 new HashMap<>(), roleSet,
                 Version.CURRENT);
+        final Map<String, IndexMetadata> indices = new HashMap<>();
+        indices.put(indexName, IndexMetadata.builder("test")
+                        .settings(Settings.builder()
+                                .put("index.number_of_shards", 1)
+                                .put("index.number_of_replicas", 1)
+                                .put("index.version.created", Version.CURRENT.id))
+                        .build());
         Metadata metadata = new Metadata.Builder()
-                .indices(ImmutableOpenMap
-                        .<String, IndexMetadata>builder()
-                        .fPut(indexName, IndexMetadata.builder("test")
-                                .settings(Settings.builder()
-                                        .put("index.number_of_shards", 1)
-                                        .put("index.number_of_replicas", 1)
-                                        .put("index.version.created", Version.CURRENT.id))
-                                .build())
-                        .build()).build();
+                .indices(indices).build();
         return new ClusterState(new ClusterName(clusterName), 123l, "111111",
                 metadata, null, DiscoveryNodes.builder().add(node).build(),
-                null, null, 0, false);
+                null, Map.of(), 0, false);
     }
 }
 

@@ -320,10 +320,8 @@ public class TestHelper {
         final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
         IndexMetadata indexMetaData = IndexMetadata.builder(indexName).settings(existingSettings).putMapping(mapping).build();
 
-        final ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap
-            .<String, IndexMetadata>builder()
-            .fPut(indexName, indexMetaData)
-            .build();
+        final Map<String, IndexMetadata> indices = new HashMap<>();
+        indices.put(indexName, indexMetaData);
         ClusterState clusterState = ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
 
         return clusterState;
@@ -368,10 +366,7 @@ public class TestHelper {
         );
         Metadata metadata = new Metadata.Builder()
             .indices(
-                ImmutableOpenMap
-                    .<String, IndexMetadata>builder()
-                    .fPut(
-                        ML_MODEL_INDEX,
+                Map.of(ML_MODEL_INDEX,
                         IndexMetadata
                             .builder("test")
                             .settings(
@@ -383,7 +378,6 @@ public class TestHelper {
                             )
                             .build()
                     )
-                    .build()
             )
             .build();
         return new ClusterState(
@@ -394,7 +388,7 @@ public class TestHelper {
             null,
             DiscoveryNodes.builder().add(node).build(),
             null,
-            null,
+            Map.of(),
             0,
             false
         );
