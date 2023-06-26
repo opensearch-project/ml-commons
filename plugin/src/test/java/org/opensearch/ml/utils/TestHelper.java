@@ -362,25 +362,25 @@ public class TestHelper {
             Version.CURRENT
         );
         Metadata metadata = new Metadata.Builder()
-            .indices(
-                ImmutableMap
-                    .<String, IndexMetadata>builder()
-                    .put(
-                        ML_MODEL_INDEX,
-                        IndexMetadata
-                            .builder("test")
-                            .settings(
-                                Settings
-                                    .builder()
-                                    .put("index.number_of_shards", 1)
-                                    .put("index.number_of_replicas", 1)
-                                    .put("index.version.created", Version.CURRENT.id)
-                            )
-                            .build()
-                    )
-                    .build()
-            )
-            .build();
+                .indices(
+                        ImmutableMap
+                                .<String, IndexMetadata>builder()
+                                .put(
+                                        ML_MODEL_INDEX,
+                                        IndexMetadata
+                                                .builder("test")
+                                                .settings(
+                                                        Settings
+                                                                .builder()
+                                                                .put("index.number_of_shards", 1)
+                                                                .put("index.number_of_replicas", 1)
+                                                                .put("index.version.created", Version.CURRENT.id)
+                                                )
+                                                .build()
+                                )
+                                .build()
+                )
+                .build();
         return new ClusterState(
             new ClusterName("test cluster"),
             123l,
