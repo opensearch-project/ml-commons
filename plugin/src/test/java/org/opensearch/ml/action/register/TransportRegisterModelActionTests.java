@@ -173,7 +173,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         when(clusterService.localNode()).thenReturn(node2);
 
-        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any());
+        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any(), null);
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);

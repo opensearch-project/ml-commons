@@ -90,6 +90,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -99,6 +100,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
@@ -298,7 +300,7 @@ public class MLModelManager {
      * @param registerModelInput register model input
      * @param mlTask      ML task
      */
-    public void registerMLModel(MLRegisterModelInput registerModelInput, MLTask mlTask) {
+    public void registerMLModel(MLRegisterModelInput registerModelInput, MLTask mlTask, ActionListener<MLRegisterModelResponse> listener) {
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
         checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
         try {
@@ -331,7 +333,7 @@ public class MLModelManager {
                         client
                             .update(
                                 updateModelGroupRequest,
-                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); }, e -> {
+                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + "", listener); }, e -> {
                                     log.error("Failed to update model group", e);
                                     handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
                                 })
@@ -360,7 +362,7 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
+    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, ActionListener<MLRegisterModelResponse> listener) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -396,6 +398,7 @@ public class MLModelManager {
                 // create model meta doc
                 ActionListener<IndexResponse> indexListener = ActionListener.wrap(modelMetaRes -> {
                     String modelId = modelMetaRes.getId();
+                    listener.onResponse(new MLRegisterModelResponse(taskId, modelId, MLTaskState.CREATED.name()));
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
                     mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
@@ -420,11 +423,11 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws PrivilegedActionException {
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, ActionListener<MLRegisterModelResponse> listener) throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
-        } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE) {
-            indexRemoteModel(registerModelInput, mlTask, modelVersion);
+        } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE || registerModelInput.getConnectorId() != null) {
+            indexRemoteModel(registerModelInput, mlTask, modelVersion, listener);
         } else {
             registerPrebuiltModel(registerModelInput, mlTask, modelVersion);
         }

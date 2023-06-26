@@ -37,6 +37,12 @@ public class MLRegisterModelResponse extends ActionResponse implements ToXConten
         this.status= status;
     }
 
+    public MLRegisterModelResponse(String taskId, String modelId, String status) {
+        this.taskId = taskId;
+        this.modelId = modelId;
+        this.status= status;
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(taskId);
