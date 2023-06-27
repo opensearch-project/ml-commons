@@ -21,11 +21,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.ConnectorNames.HTTP_V1;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
-import static org.opensearch.ml.common.utils.StringUtils.toUTF8;
 
 @Log4j2
 @NoArgsConstructor
@@ -54,10 +52,6 @@ public class HttpConnector extends AbstractConnector {
 
     @Getter
     protected String bodyTemplate;
-    @Getter
-    protected String preProcessFunction;
-    @Getter
-    protected String postProcessFunction;
 
     //TODO: add RequestConfig like request time out,
 
@@ -89,12 +83,6 @@ public class HttpConnector extends AbstractConnector {
                     break;
                 case BODY_TEMPLATE_FIELD:
                     bodyTemplate = parser.text();
-                    break;
-                case PRE_PROCESS_FUNCTION_FIELD:
-                    preProcessFunction = parser.text();
-                    break;
-                case POST_PROCESS_FUNCTION_FIELD:
-                    postProcessFunction = parser.text();
                     break;
                 default:
                     parser.skipChildren();
@@ -129,12 +117,6 @@ public class HttpConnector extends AbstractConnector {
         if (bodyTemplate != null) {
             builder.field(BODY_TEMPLATE_FIELD, bodyTemplate);
         }
-        if (preProcessFunction != null) {
-            builder.field(PRE_PROCESS_FUNCTION_FIELD, preProcessFunction);
-        }
-        if (postProcessFunction != null) {
-            builder.field(POST_PROCESS_FUNCTION_FIELD, postProcessFunction);
-        }
         builder.endObject();
         builder.endObject();
         return builder;
@@ -154,8 +136,6 @@ public class HttpConnector extends AbstractConnector {
             headers = input.readMap(StreamInput::readString, StreamInput::readString);
         }
         bodyTemplate = input.readOptionalString();
-        preProcessFunction = input.readOptionalString();
-        postProcessFunction = input.readOptionalString();
     }
 
     @Override
@@ -182,23 +162,13 @@ public class HttpConnector extends AbstractConnector {
             out.writeBoolean(false);
         }
         out.writeOptionalString(bodyTemplate);
-        out.writeOptionalString(preProcessFunction);
-        out.writeOptionalString(postProcessFunction);
     }
 
     @Override
     public  <T> T createPredictPayload(Map<String, String> parameters) {
         if (bodyTemplate != null) {
             String payload = bodyTemplate;
-            Map<String, String> values = new HashMap<>();
-            for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                if (isJson(entry.getValue())) {
-                    values.put(entry.getKey(), toUTF8(entry.getValue()));
-                } else {
-                    values.put(entry.getKey(), escapeJson(entry.getValue()));
-                }
-            }
-            StringSubstitutor substitutor = new StringSubstitutor(values, "${parameters.", "}");
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
             if (!isJson(payload)) {
