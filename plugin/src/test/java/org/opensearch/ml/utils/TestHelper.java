@@ -51,7 +51,6 @@ import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.bytes.BytesReference;
-import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
@@ -320,11 +319,9 @@ public class TestHelper {
         final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
         IndexMetadata indexMetaData = IndexMetadata.builder(indexName).settings(existingSettings).putMapping(mapping).build();
 
-        final Map<String, IndexMetadata> indices = new HashMap<>();
-        indices.put(indexName, indexMetaData);
-        ClusterState clusterState = ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
+        final Map<String, IndexMetadata> indices = Map.of(indexName, indexMetaData);
 
-        return clusterState;
+        return ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
     }
 
     public static ClusterState state(int numDataNodes, String indexName, String mapping) throws IOException {
@@ -366,7 +363,10 @@ public class TestHelper {
         );
         Metadata metadata = new Metadata.Builder()
             .indices(
-                Map.of(ML_MODEL_INDEX,
+                ImmutableMap
+                    .<String, IndexMetadata>builder()
+                    .put(
+                        ML_MODEL_INDEX,
                         IndexMetadata
                             .builder("test")
                             .settings(
@@ -378,6 +378,7 @@ public class TestHelper {
                             )
                             .build()
                     )
+                    .build()
             )
             .build();
         return new ClusterState(
