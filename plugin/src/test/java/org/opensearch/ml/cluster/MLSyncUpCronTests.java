@@ -114,7 +114,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             null,
             DiscoveryNodes.builder().add(node).build(),
             null,
-            null,
+            Map.of(),
             0,
             false
         );
