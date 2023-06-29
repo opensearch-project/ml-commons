@@ -7,10 +7,6 @@ package org.opensearch.ml.common;
 
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 
-import static org.opensearch.ml.common.connector.template.APISchema.HEADERS_FIELD;
-import static org.opensearch.ml.common.connector.template.APISchema.METHOD_FIELD;
-import static org.opensearch.ml.common.connector.template.APISchema.REQUEST_BODY_FIELD;
-import static org.opensearch.ml.common.connector.template.APISchema.URL_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD;

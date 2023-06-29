@@ -120,9 +120,12 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters, modelTensors);
             tensorOutputs.add(tensors);
             return new ModelTensorOutput(tensorOutputs);
+        } catch (IllegalArgumentException exception) {
+            log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
+            throw new MLException("Fail to execute predict in aws connector", exception);
         } catch (Throwable e) {
-            log.error("Failed to execute aws connector", e);
-            throw new MLException("Fail to execute aws connector", e);
+            log.error("Failed to execute predict in aws connector", e);
+            throw new MLException("Fail to execute predict in aws connector", e);
         }
     }
 

@@ -74,7 +74,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
         if (mlCreateConnectorInput.getConnectorTemplate() == null) {
-            throw new IllegalArgumentException("Invalid Connector template, APIs are missing");
+            throw new IllegalArgumentException("Invalid Connector template, Actions are missing");
         }
         String connectorName = mlCreateConnectorInput.getName();
         try {
