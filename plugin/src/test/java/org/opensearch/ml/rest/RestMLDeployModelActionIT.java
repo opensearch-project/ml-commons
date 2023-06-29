@@ -61,7 +61,7 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
                 getModel(client(), model_id, model -> {
                     logger.info("Get Model after re-deploy {}", model);
                     // Re-Deploy fails due to https://github.com/opensearch-project/ml-commons/issues/844
-                    assertEquals("DEPLOY_FAILED", model.get("model_state"));
+                    assertEquals("DEPLOYED", model.get("model_state"));
                 });
 
             } catch (Exception e) {
