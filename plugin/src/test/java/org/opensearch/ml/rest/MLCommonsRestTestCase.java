@@ -839,6 +839,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     public String getTaskState(String taskId) throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
         Map<String, Object> task = parseResponseToMap(response);
+        logger.info("task response" + task);
         return (String) task.get("state");
     }
 
