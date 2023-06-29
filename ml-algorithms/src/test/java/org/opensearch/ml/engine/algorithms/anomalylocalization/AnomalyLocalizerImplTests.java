@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.collect.ImmutableMap;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
@@ -37,7 +38,6 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.index.IndexNotFoundException;
@@ -439,9 +439,9 @@ public class AnomalyLocalizerImplTests {
                 new HashMap<>(), roleSet,
                 Version.CURRENT);
         Metadata metadata = new Metadata.Builder()
-                .indices(ImmutableOpenMap
+                .indices(ImmutableMap
                         .<String, IndexMetadata>builder()
-                        .fPut(indexName, IndexMetadata.builder("test")
+                        .put(indexName, IndexMetadata.builder("test")
                                 .settings(Settings.builder()
                                         .put("index.number_of_shards", 1)
                                         .put("index.number_of_replicas", 1)
@@ -450,7 +450,7 @@ public class AnomalyLocalizerImplTests {
                         .build()).build();
         return new ClusterState(new ClusterName(clusterName), 123l, "111111",
                 metadata, null, DiscoveryNodes.builder().add(node).build(),
-                null, null, 0, false);
+                null, Map.of(), 0, false);
     }
 }
 
