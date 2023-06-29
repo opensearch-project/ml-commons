@@ -442,11 +442,11 @@ public class AnomalyLocalizerImplTests {
                 .indices(ImmutableMap
                         .<String, IndexMetadata>builder()
                         .put(indexName, IndexMetadata.builder("test")
-                            .settings(Settings.builder()
-                            .put("index.number_of_shards", 1)
-                            .put("index.number_of_replicas", 1)
-                            .put("index.version.created", Version.CURRENT.id))
-                            .build())
+                                .settings(Settings.builder()
+                                        .put("index.number_of_shards", 1)
+                                        .put("index.number_of_replicas", 1)
+                                        .put("index.version.created", Version.CURRENT.id))
+                                .build())
                         .build()).build();
         return new ClusterState(new ClusterName(clusterName), 123l, "111111",
                 metadata, null, DiscoveryNodes.builder().add(node).build(),
