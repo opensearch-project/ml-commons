@@ -382,7 +382,7 @@ public class DetachedConnector extends AbstractConnector {
             payload = substitutor.replace(payload);
 
             if (!isJson(payload)) {
-                throw new IllegalArgumentException("Invalid JSON: " + payload);
+                throw new IllegalArgumentException("Invalid JSON in payload!");
             }
             return (T) payload;
         }
