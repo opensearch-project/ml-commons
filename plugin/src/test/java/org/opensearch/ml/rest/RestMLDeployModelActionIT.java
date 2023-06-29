@@ -47,7 +47,6 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
 
                 // Undeploy Model
                 Map<String, Object> undeployresponse = undeployModel(model_id);
-                logger.info("Undeploy Model {}", undeployresponse);
                 for (Map.Entry<String, Object> entry : undeployresponse.entrySet()) {
                     Map stats = (Map) ((Map) entry.getValue()).get("stats");
                     assertEquals("undeployed", stats.get(model_id));
