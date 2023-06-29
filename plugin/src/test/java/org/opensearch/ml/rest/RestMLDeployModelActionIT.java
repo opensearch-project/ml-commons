@@ -42,9 +42,7 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
             try {
                 // Deploy Model
                 String taskId1 = deployModel(model_id);
-                getTask(client(), taskId1, innerResponse -> {
-                    assertEquals(model_id, innerResponse.get(MODEL_ID_FIELD));
-                });
+                getTask(client(), taskId1, innerResponse -> { assertEquals(model_id, innerResponse.get(MODEL_ID_FIELD)); });
                 waitForTask(taskId1, MLTaskState.COMPLETED);
 
                 // Undeploy Model
@@ -58,7 +56,7 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
                 // Deploy Model again
                 taskId1 = deployModel(model_id);
                 getTask(client(), taskId1, innerResponse -> { logger.info("Re-Deploy model {}", innerResponse); });
-                //waitForTask(taskId1, MLTaskState.FAILED);
+                waitForTask(taskId1, MLTaskState.FAILED);
 
                 getModel(client(), model_id, model -> {
                     logger.info("Get Model after re-deploy {}", model);
