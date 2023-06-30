@@ -326,7 +326,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .name(registerModelInput.getModelName())
             .description(registerModelInput.getDescription())
             .backendRoles(registerModelInput.getBackendRoles())
-            .modelAccessMode(registerModelInput.getModelAccessMode())
+            .modelAccessMode(registerModelInput.getAccessMode())
             .isAddAllBackendRoles(registerModelInput.getAddAllBackendRoles())
             .build();
     }

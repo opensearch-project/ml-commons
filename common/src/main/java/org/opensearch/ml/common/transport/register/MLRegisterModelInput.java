@@ -53,8 +53,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_MODE = "model_access_mode"; //optional
-    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
+    public static final String ACCESS_MODE_FIELD = "access_mode"; //optional
+    public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles"; //optional
 
     private FunctionName functionName;
     private String modelName;
@@ -74,7 +74,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
 
     private List<String> backendRoles;
     private Boolean addAllBackendRoles;
-    private AccessMode modelAccessMode;
+    private AccessMode accessMode;
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
@@ -92,7 +92,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 String connectorId,
                                 List<String> backendRoles,
                                 Boolean addAllBackendRoles,
-                                AccessMode modelAccessMode
+                                AccessMode accessMode
                               ) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
@@ -124,7 +124,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.connectorId = connectorId;
         this.backendRoles = backendRoles;
         this.addAllBackendRoles = addAllBackendRoles;
-        this.modelAccessMode = modelAccessMode;
+        this.accessMode = accessMode;
     }
 
 
@@ -154,7 +154,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         }
         this.addAllBackendRoles = in.readOptionalBoolean();
         if (in.readBoolean()) {
-            this.modelAccessMode = in.readEnum(AccessMode.class);
+            this.accessMode = in.readEnum(AccessMode.class);
         }
     }
 
@@ -196,9 +196,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(addAllBackendRoles);
-        if (modelAccessMode != null) {
+        if (accessMode != null) {
             out.writeBoolean(true);
-            out.writeEnum(modelAccessMode);
+            out.writeEnum(accessMode);
         } else {
             out.writeBoolean(false);
         }
@@ -246,8 +246,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (addAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES_FIELD, addAllBackendRoles);
         }
-        if (modelAccessMode != null) {
-            builder.field(ACCESS_MODE_FIELD, modelAccessMode);
+        if (accessMode != null) {
+            builder.field(ACCESS_MODE_FIELD, accessMode);
         }
         builder.endObject();
         return builder;
@@ -340,7 +340,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Connector connector = null;
         String connectorId = null;
         List<String> backendRoles = new ArrayList<>();
-        AccessMode modelAccessMode = null;
+        AccessMode accessMode = null;
         Boolean addAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -398,13 +398,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     addAllBackendRoles = parser.booleanValue();
                     break;
                 case ACCESS_MODE_FIELD:
-                    modelAccessMode = modelAccessMode.from(parser.text());
+                    accessMode = accessMode.from(parser.text());
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, modelAccessMode);
+        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode);
     }
 }
