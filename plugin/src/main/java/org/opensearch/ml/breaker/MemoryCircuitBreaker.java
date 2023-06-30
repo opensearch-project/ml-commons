@@ -5,11 +5,11 @@
 
 package org.opensearch.ml.breaker;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_JVM_HEAP_MEM_THRESHOLD;
+
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.monitor.jvm.JvmService;
-
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_JVM_HEAP_MEM_THRESHOLD;
 
 /**
  * A circuit breaker for memory usage.

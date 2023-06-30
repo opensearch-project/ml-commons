@@ -51,6 +51,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
+    public static final String ACCESS_MODE = "access_mode"; //optional
+    public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
 
     private FunctionName functionName;
     private String modelName;
@@ -98,9 +101,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
         }
-        if (modelGroupId == null) {
-            throw new IllegalArgumentException("model group id is null");
-        }
         if (functionName != FunctionName.REMOTE) {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
@@ -130,7 +130,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public MLRegisterModelInput(StreamInput in) throws IOException {
         this.functionName = in.readEnum(FunctionName.class);
         this.modelName = in.readString();
-        this.modelGroupId = in.readString();
+        this.modelGroupId = in.readOptionalString();
         this.version = in.readOptionalString();
         this.description = in.readOptionalString();
         this.url = in.readOptionalString();
@@ -161,7 +161,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeEnum(functionName);
         out.writeString(modelName);
-        out.writeString(modelGroupId);
+        out.writeOptionalString(modelGroupId);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
         out.writeOptionalString(url);
@@ -208,8 +208,12 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         builder.startObject();
         builder.field(FUNCTION_NAME_FIELD, functionName);
         builder.field(NAME_FIELD, modelName);
-        builder.field(VERSION_FIELD, version);
-        builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
+        if (version != null) {
+            builder.field(VERSION_FIELD, version);
+        }
+        if (modelGroupId != null) {
+            builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
+        }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
