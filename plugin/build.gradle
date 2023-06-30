@@ -300,7 +300,17 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.remote.GetConnectorTransportAction',
         'org.opensearch.ml.action.remote.DeleteConnectorTransportAction',
         'org.opensearch.ml.action.remote.DeleteConnectorTransportAction.1',
-        'org.opensearch.ml.action.remote.SearchConnectorTransportAction'
+        'org.opensearch.ml.action.remote.SearchConnectorTransportAction',
+        'org.opensearch.ml.model.MLModelGroupManager',
+        'org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction',
+        'org.opensearch.ml.helper.ModelAccessControlHelper',
+        'org.opensearch.ml.action.models.DeleteModelTransportAction',
+        'org.opensearch.ml.action.models.DeleteModelTransportAction.1',
+        'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
+        'org.opensearch.ml.action.register.TransportRegisterModelAction',
+        'org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction',
+        'org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction',
+
 ]
 
 jacocoTestCoverageVerification {

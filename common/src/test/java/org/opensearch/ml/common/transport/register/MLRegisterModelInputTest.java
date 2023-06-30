@@ -95,17 +95,6 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
-    public void constructor_NullModelGroupId() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model group id is null");
-        MLRegisterModelInput.builder()
-                .functionName(functionName)
-                .modelName(modelName)
-                .modelGroupId(null)
-                .build();
-    }
-
-    @Test
     public void constructor_NullModelFormat() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model format is null");

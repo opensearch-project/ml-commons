@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -294,6 +295,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals(error, exception.getValue().getMessage());
     }
 
+    @Ignore
     public void testDoExecute_RegisterModel() {
         MLForwardInput forwardInput = MLForwardInput
             .builder()

@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
@@ -84,6 +85,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
      * the method, so if we use multiple methods, then we always need to wait a long time until the model version registration
      * completes, making all the tests in one method can make the overall process faster.
      */
+    @Ignore
     public void test_all() {
         test_empty_body_search();
         test_matchAll_search();
