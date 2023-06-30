@@ -199,11 +199,11 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
             throw new IllegalArgumentException("You don't have permissions to perform this operation on this model group.");
         }
-        AccessMode AccessMode = input.getModelAccessMode();
-        if ((AccessMode.PUBLIC == AccessMode || AccessMode.PRIVATE == AccessMode)
+        AccessMode accessMode = input.getModelAccessMode();
+        if ((AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
             throw new IllegalArgumentException("You can specify backend roles only for a model group with the restricted access mode.");
-        } else if (AccessMode == null || AccessMode.RESTRICTED == AccessMode) {
+        } else if (accessMode == null || AccessMode.RESTRICTED == accessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
@@ -216,7 +216,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
             }
-            if (AccessMode.RESTRICTED == AccessMode
+            if (AccessMode.RESTRICTED == accessMode
                 && CollectionUtils.isEmpty(input.getBackendRoles())
                 && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException(
