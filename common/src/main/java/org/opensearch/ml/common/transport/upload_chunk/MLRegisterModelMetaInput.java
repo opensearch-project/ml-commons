@@ -44,7 +44,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //mandatory
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //optional
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_MODE = "model_access_mode"; //optional
+    public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
 
     private FunctionName functionName;
