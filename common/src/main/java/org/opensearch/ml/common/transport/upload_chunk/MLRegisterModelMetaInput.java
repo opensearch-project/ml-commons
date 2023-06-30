@@ -63,12 +63,12 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private MLModelConfig modelConfig;
     private Integer totalChunks;
     private List<String> backendRoles;
-    private AccessMode AccessMode;
+    private AccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
     public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
-                                    AccessMode AccessMode,
+                                    AccessMode modelAccessMode,
                                     Boolean isAddAllBackendRoles) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
@@ -101,7 +101,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.modelConfig = modelConfig;
         this.totalChunks = totalChunks;
         this.backendRoles = backendRoles;
-        this.AccessMode = AccessMode;
+        this.modelAccessMode = modelAccessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
     }
 
@@ -125,7 +125,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.totalChunks = in.readInt();
         this.backendRoles = in.readOptionalStringList();
         if (in.readBoolean()) {
-            AccessMode = in.readEnum(AccessMode.class);
+            modelAccessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
@@ -164,9 +164,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         } else {
             out.writeBoolean(false);
         }
-        if (AccessMode != null) {
+        if (modelAccessMode != null) {
             out.writeBoolean(true);
-            out.writeEnum(AccessMode);
+            out.writeEnum(modelAccessMode);
         } else {
             out.writeBoolean(false);
         }
@@ -200,8 +200,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
-        if (AccessMode != null) {
-            builder.field(MODEL_ACCESS_MODE, AccessMode);
+        if (modelAccessMode != null) {
+            builder.field(MODEL_ACCESS_MODE, modelAccessMode);
         }
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
@@ -223,7 +223,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         MLModelConfig modelConfig = null;
         Integer totalChunks = null;
         List<String> backendRoles = null;
-        AccessMode AccessMode = null;
+        AccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -272,7 +272,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     }
                     break;
                 case MODEL_ACCESS_MODE:
-                    AccessMode = AccessMode.from(parser.text().toLowerCase(Locale.ROOT));
+                    modelAccessMode = AccessMode.from(parser.text().toLowerCase(Locale.ROOT));
                     break;
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
@@ -282,7 +282,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, AccessMode, isAddAllBackendRoles);
+        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, modelAccessMode, isAddAllBackendRoles);
     }
 
 }

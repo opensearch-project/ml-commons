@@ -95,7 +95,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
             .name(mlUploadInput.getName())
             .description(mlUploadInput.getDescription())
             .backendRoles(mlUploadInput.getBackendRoles())
-            .modelAccessMode(mlUploadInput.getAccessMode())
+            .modelAccessMode(mlUploadInput.getModelAccessMode())
             .isAddAllBackendRoles(mlUploadInput.getIsAddAllBackendRoles())
             .build();
     }
