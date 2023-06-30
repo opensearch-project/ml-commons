@@ -265,7 +265,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String connectorId = null;
         List<String> backendRoles = new ArrayList<>();
         Boolean addAllBackendRoles = null;
-        AccessMode modelAccessMode = null;
+        AccessMode accessMode = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -319,14 +319,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     addAllBackendRoles = parser.booleanValue();
                     break;
                 case ACCESS_MODE_FIELD:
-                    modelAccessMode = modelAccessMode.from(parser.text());
+                    accessMode = AccessMode.from(parser.text());
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, modelAccessMode);
+        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
