@@ -83,6 +83,6 @@ public class MLHttpClientFactory {
     }
 
     private static boolean hasPrivateIpAddress(InetAddress[] ipAddress) {
-        return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress());
+        return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
     }
 }

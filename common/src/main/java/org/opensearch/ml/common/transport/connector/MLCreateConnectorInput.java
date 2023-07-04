@@ -40,6 +40,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_MODE_FIELD = "access_mode";
 
+    public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
+
     private String name;
     private String description;
     private String version;
