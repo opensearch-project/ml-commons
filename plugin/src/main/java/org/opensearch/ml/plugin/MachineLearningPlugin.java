@@ -549,7 +549,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         FixedExecutorBuilder predictThreadPool = new FixedExecutorBuilder(
             settings,
             PREDICT_THREAD_POOL,
-            OpenSearchExecutors.allocatedProcessors(settings) * 2,
+            OpenSearchExecutors.allocatedProcessors(settings),
             10000,
             ML_THREAD_POOL_PREFIX + PREDICT_THREAD_POOL,
             false
@@ -603,7 +603,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY,
-                MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
+                MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             );
         return settings;
     }

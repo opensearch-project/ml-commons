@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -81,22 +83,30 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     private ClusterService clusterService;
 
+    private Settings settings;
+
+    private static final String trustedConnectorEndpointsRegex = "^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$";
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), trustedConnectorEndpointsRegex).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         action = new TransportCreateConnectorAction(
             transportService,
             actionFilters,
             mlIndicesHandler,
             client,
             mlEngine,
-            connectorAccessControlHelper
+            connectorAccessControlHelper,
+            settings,
+            clusterService
         );
         when(request.getMlCreateConnectorInput()).thenReturn(input);
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build();
         threadContext = new ThreadContext(settings);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -105,7 +115,15 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(template.getPredictSchema()).thenReturn(mock(APISchema.class));
         when(template.getMetadataSchema()).thenReturn(mock(APISchema.class));
         when(input.getConnectorTemplate()).thenReturn(template);
-        Map<String, String> metadata = ImmutableMap.of("connector_name", "mock_connector_name");
+
+        APISchema predictSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/completions", ImmutableMap.of(), null, null, null);
+        APISchema metadataSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/models/{model}", ImmutableMap.of(), null, null, null);
+
+        when(template.getPredictSchema()).thenReturn(predictSchema);
+        when(template.getMetadataSchema()).thenReturn(metadataSchema);
+
+        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com");
+        when(input.getParameters()).thenReturn(parameters);
     }
 
     public void test_execute_connectorAccessControl_notEnabled_success() {
@@ -279,7 +297,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             mlIndicesHandler,
             client,
             mlEngine,
-            connectorAccessControlHelper
+            connectorAccessControlHelper,
+            settings,
+            clusterService
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -317,7 +337,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             mlIndicesHandler,
             client,
             mlEngine,
-            connectorAccessControlHelper
+            connectorAccessControlHelper,
+            settings,
+            clusterService
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -358,11 +380,70 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             mlIndicesHandler,
             client,
             mlEngine,
-            connectorAccessControlHelper
+            connectorAccessControlHelper,
+            settings,
+            clusterService
         );
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_execute_dryRun_connector_creation() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
+        when(input.getAddAllBackendRoles()).thenReturn(false);
+        when(input.getBackendRoles()).thenReturn(ImmutableList.of("role1", "role2"));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(IndexResponse.class));
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        MLCreateConnectorInput mlCreateConnectorInput = mock(MLCreateConnectorInput.class);
+        when(mlCreateConnectorInput.getName()).thenReturn(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    public void test_execute_URL_notMatchingExpression_exception() {
+        MLCreateConnectorInput mlCreateConnectorInput = mock(MLCreateConnectorInput.class);
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+
+        ConnectorTemplate template = mock(ConnectorTemplate.class);
+        when(template.getPredictSchema()).thenReturn(mock(APISchema.class));
+        when(template.getMetadataSchema()).thenReturn(mock(APISchema.class));
+        when(mlCreateConnectorInput.getConnectorTemplate()).thenReturn(template);
+
+        APISchema predictSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/completions", ImmutableMap.of(), null, null, null);
+        APISchema metadataSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/models/{model}", ImmutableMap.of(), null, null, null);
+
+        when(template.getPredictSchema()).thenReturn(predictSchema);
+        when(template.getMetadataSchema()).thenReturn(metadataSchema);
+
+        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
+        when(input.getParameters()).thenReturn(parameters);
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService
+        );
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex, regex is: ^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$,URL is: https://${parameters.endpoint}/v1/completions", argumentCaptor.getValue().getMessage());
     }
 }

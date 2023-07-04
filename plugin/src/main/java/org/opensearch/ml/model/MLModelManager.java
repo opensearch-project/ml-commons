@@ -362,7 +362,12 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, ActionListener<MLRegisterModelResponse> listener) {
+    private void indexRemoteModel(
+        MLRegisterModelInput registerModelInput,
+        MLTask mlTask,
+        String modelVersion,
+        ActionListener<MLRegisterModelResponse> listener
+    ) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -423,7 +428,12 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion, ActionListener<MLRegisterModelResponse> listener) throws PrivilegedActionException {
+    private void uploadModel(
+        MLRegisterModelInput registerModelInput,
+        MLTask mlTask,
+        String modelVersion,
+        ActionListener<MLRegisterModelResponse> listener
+    ) throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE || registerModelInput.getConnectorId() != null) {

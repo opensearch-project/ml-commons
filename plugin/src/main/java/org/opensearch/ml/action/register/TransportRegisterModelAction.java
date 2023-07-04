@@ -7,14 +7,17 @@ package org.opensearch.ml.action.register;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
@@ -31,6 +34,10 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
@@ -75,6 +82,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     MLStats mlStats;
     volatile String trustedUrlRegex;
 
+    private String trustedConnectorEndpointsRegex;
+
     ModelAccessControlHelper modelAccessControlHelper;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -114,6 +123,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
+
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
     }
 
     @Override
@@ -121,40 +135,85 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
-
-        FunctionName functionName = registerModelInput.getFunctionName();
-
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
                 if (!access) {
                     log.error("You don't have permissions to perform this operation on this model.");
                     listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
                 } else {
-                    if (FunctionName.REMOTE == functionName) {
-                        connectorAccessControlHelper
-                            .validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
-                                if (Boolean.TRUE.equals(r)) {
-                                    registerModel(registerModelInput, listener);
-                                } else {
-                                    log
-                                        .error(
-                                            "You don't have permissions to perform this operation on this connector:"
-                                                + registerModelInput.getConnectorId()
-                                        );
-                                    listener
-                                        .onFailure(
-                                            new IllegalArgumentException(
-                                                "You don't have permissions to perform this operation on this connector:"
-                                                    + registerModelInput.getConnectorId()
-                                            )
-                                        );
-                                }
-                            }, listener::onFailure));
-                    } else {
-                        registerModel(registerModelInput, listener);
-                    }
+                    doRegister(registerModelInput, listener);
                 }
             }, listener::onFailure));
+    }
+
+    private void doRegister(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
+        FunctionName functionName = registerModelInput.getFunctionName();
+        if (FunctionName.REMOTE == functionName) {
+            if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
+                connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
+                    if (Boolean.TRUE.equals(r)) {
+                        registerModel(registerModelInput, listener);
+                    } else {
+                        listener.onFailure(new IllegalArgumentException("You don't have permission to use the connector provided, connector id: " + registerModelInput.getConnectorId()));
+                    }
+                }, e -> {
+                    log
+                        .error(
+                            "You don't have permission to use the connector provided, connector id: "
+                                + registerModelInput.getConnectorId(),
+                            e
+                        );
+                    listener.onFailure(e);
+                }));
+            } else {
+                validateInternalConnector(registerModelInput);
+                ActionListener<MLCreateConnectorResponse> dryRunResultListener = ActionListener.wrap(res -> {
+                    log.info("Dry run create connector successfully");
+                    registerModel(registerModelInput, listener);
+                }, e -> {
+                    log.error(e.getMessage(), e);
+                    listener.onFailure(e);
+                });
+                MLCreateConnectorRequest mlCreateConnectorRequest = createConnectorRequest();
+                client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
+            }
+        } else {
+            registerModel(registerModelInput, listener);
+        }
+    }
+
+    private MLCreateConnectorRequest createConnectorRequest() {
+        MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().name("dryRunConnector").build();
+        return new MLCreateConnectorRequest(createConnectorInput);
+    }
+
+    private void validateInternalConnector(MLRegisterModelInput registerModelInput) {
+        if (registerModelInput.getConnector() == null) {
+            log.error("You must provide connector content when creating a remote model without providing connector id!");
+            throw new IllegalArgumentException("You must provide connector content when creating a remote model without connector id!");
+        }
+        if (registerModelInput.getConnector().getPredictEndpoint() == null) {
+            log.error("Connector endpoint is required when creating a remote model without connector id!");
+            throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
+        }
+        // check if the connector url is trusted
+        Pattern pattern = Pattern.compile(trustedConnectorEndpointsRegex);
+        Matcher matcher = pattern.matcher(registerModelInput.getConnector().getPredictEndpoint());
+        if (!matcher.matches()) {
+            log
+                .error(
+                    "Not allowed URL in connector for remote model, URL is: "
+                        + registerModelInput.getConnector().getPredictEndpoint()
+                        + ", trusted connector endpoint regex is: "
+                        + trustedConnectorEndpointsRegex
+                );
+            throw new IllegalArgumentException(
+                "Not allowed URL in connector for remote model, URL is: "
+                    + registerModelInput.getConnector().getPredictEndpoint()
+                    + ", trusted connector endpoint regex is: "
+                    + trustedConnectorEndpointsRegex
+            );
+        }
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
