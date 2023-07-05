@@ -709,8 +709,8 @@ public class MLModelManager {
             listener.onResponse("successful");
             return;
         }
-        if (modelCacheHelper.getDeployedModels().length >= maxModelPerNode) {
-            listener.onFailure(new IllegalArgumentException("Exceed max model per node limit"));
+        if (modelCacheHelper.getLocalDeployedModels().length >= maxModelPerNode) {
+            listener.onFailure(new IllegalArgumentException("Exceed max local model per node limit"));
             return;
         }
         modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
