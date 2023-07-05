@@ -97,7 +97,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         String connectorName = mlCreateConnectorInput.getName();
         try {
             if (mlCreateConnectorInput.getConnectorTemplate() == null) {
-                throw new IllegalArgumentException("Invalid Connector template, APIs are missing");
+                throw new IllegalArgumentException("Invalid Connector template, Actions are missing");
             }
             validateConnectorURL(mlCreateConnectorInput);
             User user = RestActionUtils.getUserContext(client);
