@@ -10,6 +10,7 @@ import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
 import lombok.RequiredArgsConstructor;
+import org.opensearch.ml.engine.exceptions.MetaDataException;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +23,7 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public String encrypt(String plainText) {
-
+        checkMasterKey();
         final AwsCrypto crypto = AwsCrypto.builder()
                 .withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt)
                 .build();
@@ -38,6 +39,7 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public String decrypt(String encryptedText) {
+        checkMasterKey();
         final AwsCrypto crypto = AwsCrypto.builder()
                 .withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt)
                 .build();
@@ -49,5 +51,16 @@ public class EncryptorImpl implements Encryptor {
         final CryptoResult<byte[], JceMasterKey> decryptedResult
                 = crypto.decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
         return new String(decryptedResult.getResult());
+    }
+
+    private void checkMasterKey() {
+        if (masterKey == "0000000000000000" || masterKey == null) {
+            throw new MetaDataException("Please provide a masterKey for credential encryption! Example: PUT /_cluster/settings\n" +
+                    "{\n" +
+                    "  \"persistent\" : {\n" +
+                    "    \"plugins.ml_commons.encryption.master_key\" : \"1234567x\"  \n" +
+                    "  }\n" +
+                    "}");
+        }
     }
 }
