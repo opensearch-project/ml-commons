@@ -86,7 +86,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find connector"));
+                    actionListener.onFailure(new IllegalArgumentException("Failed to find connector with the provided connector id: " + connectorId));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
