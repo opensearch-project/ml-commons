@@ -152,6 +152,20 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Get deployed local models on node.
+     * @return array of model id
+     */
+    public String[] getLocalDeployedModels() {
+        return modelCaches
+                .entrySet()
+                .stream()
+                .filter(entry -> (entry.getValue().getModelState() == MLModelState.DEPLOYED && entry.getValue().getFunctionName() != FunctionName.REMOTE))
+                .map(entry -> entry.getKey())
+                .collect(Collectors.toList())
+                .toArray(new String[0]);
+    }
+
+    /**
      * Check if model is running on node.
      * @param modelId model id
      * @return true if model is running on node.
