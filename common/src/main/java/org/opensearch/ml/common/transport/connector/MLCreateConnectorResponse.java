@@ -20,30 +20,25 @@ public class MLCreateConnectorResponse extends ActionResponse implements ToXCont
     public static final String STATUS_FIELD = "status";
 
     private String connectorId;
-    private String status;
 
     public MLCreateConnectorResponse(StreamInput in) throws IOException {
         super(in);
         this.connectorId = in.readString();
-        this.status = in.readString();
     }
 
-    public MLCreateConnectorResponse(String taskId, String status) {
+    public MLCreateConnectorResponse(String taskId) {
         this.connectorId = taskId;
-        this.status= status;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(connectorId);
-        out.writeString(status);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(Connector_ID_FIELD, connectorId);
-        builder.field(STATUS_FIELD, status);
         builder.endObject();
         return builder;
     }

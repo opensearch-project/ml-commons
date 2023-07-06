@@ -63,7 +63,6 @@ public class DetachedConnector extends AbstractConnector {
     private String predictAPI;
     @Getter
     private String metadataAPI;
-    private ConnectorState connectorState;
     @Setter
     @Getter
     private List<String> backendRoles;
@@ -87,7 +86,6 @@ public class DetachedConnector extends AbstractConnector {
                      String credentialStr,
                      String predictAPI,
                      String metadataAPI,
-                     ConnectorState connectorState,
                      List<String> backendRoles,
                      User owner,
                      AccessMode access,
@@ -102,7 +100,6 @@ public class DetachedConnector extends AbstractConnector {
         this.credentialStr = credentialStr;
         this.predictAPI = predictAPI;
         this.metadataAPI = metadataAPI;
-        this.connectorState = connectorState;
         this.backendRoles = backendRoles;
         this.owner = owner;
         this.access = access;
@@ -119,9 +116,6 @@ public class DetachedConnector extends AbstractConnector {
         credentialStr = input.readString();
         predictAPI = input.readOptionalString();
         metadataAPI = input.readOptionalString();
-        if (input.readBoolean()) {
-            connectorState = input.readEnum(ConnectorState.class);
-        }
         backendRoles = input.readOptionalStringList();
         if (input.readBoolean()) {
             this.owner = new User(input);
@@ -144,12 +138,6 @@ public class DetachedConnector extends AbstractConnector {
         out.writeString(credentialStr);
         out.writeOptionalString(predictAPI);
         out.writeOptionalString(metadataAPI);
-        if (connectorState != null) {
-            out.writeBoolean(true);
-            out.writeEnum(connectorState);
-        } else {
-            out.writeBoolean(false);
-        }
         out.writeOptionalStringCollection(backendRoles);
         if (owner != null) {
             out.writeBoolean(true);
@@ -222,7 +210,6 @@ public class DetachedConnector extends AbstractConnector {
         String credentialStr = null;
         String predictAPI = null;
         String metadataAPI = null;
-        ConnectorState connectorState = null;
         List<String> backendRoles = null;
         User owner = null;
         AccessMode access = null;
@@ -293,7 +280,6 @@ public class DetachedConnector extends AbstractConnector {
                 .credentialStr(credentialStr)
                 .predictAPI(predictAPI)
                 .metadataAPI(metadataAPI)
-                .connectorState(connectorState)
                 .backendRoles(backendRoles)
                 .owner(owner)
                 .access(access)

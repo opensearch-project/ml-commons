@@ -15,8 +15,6 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.connector.ConnectorNames;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;

@@ -5,14 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.script.ScriptService;
@@ -30,22 +29,21 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.opensearch.ml.common.connector.ConnectorNames.AWS;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 @Log4j2
-@ConnectorExecutor(AWS)
+@ConnectorExecutor(AWS_SIGV4)
 public class AwsConnectorExecutor implements RemoteConnectorExecutor{
 
+    @Getter
     private AbstractConnector connector;
     private final SdkHttpClient httpClient;
-    @Setter
+    @Setter @Getter
     private ScriptService scriptService;
 
     public AwsConnectorExecutor(Connector connector) {
@@ -54,22 +52,9 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
     }
 
      @Override
-     public void invokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs, List<ModelTensor> modelTensors) {
+     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
         try {
-            RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, scriptService);
-
-            Map<String, String> parameters = new HashMap<>();
-            if (connector.getParameters() != null) {
-                parameters.putAll(connector.getParameters());
-            }
-            if (inputData.getParameters() != null) {
-                parameters.putAll(inputData.getParameters());
-            }
-
-            String payload = connector.createPredictPayload(parameters);
-            connector.validatePayload(payload);
-
-            String endpoint = connector.getPredictEndpoint();
+            String endpoint = connector.getPredictEndpoint(parameters);
             RequestBody requestBody = RequestBody.fromString(payload);
 
             SdkHttpFullRequest.Builder builder = SdkHttpFullRequest.builder()
@@ -106,7 +91,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
             }
             String modelResponse = responseBuilder.toString();
 
-            ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters, modelTensors);
+            ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
             tensorOutputs.add(tensors);
         } catch (IllegalArgumentException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);

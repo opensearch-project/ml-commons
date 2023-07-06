@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.transport.connector.MLCreateConnectorInput.ACCESS_MODE_FIELD;
 import static org.opensearch.ml.common.transport.connector.MLCreateConnectorInput.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.transport.connector.MLCreateConnectorInput.ADD_ALL_BACKEND_ROLES_FIELD;
@@ -144,8 +145,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.deployModel = in.readBoolean();
         this.modelNodeIds = in.readOptionalStringArray();
         if (in.readBoolean()) {
-            String connectorName = in.readString();
-            this.connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, in}, String.class, StreamInput.class);
+            String protocol = in.readString();
+            this.connector = MLCommonsClassLoader.initConnector(protocol, new Object[]{in}, StreamInput.class);
         }
         this.connectorId = in.readOptionalString();
         if (in.readBoolean()) {
@@ -182,7 +183,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeOptionalStringArray(modelNodeIds);
         if (connector != null) {
             out.writeBoolean(true);
-            out.writeString(connector.getName());
+            out.writeString(connector.getProtocol());
             connector.writeTo(out);
         } else {
             out.writeBoolean(false);
@@ -367,11 +368,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     url = parser.text();
                     break;
                 case CONNECTOR_FIELD:
-                    parser.nextToken();
-                    String connectorName = parser.currentName();
-                    parser.nextToken();
-                    connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
-                    parser.nextToken();
+                    connector = createConnector(parser);
                     break;
                 case HASH_VALUE_FIELD:
                     hashValue = parser.text();

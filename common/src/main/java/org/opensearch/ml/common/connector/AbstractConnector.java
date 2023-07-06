@@ -28,8 +28,19 @@ public abstract class AbstractConnector implements Connector {
     public static final String ACCESS_KEY_FIELD = "access_key";
     public static final String SECRET_KEY_FIELD = "secret_key";
     public static final String SESSION_TOKEN_FIELD = "session_token";
+    public static final String NAME_FIELD = "name";
+    public static final String VERSION_FIELD = "version";
+    public static final String DESCRIPTION_FIELD = "description";
+    public static final String PROTOCOL_FIELD = "protocol";
+    public static final String ACTIONS_FIELD = "actions";
 
-    protected String httpMethod;
+    @Getter
+    protected String name;
+    protected String description;
+    protected String version;
+    @Getter
+    protected String protocol;
+
     @Getter
     protected Map<String, String> parameters;
     protected Map<String, String> credential;
@@ -38,7 +49,13 @@ public abstract class AbstractConnector implements Connector {
     @Setter@Getter
     protected Map<String, String> decryptedCredential;
 
+    @Getter
+    protected List<ConnectorAction> actions;
+
     protected Map<String, String> createPredictDecryptedHeaders(Map<String, String> headers) {
+        if (headers == null) {
+            return null;
+        }
         Map<String, String> decryptedHeaders = new HashMap<>();
         StringSubstitutor substitutor = new StringSubstitutor(getDecryptedCredential(), "${credential.", "}");
         for (String key : headers.keySet()) {
@@ -84,6 +101,15 @@ public abstract class AbstractConnector implements Connector {
             map.put("response", response);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(map).build());
         }
+    }
+
+    public String getPredictEndpoint(Map<String, String> parameters) {
+        String predictEndpoint = getPredictEndpoint();
+        if (parameters != null && parameters.size() > 0) {
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+            predictEndpoint = substitutor.replace(predictEndpoint);
+        }
+        return predictEndpoint;
     }
 
     public String getAccessKey() {

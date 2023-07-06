@@ -13,15 +13,15 @@ import org.opensearch.core.xcontent.XContentParser;
 
 import java.io.IOException;
 
-import static org.opensearch.ml.common.connector.ConnectorNames.AWS;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 
 @Log4j2
 @NoArgsConstructor
-@org.opensearch.ml.common.annotation.Connector(AWS)
+@org.opensearch.ml.common.annotation.Connector(AWS_SIGV4)
 public class AwsConnector extends HttpConnector {
 
-    public AwsConnector(String name, XContentParser parser) throws IOException {
-        super(name, parser);
+    public AwsConnector(String protocol, XContentParser parser) throws IOException {
+        super(protocol, parser);
         validate();
     }
 
@@ -31,7 +31,6 @@ public class AwsConnector extends HttpConnector {
     }
 
     private void validate() {
-        headers.remove("Content-Type");
         if (credential == null || !credential.containsKey(ACCESS_KEY_FIELD) || !credential.containsKey(SECRET_KEY_FIELD)) {
             throw new IllegalArgumentException("Missing credential");
         }

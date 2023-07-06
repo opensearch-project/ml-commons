@@ -91,13 +91,13 @@ public class ConnectorUtils {
         return inputData;
     }
 
-    public static ModelTensors processOutput(String modelResponse, Connector connector, ScriptService scriptService, Map<String, String> parameters, List<ModelTensor> modelTensors) throws IOException {
-
+    public static ModelTensors processOutput(String modelResponse, Connector connector, ScriptService scriptService, Map<String, String> parameters) throws IOException {
+        List<ModelTensor> modelTensors = new ArrayList<>();
         String postProcessFunction = null;
         if (parameters != null && parameters.containsKey(POST_PROCESS_FUNCTION)) {
             postProcessFunction = parameters.get(POST_PROCESS_FUNCTION);
         }
-        Optional<String> processedResponse = executePostprocessFunction(scriptService, postProcessFunction, parameters, modelResponse);
+        Optional<String> processedResponse = executePostprocessFunction(scriptService, postProcessFunction, modelResponse);
 
         String response = processedResponse.orElse(modelResponse);
         if (parameters.get(RESPONSE_FILTER_FIELD) == null) {

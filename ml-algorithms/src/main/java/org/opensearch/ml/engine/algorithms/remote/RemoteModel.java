@@ -60,7 +60,7 @@ public class RemoteModel extends DLModel {
         try {
             Connector connector = model.getConnector().cloneConnector();
             connector.decrypt((credential) -> encryptor.decrypt(credential));
-            this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getName(), connector, Connector.class);
+            this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
             this.connectorExecutor.setClient((Client) params.get(CLIENT));

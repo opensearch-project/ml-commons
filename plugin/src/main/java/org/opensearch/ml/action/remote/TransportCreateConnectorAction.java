@@ -35,7 +35,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.template.APISchema;
-import org.opensearch.ml.common.connector.template.ConnectorState;
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -93,8 +92,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
         if (MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME.equals(mlCreateConnectorInput.getName())) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(
-                MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME,
-                ConnectorState.CREATED.name()
+                MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME
             );
             listener.onResponse(response);
             return;
@@ -117,7 +115,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 .credentialStr(toJson(mlCreateConnectorInput.getCredential()))
                 .predictAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema()))
                 .metadataAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema()))
-                .connectorState(ConnectorState.CREATED)
                 .createdTime(now)
                 .lastUpdateTime(now)
                 .build();
@@ -156,7 +153,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<IndexResponse> indexResponseListener = ActionListener.wrap(r -> {
                     log.info("Connector saved into index, result:{}, connector id: {}", r.getResult(), r.getId());
-                    MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.getId(), ConnectorState.CREATED.name());
+                    MLCreateConnectorResponse response = new MLCreateConnectorResponse(r.getId());
                     listener.onResponse(response);
                 }, listener::onFailure);
 

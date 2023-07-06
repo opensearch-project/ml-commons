@@ -30,6 +30,7 @@ import java.util.Locale;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
+import static org.opensearch.ml.common.connector.Connector.createConnector;
 
 @Getter
 public class MLModel implements ToXContentObject {
@@ -262,7 +263,7 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalString(modelGroupId);
         if (connector != null) {
             out.writeBoolean(true);
-            out.writeString(connector.getName());
+            out.writeString(connector.getProtocol());
             connector.writeTo(out);
         } else {
             out.writeBoolean(false);
@@ -474,11 +475,7 @@ public class MLModel implements ToXContentObject {
                     deployToAllNodes = parser.booleanValue();
                     break;
                 case CONNECTOR_FIELD:
-                    parser.nextToken();
-                    String connectorName = parser.currentName();
-                    parser.nextToken();
-                    connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
-                    parser.nextToken();
+                    connector = createConnector(parser);
                     break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();

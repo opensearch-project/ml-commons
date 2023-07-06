@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringSubstitutor;
@@ -16,12 +15,14 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.ConnectorNames.HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
@@ -36,26 +37,13 @@ public class HttpConnector extends AbstractConnector {
     public static final String BODY_TEMPLATE_FIELD = "body_template";
     public static final String RESPONSE_FILTER_FIELD = "response_filter";
     public static final String PARAMETERS_FIELD = "parameters";
-    public static final String PRE_PROCESS_FUNCTION_FIELD = "pre_process_function";
-    public static final String POST_PROCESS_FUNCTION_FIELD = "post_process_function";
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
 
-    @Getter
-    protected String name;
-    @Getter
-    protected String endpoint;
-
-    protected Map<String, String> headers;
-
-    @Getter
-    protected String bodyTemplate;
-
     //TODO: add RequestConfig like request time out,
 
-    public HttpConnector(String name, XContentParser parser) throws IOException {
-        this.name = name;
-        headers = new HashMap<>();
+    public HttpConnector(String protocol, XContentParser parser) throws IOException {
+        this.protocol = protocol;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -63,11 +51,17 @@ public class HttpConnector extends AbstractConnector {
             parser.nextToken();
 
             switch (fieldName) {
-                case HTTP_METHOD_FIELD:
-                    httpMethod = parser.text();
+                case NAME_FIELD:
+                    name = parser.text();
                     break;
-                case ENDPOINT_FIELD:
-                    endpoint = parser.text();
+                case VERSION_FIELD:
+                    version = parser.text();
+                    break;
+                case DESCRIPTION_FIELD:
+                    description = parser.text();
+                    break;
+                case PROTOCOL_FIELD:
+                    protocol = parser.text();
                     break;
                 case PARAMETERS_FIELD:
                     Map<String, Object> map = parser.map();
@@ -77,32 +71,34 @@ public class HttpConnector extends AbstractConnector {
                     credential = new HashMap<>();
                     credential.putAll(parser.mapStrings());
                     break;
-                case HEADERS_FIELD:
-                    headers.putAll(parser.mapStrings());
-                    break;
-                case BODY_TEMPLATE_FIELD:
-                    bodyTemplate = parser.text();
+                case ACTIONS_FIELD:
+                    actions = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        actions.add(ConnectorAction.parse(parser));
+                    }
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        if (endpoint == null) {
-            throw new IllegalArgumentException("wrong input");
-        }
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(this.name);
-        builder.startObject();
-        if (httpMethod != null) {
-            builder.field(HTTP_METHOD_FIELD, httpMethod);
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
         }
-        if (endpoint != null) {
-            builder.field(ENDPOINT_FIELD, endpoint);
+        if (version != null) {
+            builder.field(VERSION_FIELD, version);
+        }
+        if (description != null) {
+            builder.field(DESCRIPTION_FIELD, description);
+        }
+        if (protocol != null) {
+            builder.field(PROTOCOL_FIELD, protocol);
         }
         if (parameters != null) {
             builder.field(PARAMETERS_FIELD, parameters);
@@ -110,21 +106,18 @@ public class HttpConnector extends AbstractConnector {
         if (credential != null) {
             builder.field(CREDENTIAL_FIELD, credential);
         }
-        if (headers != null) {
-            builder.field(HEADERS_FIELD, headers);
+        if (actions != null) {
+            builder.field(ACTIONS_FIELD, actions);
         }
-        if (bodyTemplate != null) {
-            builder.field(BODY_TEMPLATE_FIELD, bodyTemplate);
-        }
-        builder.endObject();
         builder.endObject();
         return builder;
     }
 
     public HttpConnector(StreamInput input) throws IOException {
-        this.name = input.readString();
-        endpoint = input.readOptionalString();
-        httpMethod = input.readOptionalString();
+        this.protocol = input.readString();
+        this.name = input.readOptionalString();
+        this.version = input.readOptionalString();
+        this.description = input.readOptionalString();
         if (input.readBoolean()) {
             parameters = input.readMap(StreamInput::readString, StreamInput::readString);
         }
@@ -132,16 +125,20 @@ public class HttpConnector extends AbstractConnector {
             credential = input.readMap(StreamInput::readString, StreamInput::readString);
         }
         if (input.readBoolean()) {
-            headers = input.readMap(StreamInput::readString, StreamInput::readString);
+            actions = new ArrayList<>();
+            int size = input.readInt();
+            for (int i = 0; i < size; i++) {
+                actions.add(new ConnectorAction(input));
+            }
         }
-        bodyTemplate = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(getName());
-        out.writeOptionalString(getEndpoint());
-        out.writeOptionalString(httpMethod);
+        out.writeString(protocol);
+        out.writeOptionalString(name);
+        out.writeOptionalString(version);
+        out.writeOptionalString(description);
         if (parameters != null) {
             out.writeBoolean(true);
             out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
@@ -154,19 +151,22 @@ public class HttpConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
-        if (headers != null) {
+        if (actions != null) {
             out.writeBoolean(true);
-            out.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
+            out.writeInt(actions.size());
+            for (ConnectorAction action : actions) {
+                action.writeTo(out);
+            }
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalString(bodyTemplate);
     }
 
     @Override
     public  <T> T createPredictPayload(Map<String, String> parameters) {
-        if (bodyTemplate != null) {
-            String payload = bodyTemplate;
+        Optional<ConnectorAction> predictAction = findPredictAction();
+        if (predictAction.isPresent() && predictAction.get().getRequestBody() != null) {
+            String payload = predictAction.get().getRequestBody();
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
@@ -178,6 +178,13 @@ public class HttpConnector extends AbstractConnector {
         return (T) parameters.get("http_body");
     }
 
+    public Optional<ConnectorAction> findPredictAction() {
+        if (actions != null) {
+            return actions.stream().filter(a -> a.getActionType() == ConnectorAction.ActionType.PREDICT).findFirst();
+        }
+        return null;
+    }
+
     @Override
     public void decrypt(Function<String, String> function) {
         Map<String, String> decrypted = new HashMap<>();
@@ -185,6 +192,8 @@ public class HttpConnector extends AbstractConnector {
             decrypted.put(key, function.apply(credential.get(key)));
         }
         this.decryptedCredential = decrypted;
+        Optional<ConnectorAction> predictAction = findPredictAction();
+        Map<String, String> headers = predictAction.isPresent() ? predictAction.get().getHeaders() : null;
         this.decryptedHeaders = createPredictDecryptedHeaders(headers);
     }
 
@@ -213,10 +222,10 @@ public class HttpConnector extends AbstractConnector {
     }
 
     public String getPredictHttpMethod() {
-        return httpMethod;
+        return findPredictAction().get().getMethod();
     }
 
     public String getPredictEndpoint() {
-        return getEndpoint();
+        return findPredictAction().get().getUrl();
     }
 }

@@ -32,7 +32,7 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.connector.ConnectorNames;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -84,8 +84,8 @@ public class MLSearchHandler {
                 true,
                 null,
                 new String[] {
-                    MLModel.CONNECTOR_FIELD + "." + ConnectorNames.AWS + "." + HttpConnector.CREDENTIAL_FIELD,
-                    MLModel.CONNECTOR_FIELD + "." + ConnectorNames.HTTP + "." + HttpConnector.CREDENTIAL_FIELD }
+                    MLModel.CONNECTOR_FIELD + "." + ConnectorProtocols.AWS_SIGV4 + "." + HttpConnector.CREDENTIAL_FIELD,
+                    MLModel.CONNECTOR_FIELD + "." + ConnectorProtocols.HTTP + "." + HttpConnector.CREDENTIAL_FIELD }
             );
             request.source().fetchSource(fetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
