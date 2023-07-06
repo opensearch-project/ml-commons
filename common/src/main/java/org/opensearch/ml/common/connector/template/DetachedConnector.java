@@ -366,6 +366,10 @@ public class DetachedConnector extends AbstractConnector {
         return this.protocol;
     }
 
+    public void removeCredential() {
+        this.credentialStr = null;
+    }
+
     @Override
     public <T> T createPredictPayload(Map<String, String> parameters) {
         if (predictAPI != null) {

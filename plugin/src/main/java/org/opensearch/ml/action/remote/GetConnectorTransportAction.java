@@ -76,6 +76,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         DetachedConnector mlConnector = DetachedConnector.parse(parser);
+                        mlConnector.removeCredential();
                         if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                             actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                         } else {
