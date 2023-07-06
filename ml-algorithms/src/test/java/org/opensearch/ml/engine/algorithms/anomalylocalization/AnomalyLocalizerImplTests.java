@@ -38,8 +38,10 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.index.Index;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
@@ -438,19 +440,17 @@ public class AnomalyLocalizerImplTests {
                 new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
                 new HashMap<>(), roleSet,
                 Version.CURRENT);
-        Metadata metadata = new Metadata.Builder()
-                .indices(ImmutableMap
-                        .<String, IndexMetadata>builder()
-                        .put(indexName, IndexMetadata.builder("test")
-                                .settings(Settings.builder()
-                                        .put("index.number_of_shards", 1)
-                                        .put("index.number_of_replicas", 1)
-                                        .put("index.version.created", Version.CURRENT.id))
-                                .build())
-                        .build()).build();
+        IndexMetadata indexMetadata = IndexMetadata.builder("test")
+            .settings(Settings.builder()
+                .put("index.number_of_shards", 1)
+                .put("index.number_of_replicas", 1)
+                .put("index.version.created", Version.CURRENT.id)
+                .build()).build();
+        ImmutableOpenMap<String, IndexMetadata> index = ImmutableOpenMap.<String, IndexMetadata>builder().fPut(indexName, indexMetadata).build();
+        Metadata metadata = new Metadata.Builder().indices(index).build();
         return new ClusterState(new ClusterName(clusterName), 123l, "111111",
                 metadata, null, DiscoveryNodes.builder().add(node).build(),
-                null, Map.of(), 0, false);
+                null, ImmutableOpenMap.of(), 0, false);
     }
 }
 
