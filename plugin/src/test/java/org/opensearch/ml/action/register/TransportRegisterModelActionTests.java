@@ -299,11 +299,6 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
-            listener.onResponse(response);
-            return null;
-        }).when(mlModelManager).registerMLModel(any(), any());
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -363,11 +358,6 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), isA(ActionListener.class));
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
-        doAnswer(invocation -> {
-            ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
-            listener.onResponse(response);
-            return null;
-        }).when(mlModelManager).registerMLModel(any(), any());
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());

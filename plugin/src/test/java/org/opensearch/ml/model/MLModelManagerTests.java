@@ -451,6 +451,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
         mock_client_ThreadContext(client, threadPool, threadContext);
@@ -471,6 +472,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NullResponse(client);
         modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
@@ -490,6 +492,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_NotExist(client);
         modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
@@ -509,6 +512,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_threadpool(threadPool, taskExecutorService);
         setUpMock_GetModel(model);
@@ -537,6 +541,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ActionListener<String> listener = mock(ActionListener.class);
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext(client, threadPool, threadContext);
         mock_threadpool(threadPool, taskExecutorService);
         setUpMock_GetModelChunks(model);
@@ -571,16 +576,18 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             models[i] = "model" + i;
         }
         when(modelCacheHelper.getDeployedModels()).thenReturn(models);
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(models);
         ActionListener<String> listener = mock(ActionListener.class);
         modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, mlTask, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
-        assertEquals("Exceed max model per node limit", failure.getValue().getMessage());
+        assertEquals("Exceed max local model per node limit", failure.getValue().getMessage());
     }
 
     public void testDeployModel_ThreadPoolException() {
         when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
         when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
         ActionListener<String> listener = mock(ActionListener.class);
         FunctionName functionName = FunctionName.TEXT_EMBEDDING;
@@ -591,10 +598,12 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testDeployModel_FailedToRetrieveFirstModelChunks() {
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         testDeployModel_FailedToRetrieveModelChunks(false);
     }
 
     public void testDeployModel_FailedToRetrieveLastModelChunks() {
+        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         testDeployModel_FailedToRetrieveModelChunks(true);
     }
 
