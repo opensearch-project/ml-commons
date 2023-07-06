@@ -23,4 +23,10 @@ public interface Encryptor {
      */
     String decrypt(String encryptedText);
 
+    /**
+     * Set up the masterKey for dynamic updating
+     *
+     * @param masterKey masterKey to be set.
+     */
+    void setMasterKey(String masterKey);
 }

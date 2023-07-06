@@ -194,4 +194,8 @@ public class MLEngine {
     public String encrypt(String credential) {
         return encryptor.encrypt(credential);
     }
+
+    public void setMasterKey(String masterKey) {
+        encryptor.setMasterKey(masterKey);
+    }
 }
