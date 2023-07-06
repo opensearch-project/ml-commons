@@ -30,7 +30,10 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.ConnectorNames;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -42,6 +45,7 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import com.google.common.base.Throwables;
 
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 /**
  * Handle general get and search request in ml common.
@@ -76,6 +80,14 @@ public class MLSearchHandler {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            FetchSourceContext fetchSourceContext = new FetchSourceContext(
+                true,
+                null,
+                new String[] {
+                    MLModel.CONNECTOR_FIELD + "." + ConnectorNames.AWS_V1 + "." + HttpConnector.CREDENTIAL_FIELD,
+                    MLModel.CONNECTOR_FIELD + "." + ConnectorNames.HTTP_V1 + "." + HttpConnector.CREDENTIAL_FIELD }
+            );
+            request.source().fetchSource(fetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, listener);
             } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
