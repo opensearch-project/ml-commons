@@ -182,7 +182,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(clusterService.localNode()).thenReturn(node2);
         when(node2.getId()).thenReturn("node2Id");
 
-        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any(), isA(ActionListener.class));
+        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any());
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -303,7 +303,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlModelManager).registerMLModel(any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).registerMLModel(any(), any());
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -325,7 +325,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlModelManager).registerMLModel(any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).registerMLModel(any(), any());
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -367,7 +367,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
-        }).when(mlModelManager).registerMLModel(any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).registerMLModel(any(), any());
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());

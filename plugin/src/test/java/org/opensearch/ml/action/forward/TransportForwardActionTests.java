@@ -308,7 +308,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(listener).onResponse(response.capture());
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
-        verify(mlModelManager).registerMLModel(any(), any(), null);
+        verify(mlModelManager).registerMLModel(any(), any());
     }
 
     private MLTask createMlTask(MLTaskType mlTaskType) {

@@ -167,7 +167,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                     listener.onResponse(new MLForwardResponse("ok", null));
                     break;
                 case REGISTER_MODEL:
-                    mlModelManager.registerMLModel(registerModelInput, mlTask, null);
+                    mlModelManager.registerMLModel(registerModelInput, mlTask);
                     listener.onResponse(new MLForwardResponse("ok", null));
                     break;
                 default:
