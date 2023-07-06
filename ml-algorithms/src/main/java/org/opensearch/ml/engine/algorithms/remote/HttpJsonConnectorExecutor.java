@@ -14,6 +14,7 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
@@ -21,15 +22,12 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -53,20 +51,21 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     }
 
     @Override
-    public ModelTensorOutput executePredict(MLInput mlInput) {
-        List<ModelTensors> tensorOutputs = new ArrayList<>();
-        List<ModelTensor> modelTensors = new ArrayList<>();
-
+    public void invokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs, List<ModelTensor> modelTensors) {
         try {
+            RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, scriptService);
+
             Map<String, String> parameters = new HashMap<>();
             if (connector.getParameters() != null) {
                 parameters.putAll(connector.getParameters());
             }
-            RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, scriptService);
             if (inputData.getParameters() != null) {
                 parameters.putAll(inputData.getParameters());
             }
+
             String payload = connector.createPredictPayload(parameters);
+            connector.validatePayload(payload);
+
             AtomicReference<String> responseRef = new AtomicReference<>("");
 
             HttpUriRequest request;
@@ -92,7 +91,6 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             Map<String, ?> headers = connector.getDecryptedHeaders();
-
             boolean hasContentTypeHeader = false;
             for (String key : headers.keySet()) {
                 request.addHeader(key, (String)headers.get(key));
@@ -105,7 +103,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = MLHttpClientFactory.getCloseableHttpClient();
+                try (CloseableHttpClient httpClient = HttpClientBuilder.create().build();
                      CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
@@ -118,7 +116,6 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters, modelTensors);
             tensorOutputs.add(tensors);
-            return new ModelTensorOutput(tensorOutputs);
         } catch (Throwable e) {
             log.error("Fail to execute http connector", e);
             throw new MLException("Fail to execute http connector", e);
