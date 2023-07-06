@@ -108,7 +108,7 @@ public class MLModelAutoReDeployer {
 
     private void undeployModelsOnDataNodes() {
         List<String> dataNodeIds = new ArrayList<>();
-        clusterService.state().nodes().getDataNodes().forEach((key, value) -> dataNodeIds.add(value.getId()));
+        clusterService.state().nodes().getDataNodes().values().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
         if (dataNodeIds.size() > 0)
             triggerUndeployModelsOnDataNodes(dataNodeIds);
     }

@@ -34,6 +34,7 @@ import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -103,7 +104,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         Metadata metadata = mock(Metadata.class);
         when(metadata.hasIndex(anyString())).thenReturn(true);
-        ClusterState testState = new ClusterState(new ClusterName("mock"), 123l, "111111", metadata, null, null, null, Map.of(), 0, false);
+        ClusterState testState = new ClusterState(new ClusterName("mock"), 123l, "111111", metadata, null, null, null, ImmutableOpenMap.of(), 0, false);
         when(clusterService.state()).thenReturn(testState);
     }
 

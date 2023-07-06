@@ -30,6 +30,7 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.CommonValue;
@@ -129,7 +130,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             .add(mlNode1)
             .add(mlNode2)
             .build();
-        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
+        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, ImmutableOpenMap.of(), 0, false);
 
         when(clusterService.state()).thenReturn(clusterState);
         discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -158,7 +159,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
         mockSettings(false, nonExistingNodeName);
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(clusterManagerNode).add(dataNode1).add(dataNode2).add(warmDataNode1).build();
-        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
+        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, ImmutableOpenMap.of(), 0, false);
         when(clusterService.state()).thenReturn(clusterState);
 
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes();

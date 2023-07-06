@@ -35,6 +35,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.collect.ImmutableOpenMap;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
@@ -82,7 +83,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
         Set<DiscoveryNodeRole> mlRoleSet = ImmutableSet.of(ML_ROLE);
         mlNode = new DiscoveryNode("mlNode", buildNewFakeTransportAddress(), new HashMap<>(), mlRoleSet, Version.CURRENT);
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(dataNode1).add(dataNode2).build();
-        testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
+        testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, ImmutableOpenMap.of(), 0, false);
         when(clusterService.state()).thenReturn(testState);
 
         doAnswer(invocation -> {
@@ -145,7 +146,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
     @Ignore
     public void testGetEligibleNodes_MlAndDataNodes() {
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(dataNode1).add(dataNode2).add(mlNode).build();
-        testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
+        testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, ImmutableOpenMap.of(), 0, false);
         when(clusterService.state()).thenReturn(testState);
 
         DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
