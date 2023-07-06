@@ -110,7 +110,7 @@ public final class MLCommonsSettings {
         .simpleString("plugins.ml_commons.encryption.master_key", "0000000000000000", Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.connector_access_control_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.connector_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<String> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .simpleString("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$", Setting.Property.NodeScope, Setting.Property.Dynamic);
