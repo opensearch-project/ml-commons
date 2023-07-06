@@ -50,9 +50,8 @@ public class DetachedConnector extends AbstractConnector {
     public static final String CONNECTOR_PROTOCOL_FIELD = "protocol";
     public static final String CONNECTOR_PARAMETERS_FIELD = "parameters";
     public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
-    public static final String PREDICT_API_SCHEMA_FIELD = "predict_API";
-    public static final String METADATA_API_SCHEMA_FIELD = "metadata_API";
-    public static final String CONNECTOR_STATE_FIELD = "connector_state";
+    public static final String PREDICT_API_SCHEMA_FIELD = "predict";
+    public static final String METADATA_API_SCHEMA_FIELD = "action";
     public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
@@ -200,9 +199,6 @@ public class DetachedConnector extends AbstractConnector {
         if (metadataAPI != null) {
             builder.field(METADATA_API_SCHEMA_FIELD, metadataAPI);
         }
-        if (connectorState != null) {
-            builder.field(CONNECTOR_STATE_FIELD, connectorState);
-        }
         if (backendRoles != null) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
@@ -267,9 +263,6 @@ public class DetachedConnector extends AbstractConnector {
                     break;
                 case METADATA_API_SCHEMA_FIELD:
                     metadataAPI = parser.text();
-                    break;
-                case CONNECTOR_STATE_FIELD:
-                    connectorState = ConnectorState.from(parser.text());
                     break;
                 case BACKEND_ROLES_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
