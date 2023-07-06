@@ -301,7 +301,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         doThrow(new MLLimitExceededException(error)).when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage(error);
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
@@ -312,7 +312,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
@@ -322,7 +322,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
         mock_MLIndicesHandler_initModelIndex_failure(mlIndicesHandler);
 
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
         verify(client, never()).index(any(), any());
@@ -336,7 +336,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
         mock_client_index_failure(client);
 
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
@@ -352,7 +352,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_client_index_ModelChunkFailure(client, modelId);
         setUpMock_DownloadModelFile(createTempChunkFiles(), 1000L);
 
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(2)).index(any(), any());
         verify(modelHelper).downloadAndSplit(any(), any(), any(), any(), any(), any(), any());
@@ -366,7 +366,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_client_index(client, modelId);
         setUpMock_DownloadModelFileFailure();
 
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
@@ -382,7 +382,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         String[] newChunks = createTempChunkFiles();
         setUpMock_DownloadModelFile(newChunks, 1000L);
 
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
@@ -400,7 +400,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_client_update(client);
 
         MLRegisterModelInput mlRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
-        modelManager.registerMLModel(mlRegisterModelInput, mlTask, null);
+        modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
@@ -419,7 +419,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_client_update_failure(client);
 
         MLRegisterModelInput mlRegisterModelInput = registerModelInput.toBuilder().deployModel(true).build();
-        modelManager.registerMLModel(mlRegisterModelInput, mlTask, null);
+        modelManager.registerMLModel(mlRegisterModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(3)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
@@ -435,7 +435,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         String[] newChunks = createTempChunkFiles();
         setUpMock_DownloadModelFile(newChunks, 10 * 1024 * 1024 * 1024L);
 
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client, times(1)).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any());
@@ -443,7 +443,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testRegisterModel_ClientFailedToGetThreadPool() {
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
-        modelManager.registerMLModel(registerModelInput, mlTask, null);
+        modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler, never()).initModelIndexIfAbsent(any());
     }
 
