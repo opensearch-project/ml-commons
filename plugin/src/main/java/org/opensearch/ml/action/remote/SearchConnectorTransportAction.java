@@ -15,10 +15,14 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorNames;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -52,6 +56,12 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            FetchSourceContext fetchSourceContext = new FetchSourceContext(
+                true,
+                null,
+                new String[] { HttpConnector.CREDENTIAL_FIELD }
+            );
+            request.source().fetchSource(fetchSourceContext);
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 client.search(request, actionListener);
             } else {
