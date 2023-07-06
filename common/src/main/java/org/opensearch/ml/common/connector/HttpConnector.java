@@ -18,16 +18,16 @@ import org.opensearch.core.xcontent.XContentParser;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Function;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.ConnectorNames.HTTP_V1;
+import static org.opensearch.ml.common.connector.ConnectorNames.HTTP;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 @Log4j2
 @NoArgsConstructor
-@org.opensearch.ml.common.annotation.Connector(HTTP_V1)
+@org.opensearch.ml.common.annotation.Connector(HTTP)
 public class HttpConnector extends AbstractConnector {
     public static final String HTTP_METHOD_FIELD = "http_method";
     public static final String ENDPOINT_FIELD = "endpoint";
@@ -38,8 +38,6 @@ public class HttpConnector extends AbstractConnector {
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String PRE_PROCESS_FUNCTION_FIELD = "pre_process_function";
     public static final String POST_PROCESS_FUNCTION_FIELD = "post_process_function";
-    public static final String ACCESS_KEY_FIELD = "access_key";
-    public static final String SECRET_KEY_FIELD = "secret_key";
     public static final String SERVICE_NAME_FIELD = "service_name";
     public static final String REGION_FIELD = "region";
 
@@ -72,7 +70,8 @@ public class HttpConnector extends AbstractConnector {
                     endpoint = parser.text();
                     break;
                 case PARAMETERS_FIELD:
-                    parameters = parser.mapStrings();
+                    Map<String, Object> map = parser.map();
+                    parameters = getParameterMap(map);
                     break;
                 case CREDENTIAL_FIELD:
                     credential = new HashMap<>();
@@ -211,31 +210,6 @@ public class HttpConnector extends AbstractConnector {
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;
-    }
-
-    public boolean hasAwsCredential() {
-        return this.decryptedCredential.containsKey(ACCESS_KEY_FIELD) && this.decryptedCredential.containsKey(SECRET_KEY_FIELD);
-    }
-
-    public String getAccessKey() {
-        return decryptedCredential.get(ACCESS_KEY_FIELD);
-    }
-
-    public String getSecretKey() {
-        return decryptedCredential.get(SECRET_KEY_FIELD);
-    }
-    public String getServiceName() {
-        if (parameters == null) {
-            return decryptedCredential.get(SERVICE_NAME_FIELD);
-        }
-        return Optional.ofNullable(parameters.get(SERVICE_NAME_FIELD)).orElse(decryptedCredential.get(SERVICE_NAME_FIELD));
-    }
-
-    public String getRegion() {
-        if (parameters == null) {
-            return decryptedCredential.get(REGION_FIELD);
-        }
-        return Optional.ofNullable(parameters.get(REGION_FIELD)).orElse(decryptedCredential.get(REGION_FIELD));
     }
 
     public String getPredictHttpMethod() {

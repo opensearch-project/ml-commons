@@ -36,12 +36,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.opensearch.ml.common.connector.ConnectorNames.HTTP_V1;
+import static org.opensearch.ml.common.connector.ConnectorNames.HTTP;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 @Log4j2
-@ConnectorExecutor(HTTP_V1)
+@ConnectorExecutor(HTTP)
 public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
     private AbstractConnector connector;

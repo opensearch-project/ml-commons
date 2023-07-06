@@ -18,10 +18,17 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 public abstract class AbstractConnector implements Connector {
+    public static final String ACCESS_KEY_FIELD = "access_key";
+    public static final String SECRET_KEY_FIELD = "secret_key";
+    public static final String SESSION_TOKEN_FIELD = "session_token";
+
     protected String httpMethod;
     @Getter
     protected Map<String, String> parameters;
@@ -79,11 +86,29 @@ public abstract class AbstractConnector implements Connector {
         }
     }
 
-    abstract public String getAccessKey();
+    public String getAccessKey() {
+        return decryptedCredential.get(ACCESS_KEY_FIELD);
+    }
 
-    abstract public String getSecretKey();
+    public String getSecretKey() {
+        return decryptedCredential.get(SECRET_KEY_FIELD);
+    }
 
-    abstract public String getServiceName();
+    public String getSessionToken() {
+        return decryptedCredential.get(SESSION_TOKEN_FIELD);
+    }
 
-    abstract public String getRegion();
+    public String getServiceName() {
+        if (parameters == null) {
+            return decryptedCredential.get(SERVICE_NAME_FIELD);
+        }
+        return Optional.ofNullable(parameters.get(SERVICE_NAME_FIELD)).orElse(decryptedCredential.get(SERVICE_NAME_FIELD));
+    }
+
+    public String getRegion() {
+        if (parameters == null) {
+            return decryptedCredential.get(REGION_FIELD);
+        }
+        return Optional.ofNullable(parameters.get(REGION_FIELD)).orElse(decryptedCredential.get(REGION_FIELD));
+    }
 }

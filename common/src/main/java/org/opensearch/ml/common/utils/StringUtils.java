@@ -14,6 +14,9 @@ import org.json.JSONObject;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,5 +70,25 @@ public class StringUtils {
 
     public static String toJson(Map<String, String> map) {
         return new JSONObject(map).toString();
+    }
+
+    public static Map<String, String> getParameterMap(Map<String, ?> parameterObjs) {
+        Map<String, String> parameters = new HashMap<>();
+        for (String key : parameterObjs.keySet()) {
+            Object value = parameterObjs.get(key);
+            try {
+                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                    if (value instanceof String) {
+                        parameters.put(key, (String)value);
+                    } else {
+                        parameters.put(key, gson.toJson(value));
+                    }
+                    return null;
+                });
+            } catch (PrivilegedActionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return parameters;
     }
 }

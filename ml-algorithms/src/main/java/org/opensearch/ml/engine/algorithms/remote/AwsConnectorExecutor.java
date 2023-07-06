@@ -40,13 +40,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.opensearch.ml.common.connector.ConnectorNames.AWS_V1;
+import static org.opensearch.ml.common.connector.ConnectorNames.AWS;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 @Log4j2
-@ConnectorExecutor(AWS_V1)
+@ConnectorExecutor(AWS)
 public class AwsConnectorExecutor implements RemoteConnectorExecutor{
 
     private AbstractConnector connector;
