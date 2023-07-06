@@ -43,8 +43,10 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -56,6 +58,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final MLEngine mlEngine;
+    private final MLModelManager mlModelManager;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     private String trustedConnectorEndpointsRegex;
@@ -69,13 +72,15 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         MLEngine mlEngine,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         Settings settings,
-        ClusterService clusterService
+        ClusterService clusterService,
+        MLModelManager mlModelManager
     ) {
         super(MLCreateConnectorAction.NAME, transportService, actionFilters, MLCreateConnectorRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
         this.mlEngine = mlEngine;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlModelManager = mlModelManager;
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -129,13 +134,18 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 connector.setAccess(mlCreateConnectorInput.getAccess());
                 indexConnector(connector, listener);
             }
-        } catch (Exception e) {
+        } catch (MetaDataException e) {
+            log.error("The masterKey for credential encryption is missing in connector creation");
+            listener.onFailure(e);
+        }
+        catch (Exception e) {
             log.error("Failed to create connector " + connectorName, e);
             listener.onFailure(e);
         }
     }
 
     private void indexConnector(DetachedConnector connector, ActionListener<MLCreateConnectorResponse> listener) {
+        mlModelManager.checkMasterKey(mlEngine);
         connector.encrypt(mlEngine::encrypt);
         log.info("connector created, indexing into the connector system index");
         mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {

@@ -37,6 +37,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -106,6 +107,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.profile.MLModelProfile;
@@ -153,6 +155,7 @@ public class MLModelManager {
     private volatile Integer maxModelPerNode;
     private volatile Integer maxRegisterTasksPerNode;
     private volatile Integer maxDeployTasksPerNode;
+    private volatile String masterKey;
 
     public static final ImmutableSet MODEL_DONE_STATES = ImmutableSet
         .of(
@@ -206,6 +209,11 @@ public class MLModelManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE, it -> maxDeployTasksPerNode = it);
+
+        this.masterKey = ML_COMMONS_MASTER_SECRET_KEY.get(settings);
+        clusterService
+                .getClusterSettings()
+                .addSettingsUpdateConsumer(ML_COMMONS_MASTER_SECRET_KEY, it -> masterKey = it);
     }
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
@@ -824,6 +832,7 @@ public class MLModelManager {
     }
 
     private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
+        checkMasterKey(mlEngine);
         Predictable predictable = mlEngine.deploy(mlModel, params);
         modelCacheHelper.setPredictor(modelId, predictable);
         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
@@ -1155,4 +1164,15 @@ public class MLModelManager {
         return modelCacheHelper.isModelRunningOnNode(modelId);
     }
 
+    public void checkMasterKey(MLEngine mlEngine) {
+        if (masterKey == "0000000000000000" || masterKey == null) {
+            throw new MetaDataException("Please provide a masterKey for credential encryption! Example: PUT /_cluster/settings\n" +
+                    "{\n" +
+                    "  \"persistent\" : {\n" +
+                    "    \"plugins.ml_commons.encryption.master_key\" : \"1234567x\"  \n" +
+                    "  }\n" +
+                    "}");
+        }
+        mlEngine.setMasterKey(masterKey);
+    }
 }
