@@ -84,8 +84,7 @@ public class MLSearchHandler {
                 true,
                 null,
                 new String[] {
-                    MLModel.CONNECTOR_FIELD + "." + ConnectorProtocols.AWS_SIGV4 + "." + HttpConnector.CREDENTIAL_FIELD,
-                    MLModel.CONNECTOR_FIELD + "." + ConnectorProtocols.HTTP + "." + HttpConnector.CREDENTIAL_FIELD }
+                    MLModel.CONNECTOR_FIELD + "." + HttpConnector.CREDENTIAL_FIELD}
             );
             request.source().fetchSource(fetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
