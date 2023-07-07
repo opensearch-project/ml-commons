@@ -127,6 +127,21 @@ public class HttpConnector extends AbstractConnector {
         if (actions != null) {
             builder.field(ACTIONS_FIELD, actions);
         }
+        if (backendRoles != null) {
+            builder.field(BACKEND_ROLES_FIELD, backendRoles);
+        }
+        if (owner != null) {
+            builder.field(OWNER_FIELD, owner);
+        }
+        if (access != null) {
+            builder.field(ACCESS_FIELD, access.getValue());
+        }
+        if (createdTime != null) {
+            builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
+        }
+        if (lastUpdateTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
         builder.endObject();
         return builder;
     }
