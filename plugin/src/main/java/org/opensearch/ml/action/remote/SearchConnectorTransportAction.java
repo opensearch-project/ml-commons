@@ -15,6 +15,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -25,6 +26,10 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 import lombok.extern.log4j.Log4j2;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Log4j2
 public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
@@ -54,12 +59,15 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            FetchSourceContext fetchSourceContext = new FetchSourceContext(
-                true,
-                null,
-                new String[] { HttpConnector.CREDENTIAL_FIELD }
+            FetchSourceContext fetchSourceContext = request.source().fetchSource();
+            List<String> excludes = Arrays.stream(fetchSourceContext.excludes()).collect(Collectors.toList());
+            excludes.add(HttpConnector.CREDENTIAL_FIELD);
+            FetchSourceContext rebuiltFetchSourceContext = new FetchSourceContext(
+                fetchSourceContext.fetchSource(),
+                fetchSourceContext.includes(),
+                excludes.toArray(new String[0])
             );
-            request.source().fetchSource(fetchSourceContext);
+            request.source().fetchSource(rebuiltFetchSourceContext);
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 client.search(request, actionListener);
             } else {

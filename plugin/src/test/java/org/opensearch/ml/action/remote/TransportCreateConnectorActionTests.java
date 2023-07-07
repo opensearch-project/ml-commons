@@ -12,7 +12,6 @@ import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,8 +33,6 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
-import org.opensearch.ml.common.connector.template.APISchema;
-import org.opensearch.ml.common.connector.template.ConnectorTemplate;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
@@ -92,13 +89,21 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private Settings settings;
 
-    private static final String trustedConnectorEndpointsRegex = "^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$";
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of(
+        "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+        "^https://api\\.openai\\.com/.*$",
+        "^https://api\\.cohere\\.ai/.*$"
+    );
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().put(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), trustedConnectorEndpointsRegex).build();
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED);
+        settings = Settings.builder().putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES).build();
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
+        );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         action = new TransportCreateConnectorAction(
             transportService,
@@ -120,7 +125,15 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         List<ConnectorAction> actions = new ArrayList<>();
-        actions.add(ConnectorAction.builder().actionType(ConnectorAction.ActionType.PREDICT).method("POST").url("https://${parameters.endpoint}/v1/completions").build());
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://${parameters.endpoint}/v1/completions")
+                    .build()
+            );
         when(input.getActions()).thenReturn(actions);
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com");
@@ -420,17 +433,25 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_URL_notMatchingExpression_exception() {
         List<ConnectorAction> actions = new ArrayList<>();
-        actions.add(ConnectorAction.builder().actionType(ConnectorAction.ActionType.PREDICT).method("POST").url("https://${parameters.endpoint}/v1/completions").build());
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://${parameters.endpoint}/v1/completions")
+                    .build()
+            );
 
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
-                .builder()
-                .name(randomAlphaOfLength(5))
-                .description(randomAlphaOfLength(10))
-                .version("1")
-                .protocol(ConnectorProtocols.HTTP)
-                .parameters(ImmutableMap.of("k1", "v1", "k2", "v2"))
-                .actions(actions)
-                .build();
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .parameters(ImmutableMap.of("k1", "v1", "k2", "v2"))
+            .actions(actions)
+            .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
@@ -449,6 +470,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Connector URL is not matching the trusted connector endpoint regex, regex is: ^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$,URL is: https://${parameters.endpoint}/v1/completions", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Connector URL is not matching the trusted connector endpoint regex, regex is: ^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$,URL is: https://${parameters.endpoint}/v1/completions",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 }

@@ -123,24 +123,25 @@ public interface Connector extends ToXContentObject, Writeable {
         }
     }
 
-    default void validateConnectorURL(String urlRegex) {
+    default void validateConnectorURL(List<String> urlRegexes) {
         if (getActions() == null) {
             throw new IllegalArgumentException("No actions configured for this connector");
         }
         Map<String, String> parameters = getParameters();
-        List<ConnectorAction> actions = getActions();
-        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-        Pattern pattern = Pattern.compile(urlRegex);
-        for (ConnectorAction action : actions) {
+        for (ConnectorAction action : getActions()) {
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             String url = substitutor.replace(action.getUrl());
-            Matcher matcher = pattern.matcher(url);
-            if (!matcher.matches()) {
-                throw new IllegalArgumentException(
-                        "Connector URL is not matching the trusted connector endpoint regex, regex is: "
-                                + urlRegex
-                                + ",URL is: "
-                                + url
-                );
+            boolean hasMatchedUrl = false;
+            for (String urlRegex : urlRegexes) {
+                Pattern pattern = Pattern.compile(urlRegex);
+                Matcher matcher = pattern.matcher(url);
+                if (matcher.matches()) {
+                    hasMatchedUrl = true;
+                    break;
+                }
+            }
+            if (!hasMatchedUrl) {
+                throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex, URL is: " + url);
             }
         }
     }

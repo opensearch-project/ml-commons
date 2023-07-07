@@ -14,6 +14,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -82,7 +83,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     MLStats mlStats;
     volatile String trustedUrlRegex;
 
-    private String trustedConnectorEndpointsRegex;
+    private List<String> trustedConnectorEndpointsRegex;
 
     ModelAccessControlHelper modelAccessControlHelper;
 

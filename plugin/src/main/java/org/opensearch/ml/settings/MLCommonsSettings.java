@@ -5,7 +5,12 @@
 
 package org.opensearch.ml.settings;
 
+import java.util.List;
+import java.util.function.Function;
+
 import org.opensearch.common.settings.Setting;
+
+import com.google.common.collect.ImmutableList;
 
 public final class MLCommonsSettings {
 
@@ -112,7 +117,18 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.connector_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<String> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
-        .simpleString("plugins.ml_commons.trusted_connector_endpoints_regex", "^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$", Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
+        .listSetting(
+            "plugins.ml_commons.trusted_connector_endpoints_regex",
+            ImmutableList
+                .of(
+                    "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+                    "^https://api\\.openai\\.com/.*$",
+                    "^https://api\\.cohere\\.ai/.*$"
+                ),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 
 }

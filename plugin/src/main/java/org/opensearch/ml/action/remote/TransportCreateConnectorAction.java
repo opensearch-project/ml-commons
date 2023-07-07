@@ -9,6 +9,8 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.util.HashSet;
+import java.util.List;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -53,7 +55,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final MLModelManager mlModelManager;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
-    private volatile String trustedConnectorEndpointsRegex;
+    private volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -84,9 +86,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
         if (MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME.equals(mlCreateConnectorInput.getName())) {
-            MLCreateConnectorResponse response = new MLCreateConnectorResponse(
-                MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME
-            );
+            MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);
             return;
         }
@@ -158,8 +158,13 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
         AccessMode accessMode = input.getAccess();
         if (accessMode == null) {
-            input.setAccess(AccessMode.RESTRICTED);
-            accessMode = AccessMode.RESTRICTED;
+            if (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles)) {
+                input.setAccess(AccessMode.RESTRICTED);
+                accessMode = AccessMode.RESTRICTED;
+            } else {
+                input.setAccess(AccessMode.PRIVATE);
+                accessMode = AccessMode.PRIVATE;
+            }
         }
         if (AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode) {
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles)) {
