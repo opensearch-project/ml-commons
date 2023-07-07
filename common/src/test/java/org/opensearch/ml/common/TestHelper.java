@@ -34,7 +34,7 @@ public class TestHelper {
         if (wrapWithObject) {
             builder.endObject();
         }
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = Strings.toString(builder);
         testParseFromString(obj, jsonStr, function);
     }
 
