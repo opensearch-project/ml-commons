@@ -83,6 +83,9 @@ public interface Connector extends ToXContentObject, Writeable {
         try (XContentParser connectorParser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonStr)) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, connectorParser.nextToken(), parser);
             String connectorProtocol = (String)connectorMap.get("protocol");
+            if (connectorProtocol == null) {
+                throw new IllegalArgumentException("connector protocol is null");
+            }
             connector = MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, connectorParser}, String.class, XContentParser.class);
         }
         return connector;

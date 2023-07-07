@@ -30,11 +30,7 @@ import static org.opensearch.ml.common.utils.StringUtils.isJson;
 @NoArgsConstructor
 @org.opensearch.ml.common.annotation.Connector(HTTP)
 public class HttpConnector extends AbstractConnector {
-    public static final String HTTP_METHOD_FIELD = "http_method";
-    public static final String ENDPOINT_FIELD = "endpoint";
     public static final String CREDENTIAL_FIELD = "credential";
-    public static final String HEADERS_FIELD = "headers";
-    public static final String BODY_TEMPLATE_FIELD = "body_template";
     public static final String RESPONSE_FILTER_FIELD = "response_filter";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String SERVICE_NAME_FIELD = "service_name";

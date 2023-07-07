@@ -56,6 +56,7 @@ public class DetachedConnector extends AbstractConnector {
     private String name;
     private String version;
     private String description;
+    @Getter
     private String protocol;
     private String parameterStr;
     private String credentialStr;
