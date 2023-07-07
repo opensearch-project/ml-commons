@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
@@ -32,7 +33,6 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
@@ -41,11 +41,11 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import com.google.common.base.Throwables;
 
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 /**
  * Handle general get and search request in ml common.
@@ -80,13 +80,15 @@ public class MLSearchHandler {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            FetchSourceContext fetchSourceContext = new FetchSourceContext(
-                true,
-                null,
-                new String[] {
-                    MLModel.CONNECTOR_FIELD + "." + HttpConnector.CREDENTIAL_FIELD}
+            FetchSourceContext fetchSourceContext = request.source().fetchSource();
+            List<String> excludes = Arrays.stream(fetchSourceContext.excludes()).collect(Collectors.toList());
+            excludes.add(MLModel.CONNECTOR_FIELD + "." + HttpConnector.CREDENTIAL_FIELD);
+            FetchSourceContext rebuiltFetchSourceContext = new FetchSourceContext(
+                fetchSourceContext.fetchSource(),
+                fetchSourceContext.includes(),
+                excludes.toArray(new String[0])
             );
-            request.source().fetchSource(fetchSourceContext);
+            request.source().fetchSource(rebuiltFetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, listener);
             } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {

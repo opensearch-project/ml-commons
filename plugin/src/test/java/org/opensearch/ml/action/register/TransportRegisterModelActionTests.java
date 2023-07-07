@@ -18,6 +18,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
+import com.google.common.collect.ImmutableList;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -60,6 +61,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import java.util.List;
 
 public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Rule
@@ -124,7 +127,11 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
 
-    private static final String TRUSTED_CONNECTOR_ENDPOINTS_REGEX = "^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$";
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of(
+        "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+        "^https://api\\.openai\\.com/.*$",
+        "^https://api\\.cohere\\.ai/.*$"
+    );
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
@@ -135,9 +142,17 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex).put(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEX).build();
+        settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
         threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX, ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX);
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_URL_REGEX,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+        );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         transportRegisterModelAction = new TransportRegisterModelAction(
             transportService,
@@ -324,7 +339,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don't have permission to use the connector provided, connector id: mockConnectorId", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "You don't have permission to use the connector provided, connector id: mockConnectorId",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_execute_registerRemoteModel_withConnectorId_connectorValidationException() {
@@ -343,6 +361,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
+
     public void test_execute_registerRemoteModel_withInternalConnector_success() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -372,7 +391,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You must provide connector content when creating a remote model without connector id!", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "You must provide connector content when creating a remote model without connector id!",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_execute_registerRemoteModel_withInternalConnector_predictEndpointIsNull() {
@@ -386,7 +408,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Connector endpoint is required when creating a remote model without connector id!", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Connector endpoint is required when creating a remote model without connector id!",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_execute_registerRemoteModel_withInternalConnector_connectorEndpoint_notMatchingRegex() {
@@ -406,7 +431,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Not allowed URL in connector for remote model, URL is: https://api.openai1.com, trusted connector endpoint regex is: ^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Not allowed URL in connector for remote model, URL is: https://api.openai1.com, trusted connector endpoint regex is: ^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     private MLRegisterModelRequest prepareRequest() {
