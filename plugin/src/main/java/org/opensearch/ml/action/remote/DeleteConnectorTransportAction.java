@@ -62,22 +62,27 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         DeleteRequest deleteRequest = new DeleteRequest(ML_CONNECTOR_INDEX, connectorId);
         connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(x -> {
             if (Boolean.TRUE.equals(x)) {
-                SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
-                SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-                sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
-                searchRequest.source(sourceBuilder);
-                client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-                    SearchHit[] searchHits = searchResponse.getHits().getHits();
-                    if (searchHits.length == 0) {
-                        deleteConnector(deleteRequest, connectorId, actionListener);
-                    } else {
-                        log.error(searchHits.length + " models are still using this connector, please delete or update the models first!");
-                        actionListener.onFailure(new MLValidationException(searchHits.length + " models are still using this connector, please delete or update the models first!"));
-                    }
-                }, e -> {
-                    log.error("Failed to delete ML connector: " + connectorId, e);
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
+                    SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+                    sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+                    searchRequest.source(sourceBuilder);
+                    client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+                        SearchHit[] searchHits = searchResponse.getHits().getHits();
+                        if (searchHits.length == 0) {
+                            deleteConnector(deleteRequest, connectorId, actionListener);
+                        } else {
+                            log.error(searchHits.length + " models are still using this connector, please delete or update the models first!");
+                            actionListener.onFailure(new MLValidationException(searchHits.length + " models are still using this connector, please delete or update the models first!"));
+                        }
+                    }, e -> {
+                        log.error("Failed to delete ML connector: " + connectorId, e);
+                        actionListener.onFailure(e);
+                    }));
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
                     actionListener.onFailure(e);
-                }));
+                }
             } else {
                 actionListener.onFailure(new MLValidationException("You are not allowed to delete this connector"));
             }
