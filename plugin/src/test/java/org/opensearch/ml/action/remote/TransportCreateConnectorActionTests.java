@@ -8,10 +8,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -30,6 +32,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.template.APISchema;
 import org.opensearch.ml.common.connector.template.ConnectorTemplate;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -115,16 +119,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        ConnectorTemplate template = mock(ConnectorTemplate.class);
-        when(template.getPredictSchema()).thenReturn(mock(APISchema.class));
-        when(template.getMetadataSchema()).thenReturn(mock(APISchema.class));
-        when(input.getConnectorTemplate()).thenReturn(template);
-
-        APISchema predictSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/completions", ImmutableMap.of(), null, null, null);
-        APISchema metadataSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/models/{model}", ImmutableMap.of(), null, null, null);
-
-        when(template.getPredictSchema()).thenReturn(predictSchema);
-        when(template.getMetadataSchema()).thenReturn(metadataSchema);
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions.add(ConnectorAction.builder().actionType(ConnectorAction.ActionType.PREDICT).method("POST").url("https://${parameters.endpoint}/v1/completions").build());
+        when(input.getActions()).thenReturn(actions);
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com");
         when(input.getParameters()).thenReturn(parameters);
@@ -422,19 +419,19 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void test_execute_URL_notMatchingExpression_exception() {
-        MLCreateConnectorInput mlCreateConnectorInput = mock(MLCreateConnectorInput.class);
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions.add(ConnectorAction.builder().actionType(ConnectorAction.ActionType.PREDICT).method("POST").url("https://${parameters.endpoint}/v1/completions").build());
+
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+                .builder()
+                .name(randomAlphaOfLength(5))
+                .description(randomAlphaOfLength(10))
+                .version("1")
+                .protocol(ConnectorProtocols.HTTP)
+                .parameters(ImmutableMap.of("k1", "v1", "k2", "v2"))
+                .actions(actions)
+                .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
-
-        ConnectorTemplate template = mock(ConnectorTemplate.class);
-        when(template.getPredictSchema()).thenReturn(mock(APISchema.class));
-        when(template.getMetadataSchema()).thenReturn(mock(APISchema.class));
-        when(mlCreateConnectorInput.getConnectorTemplate()).thenReturn(template);
-
-        APISchema predictSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/completions", ImmutableMap.of(), null, null, null);
-        APISchema metadataSchema = new APISchema("POST", "https://${parameters.endpoint}/v1/models/{model}", ImmutableMap.of(), null, null, null);
-
-        when(template.getPredictSchema()).thenReturn(predictSchema);
-        when(template.getMetadataSchema()).thenReturn(metadataSchema);
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
         when(input.getParameters()).thenReturn(parameters);

@@ -14,7 +14,7 @@ import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
+import org.opensearch.ml.common.connector.Connector;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -22,16 +22,16 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 public class MLConnectorGetResponse extends ActionResponse implements ToXContentObject {
-    DetachedConnector mlConnector;
+    Connector mlConnector;
 
     @Builder
-    public MLConnectorGetResponse(DetachedConnector mlConnector) {
+    public MLConnectorGetResponse(Connector mlConnector) {
         this.mlConnector = mlConnector;
     }
 
     public MLConnectorGetResponse(StreamInput in) throws IOException {
         super(in);
-        mlConnector = mlConnector.fromStream(in);
+        mlConnector = Connector.fromStream(in);
     }
 
     @Override

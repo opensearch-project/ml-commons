@@ -28,7 +28,8 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
+import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -48,7 +49,7 @@ public class ConnectorAccessControlHelper {
             .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED, it -> connectorAccessControlEnabled = it);
     }
 
-    public boolean hasPermission(User user, DetachedConnector connector) {
+    public boolean hasPermission(User user, Connector connector) {
         return accessControlNotEnabled(user)
             || isAdmin(user)
             || previouslyPublicConnector(connector)
@@ -73,8 +74,8 @@ public class ConnectorAccessControlHelper {
                             .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
                     ) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        DetachedConnector detachedConnector = DetachedConnector.parse(parser);
-                        boolean hasPermission = hasPermission(user, detachedConnector);
+                        Connector connector = Connector.createConnector(parser);
+                        boolean hasPermission = hasPermission(user, connector);
                         wrappedListener.onResponse(hasPermission);
                     } catch (Exception e) {
                         log.error("Failed to parse connector:" + connectorId);
@@ -123,41 +124,41 @@ public class ConnectorAccessControlHelper {
         return owner.getName().equals(user.getName());
     }
 
-    private boolean isUserHasBackendRole(User user, DetachedConnector detachedConnector) {
-        AccessMode modelAccessMode = detachedConnector.getAccess();
+    private boolean isUserHasBackendRole(User user, Connector connector) {
+        AccessMode modelAccessMode = connector.getAccess();
         return AccessMode.RESTRICTED == modelAccessMode
             && (user.getBackendRoles() != null
-                && detachedConnector.getBackendRoles() != null
-                && detachedConnector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x)));
+                && connector.getBackendRoles() != null
+                && connector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x)));
     }
 
-    private boolean previouslyPublicConnector(DetachedConnector detachedConnector) {
-        return detachedConnector.getOwner() == null;
+    private boolean previouslyPublicConnector(Connector connector) {
+        return connector.getOwner() == null;
     }
 
-    private boolean isPublicConnector(DetachedConnector detachedConnector) {
-        return AccessMode.PUBLIC == detachedConnector.getAccess();
+    private boolean isPublicConnector(Connector connector) {
+        return AccessMode.PUBLIC == connector.getAccess();
     }
 
-    private boolean isPrivateConnector(DetachedConnector detachedConnector) {
-        return AccessMode.PRIVATE == detachedConnector.getAccess();
+    private boolean isPrivateConnector(Connector connector) {
+        return AccessMode.PRIVATE == connector.getAccess();
     }
 
-    private boolean isRestrictedConnector(DetachedConnector detachedConnector) {
-        return AccessMode.RESTRICTED == detachedConnector.getAccess();
+    private boolean isRestrictedConnector(Connector connector) {
+        return AccessMode.RESTRICTED == connector.getAccess();
     }
 
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        boolQueryBuilder.should(QueryBuilders.termQuery(DetachedConnector.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));
-        boolQueryBuilder.should(QueryBuilders.termsQuery(DetachedConnector.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
+        boolQueryBuilder.should(QueryBuilders.termQuery(AbstractConnector.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));
+        boolQueryBuilder.should(QueryBuilders.termsQuery(AbstractConnector.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
 
         BoolQueryBuilder privateBoolQuery = new BoolQueryBuilder();
         String ownerName = "owner.name.keyword";
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery(ownerName, user.getName());
-        NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(DetachedConnector.OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
+        NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(AbstractConnector.OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
         privateBoolQuery.must(nestedQueryBuilder);
-        privateBoolQuery.must(QueryBuilders.termQuery(DetachedConnector.ACCESS_FIELD, AccessMode.PRIVATE.getValue()));
+        privateBoolQuery.must(QueryBuilders.termQuery(AbstractConnector.ACCESS_FIELD, AccessMode.PRIVATE.getValue()));
         boolQueryBuilder.should(privateBoolQuery);
         QueryBuilder query = searchSourceBuilder.query();
         if (query == null) {

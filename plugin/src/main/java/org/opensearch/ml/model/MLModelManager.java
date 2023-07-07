@@ -91,8 +91,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
@@ -101,7 +100,6 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
@@ -757,7 +755,7 @@ public class MLModelManager {
                                 )
                             ) {
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                DetachedConnector connector = DetachedConnector.parse(parser);
+                                Connector connector = Connector.createConnector(parser);
                                 mlModel.setConnector(connector);
                                 setupPredictable(modelId, mlModel, params);
                                 listener.onResponse("successful");

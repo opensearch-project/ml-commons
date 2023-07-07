@@ -6,16 +6,9 @@
 package org.opensearch.ml.action.remote;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
-import java.time.Instant;
 import java.util.HashSet;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -29,18 +22,18 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.template.APISchema;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -99,25 +92,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
         String connectorName = mlCreateConnectorInput.getName();
         try {
-            if (mlCreateConnectorInput.getConnectorTemplate() == null) {
-                throw new IllegalArgumentException("Invalid Connector template, Actions are missing");
-            }
-            validateConnectorURL(mlCreateConnectorInput);
+            XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+            mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
+            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+
             User user = RestActionUtils.getUserContext(client);
-            Instant now = Instant.now();
-            DetachedConnector connector = DetachedConnector
-                .builder()
-                .name(connectorName)
-                .version(mlCreateConnectorInput.getVersion())
-                .description(mlCreateConnectorInput.getDescription())
-                .protocol(mlCreateConnectorInput.getProtocol())
-                .parameterStr(toJson(mlCreateConnectorInput.getParameters()))
-                .credentialStr(toJson(mlCreateConnectorInput.getCredential()))
-                .predictAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema()))
-                .metadataAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema()))
-                .createdTime(now)
-                .lastUpdateTime(now)
-                .build();
             if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
                 validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
                 indexConnector(connector, listener);
@@ -134,14 +114,13 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         } catch (MetaDataException e) {
             log.error("The masterKey for credential encryption is missing in connector creation");
             listener.onFailure(e);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             log.error("Failed to create connector " + connectorName, e);
             listener.onFailure(e);
         }
     }
 
-    private void indexConnector(DetachedConnector connector, ActionListener<MLCreateConnectorResponse> listener) {
+    private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
         mlModelManager.checkMasterKey(mlEngine);
         connector.encrypt(mlEngine::encrypt);
         log.info("connector created, indexing into the connector system index");
@@ -225,39 +204,4 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         return apiSchema.toString();
     }
 
-    private void validateConnectorURL(MLCreateConnectorInput mlCreateConnectorInput) {
-        Map<String, String> parameters = mlCreateConnectorInput.getParameters();
-
-        String predictAPISchema = getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema());
-        String metadataAPISchema = getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema());
-        Map<String, String> predictAPIMap = StringUtils.fromJson(predictAPISchema);
-        Map<String, String> metadataAPIMap = StringUtils.fromJson(metadataAPISchema);
-        String predictUrl = predictAPIMap.get(APISchema.URL_FIELD);
-        String metadataUrl = metadataAPIMap.get(APISchema.URL_FIELD);
-
-        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-        String finalPredictUrl = substitutor.replace(predictUrl);
-        String finalMetadataUrl = substitutor.replace(metadataUrl);
-
-        Pattern pattern = Pattern.compile(trustedConnectorEndpointsRegex);
-        Matcher predictUrlMatcher = pattern.matcher(finalPredictUrl);
-        Matcher metadataUrlMatcher = pattern.matcher(finalMetadataUrl);
-
-        if (!predictUrlMatcher.matches()) {
-            throw new IllegalArgumentException(
-                "Connector URL is not matching the trusted connector endpoint regex, regex is: "
-                    + trustedConnectorEndpointsRegex
-                    + ",URL is: "
-                    + finalPredictUrl
-            );
-        }
-        if (!metadataUrlMatcher.matches()) {
-            throw new IllegalArgumentException(
-                "Connector URL is not matching the trusted connector endpoint regex, regex is: "
-                    + trustedConnectorEndpointsRegex
-                    + ",URL is: "
-                    + finalMetadataUrl
-            );
-        }
-    }
 }

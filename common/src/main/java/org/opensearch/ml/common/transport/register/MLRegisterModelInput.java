@@ -291,11 +291,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
                 case CONNECTOR_FIELD:
-                    parser.nextToken();
-                    String connectorName = parser.currentName();
-                    parser.nextToken();
-                    connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, parser}, String.class, XContentParser.class);
-                    parser.nextToken();
+                    connector = createConnector(parser);
                     break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();

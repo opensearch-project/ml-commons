@@ -208,8 +208,8 @@ public class MLModel implements ToXContentObject {
             deployToAllNodes = input.readBoolean();
             modelGroupId = input.readOptionalString();
             if (input.readBoolean()) {
-                String connectorName = input.readString();
-                connector = MLCommonsClassLoader.initConnector(connectorName, new Object[]{connectorName, input}, String.class, StreamInput.class);
+                String connectorProtocol = input.readString();
+                connector = MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{input}, String.class, StreamInput.class);
             }
             connectorId = input.readOptionalString();
         }

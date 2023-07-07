@@ -9,8 +9,10 @@ import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.utils.StringUtils;
 
@@ -33,6 +35,13 @@ public abstract class AbstractConnector implements Connector {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PROTOCOL_FIELD = "protocol";
     public static final String ACTIONS_FIELD = "actions";
+    public static final String CREDENTIAL_FIELD = "credential";
+    public static final String PARAMETERS_FIELD = "parameters";
+    public static final String CREATED_TIME_FIELD = "created_time";
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles";
+    public static final String OWNER_FIELD = "owner";
+    public static final String ACCESS_FIELD = "access";
 
     @Getter
     protected String name;
@@ -51,6 +60,16 @@ public abstract class AbstractConnector implements Connector {
 
     @Getter
     protected List<ConnectorAction> actions;
+
+    @Setter
+    @Getter
+    private List<String> backendRoles;
+    @Setter
+    @Getter
+    private User owner;
+    @Setter
+    @Getter
+    private AccessMode access;
 
     protected Map<String, String> createPredictDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
@@ -101,6 +120,12 @@ public abstract class AbstractConnector implements Connector {
             map.put("response", response);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(map).build());
         }
+    }
+
+    @Override
+    public void removeCredential() {
+        this.credential = null;
+        this.decryptedCredential = null;
     }
 
     public String getPredictEndpoint(Map<String, String> parameters) {

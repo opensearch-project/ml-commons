@@ -22,7 +22,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
@@ -75,7 +75,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        DetachedConnector mlConnector = DetachedConnector.parse(parser);
+                        Connector mlConnector = Connector.createConnector(parser);
                         mlConnector.removeCredential();
                         if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                             actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
