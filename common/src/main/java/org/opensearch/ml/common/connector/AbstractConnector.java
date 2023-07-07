@@ -17,6 +17,7 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,13 +64,15 @@ public abstract class AbstractConnector implements Connector {
 
     @Setter
     @Getter
-    private List<String> backendRoles;
+    protected List<String> backendRoles;
     @Setter
     @Getter
-    private User owner;
+    protected User owner;
     @Setter
     @Getter
-    private AccessMode access;
+    protected AccessMode access;
+    protected Instant createdTime;
+    protected Instant lastUpdateTime;
 
     protected Map<String, String> createPredictDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {

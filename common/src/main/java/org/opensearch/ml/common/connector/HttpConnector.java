@@ -11,10 +11,13 @@ import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -73,6 +76,25 @@ public class HttpConnector extends AbstractConnector {
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                         actions.add(ConnectorAction.parse(parser));
                     }
+                    break;
+                case BACKEND_ROLES_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    backendRoles = new ArrayList<>();
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        backendRoles.add(parser.text());
+                    }
+                    break;
+                case OWNER_FIELD:
+                    owner = User.parse(parser);
+                    break;
+                case ACCESS_FIELD:
+                    access = AccessMode.from(parser.text());
+                    break;
+                case CREATED_TIME_FIELD:
+                    createdTime = Instant.ofEpochMilli(parser.longValue());
+                    break;
+                case LAST_UPDATED_TIME_FIELD:
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 default:
                     parser.skipChildren();
