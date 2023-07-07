@@ -38,7 +38,6 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -304,7 +303,7 @@ public class MLSyncUpCron implements Runnable {
             for (String modelId : updatedModelIds) {
                 UpdateRequest updateRequest = new UpdateRequest();
                 Instant now = Instant.now();
-                ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
+                final Map<String, Object> builder = new HashMap<>();
                 if (newModelStates.containsKey(modelId)) {
                     builder.put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name());
                 }
@@ -316,7 +315,7 @@ public class MLSyncUpCron implements Runnable {
                 Set<String> workerNodes = modelWorkerNodes.get(modelId);
                 int currentWorkNodeCount = workerNodes == null ? 0 : workerNodes.size();
                 builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
-                updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
+                updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder);
                 bulkUpdateRequest.add(updateRequest);
             }
             log.info("Refresh model state: {}", newModelStates);

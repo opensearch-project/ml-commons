@@ -41,7 +41,6 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestStatus;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -165,7 +164,7 @@ public class RestMLProfileAction extends BaseRestHandler {
                     entry.getValue().getMemSizeEstimationCPU(),
                     entry.getValue().getMemSizeEstimationGPU()
                 );
-                mlProfileModelResponse.getMlModelProfileMap().putAll(ImmutableMap.of(nodeId, modelProfile));
+                mlProfileModelResponse.getMlModelProfileMap().putAll(Map.of(nodeId, modelProfile));
             }
 
             for (Map.Entry<String, MLTask> entry : taskProfileMap.entrySet()) {
@@ -175,7 +174,7 @@ public class RestMLProfileAction extends BaseRestHandler {
                     mlProfileModelResponse = new MLProfileModelResponse();
                     modelCentricMap.put(modelId, mlProfileModelResponse);
                 }
-                mlProfileModelResponse.getMlTaskMap().putAll(ImmutableMap.of(entry.getKey(), entry.getValue()));
+                mlProfileModelResponse.getMlTaskMap().putAll(Map.of(entry.getKey(), entry.getValue()));
             }
         }
         return modelCentricMap;

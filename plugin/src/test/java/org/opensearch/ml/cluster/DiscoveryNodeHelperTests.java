@@ -35,7 +35,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
@@ -91,14 +90,14 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             dataNode1Name,
             dataNode2Id,
             buildNewFakeTransportAddress(),
-            ImmutableMap.of(CommonValue.BOX_TYPE_KEY, CommonValue.HOT_BOX_TYPE),
+            Map.of(CommonValue.BOX_TYPE_KEY, CommonValue.HOT_BOX_TYPE),
             BUILT_IN_ROLES,
             Version.CURRENT
         );
         warmDataNode1 = new DiscoveryNode(
             warmDataNode1Id,
             buildNewFakeTransportAddress(),
-            ImmutableMap.of(CommonValue.BOX_TYPE_KEY, CommonValue.WARM_BOX_TYPE),
+            Map.of(CommonValue.BOX_TYPE_KEY, CommonValue.WARM_BOX_TYPE),
             BUILT_IN_ROLES,
             Version.CURRENT
         );

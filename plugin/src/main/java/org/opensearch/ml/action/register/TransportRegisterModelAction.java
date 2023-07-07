@@ -13,6 +13,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 import org.opensearch.action.ActionListener;
@@ -54,7 +55,6 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -166,7 +166,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                 mlTaskManager
                                     .updateMLTask(
                                         taskId,
-                                        ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
+                                        Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
                                         TASK_SEMAPHORE_TIMEOUT,
                                         true
                                     );

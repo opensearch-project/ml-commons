@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -25,8 +26,8 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -46,7 +47,6 @@ import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.Builder;
 import lombok.Data;
@@ -108,7 +108,7 @@ public class MLModelAutoReDeployer {
 
     private void undeployModelsOnDataNodes() {
         List<String> dataNodeIds = new ArrayList<>();
-        clusterService.state().nodes().getDataNodes().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
+        clusterService.state().nodes().getDataNodes().values().iterator().forEachRemaining(x -> { dataNodeIds.add(x.getId()); });
         if (dataNodeIds.size() > 0)
             triggerUndeployModelsOnDataNodes(dataNodeIds);
     }
@@ -289,7 +289,7 @@ public class MLModelAutoReDeployer {
         mlModelManager
             .updateModel(
                 modelId,
-                ImmutableMap.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
+                Map.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
             );
 
         MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, nodeIds, false, true);

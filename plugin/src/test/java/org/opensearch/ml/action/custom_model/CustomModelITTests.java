@@ -46,7 +46,6 @@ import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 //TODO: DJL can't load models on multiple virtual nodes under OS integ test framework, so have to use "numDataNodes = 1"
@@ -60,7 +59,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
         irisIndexName = "iris_data_for_model_serving_test";
         loadIrisData(irisIndexName);
         ClusterUpdateSettingsRequest updateSettingRequest = new ClusterUpdateSettingsRequest();
-        updateSettingRequest.transientSettings(ImmutableMap.of("logger.org.opensearch.ml", "DEBUG"));
+        updateSettingRequest.transientSettings(Map.of("logger.org.opensearch.ml", "DEBUG"));
         admin().cluster().updateSettings(updateSettingRequest).actionGet(5000);
     }
 

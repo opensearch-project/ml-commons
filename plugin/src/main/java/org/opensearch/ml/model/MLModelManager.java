@@ -111,7 +111,6 @@ import org.opensearch.rest.RestStatus;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 
@@ -543,7 +542,7 @@ public class MLModelManager {
     ) {
         FunctionName functionName = registerModelInput.getFunctionName();
         deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-        Map<String, Object> updatedFields = ImmutableMap
+        Map<String, Object> updatedFields = Map
             .of(
                 MLModel.MODEL_STATE_FIELD,
                 MLModelState.REGISTERED,
@@ -558,7 +557,7 @@ public class MLModelManager {
             );
         log.info("Model registered successfully, model id: {}, task id: {}", modelId, taskId);
         updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
-            mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
+            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
             if (registerModelInput.isDeployModel()) {
                 deployModelAfterRegistering(registerModelInput, modelId);
             }
@@ -591,7 +590,7 @@ public class MLModelManager {
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
         mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-        Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
+        Map<String, Object> updated = Map.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
@@ -652,8 +651,7 @@ public class MLModelManager {
                         return;
                     }
                     log.debug("Model content matches original hash value, continue deploying");
-                    Map<String, Object> params = ImmutableMap
-                        .of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
+                    Map<String, Object> params = Map.of(MODEL_ZIP_FILE, modelZipFile, MODEL_HELPER, modelHelper, ML_ENGINE, mlEngine);
                     if (FunctionName.METRICS_CORRELATION.equals(mlModel.getAlgorithm())) {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {

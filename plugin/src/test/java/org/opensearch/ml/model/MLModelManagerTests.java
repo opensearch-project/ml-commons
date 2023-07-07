@@ -108,7 +108,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 public class MLModelManagerTests extends OpenSearchTestCase {
@@ -610,7 +609,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUpdateModel_EmptyUpdatedFields() {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        modelManager.updateModel(modelId, ImmutableMap.of(), listener);
+        modelManager.updateModel(modelId, Map.of(), listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Updated fields is null or empty", failure.getValue().getMessage());
@@ -619,14 +618,14 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testUpdateModel_ThreadPoolException() {
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        modelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOYED), listener);
+        modelManager.updateModel(modelId, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOYED), listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("failed to stashContext", failure.getValue().getMessage());
     }
 
     public void testSyncModelWorkerNodes() {
-        Map<String, Set<String>> modelWorkerNodes = ImmutableMap.of(modelId, ImmutableSet.of("node1"));
+        Map<String, Set<String>> modelWorkerNodes = Map.of(modelId, ImmutableSet.of("node1"));
         modelManager.syncModelWorkerNodes(modelWorkerNodes);
         verify(modelCacheHelper).syncWorkerNodes(eq(modelWorkerNodes));
     }

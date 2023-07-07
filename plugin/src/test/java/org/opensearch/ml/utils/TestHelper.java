@@ -77,7 +77,6 @@ import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 
 public class TestHelper {
@@ -239,9 +238,8 @@ public class TestHelper {
     }
 
     public static RestRequest getStatsRestRequest(String nodeId, String stat) {
-        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
-            .withParams(ImmutableMap.of("nodeId", nodeId, "stat", stat))
-            .build();
+        final Map<String, String> immutableNodeStatMap = Map.of("nodeId", nodeId, "stat", stat);
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry()).withParams(immutableNodeStatMap).build();
         return request;
     }
 
@@ -361,26 +359,16 @@ public class TestHelper {
             roleSet,
             Version.CURRENT
         );
-        Metadata metadata = new Metadata.Builder()
-            .indices(
-                ImmutableMap
-                    .<String, IndexMetadata>builder()
-                    .put(
-                        ML_MODEL_INDEX,
-                        IndexMetadata
-                            .builder("test")
-                            .settings(
-                                Settings
-                                    .builder()
-                                    .put("index.number_of_shards", 1)
-                                    .put("index.number_of_replicas", 1)
-                                    .put("index.version.created", Version.CURRENT.id)
-                            )
-                            .build()
-                    )
-                    .build()
-            )
-            .build();
+
+        final Settings.Builder indexSettings = Settings
+            .builder()
+            .put("index.number_of_shards", 1)
+            .put("index.number_of_replicas", 1)
+            .put("index.version.created", Version.CURRENT.id);
+        IndexMetadata indexMetaData = IndexMetadata.builder("test").settings(indexSettings).build();
+        final Map<String, IndexMetadata> indices = Map.of(ML_MODEL_INDEX, indexMetaData);
+        Metadata metadata = new Metadata.Builder().indices(indices).build();
+
         return new ClusterState(
             new ClusterName("test cluster"),
             123l,

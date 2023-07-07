@@ -83,7 +83,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 
@@ -257,7 +256,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, "Kibana"))
             );
 
-        Response statsResponse = TestHelper.makeRequest(client(), "GET", indexName, ImmutableMap.of(), "", null);
+        Response statsResponse = TestHelper.makeRequest(client(), "GET", indexName, Map.of(), "", null);
         assertEquals(RestStatus.OK, TestHelper.restStatus(statsResponse));
         String result = EntityUtils.toString(statsResponse.getEntity());
         assertTrue(result.contains(indexName));
@@ -337,7 +336,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             endpoint += "?async=true";
         }
         Response response = TestHelper
-            .makeRequest(client(), "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
+            .makeRequest(client(), "POST", endpoint, Map.of(), TestHelper.toHttpEntity(trainModelDataJson()), null);
         TimeUnit.SECONDS.sleep(5);
         verifyResponse(consumer, response);
     }
@@ -488,7 +487,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
                 client,
                 "POST",
                 "/_plugins/_ml/_train_predict/" + functionName.name().toLowerCase(Locale.ROOT),
-                ImmutableMap.of(),
+                Map.of(),
                 TestHelper.toHttpEntity(kmeansInput),
                 null
             );
@@ -518,7 +517,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         if (async) {
             endpoint += "?async=true";
         }
-        Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
+        Response response = TestHelper.makeRequest(client, "POST", endpoint, Map.of(), TestHelper.toHttpEntity(kmeansInput), null);
         verifyResponse(function, response);
     }
 
@@ -538,7 +537,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
             .build();
         MLInput kmeansInput = MLInput.builder().algorithm(functionName).parameters(params).inputDataset(inputData).build();
         String endpoint = "/_plugins/_ml/_predict/" + functionName.name().toLowerCase(Locale.ROOT) + "/" + modelId;
-        Response response = TestHelper.makeRequest(client, "POST", endpoint, ImmutableMap.of(), TestHelper.toHttpEntity(kmeansInput), null);
+        Response response = TestHelper.makeRequest(client, "POST", endpoint, Map.of(), TestHelper.toHttpEntity(kmeansInput), null);
         verifyResponse(function, response);
     }
 

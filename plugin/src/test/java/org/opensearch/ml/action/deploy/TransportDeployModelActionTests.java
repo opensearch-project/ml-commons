@@ -73,7 +73,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableMap;
 
 public class TransportDeployModelActionTests extends OpenSearchTestCase {
     @Mock
@@ -348,7 +347,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         clientField.setAccessible(true);
         clientField.set(mlModelManager, client);
 
-        doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(ImmutableMap.class), isA(ActionListener.class));
+        doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(Map.class), isA(ActionListener.class));
 
         MLDeployModelNodesResponse MLDeployModelNodesResponse = mock(MLDeployModelNodesResponse.class);
         doAnswer(invocation -> {
@@ -388,7 +387,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testUpdateModelDeployStatusAndTriggerOnNodesAction_whenMLTaskManagerThrowException_ListenerOnFailureExecuted() {
-        doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(ImmutableMap.class), isA(ActionListener.class));
+        doCallRealMethod().when(mlModelManager).updateModel(anyString(), any(Map.class), isA(ActionListener.class));
         transportDeployModelAction
             .updateModelDeployStatusAndTriggerOnNodesAction(modelId, "mock_task_id", mlModel, localNodeId, mlTask, eligibleNodes, false);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());

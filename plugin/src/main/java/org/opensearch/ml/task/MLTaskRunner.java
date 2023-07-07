@@ -24,8 +24,6 @@ import org.opensearch.transport.TransportResponse;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableMap;
-
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -63,8 +61,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
         // update task state to MLTaskState.FAILED
         // update task error
         if (mlTask.isAsync()) {
-            Map<String, Object> updatedFields = ImmutableMap
-                .of(MLTask.STATE_FIELD, MLTaskState.FAILED.name(), MLTask.ERROR_FIELD, e.getMessage());
+            Map<String, Object> updatedFields = Map.of(MLTask.STATE_FIELD, MLTaskState.FAILED.name(), MLTask.ERROR_FIELD, e.getMessage());
             // wait for 2 seconds to make sure failed state persisted
             mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS, true);
         }

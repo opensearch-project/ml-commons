@@ -27,7 +27,6 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 public class MLStatsNodeResponseTests extends OpenSearchTestCase {
@@ -87,8 +86,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
 
     private MLStatsNodeResponse createResponseWithDefaultAlgoStats(Map<MLNodeLevelStat, Object> nodeStats) {
         Map<FunctionName, MLAlgoStats> algoStats = new HashMap<>();
-        Map<MLActionLevelStat, Object> actionStats = ImmutableMap.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, totalRequestCount);
-        Map<ActionName, MLActionStats> stats = ImmutableMap.of(ActionName.TRAIN, new MLActionStats(actionStats));
+        Map<MLActionLevelStat, Object> actionStats = Map.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, totalRequestCount);
+        Map<ActionName, MLActionStats> stats = Map.of(ActionName.TRAIN, new MLActionStats(actionStats));
         algoStats.put(FunctionName.KMEANS, new MLAlgoStats(stats));
 
         MLStatsNodeResponse response = new MLStatsNodeResponse(node, nodeStats, algoStats);
@@ -134,7 +133,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testIsEmpty_EmptyNodeStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(ImmutableMap.of());
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(Map.of());
         assertFalse(response.isEmpty());
     }
 
@@ -143,14 +142,14 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testIsEmpty_EmptyAlgoStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(ImmutableMap.of());
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(Map.of());
         response.removeAlgorithmStats(FunctionName.KMEANS);
         assertTrue(response.isEmpty());
     }
 
     public void testIsEmpty_NonEmptyNodeAndAlgoStats() {
         MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(
-            ImmutableMap.of(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, totalRequestCount)
+            Map.of(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, totalRequestCount)
         );
         assertFalse(response.isEmpty());
     }
@@ -165,7 +164,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
         assertEquals(0, response.getNodeLevelStatSize());
 
-        response = new MLStatsNodeResponse(node, ImmutableMap.of());
+        response = new MLStatsNodeResponse(node, Map.of());
         assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
         assertEquals(0, response.getNodeLevelStatSize());
     }
@@ -176,7 +175,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testGetAlgorithmLevelStat_EmptyAlgoStats() {
-        MLStatsNodeResponse response = new MLStatsNodeResponse(node, null, ImmutableMap.of());
+        MLStatsNodeResponse response = new MLStatsNodeResponse(node, null, Map.of());
         assertNull(response.getAlgorithmStats(FunctionName.BATCH_RCF));
         assertEquals(0, response.getNodeLevelStatSize());
     }

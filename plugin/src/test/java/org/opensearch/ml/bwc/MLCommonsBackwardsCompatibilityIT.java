@@ -9,7 +9,11 @@ import static org.junit.Assert.*;
 import static org.opensearch.ml.common.input.parameter.clustering.KMeansParams.DistanceType.COSINE;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.http.HttpEntity;
@@ -30,7 +34,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.rest.OpenSearchRestTestCase;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompatibilityRestTestCase {
 
@@ -287,7 +290,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
             + "  }\n"
             + "}";
         Response bwcResponse = TestHelper
-            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
+            .makeRequest(client(), "PUT", "_cluster/settings", Map.of(), TestHelper.toHttpEntity(jsonEntity), null);
         assertEquals(200, bwcResponse.getStatusLine().getStatusCode());
     }
 

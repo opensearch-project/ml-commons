@@ -39,11 +39,11 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileNodeResponse;
@@ -67,7 +67,6 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 public class RestMLProfileActionTests extends OpenSearchTestCase {
     @Rule
@@ -288,7 +287,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
 
     public void test_WhenViewIsModel_ReturnModelViewResult() throws Exception {
         MLProfileInput mlProfileInput = new MLProfileInput();
-        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, ImmutableMap.of("view", "model"));
+        RestRequest request = getProfileRestRequestWithQueryParams(mlProfileInput, Map.of("view", "model"));
         profileAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLProfileRequest> argumentCaptor = ArgumentCaptor.forClass(MLProfileRequest.class);
         verify(client, times(1)).execute(eq(MLProfileAction.INSTANCE), argumentCaptor.capture(), any());

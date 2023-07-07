@@ -63,7 +63,6 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -228,7 +227,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                 mlTaskManager
                                     .updateMLTask(
                                         taskId,
-                                        ImmutableMap.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
+                                        Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
                                         TASK_SEMAPHORE_TIMEOUT,
                                         true
                                     );
@@ -279,25 +278,25 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         );
         ActionListener<MLDeployModelNodesResponse> actionListener = ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {
-                mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+                mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
         }, e -> {
             log.error("Failed to deploy model " + modelId, e);
             mlTaskManager
                 .updateMLTask(
                     taskId,
-                    ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
+                    Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager.updateModel(modelId, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
         });
 
         List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
         mlModelManager
             .updateModel(
                 modelId,
-                ImmutableMap
+                Map
                     .of(
                         MLModel.MODEL_STATE_FIELD,
                         MLModelState.DEPLOYING,

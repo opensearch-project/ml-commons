@@ -47,8 +47,6 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableMap;
-
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -137,14 +135,14 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         } else {
                             syncModelWorkerNodes(modelId);
                         }
-                        ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
+                        final Map<String, Object> builder = new HashMap<>();
                         builder.put(MLTask.STATE_FIELD, taskState);
                         if (mlTaskCache.hasError()) {
                             currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize() - mlTaskCache.getErrors().size();
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
-                        mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
+                        mlTaskManager.updateMLTask(taskId, builder, TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
                         if (!mlTaskCache.allNodeFailed()) {
@@ -201,7 +199,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
         if (allNodes.length > 1 && workerNodes != null && workerNodes.length > 0) {
             log.debug("Sync to other nodes about worker nodes of model {}: {}", modelId, Arrays.toString(workerNodes));
-            MLSyncUpInput syncUpInput = MLSyncUpInput.builder().addedWorkerNodes(ImmutableMap.of(modelId, workerNodes)).build();
+            MLSyncUpInput syncUpInput = MLSyncUpInput.builder().addedWorkerNodes(Map.of(modelId, workerNodes)).build();
             MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(allNodes, syncUpInput);
             client
                 .execute(
