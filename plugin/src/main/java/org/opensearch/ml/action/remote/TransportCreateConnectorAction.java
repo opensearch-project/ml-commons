@@ -53,7 +53,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final MLModelManager mlModelManager;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
-    private String trustedConnectorEndpointsRegex;
+    private volatile String trustedConnectorEndpointsRegex;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -121,7 +121,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     }
 
     private void indexConnector(Connector connector, ActionListener<MLCreateConnectorResponse> listener) {
-        mlModelManager.checkMasterKey(mlEngine);
         connector.encrypt(mlEngine::encrypt);
         log.info("connector created, indexing into the connector system index");
         mlIndicesHandler.initMLConnectorIndex(ActionListener.wrap(indexCreated -> {

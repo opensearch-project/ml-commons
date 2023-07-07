@@ -197,23 +197,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
         // check if the connector url is trusted
-        Pattern pattern = Pattern.compile(trustedConnectorEndpointsRegex);
-        Matcher matcher = pattern.matcher(registerModelInput.getConnector().getPredictEndpoint());
-        if (!matcher.matches()) {
-            log
-                .error(
-                    "Not allowed URL in connector for remote model, URL is: "
-                        + registerModelInput.getConnector().getPredictEndpoint()
-                        + ", trusted connector endpoint regex is: "
-                        + trustedConnectorEndpointsRegex
-                );
-            throw new IllegalArgumentException(
-                "Not allowed URL in connector for remote model, URL is: "
-                    + registerModelInput.getConnector().getPredictEndpoint()
-                    + ", trusted connector endpoint regex is: "
-                    + trustedConnectorEndpointsRegex
-            );
-        }
+        registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
