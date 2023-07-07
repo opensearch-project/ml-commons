@@ -25,8 +25,8 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -108,7 +108,7 @@ public class MLModelAutoReDeployer {
 
     private void undeployModelsOnDataNodes() {
         List<String> dataNodeIds = new ArrayList<>();
-        clusterService.state().nodes().getDataNodes().iterator().forEachRemaining(x -> { dataNodeIds.add(x.value.getId()); });
+        clusterService.state().nodes().getDataNodes().values().iterator().forEachRemaining(x -> { dataNodeIds.add(x.getId()); });
         if (dataNodeIds.size() > 0)
             triggerUndeployModelsOnDataNodes(dataNodeIds);
     }

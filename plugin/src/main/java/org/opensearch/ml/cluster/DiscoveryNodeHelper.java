@@ -18,8 +18,8 @@ import java.util.function.Predicate;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.Strings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.utils.MLNodeUtils;
 
