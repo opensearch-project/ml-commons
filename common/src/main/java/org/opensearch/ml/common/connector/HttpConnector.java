@@ -211,13 +211,6 @@ public class HttpConnector extends AbstractConnector {
         return (T) parameters.get("http_body");
     }
 
-    public Optional<ConnectorAction> findPredictAction() {
-        if (actions != null) {
-            return actions.stream().filter(a -> a.getActionType() == ConnectorAction.ActionType.PREDICT).findFirst();
-        }
-        return null;
-    }
-
     @Override
     public void decrypt(Function<String, String> function) {
         Map<String, String> decrypted = new HashMap<>();

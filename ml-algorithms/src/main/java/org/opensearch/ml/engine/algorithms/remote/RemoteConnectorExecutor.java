@@ -10,6 +10,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -53,16 +54,20 @@ public interface RemoteConnectorExecutor {
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
-        RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, getScriptService());
 
         Map<String, String> parameters = new HashMap<>();
         if (connector.getParameters() != null) {
             parameters.putAll(connector.getParameters());
         }
-        if (inputData.getParameters() != null) {
-            parameters.putAll(inputData.getParameters());
+        MLInputDataset inputDataset = mlInput.getInputDataset();
+        if (inputDataset instanceof RemoteInferenceInputDataSet && ((RemoteInferenceInputDataSet) inputDataset).getParameters() != null) {
+            parameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
         }
 
+        RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, parameters, getScriptService());
+        if (inputData != null && inputData.getParameters() != null) {
+            parameters.putAll(inputData.getParameters());
+        }
         String payload = connector.createPredictPayload(parameters);
         connector.validatePayload(payload);
         invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);

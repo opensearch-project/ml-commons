@@ -27,6 +27,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -63,6 +64,8 @@ public interface Connector extends ToXContentObject, Writeable {
     void encrypt(Function<String, String> function);
 
     Connector cloneConnector();
+
+    Optional<ConnectorAction> findPredictAction();
 
     void removeCredential();
 

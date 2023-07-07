@@ -32,7 +32,6 @@ import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;

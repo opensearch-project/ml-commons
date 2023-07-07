@@ -7,8 +7,9 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import com.google.common.collect.ImmutableMap;
 import com.jayway.jsonpath.JsonPath;
-import lombok.extern.log4j.Log4j2;
+import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -35,8 +36,6 @@ import java.util.Optional;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJava;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.POST_PROCESS_FUNCTION;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.PRE_PROCESS_FUNCTION;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.gson;
@@ -48,15 +47,20 @@ public class ConnectorUtils {
         signer = Aws4Signer.create();
     }
 
-    public static RemoteInferenceInputDataSet processInput(MLInput mlInput, Connector connector, ScriptService scriptService) {
+    public static RemoteInferenceInputDataSet processInput(MLInput mlInput, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
         RemoteInferenceInputDataSet inputData;
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet inputDataSet = (TextDocsInputDataSet)mlInput.getInputDataset();
             List<String> docs = new ArrayList<>(inputDataSet.getDocs());
             Map<String, Object> params = ImmutableMap.of("text_docs", docs);
-            String preProcessFunction = null;
-            if (connector.getParameters() != null && connector.getParameters().containsKey(PRE_PROCESS_FUNCTION)) {
-                preProcessFunction = connector.getParameters().get(PRE_PROCESS_FUNCTION);
+            Optional<ConnectorAction> predictAction = connector.findPredictAction();
+            if (!predictAction.isPresent()) {
+                throw new IllegalArgumentException("no predict action found");
+            }
+            String preProcessFunction = predictAction.get().getPreProcessFunction();
+            if (preProcessFunction != null && preProcessFunction.contains("${parameters")) {
+                StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+                preProcessFunction = substitutor.replace(preProcessFunction);
             }
             Optional<String> processedResponse = executePreprocessFunction(scriptService, preProcessFunction, params);
             if (!processedResponse.isPresent()) {
@@ -93,9 +97,14 @@ public class ConnectorUtils {
 
     public static ModelTensors processOutput(String modelResponse, Connector connector, ScriptService scriptService, Map<String, String> parameters) throws IOException {
         List<ModelTensor> modelTensors = new ArrayList<>();
-        String postProcessFunction = null;
-        if (parameters != null && parameters.containsKey(POST_PROCESS_FUNCTION)) {
-            postProcessFunction = parameters.get(POST_PROCESS_FUNCTION);
+        Optional<ConnectorAction> predictAction = connector.findPredictAction();
+        if (!predictAction.isPresent()) {
+            throw new IllegalArgumentException("no predict action found");
+        }
+        String postProcessFunction = predictAction.get().getPostProcessFunction();
+        if (postProcessFunction != null && postProcessFunction.contains("${parameters")) {
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+            postProcessFunction = substitutor.replace(postProcessFunction);
         }
         Optional<String> processedResponse = executePostprocessFunction(scriptService, postProcessFunction, modelResponse);
 

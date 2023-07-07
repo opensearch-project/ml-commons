@@ -126,6 +126,14 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
+    public Optional<ConnectorAction> findPredictAction() {
+        if (actions != null) {
+            return actions.stream().filter(a -> a.getActionType() == ConnectorAction.ActionType.PREDICT).findFirst();
+        }
+        return null;
+    }
+
+    @Override
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;

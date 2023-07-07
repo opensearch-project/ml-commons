@@ -30,12 +30,16 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
     public static final String REQUEST_BODY_FIELD = "request_body";
+    public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
+    public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
 
     private ActionType actionType;
     private String method;
     private String url;
     private Map<String, String> headers;
     private String requestBody;
+    private String preProcessFunction;
+    private String postProcessFunction;
 
     @Builder(toBuilder = true)
     public ConnectorAction(
@@ -43,7 +47,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         String method,
         String url,
         Map<String, String> headers,
-        String requestBody
+        String requestBody,
+        String preProcessFunction,
+        String postProcessFunction
     ) {
         if (actionType == null) {
             throw new IllegalArgumentException("action type can't null");
@@ -59,6 +65,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         this.url = url;
         this.headers = headers;
         this.requestBody = requestBody;
+        this.preProcessFunction = preProcessFunction;
+        this.postProcessFunction = postProcessFunction;
     }
 
     public ConnectorAction(StreamInput input) throws IOException {
@@ -69,6 +77,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             this.headers = input.readMap(StreamInput::readString, StreamInput::readString);
         }
         this.requestBody = input.readOptionalString();
+        this.preProcessFunction = input.readOptionalString();
+        this.postProcessFunction = input.readOptionalString();
     }
 
     @Override
@@ -81,6 +91,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             out.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
         }
         out.writeOptionalString(requestBody);
+        out.writeOptionalString(preProcessFunction);
+        out.writeOptionalString(postProcessFunction);
     }
 
     @Override
@@ -101,6 +113,12 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (requestBody != null) {
             builder.field(REQUEST_BODY_FIELD, requestBody);
         }
+        if (preProcessFunction != null) {
+            builder.field(ACTION_PRE_PROCESS_FUNCTION, preProcessFunction);
+        }
+        if (postProcessFunction != null) {
+            builder.field(ACTION_POST_PROCESS_FUNCTION, postProcessFunction);
+        }
         return builder.endObject();
     }
 
@@ -115,6 +133,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         String url = null;
         Map<String, String> headers = null;
         String requestBody = null;
+        String preProcessFunction = null;
+        String postProcessFunction = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -137,6 +157,12 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                 case REQUEST_BODY_FIELD:
                     requestBody = parser.text();
                     break;
+                case ACTION_PRE_PROCESS_FUNCTION:
+                    preProcessFunction = parser.text();
+                    break;
+                case ACTION_POST_PROCESS_FUNCTION:
+                    postProcessFunction = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -148,6 +174,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                 .url(url)
                 .headers(headers)
                 .requestBody(requestBody)
+                .preProcessFunction(preProcessFunction)
+                .postProcessFunction(postProcessFunction)
                 .build();
     }
 

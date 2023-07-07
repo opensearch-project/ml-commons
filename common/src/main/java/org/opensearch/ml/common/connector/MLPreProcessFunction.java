@@ -11,7 +11,6 @@ import java.util.Map;
 public class MLPreProcessFunction {
 
     private static Map<String, String> PRE_PROCESS_FUNCTIONS;
-    public static final String PRE_PROCESS_FUNCTION = "connector.pre_process_function";
     public static final String TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT = "connector.pre_process.cohere.embedding";
     public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "connector.pre_process.openai.embedding";
 
