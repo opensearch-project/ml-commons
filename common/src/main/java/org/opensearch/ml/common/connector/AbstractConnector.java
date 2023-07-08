@@ -148,29 +148,4 @@ public abstract class AbstractConnector implements Connector {
         return predictEndpoint;
     }
 
-    public String getAccessKey() {
-        return decryptedCredential.get(ACCESS_KEY_FIELD);
-    }
-
-    public String getSecretKey() {
-        return decryptedCredential.get(SECRET_KEY_FIELD);
-    }
-
-    public String getSessionToken() {
-        return decryptedCredential.get(SESSION_TOKEN_FIELD);
-    }
-
-    public String getServiceName() {
-        if (parameters == null) {
-            return decryptedCredential.get(SERVICE_NAME_FIELD);
-        }
-        return Optional.ofNullable(parameters.get(SERVICE_NAME_FIELD)).orElse(decryptedCredential.get(SERVICE_NAME_FIELD));
-    }
-
-    public String getRegion() {
-        if (parameters == null) {
-            return decryptedCredential.get(REGION_FIELD);
-        }
-        return Optional.ofNullable(parameters.get(REGION_FIELD)).orElse(decryptedCredential.get(REGION_FIELD));
-    }
 }

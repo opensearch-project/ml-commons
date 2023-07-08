@@ -5,10 +5,9 @@
 
 package org.opensearch.ml.common.dataset.remote;
 
-import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.experimental.FieldDefaults;
+import lombok.Setter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
@@ -19,10 +18,10 @@ import java.io.IOException;
 import java.util.Map;
 
 @Getter
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @InputDataSet(MLInputDataType.REMOTE)
 public class RemoteInferenceInputDataSet extends MLInputDataset {
 
+    @Setter
     private Map<String, String> parameters;
 
     @Builder(toBuilder = true)

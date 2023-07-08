@@ -114,8 +114,8 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processOutput_PostprocessFunction() throws IOException {
-        String preprocessResult = "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
-        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult));
+        String postprocessResult = "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
+        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult));
 
         ConnectorAction predictAction = ConnectorAction.builder()
                 .actionType(ConnectorAction.ActionType.PREDICT)

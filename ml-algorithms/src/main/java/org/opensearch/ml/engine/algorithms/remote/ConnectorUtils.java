@@ -95,9 +95,11 @@ public class ConnectorUtils {
         } else {
             throw new IllegalArgumentException("Wrong input type");
         }
+        Map<String, String> escapedParameters = new HashMap<>();
         inputData.getParameters().entrySet().forEach(entry -> {
-            entry.setValue(escapeJava(entry.getValue()));
+            escapedParameters.put(entry.getKey(), escapeJava(entry.getValue()));
         });
+        inputData.setParameters(escapedParameters);
         return inputData;
     }
 

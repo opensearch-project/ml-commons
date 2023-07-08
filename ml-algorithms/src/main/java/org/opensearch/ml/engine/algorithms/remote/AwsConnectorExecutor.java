@@ -8,7 +8,7 @@ package org.opensearch.ml.engine.algorithms.remote;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.connector.AbstractConnector;
+import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
@@ -41,13 +41,13 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 public class AwsConnectorExecutor implements RemoteConnectorExecutor{
 
     @Getter
-    private AbstractConnector connector;
+    private AwsConnector connector;
     private final SdkHttpClient httpClient;
     @Setter @Getter
     private ScriptService scriptService;
 
     public AwsConnectorExecutor(Connector connector) {
-        this.connector = (AbstractConnector)connector;
+        this.connector = (AwsConnector) connector;
         this.httpClient = new DefaultSdkHttpClientBuilder().build();
     }
 

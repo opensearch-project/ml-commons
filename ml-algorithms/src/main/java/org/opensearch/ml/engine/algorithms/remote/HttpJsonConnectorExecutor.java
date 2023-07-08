@@ -16,8 +16,8 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
-import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -40,12 +40,12 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processO
 public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
     @Getter
-    private AbstractConnector connector;
+    private HttpConnector connector;
     @Setter @Getter
     private ScriptService scriptService;
 
     public HttpJsonConnectorExecutor(Connector connector) {
-        this.connector = (AbstractConnector)connector;
+        this.connector = (HttpConnector)connector;
     }
 
     @Override
@@ -78,10 +78,12 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
             Map<String, ?> headers = connector.getDecryptedHeaders();
             boolean hasContentTypeHeader = false;
-            for (String key : headers.keySet()) {
-                request.addHeader(key, (String)headers.get(key));
-                if (key.toLowerCase().equals("Content-Type")) {
-                    hasContentTypeHeader = true;
+            if (headers != null) {
+                for (String key : headers.keySet()) {
+                    request.addHeader(key, (String)headers.get(key));
+                    if (key.toLowerCase().equals("Content-Type")) {
+                        hasContentTypeHeader = true;
+                    }
                 }
             }
             if (!hasContentTypeHeader) {
@@ -89,7 +91,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = MLHttpClientFactory.getCloseableHttpClient();
+                try (CloseableHttpClient httpClient = getHttpClient();
                      CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
@@ -102,9 +104,16 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
             tensorOutputs.add(tensors);
+        } catch (RuntimeException e) {
+            log.error("Fail to execute http connector", e);
+            throw e;
         } catch (Throwable e) {
             log.error("Fail to execute http connector", e);
             throw new MLException("Fail to execute http connector", e);
         }
+    }
+
+    public CloseableHttpClient getHttpClient() {
+        return MLHttpClientFactory.getCloseableHttpClient();
     }
 }
