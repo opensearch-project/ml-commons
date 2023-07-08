@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.output.model;
 
-import com.google.gson.Gson;
 import lombok.Builder;
 import lombok.Data;
 import org.opensearch.common.io.stream.StreamInput;
@@ -27,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Data
 public class ModelTensor implements Writeable, ToXContentObject {
@@ -48,7 +48,6 @@ public class ModelTensor implements Writeable, ToXContentObject {
     private ByteBuffer byteBuffer;// whole result in bytes
     private String result;// whole result in string
     private Map<String, ?> dataAsMap;// whole result in Map
-    private Gson gson = new Gson();
 
     @Builder
     public ModelTensor(String name, Number[] data, long[] shape, MLResultDataType dataType, ByteBuffer byteBuffer, String result, Map<String, ?> dataAsMap) {

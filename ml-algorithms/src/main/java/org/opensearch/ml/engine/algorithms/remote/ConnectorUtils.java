@@ -48,6 +48,9 @@ public class ConnectorUtils {
     }
 
     public static RemoteInferenceInputDataSet processInput(MLInput mlInput, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
+        if (mlInput == null) {
+            throw new IllegalArgumentException("Input is null");
+        }
         RemoteInferenceInputDataSet inputData;
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet inputDataSet = (TextDocsInputDataSet)mlInput.getInputDataset();
@@ -58,6 +61,9 @@ public class ConnectorUtils {
                 throw new IllegalArgumentException("no predict action found");
             }
             String preProcessFunction = predictAction.get().getPreProcessFunction();
+            if (preProcessFunction == null) {
+                throw new IllegalArgumentException("Must provide pre_process_function for predict action to process text docs input.");
+            }
             if (preProcessFunction != null && preProcessFunction.contains("${parameters")) {
                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 preProcessFunction = substitutor.replace(preProcessFunction);
@@ -96,6 +102,9 @@ public class ConnectorUtils {
     }
 
     public static ModelTensors processOutput(String modelResponse, Connector connector, ScriptService scriptService, Map<String, String> parameters) throws IOException {
+        if (modelResponse == null) {
+            throw new IllegalArgumentException("model response is null");
+        }
         List<ModelTensor> modelTensors = new ArrayList<>();
         Optional<ConnectorAction> predictAction = connector.findPredictAction();
         if (!predictAction.isPresent()) {

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.connector;
 
+import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringSubstitutor;
@@ -20,6 +21,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -40,6 +42,21 @@ public class HttpConnector extends AbstractConnector {
     public static final String REGION_FIELD = "region";
 
     //TODO: add RequestConfig like request time out,
+
+    @Builder
+    public HttpConnector(String name, String description, String version, String protocol,
+                         Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
+                         List<String> backendRoles, AccessMode accessMode) {
+        this.name = name;
+        this.description = description;
+        this.version = version;
+        this.protocol = protocol;
+        this.parameters = parameters;
+        this.credential = credential;
+        this.actions = actions;
+        this.backendRoles = backendRoles;
+        this.access = accessMode;
+    }
 
     public HttpConnector(String protocol, XContentParser parser) throws IOException {
         this.protocol = protocol;
