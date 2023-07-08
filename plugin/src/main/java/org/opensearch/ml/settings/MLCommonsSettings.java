@@ -122,7 +122,7 @@ public final class MLCommonsSettings {
             "plugins.ml_commons.trusted_connector_endpoints_regex",
             ImmutableList
                 .of(
-                    "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+                    "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$"
                 ),
