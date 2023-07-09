@@ -27,7 +27,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -96,7 +95,9 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                                 } else {
                                     log.debug("Completed Get Model Request, id:{}", modelId);
                                     Connector connector = mlModel.getConnector();
-                                    connector.removeCredential();
+                                    if (connector != null) {
+                                        connector.removeCredential();
+                                    }
                                     actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                                 }
                             }, e -> {
