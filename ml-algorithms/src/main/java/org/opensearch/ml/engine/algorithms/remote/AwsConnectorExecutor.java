@@ -8,12 +8,14 @@ package org.opensearch.ml.engine.algorithms.remote;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.script.ScriptService;
 import software.amazon.awssdk.core.internal.http.loader.DefaultSdkHttpClientBuilder;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -46,9 +48,13 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
     @Setter @Getter
     private ScriptService scriptService;
 
-    public AwsConnectorExecutor(Connector connector) {
+    public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
         this.connector = (AwsConnector) connector;
-        this.httpClient = new DefaultSdkHttpClientBuilder().build();
+        this.httpClient = httpClient;
+    }
+
+    public AwsConnectorExecutor(Connector connector) {
+        this(connector, new DefaultSdkHttpClientBuilder().build());
     }
 
      @Override
@@ -62,8 +68,10 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
                     .uri(URI.create(endpoint))
                     .contentStreamProvider(requestBody.contentStreamProvider());
             Map<String, String> headers = connector.getDecryptedHeaders();
-            for (String key : headers.keySet()) {
-                builder.putHeader(key, headers.get(key));
+            if (headers != null) {
+                for (String key : headers.keySet()) {
+                    builder.putHeader(key, headers.get(key));
+                }
             }
             SdkHttpFullRequest request = builder.build();
             HttpExecuteRequest executeRequest = HttpExecuteRequest.builder()
@@ -88,12 +96,14 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
                         responseBuilder.append(line);
                     }
                 }
+            } else {
+                throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
             }
             String modelResponse = responseBuilder.toString();
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
             tensorOutputs.add(tensors);
-        } catch (IllegalArgumentException exception) {
+        } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
             throw exception;
         } catch (Throwable e) {

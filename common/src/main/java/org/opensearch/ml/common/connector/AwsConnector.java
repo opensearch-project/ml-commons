@@ -5,13 +5,17 @@
 
 package org.opensearch.ml.common.connector;
 
+import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
@@ -21,10 +25,19 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 @org.opensearch.ml.common.annotation.Connector(AWS_SIGV4)
 public class AwsConnector extends HttpConnector {
 
+    @Builder(builderMethodName = "awsConnectorBuilder")
+    public AwsConnector(String name, String description, String version, String protocol,
+                         Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
+                         List<String> backendRoles, AccessMode accessMode) {
+        super(name, description, version, protocol, parameters, credential, actions, backendRoles, accessMode);
+        validate();
+    }
+
     public AwsConnector(String protocol, XContentParser parser) throws IOException {
         super(protocol, parser);
         validate();
     }
+
 
     public AwsConnector(StreamInput input) throws IOException {
         super(input);
