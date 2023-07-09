@@ -78,7 +78,6 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     private MLCreateConnectorRequest request;
 
-    @Mock
     private MLCreateConnectorInput input;
 
     @Mock
@@ -94,16 +93,16 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private Settings settings;
 
-    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of(
-        "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
-        "^https://api\\.openai\\.com/.*$",
-        "^https://api\\.cohere\\.ai/.*$"
-    );
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
+        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES).build();
+        settings = Settings
+            .builder()
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
@@ -121,7 +120,6 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             clusterService,
             mlModelManager
         );
-        when(request.getMlCreateConnectorInput()).thenReturn(input);
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), true).build();
         threadContext = new ThreadContext(settings);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
@@ -139,16 +137,23 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
                     .url("https://${parameters.endpoint}/v1/completions")
                     .build()
             );
-        when(input.getActions()).thenReturn(actions);
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com");
-        when(input.getParameters()).thenReturn(parameters);
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        input = MLCreateConnectorInput
+            .builder()
+            .actions(actions)
+            .parameters(parameters)
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .build();
+        when(request.getMlCreateConnectorInput()).thenReturn(input);
     }
 
     public void test_execute_connectorAccessControl_notEnabled_success() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
-        when(input.getAddAllBackendRoles()).thenReturn(null);
-        when(input.getBackendRoles()).thenReturn(null);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -167,8 +172,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_connectorAccessControl_notEnabled_withPermissionInfo_exception() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
-        when(input.getAddAllBackendRoles()).thenReturn(true);
-        when(input.getBackendRoles()).thenReturn(null);
+        input.setBackendRoles(null);
+        input.setAddAllBackendRoles(true);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -192,8 +197,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_connectorAccessControlEnabled_success() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(false);
-        when(input.getBackendRoles()).thenReturn(ImmutableList.of("role1", "role2"));
+        input.setAddAllBackendRoles(false);
+        input.setBackendRoles(ImmutableList.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -210,10 +215,10 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
 
-    public void test_execute_connectorAccessControlEnabled_missingPermissionInfo_exception() {
+    public void test_execute_connectorAccessControlEnabled_missingPermissionInfo_defaultToPrivate() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(null);
-        when(input.getBackendRoles()).thenReturn(null);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -227,19 +232,14 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
         action.doExecute(task, request, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You must specify at least one backend role or make the connector public/private for registering it.",
-            argumentCaptor.getValue().getMessage()
-        );
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
 
     public void test_execute_connectorAccessControlEnabled_adminSpecifyAllBackendRoles_exception() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
         when(connectorAccessControlHelper.isAdmin(any(User.class))).thenReturn(true);
-        when(input.getAddAllBackendRoles()).thenReturn(true);
-        when(input.getBackendRoles()).thenReturn(null);
+        input.setAddAllBackendRoles(true);
+        input.setBackendRoles(null);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -262,9 +262,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_connectorAccessControlEnabled_specifyBackendRolesForPublicConnector_exception() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(true);
-        when(input.getAccess()).thenReturn(AccessMode.PUBLIC);
-        when(input.getBackendRoles()).thenReturn(null);
+        input.setAddAllBackendRoles(true);
+        input.setAccess(AccessMode.PUBLIC);
+        input.setBackendRoles(null);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -296,8 +296,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(true);
-        when(input.getBackendRoles()).thenReturn(null);
+        input.setAddAllBackendRoles(true);
+        input.setBackendRoles(null);
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -337,8 +337,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(true);
-        when(input.getBackendRoles()).thenReturn(ImmutableList.of("role1", "role2"));
+        input.setAddAllBackendRoles(true);
+        input.setBackendRoles(ImmutableList.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -381,8 +381,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(false);
-        when(input.getBackendRoles()).thenReturn(ImmutableList.of("role1", "role2"));
+        input.setAddAllBackendRoles(false);
+        input.setBackendRoles(ImmutableList.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -414,8 +414,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_execute_dryRun_connector_creation() {
         when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(false);
-        when(input.getAddAllBackendRoles()).thenReturn(false);
-        when(input.getBackendRoles()).thenReturn(ImmutableList.of("role1", "role2"));
+        input.setAddAllBackendRoles(false);
+        input.setBackendRoles(ImmutableList.of("role1", "role2"));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -454,13 +454,12 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             .description(randomAlphaOfLength(10))
             .version("1")
             .protocol(ConnectorProtocols.HTTP)
-            .parameters(ImmutableMap.of("k1", "v1", "k2", "v2"))
             .actions(actions)
             .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
-        when(input.getParameters()).thenReturn(parameters);
+        mlCreateConnectorInput.setParameters(parameters);
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
             transportService,
             actionFilters,
@@ -476,7 +475,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Connector URL is not matching the trusted connector endpoint regex, regex is: ^https://(runtime\\.sagemaker\\..*\\.amazonaws\\.com/|api.openai.com|api.cohere.ai).*$,URL is: https://${parameters.endpoint}/v1/completions",
+            "Connector URL is not matching the trusted connector endpoint regex, URL is: https://api.openai1.com/v1/completions",
             argumentCaptor.getValue().getMessage()
         );
     }

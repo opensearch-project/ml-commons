@@ -87,7 +87,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new IllegalArgumentException("Failed to find connector with the provided connector id: " + connectorId));
+                    actionListener
+                        .onFailure(new IllegalArgumentException("Failed to find connector with the provided connector id: " + connectorId));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {

@@ -72,8 +72,17 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                         if (searchHits.length == 0) {
                             deleteConnector(deleteRequest, connectorId, actionListener);
                         } else {
-                            log.error(searchHits.length + " models are still using this connector, please delete or update the models first!");
-                            actionListener.onFailure(new MLValidationException(searchHits.length + " models are still using this connector, please delete or update the models first!"));
+                            log
+                                .error(
+                                    searchHits.length + " models are still using this connector, please delete or update the models first!"
+                                );
+                            actionListener
+                                .onFailure(
+                                    new MLValidationException(
+                                        searchHits.length
+                                            + " models are still using this connector, please delete or update the models first!"
+                                    )
+                                );
                         }
                     }, e -> {
                         log.error("Failed to delete ML connector: " + connectorId, e);

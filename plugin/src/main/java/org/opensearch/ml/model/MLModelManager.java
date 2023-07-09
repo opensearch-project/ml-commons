@@ -34,10 +34,10 @@ import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -105,7 +105,6 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
-import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.profile.MLModelProfile;
@@ -209,12 +208,10 @@ public class MLModelManager {
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE, it -> maxDeployTasksPerNode = it);
 
         this.masterKey = ML_COMMONS_MASTER_SECRET_KEY.get(settings);
-        clusterService
-                .getClusterSettings()
-                .addSettingsUpdateConsumer(ML_COMMONS_MASTER_SECRET_KEY, it -> {
-                    masterKey = it;
-                    mlEngine.setMasterKey(masterKey);
-                });
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MASTER_SECRET_KEY, it -> {
+            masterKey = it;
+            mlEngine.setMasterKey(masterKey);
+        });
     }
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
@@ -371,11 +368,7 @@ public class MLModelManager {
         }
     }
 
-    private void indexRemoteModel(
-        MLRegisterModelInput registerModelInput,
-        MLTask mlTask,
-        String modelVersion
-    ) {
+    private void indexRemoteModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -435,11 +428,7 @@ public class MLModelManager {
         }
     }
 
-    private void uploadModel(
-        MLRegisterModelInput registerModelInput,
-        MLTask mlTask,
-        String modelVersion
-    ) throws PrivilegedActionException {
+    private void uploadModel(MLRegisterModelInput registerModelInput, MLTask mlTask, String modelVersion) throws PrivilegedActionException {
         if (registerModelInput.getUrl() != null) {
             registerModelFromUrl(registerModelInput, mlTask, modelVersion);
         } else if (registerModelInput.getFunctionName() == FunctionName.REMOTE || registerModelInput.getConnectorId() != null) {
@@ -1163,6 +1152,5 @@ public class MLModelManager {
     public boolean isModelRunningOnNode(String modelId) {
         return modelCacheHelper.isModelRunningOnNode(modelId);
     }
-
 
 }

@@ -18,11 +18,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
-
-import com.google.common.collect.ImmutableMap;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.Mock;
@@ -635,7 +632,10 @@ public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
     private void mockClusterDataNodes(ClusterService clusterService) {
         ClusterState clusterState = mock(ClusterState.class);
         DiscoveryNodes discoveryNodes = mock(DiscoveryNodes.class);
-        ImmutableOpenMap<String, DiscoveryNode> dataNodes = ImmutableOpenMap.<String, DiscoveryNode>builder().fPut("dataNodeId", mock(DiscoveryNode.class)).build();
+        ImmutableOpenMap<String, DiscoveryNode> dataNodes = ImmutableOpenMap
+            .<String, DiscoveryNode>builder()
+            .fPut("dataNodeId", mock(DiscoveryNode.class))
+            .build();
         when(discoveryNodes.getDataNodes()).thenReturn(dataNodes);
         when(discoveryNodes.getSize()).thenReturn(2); // a ml node join cluster.
         when(clusterState.nodes()).thenReturn(discoveryNodes);

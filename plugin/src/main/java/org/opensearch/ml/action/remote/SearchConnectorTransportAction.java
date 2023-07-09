@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.action.remote;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -15,7 +19,6 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -26,10 +29,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 import lombok.extern.log4j.Log4j2;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Log4j2
 public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
