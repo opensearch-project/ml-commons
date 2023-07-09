@@ -120,6 +120,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             ActionListener<DiscoveryNode> actionListener = ActionListener.wrap(node -> {
                 if (clusterService.localNode().getId().equals(node.getId())) {
                     log.debug("Execute ML predict request {} locally on node {}", request.getRequestID(), node.getId());
+                    request.setDispatchTask(false);
                     executeTask(request, listener);
                 } else {
                     log.debug("Execute ML predict request {} remotely on node {}", request.getRequestID(), node.getId());
@@ -129,8 +130,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             }, e -> { listener.onFailure(e); });
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, true);
             if (workerNodes == null || workerNodes.length == 0) {
-                if (algorithm == FunctionName.TEXT_EMBEDDING) {
-                    listener.onFailure(new IllegalArgumentException("model not deployed"));
+                if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(
+                                "Model not ready yet. Please run this first: POST /_plugins/_ml/models/" + modelId + "/_deploy"
+                            )
+                        );
                     return;
                 } else {
                     workerNodes = nodeHelper.getEligibleNodeIds();
@@ -204,6 +210,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             try {
                 Predictable predictor = mlModelManager.getPredictor(modelId);
                 if (predictor != null) {
+                    if (!predictor.isModelReady()) {
+                        throw new IllegalArgumentException("Model not ready: " + modelId);
+                    }
                     MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
                     if (output instanceof MLPredictionOutput) {
                         ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
@@ -214,8 +223,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     MLTaskResponse response = MLTaskResponse.builder().output(output).build();
                     internalListener.onResponse(response);
                     return;
-                } else if (algorithm == FunctionName.TEXT_EMBEDDING) {
-                    throw new IllegalArgumentException("model not deployed");
+                } else if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
+                    throw new IllegalArgumentException("Model not ready to be used: " + modelId);
                 }
             } catch (Exception e) {
                 handlePredictFailure(mlTask, internalListener, e, false);

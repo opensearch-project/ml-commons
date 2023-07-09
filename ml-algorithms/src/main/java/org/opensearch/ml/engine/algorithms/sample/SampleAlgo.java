@@ -49,6 +49,11 @@ public class SampleAlgo implements Trainable, Predictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return true;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         AtomicReference<Double> sum = new AtomicReference<>((double) 0);
         DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();

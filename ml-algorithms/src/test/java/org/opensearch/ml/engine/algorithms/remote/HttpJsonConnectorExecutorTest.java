@@ -66,7 +66,7 @@ public class HttpJsonConnectorExecutorTest {
                 .url("http://test.com/mock")
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         executor.invokeRemoteModel(null, null, null, null);
     }
@@ -79,7 +79,7 @@ public class HttpJsonConnectorExecutorTest {
                 .url("http://test.com/mock")
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         when(httpClient.execute(any())).thenReturn(response);
         HttpEntity entity = new StringEntity("{\"response\": \"test result\"}");
@@ -103,7 +103,7 @@ public class HttpJsonConnectorExecutorTest {
                 .url("http://test.com/mock")
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -129,7 +129,7 @@ public class HttpJsonConnectorExecutorTest {
                 .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setScriptService(scriptService);
         when(httpClient.execute(any())).thenReturn(response);

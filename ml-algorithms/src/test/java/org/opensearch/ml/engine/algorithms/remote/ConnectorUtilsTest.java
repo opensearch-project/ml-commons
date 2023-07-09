@@ -67,7 +67,7 @@ public class ConnectorUtilsTest {
                 .url("http://test.com/mock")
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
-        Connector connector = HttpConnector.builder().name("test connector").version("1").actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
     }
 
@@ -104,7 +104,7 @@ public class ConnectorUtilsTest {
                 .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").parameters(parameters).actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         ModelTensors tensors = ConnectorUtils.processOutput("{\"response\": \"test response\"}", connector, scriptService, ImmutableMap.of());
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
@@ -126,7 +126,7 @@ public class ConnectorUtilsTest {
                 .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").parameters(parameters).actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         String modelResponse = "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils.processOutput(modelResponse, connector, scriptService, ImmutableMap.of());
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
@@ -153,7 +153,7 @@ public class ConnectorUtilsTest {
                 .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").parameters(parameters).actions(Arrays.asList(predictAction)).build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
         Assert.assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
