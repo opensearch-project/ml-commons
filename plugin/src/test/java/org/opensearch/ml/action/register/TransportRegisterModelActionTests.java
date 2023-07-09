@@ -18,7 +18,8 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
-import com.google.common.collect.ImmutableList;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -62,7 +63,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import java.util.List;
+import com.google.common.collect.ImmutableList;
 
 public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Rule
@@ -127,11 +128,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
 
-    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of(
-        "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
-        "^https://api\\.openai\\.com/.*$",
-        "^https://api\\.cohere\\.ai/.*$"
-    );
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
+        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;

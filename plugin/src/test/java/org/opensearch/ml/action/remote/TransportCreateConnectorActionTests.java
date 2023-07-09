@@ -93,16 +93,16 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     private Settings settings;
 
-    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of(
-        "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
-        "^https://api\\.openai\\.com/.*$",
-        "^https://api\\.cohere\\.ai/.*$"
-    );
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
+        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES).build();
+        settings = Settings
+            .builder()
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
@@ -140,7 +140,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai.com");
         Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
-        input = MLCreateConnectorInput.builder()
+        input = MLCreateConnectorInput
+            .builder()
             .actions(actions)
             .parameters(parameters)
             .protocol(ConnectorProtocols.HTTP)

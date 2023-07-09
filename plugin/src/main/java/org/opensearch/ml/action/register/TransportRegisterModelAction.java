@@ -15,7 +15,6 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.util.Strings;
@@ -155,13 +154,18 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     if (Boolean.TRUE.equals(r)) {
                         registerModel(registerModelInput, listener);
                     } else {
-                        listener.onFailure(new IllegalArgumentException("You don't have permission to use the connector provided, connector id: " + registerModelInput.getConnectorId()));
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "You don't have permission to use the connector provided, connector id: "
+                                        + registerModelInput.getConnectorId()
+                                )
+                            );
                     }
                 }, e -> {
                     log
                         .error(
-                            "You don't have permission to use the connector provided, connector id: "
-                                + registerModelInput.getConnectorId(),
+                            "You don't have permission to use the connector provided, connector id: " + registerModelInput.getConnectorId(),
                             e
                         );
                     listener.onFailure(e);

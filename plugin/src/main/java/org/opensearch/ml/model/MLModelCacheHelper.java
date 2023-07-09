@@ -157,12 +157,15 @@ public class MLModelCacheHelper {
      */
     public String[] getLocalDeployedModels() {
         return modelCaches
-                .entrySet()
-                .stream()
-                .filter(entry -> (entry.getValue().getModelState() == MLModelState.DEPLOYED && entry.getValue().getFunctionName() != FunctionName.REMOTE))
-                .map(entry -> entry.getKey())
-                .collect(Collectors.toList())
-                .toArray(new String[0]);
+            .entrySet()
+            .stream()
+            .filter(
+                entry -> (entry.getValue().getModelState() == MLModelState.DEPLOYED
+                    && entry.getValue().getFunctionName() != FunctionName.REMOTE)
+            )
+            .map(entry -> entry.getKey())
+            .collect(Collectors.toList())
+            .toArray(new String[0]);
     }
 
     /**

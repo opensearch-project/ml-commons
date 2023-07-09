@@ -64,7 +64,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.Index;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
@@ -321,7 +320,10 @@ public class TestHelper {
         final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
         IndexMetadata indexMetaData = IndexMetadata.builder(indexName).settings(existingSettings).putMapping(mapping).build();
 
-        final ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap.<String, IndexMetadata>builder().fPut(indexName, indexMetaData).build();
+        final ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap
+            .<String, IndexMetadata>builder()
+            .fPut(indexName, indexMetaData)
+            .build();
 
         return ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
     }
@@ -373,10 +375,11 @@ public class TestHelper {
                     .put("index.version.created", Version.CURRENT.id)
             )
             .build();
-        ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap.<String, IndexMetadata>builder().fPut(ML_MODEL_INDEX, indexMetadata).build();
-        Metadata metadata = new Metadata.Builder()
-            .indices(indices)
+        ImmutableOpenMap<String, IndexMetadata> indices = ImmutableOpenMap
+            .<String, IndexMetadata>builder()
+            .fPut(ML_MODEL_INDEX, indexMetadata)
             .build();
+        Metadata metadata = new Metadata.Builder().indices(indices).build();
         return new ClusterState(
             new ClusterName("test cluster"),
             123l,
