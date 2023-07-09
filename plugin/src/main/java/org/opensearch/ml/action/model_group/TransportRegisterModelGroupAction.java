@@ -25,10 +25,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
@@ -112,7 +112,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                     mlModelGroup = builder
                         .name(modelName)
                         .description(input.getDescription())
-                        .access(ModelAccessMode.PUBLIC.getValue())
+                        .access(AccessMode.PUBLIC.getValue())
                         .createdTime(Instant.now())
                         .lastUpdatedTime(Instant.now())
                         .build();
@@ -146,7 +146,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     }
 
     private void validateRequestForAccessControl(MLRegisterModelGroupInput input, User user) {
-        ModelAccessMode modelAccessMode = input.getModelAccessMode();
+        AccessMode modelAccessMode = input.getModelAccessMode();
         Boolean isAddAllBackendRoles = input.getIsAddAllBackendRoles();
         if (modelAccessMode == null) {
             if (!Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(input.getBackendRoles())) {
@@ -154,14 +154,14 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
                     "You must specify at least one backend role or make the model group public/private for registering it."
                 );
             } else {
-                input.setModelAccessMode(ModelAccessMode.RESTRICTED);
-                modelAccessMode = ModelAccessMode.RESTRICTED;
+                input.setModelAccessMode(AccessMode.RESTRICTED);
+                modelAccessMode = AccessMode.RESTRICTED;
             }
         }
-        if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
+        if ((AccessMode.PUBLIC == modelAccessMode || AccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles))) {
             throw new IllegalArgumentException("You can specify backend roles only for a model group with the restricted access mode.");
-        } else if (ModelAccessMode.RESTRICTED == modelAccessMode) {
+        } else if (AccessMode.RESTRICTED == modelAccessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }

@@ -15,6 +15,7 @@ import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -39,7 +40,8 @@ public class TextEmbeddingModel extends DLModel {
     public static final String SENTENCE_EMBEDDING = "sentence_embedding";
 
     @Override
-    public ModelTensorOutput predict(String modelId, MLInputDataset inputDataSet) throws TranslateException {
+    public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
+        MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
         TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;

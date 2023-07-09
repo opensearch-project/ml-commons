@@ -55,12 +55,13 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     implementation group: 'com.google.guava', name: 'guava', version: '32.0.1-jre'
-    implementation group: 'com.google.code.gson', name: 'gson', version: '2.9.1'
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
@@ -324,6 +325,10 @@ configurations.all {
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
     resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'org.apache.httpcomponents:httpcore:4.4.15'
+    resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
+    resolutionStrategy.force 'commons-codec:commons-codec:1.15'
+    resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

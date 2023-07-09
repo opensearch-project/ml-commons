@@ -47,6 +47,8 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -95,10 +97,12 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     String errorMessage = "test error";
     Settings settings;
     MLEngine mlEngine;
+    private Encryptor encryptor;
 
     @Before
     public void setup() {
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
+        encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().build();
         MockitoAnnotations.openMocks(this);
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);

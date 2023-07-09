@@ -117,7 +117,13 @@ public class ONNXSentenceTransformerTextEmbeddingTranslator implements ServingTr
         Number[] data = embeddings.toArray();
         List<ModelTensor> outputs = new ArrayList<>();
         long[] shape = embeddings.getShape().getShape();
-        outputs.add(new ModelTensor(SENTENCE_EMBEDDING, data, shape, MLResultDataType.FLOAT32, null));
+        ModelTensor modelTensor = ModelTensor.builder()
+                .name(SENTENCE_EMBEDDING)
+                .data(data)
+                .shape(shape)
+                .dataType(MLResultDataType.FLOAT32)
+                .build();
+        outputs.add(modelTensor);
 
         Output output = new Output();
         ModelTensors modelTensorOutput = new ModelTensors(outputs);

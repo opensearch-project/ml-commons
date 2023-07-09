@@ -6,7 +6,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -29,7 +29,7 @@ public class MLUpdateModelGroupRequestTest {
                 .name("name")
                 .description("description")
                 .backendRoles(Arrays.asList("IT"))
-                .modelAccessMode(ModelAccessMode.RESTRICTED)
+                .modelAccessMode(AccessMode.RESTRICTED)
                 .isAddAllBackendRoles(true)
                 .build();
     }
@@ -47,7 +47,7 @@ public class MLUpdateModelGroupRequestTest {
         assertEquals("name", request.getUpdateModelGroupInput().getName());
         assertEquals("description", request.getUpdateModelGroupInput().getDescription());
         assertEquals("IT", request.getUpdateModelGroupInput().getBackendRoles().get(0));
-        assertEquals(ModelAccessMode.RESTRICTED, request.getUpdateModelGroupInput().getModelAccessMode());
+        assertEquals(AccessMode.RESTRICTED, request.getUpdateModelGroupInput().getModelAccessMode());
         assertEquals(true, request.getUpdateModelGroupInput().getIsAddAllBackendRoles());
     }
 

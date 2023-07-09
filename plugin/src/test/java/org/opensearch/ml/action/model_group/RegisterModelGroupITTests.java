@@ -9,7 +9,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
@@ -33,7 +33,7 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_name",
             "mock_model_group_desc",
             null,
-            ModelAccessMode.PUBLIC,
+            AccessMode.PUBLIC,
             false
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
@@ -46,7 +46,7 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_name",
             "mock_model_group_desc",
             null,
-            ModelAccessMode.PRIVATE,
+            AccessMode.PRIVATE,
             false
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
@@ -65,7 +65,7 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_name",
             "mock_model_group_desc",
             null,
-            ModelAccessMode.RESTRICTED,
+            AccessMode.RESTRICTED,
             true
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
@@ -78,7 +78,7 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_name",
             "mock_model_group_desc",
             ImmutableList.of("role-1"),
-            ModelAccessMode.RESTRICTED,
+            AccessMode.RESTRICTED,
             null
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
