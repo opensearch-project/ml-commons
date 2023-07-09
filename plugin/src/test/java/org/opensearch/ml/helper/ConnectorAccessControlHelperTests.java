@@ -40,6 +40,8 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
@@ -91,72 +93,72 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     public void test_hasPermission_user_null_return_true() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(null, detachedConnector);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(null, httpConnector);
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_connectorAccessControl_not_enabled_return_true() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
+        HttpConnector httpConnector = mock(HttpConnector.class);
         Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED.getKey(), false).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         ConnectorAccessControlHelper connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, detachedConnector);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_connectorOwner_is_null_return_true() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        when(detachedConnector.getOwner()).thenReturn(null);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, detachedConnector);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getOwner()).thenReturn(null);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_user_is_admin_return_true() {
         User user = User.parse("admin|role-1|all_access");
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, mock(DetachedConnector.class));
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, mock(HttpConnector.class));
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_connector_isPublic_return_true() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        when(detachedConnector.getAccess()).thenReturn(AccessMode.PUBLIC);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, detachedConnector);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.PUBLIC);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_connector_isPrivate_userIsOwner_return_true() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        when(detachedConnector.getAccess()).thenReturn(AccessMode.PRIVATE);
-        when(detachedConnector.getOwner()).thenReturn(user);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, detachedConnector);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.PRIVATE);
+        when(httpConnector.getOwner()).thenReturn(user);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_connector_isPrivate_userIsNotOwner_return_false() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        when(detachedConnector.getAccess()).thenReturn(AccessMode.PRIVATE);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.PRIVATE);
         User user1 = User.parse(USER_STRING);
-        when(detachedConnector.getOwner()).thenReturn(user);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user1, detachedConnector);
+        when(httpConnector.getOwner()).thenReturn(user);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user1, httpConnector);
         assertFalse(hasPermission);
     }
 
     public void test_hasPermission_connector_isRestricted_userHasBackendRole_return_true() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        when(detachedConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
-        when(detachedConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-1"));
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, detachedConnector);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
+        when(httpConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-1"));
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertTrue(hasPermission);
     }
 
     public void test_hasPermission_connector_isRestricted_userNotHasBackendRole_return_false() {
-        DetachedConnector detachedConnector = mock(DetachedConnector.class);
-        when(detachedConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
-        when(detachedConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-3"));
-        when(detachedConnector.getOwner()).thenReturn(user);
-        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, detachedConnector);
+        HttpConnector httpConnector = mock(HttpConnector.class);
+        when(httpConnector.getAccess()).thenReturn(AccessMode.RESTRICTED);
+        when(httpConnector.getBackendRoles()).thenReturn(ImmutableList.of("role-3"));
+        when(httpConnector.getOwner()).thenReturn(user);
+        boolean hasPermission = connectorAccessControlHelper.hasPermission(user, httpConnector);
         assertFalse(hasPermission);
     }
 
@@ -278,17 +280,18 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     }
 
     private GetResponse createGetResponse(List<String> backendRoles) {
-        DetachedConnector detachedConnector = DetachedConnector
+        HttpConnector httpConnector = HttpConnector
             .builder()
             .name("testConnector")
-            .description("This is test connector")
+            .protocol(ConnectorProtocols.HTTP)
             .owner(user)
+            .description("This is test connector")
             .backendRoles(Optional.ofNullable(backendRoles).orElse(ImmutableList.of("role-1")))
-            .access(AccessMode.RESTRICTED)
+            .accessMode(AccessMode.RESTRICTED)
             .build();
         XContentBuilder content = null;
         try {
-            content = detachedConnector.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+            content = httpConnector.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

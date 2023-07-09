@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 
@@ -28,8 +29,9 @@ public class AwsConnector extends HttpConnector {
     @Builder(builderMethodName = "awsConnectorBuilder")
     public AwsConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
-                         List<String> backendRoles, AccessMode accessMode) {
-        super(name, description, version, protocol, parameters, credential, actions, backendRoles, accessMode);
+                         List<String> backendRoles, AccessMode accessMode, User owner
+        ) {
+        super(name, description, version, protocol, parameters, credential, actions, backendRoles, accessMode, owner);
         validate();
     }
 
