@@ -210,6 +210,11 @@ public class LinearRegression implements Trainable, Predictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return regressionModel != null;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         if (regressionModel == null) {
             throw new IllegalArgumentException("model not deployed");

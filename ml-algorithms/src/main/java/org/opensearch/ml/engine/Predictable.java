@@ -45,4 +45,10 @@ public interface Predictable {
      * Close resources like deployed model.
      */
     void close();
+
+    /**
+     * Check if model ready to be used.
+     * @return
+     */
+    boolean isModelReady();
 }
