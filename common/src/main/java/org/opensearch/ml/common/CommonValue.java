@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common;
 
+import org.opensearch.ml.common.connector.AbstractConnector;
+
 import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
 import static org.opensearch.ml.common.model.MLModelConfig.MODEL_TYPE_FIELD;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD;
@@ -31,8 +33,10 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 1;
-    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 5;
+    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 6;
+    public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
+    public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 1;
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
@@ -94,6 +98,29 @@ public class CommonValue {
             "      \"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n" +
             "  }\n" +
             "}";
+
+    public static final String ML_CONNECTOR_INDEX_FIELDS = "    \"properties\": {\n"
+            + "      \""
+            + AbstractConnector.NAME_FIELD
+            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "      \""
+            + AbstractConnector.VERSION_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + AbstractConnector.DESCRIPTION_FIELD
+            + "\" : {\"type\": \"text\"},\n"
+            + "      \""
+            + AbstractConnector.PROTOCOL_FIELD
+            + "\" : {\"type\": \"keyword\"},\n"
+            + "      \""
+            + AbstractConnector.PARAMETERS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + AbstractConnector.CREDENTIAL_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + AbstractConnector.ACTIONS_FIELD
+            + "\" : {\"type\": \"flat_object\"}\n";
 
     public static final String ML_MODEL_INDEX_MAPPING = "{\n"
             + "    \"_meta\": {\"schema_version\": "
@@ -182,6 +209,9 @@ public class CommonValue {
             + "      \""
             + MLModel.LAST_UNDEPLOYED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLModel.CONNECTOR_FIELD
+            + "\": {" + ML_CONNECTOR_INDEX_FIELDS + "    }\n},"
             + USER_FIELD_MAPPING
             + "    }\n"
             + "}";
@@ -228,6 +258,47 @@ public class CommonValue {
             + MLTask.IS_ASYNC_TASK_FIELD
             + "\" : {\"type\" : \"boolean\"}, \n"
             + USER_FIELD_MAPPING
+            + "    }\n"
+            + "}";
+
+    public static final String ML_CONNECTOR_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_CONNECTOR_SCHEMA_VERSION
+            + "},\n"
+            + ML_CONNECTOR_INDEX_FIELDS + ",\n"
+            + "      \""
+            + MLModelGroup.BACKEND_ROLES_FIELD
+            + "\": {\n"
+            + "   \"type\": \"text\",\n"
+            + "      \"fields\": {\n"
+            + "        \"keyword\": {\n"
+            + "          \"type\": \"keyword\",\n"
+            + "          \"ignore_above\": 256\n"
+            + "        }\n"
+            + "      }\n"
+            + "    },\n"
+            + "   \""
+            + MLModelGroup.ACCESS
+            + "\": {\n"
+            + "   \"type\": \"keyword\"\n"
+            + "    },\n"
+            + "  \""
+            + MLModelGroup.OWNER
+            + "\": {\n"
+            + "    \"type\": \"nested\",\n"
+            + "        \"properties\": {\n"
+            + "          \"name\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\", \"ignore_above\":256}}},\n"
+            + "          \"backend_roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
+            + "          \"roles\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}},\n"
+            + "          \"custom_attribute_names\": {\"type\":\"text\", \"fields\":{\"keyword\":{\"type\":\"keyword\"}}}\n"
+            + "        }\n"
+            + "    },\n"
+            + "  \""
+            + AbstractConnector.CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + AbstractConnector.LAST_UPDATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
             + "    }\n"
             + "}";
 }
