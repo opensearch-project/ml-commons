@@ -47,7 +47,7 @@ public class HttpConnector extends AbstractConnector {
     @Builder
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
-                         List<String> backendRoles, AccessMode accessMode) {
+                         List<String> backendRoles, AccessMode accessMode, User owner) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
@@ -58,6 +58,7 @@ public class HttpConnector extends AbstractConnector {
         this.actions = actions;
         this.backendRoles = backendRoles;
         this.access = accessMode;
+        this.owner = owner;
     }
 
     public HttpConnector(String protocol, XContentParser parser) throws IOException {
