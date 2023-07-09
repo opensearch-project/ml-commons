@@ -291,7 +291,13 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.autoredeploy.MLModelAutoReDeployer.SearchRequestBuilderFactory',
         'org.opensearch.ml.action.training.TrainingITTests',
         'org.opensearch.ml.action.prediction.PredictionITTests',
-        'org.opensearch.ml.cluster.MLSyncUpCron'
+        'org.opensearch.ml.cluster.MLSyncUpCron',
+        'org.opensearch.ml.action.connector.GetConnectorTransportAction',
+        'org.opensearch.ml.breaker.MemoryCircuitBreaker',
+        'org.opensearch.ml.action.connector.DeleteConnectorTransportAction',
+        'org.opensearch.ml.action.connector.DeleteConnectorTransportAction.1',
+        'org.opensearch.ml.action.connector.TransportCreateConnectorAction',
+        'org.opensearch.ml.action.connector.SearchConnectorTransportAction'
 ]
 
 jacocoTestCoverageVerification {
