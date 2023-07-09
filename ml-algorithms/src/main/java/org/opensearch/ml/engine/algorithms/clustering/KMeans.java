@@ -99,6 +99,11 @@ public class KMeans implements TrainAndPredictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return kMeansModel != null;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         MutableDataset<ClusterID> predictionDataset = TribuoUtil.generateDataset(dataFrame, new ClusteringFactory(),

@@ -83,6 +83,11 @@ public class BatchRandomCutForest implements TrainAndPredictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return forest != null;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         List<Map<String, Object>> predictResult = process(dataFrame, forest, 0);

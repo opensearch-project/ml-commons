@@ -28,6 +28,7 @@ import java.util.function.Function;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
@@ -47,6 +48,7 @@ public class HttpConnector extends AbstractConnector {
     public HttpConnector(String name, String description, String version, String protocol,
                          Map<String, String> parameters, Map<String, String> credential, List<ConnectorAction> actions,
                          List<String> backendRoles, AccessMode accessMode) {
+        validateProtocol(protocol);
         this.name = name;
         this.description = description;
         this.version = version;

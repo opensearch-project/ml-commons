@@ -203,6 +203,11 @@ public class LogisticRegression implements Trainable, Predictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return classificationModel != null;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
         MutableDataset<Label> predictionDataset = TribuoUtil.generateDataset(dataFrame, new LabelFactory(),

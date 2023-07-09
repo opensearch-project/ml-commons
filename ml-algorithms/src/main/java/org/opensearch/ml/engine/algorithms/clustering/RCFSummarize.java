@@ -146,6 +146,11 @@ public class RCFSummarize implements TrainAndPredictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return summary != null;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         Iterable<float[]> centroidsLst = Arrays.asList(summary.summaryPoints);
         DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
