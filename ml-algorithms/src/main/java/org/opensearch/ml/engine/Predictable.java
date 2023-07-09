@@ -8,6 +8,7 @@ package org.opensearch.ml.engine;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 
 import java.util.Map;
 
@@ -36,8 +37,9 @@ public interface Predictable {
      * Init model (load model into memory) with ML model content and params.
      * @param model ML model
      * @param params other parameters
+     * @param encryptor encryptor
      */
-    void initModel(MLModel model, Map<String, Object> params);
+    void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor);
 
     /**
      * Close resources like deployed model.

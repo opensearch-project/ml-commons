@@ -28,8 +28,8 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
@@ -121,12 +121,12 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     ) {
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
-            if (ModelAccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
+            if (AccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
                 source.put(MLModelGroup.BACKEND_ROLES_FIELD, ImmutableList.of());
             }
         } else if (updateModelGroupInput.getBackendRoles() != null
             || Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
-            source.put(MLModelGroup.ACCESS, ModelAccessMode.RESTRICTED.getValue());
+            source.put(MLModelGroup.ACCESS, AccessMode.RESTRICTED.getValue());
         }
         if (updateModelGroupInput.getBackendRoles() != null) {
             source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
@@ -175,11 +175,11 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
             throw new IllegalArgumentException("You don't have permissions to perform this operation on this model group.");
         }
-        ModelAccessMode modelAccessMode = input.getModelAccessMode();
-        if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
+        AccessMode modelAccessMode = input.getModelAccessMode();
+        if ((AccessMode.PUBLIC == modelAccessMode || AccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
             throw new IllegalArgumentException("You can specify backend roles only for a model group with the restricted access mode.");
-        } else if (modelAccessMode == null || ModelAccessMode.RESTRICTED == modelAccessMode) {
+        } else if (modelAccessMode == null || AccessMode.RESTRICTED == modelAccessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
@@ -192,7 +192,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
             }
-            if (ModelAccessMode.RESTRICTED == modelAccessMode
+            if (AccessMode.RESTRICTED == modelAccessMode
                 && CollectionUtils.isEmpty(input.getBackendRoles())
                 && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException(

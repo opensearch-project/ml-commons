@@ -23,9 +23,9 @@ import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -112,7 +112,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
         // Create public model group
-        mlRegisterModelGroupInput = createRegisterModelGroupInput(null, ModelAccessMode.PUBLIC, false);
+        mlRegisterModelGroupInput = createRegisterModelGroupInput(null, AccessMode.PUBLIC, false);
 
         registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             this.modelGroupId = (String) registerModelGroupResult.get("model_group_id");

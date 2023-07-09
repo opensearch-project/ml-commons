@@ -66,9 +66,9 @@ import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -669,7 +669,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public MLRegisterModelGroupInput createRegisterModelGroupInput(
         List<String> backendRoles,
-        ModelAccessMode modelAccessMode,
+        AccessMode modelAccessMode,
         Boolean isAddAllBackendRoles
     ) {
         return MLRegisterModelGroupInput
@@ -687,7 +687,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         String name,
         String description,
         List<String> backendRoles,
-        ModelAccessMode modelAccessMode,
+        AccessMode modelAccessMode,
         Boolean isAddAllBackendRoles
     ) {
         return MLUpdateModelGroupInput
