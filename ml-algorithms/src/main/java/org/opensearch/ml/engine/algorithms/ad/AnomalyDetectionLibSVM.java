@@ -85,6 +85,11 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     }
 
     @Override
+    public boolean isModelReady() {
+        return libSVMAnomalyModel != null;
+    }
+
+    @Override
     public MLOutput predict(MLInput mlInput) {
         MLInputDataset inputDataset = mlInput.getInputDataset();
         DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();

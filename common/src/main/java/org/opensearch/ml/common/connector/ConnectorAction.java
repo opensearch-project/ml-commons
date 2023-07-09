@@ -89,6 +89,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (headers != null) {
             out.writeBoolean(true);
             out.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
         }
         out.writeOptionalString(requestBody);
         out.writeOptionalString(preProcessFunction);
