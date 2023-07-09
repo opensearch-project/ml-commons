@@ -37,8 +37,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
@@ -140,7 +140,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -151,7 +151,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -179,7 +179,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PRIVATE, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PRIVATE, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -192,7 +192,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PUBLIC, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -203,7 +203,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -216,7 +216,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -229,7 +229,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, false);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, false);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -242,7 +242,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(backendRoles, ModelAccessMode.RESTRICTED, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(backendRoles, AccessMode.RESTRICTED, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -260,7 +260,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
         List<String> incorrectBackendRole = Arrays.asList("Finance");
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(incorrectBackendRole, ModelAccessMode.RESTRICTED, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(incorrectBackendRole, AccessMode.RESTRICTED, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -272,7 +272,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PRIVATE, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PRIVATE, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -284,7 +284,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, true);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -295,7 +295,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PUBLIC, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -305,7 +305,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(false);
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(backendRoles, ModelAccessMode.RESTRICTED, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(backendRoles, AccessMode.RESTRICTED, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<MLUpdateModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLUpdateModelGroupResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -330,7 +330,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -344,7 +344,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.RESTRICTED, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -360,7 +360,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
 
-        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, ModelAccessMode.PUBLIC, null);
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -390,11 +390,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         );
     }
 
-    private MLUpdateModelGroupRequest prepareRequest(
-        List<String> backendRoles,
-        ModelAccessMode modelAccessMode,
-        Boolean isAddAllBackendRoles
-    ) {
+    private MLUpdateModelGroupRequest prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         MLUpdateModelGroupInput UpdateModelGroupInput = MLUpdateModelGroupInput
             .builder()
             .modelGroupID("testModelGroupId")
