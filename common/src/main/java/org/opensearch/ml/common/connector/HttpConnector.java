@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.text.StringSubstitutor;
@@ -34,6 +35,7 @@ import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 @Log4j2
 @NoArgsConstructor
+@EqualsAndHashCode
 @org.opensearch.ml.common.annotation.Connector(HTTP)
 public class HttpConnector extends AbstractConnector {
     public static final String CREDENTIAL_FIELD = "credential";
@@ -183,6 +185,10 @@ public class HttpConnector extends AbstractConnector {
                 actions.add(new ConnectorAction(input));
             }
         }
+        backendRoles = input.readOptionalStringList();
+        if (input.readBoolean()) {
+            this.access = input.readEnum(AccessMode.class);
+        }
     }
 
     @Override
@@ -209,6 +215,13 @@ public class HttpConnector extends AbstractConnector {
             for (ConnectorAction action : actions) {
                 action.writeTo(out);
             }
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalStringCollection(backendRoles);
+        if (access != null) {
+            out.writeBoolean(true);
+            out.writeEnum(access);
         } else {
             out.writeBoolean(false);
         }
@@ -264,6 +277,7 @@ public class HttpConnector extends AbstractConnector {
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;
+        this.decryptedHeaders = null;
     }
 
     public String getPredictHttpMethod() {

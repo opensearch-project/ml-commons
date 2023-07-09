@@ -25,6 +25,7 @@ import java.util.Optional;
 
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
+@Getter
 public abstract class AbstractConnector implements Connector {
     public static final String ACCESS_KEY_FIELD = "access_key";
     public static final String SECRET_KEY_FIELD = "secret_key";
@@ -42,32 +43,24 @@ public abstract class AbstractConnector implements Connector {
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_FIELD = "access";
 
-    @Getter
     protected String name;
     protected String description;
     protected String version;
-    @Getter
     protected String protocol;
 
-    @Getter
     protected Map<String, String> parameters;
     protected Map<String, String> credential;
-    @Getter
     protected Map<String, String> decryptedHeaders;
-    @Setter@Getter
+    @Setter
     protected Map<String, String> decryptedCredential;
 
-    @Getter
     protected List<ConnectorAction> actions;
 
     @Setter
-    @Getter
     protected List<String> backendRoles;
     @Setter
-    @Getter
     protected User owner;
     @Setter
-    @Getter
     protected AccessMode access;
     protected Instant createdTime;
     protected Instant lastUpdateTime;
@@ -128,7 +121,7 @@ public abstract class AbstractConnector implements Connector {
         if (actions != null) {
             return actions.stream().filter(a -> a.getActionType() == ConnectorAction.ActionType.PREDICT).findFirst();
         }
-        return null;
+        return Optional.empty();
     }
 
     @Override
