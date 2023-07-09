@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.helper;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -35,7 +40,6 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;

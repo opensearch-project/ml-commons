@@ -31,7 +31,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.connector.template.APISchema;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -199,13 +198,6 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 "You cannot specify connector access control parameters because the Security plugin or connector access control is disabled on your cluster."
             );
         }
-    }
-
-    private String getAPIStringValue(APISchema apiSchema) {
-        if (apiSchema == null) {
-            return null;
-        }
-        return apiSchema.toString();
     }
 
 }
