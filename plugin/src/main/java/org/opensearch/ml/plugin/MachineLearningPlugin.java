@@ -287,6 +287,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         modelHelper = new ModelHelper(mlEngine);
         mlModelManager = new MLModelManager(
             clusterService,
+            scriptService,
             client,
             threadPool,
             xContentRegistry,
@@ -569,7 +570,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
-                MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED
+                MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY
             );
         return settings;
     }
