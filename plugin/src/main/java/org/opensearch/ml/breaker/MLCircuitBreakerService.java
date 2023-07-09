@@ -78,8 +78,8 @@ public class MLCircuitBreakerService {
         log.info("Registered ML memory breaker.");
         registerBreaker(BreakerName.DISK, new DiskCircuitBreaker(path.toString()));
         log.info("Registered ML disk breaker.");
-        // Register native memory circuit breaker
-        registerBreaker(BreakerName.NATIVE_MEMORY, new NativeMemoryCircuitBreaker(this.osService, this.settings, this.clusterService));
+        // Register native memory circuit breaker, disabling due to unstability.
+        // registerBreaker(BreakerName.NATIVE_MEMORY, new NativeMemoryCircuitBreaker(this.osService, this.settings, this.clusterService));
         log.info("Registered ML native memory breaker.");
 
         return this;
