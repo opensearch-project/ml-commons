@@ -563,6 +563,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX,
                 MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD,
+                MLCommonsSettings.ML_COMMONS_JVM_HEAP_MEM_THRESHOLD,
                 MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN,
                 MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL,
@@ -571,7 +572,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY
+                MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY,
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
+                MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             );
         return settings;
     }
