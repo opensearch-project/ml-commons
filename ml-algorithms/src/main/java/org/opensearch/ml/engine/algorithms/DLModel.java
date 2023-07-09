@@ -20,7 +20,6 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -31,6 +30,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
 import java.io.File;
@@ -79,7 +79,7 @@ public abstract class DLModel implements Predictable {
                 if (predictors == null) {
                     throw new MLException("model not deployed.");
                 }
-                return predict(modelId, mlInput.getInputDataset());
+                return predict(modelId, mlInput);
             });
         } catch (Throwable e) {
             String errorMsg = "Failed to inference " + mlInput.getAlgorithm() + " model: " + modelId;
@@ -97,10 +97,10 @@ public abstract class DLModel implements Predictable {
         return predictors[currentDevice];
     }
 
-    public abstract ModelTensorOutput predict(String modelId, MLInputDataset inputDataSet) throws TranslateException;
+    public abstract ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         String engine;
         switch (model.getModelFormat()) {
             case TORCH_SCRIPT:
@@ -167,10 +167,13 @@ public abstract class DLModel implements Predictable {
 
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
 
-    private void loadModel(File modelZipFile, String modelId, String modelName, String version,
+    protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
                              MLModelConfig modelConfig,
                              String engine) {
         try {
+            if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
+                throw new IllegalArgumentException("unsupported engine");
+            }
             List<Predictor<Input, Output>> predictorList = new ArrayList<>();
             List<ZooModel<Input, Output>> modelList = new ArrayList<>();
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {

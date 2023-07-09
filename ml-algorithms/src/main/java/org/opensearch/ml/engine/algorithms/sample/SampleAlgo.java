@@ -5,20 +5,21 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.sample.SampleAlgoOutput;
-import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.Trainable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
 import java.util.Map;
@@ -38,7 +39,7 @@ public class SampleAlgo implements Trainable, Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         throw new MLException("Sample Algo doesn't support init model");
     }
 

@@ -17,7 +17,8 @@ public enum FunctionName {
     RCF_SUMMARIZE,
     LOGISTIC_REGRESSION,
     TEXT_EMBEDDING,
-    METRICS_CORRELATION;
+    METRICS_CORRELATION,
+    REMOTE;
 
     public static FunctionName from(String value) {
         try {

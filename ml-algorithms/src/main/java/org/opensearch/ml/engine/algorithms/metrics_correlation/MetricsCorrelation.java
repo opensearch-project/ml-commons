@@ -11,7 +11,6 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionFuture;
 import org.opensearch.action.ActionListener;
-import org.opensearch.action.ActionRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.get.GetRequest;
@@ -32,7 +31,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.ModelAccessMode;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.exception.ExecuteException;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
@@ -50,11 +49,6 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
-import org.opensearch.ml.common.transport.model.MLModelSearchAction;
-import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
-import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
-import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
-import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
@@ -64,7 +58,6 @@ import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
-import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
@@ -228,7 +221,7 @@ public class MetricsCorrelation extends DLModelExecute {
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             IndexRequest createModelGroupRequest = new IndexRequest(ML_MODEL_GROUP_INDEX).id(functionName.name());
-            MLModelGroup modelGroup = MLModelGroup.builder().name(functionName.name()).access(ModelAccessMode.PUBLIC.getValue()).createdTime(Instant.now()).build();
+            MLModelGroup modelGroup = MLModelGroup.builder().name(functionName.name()).access(AccessMode.PUBLIC.getValue()).createdTime(Instant.now()).build();
             XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
             modelGroup.toXContent(builder, ToXContent.EMPTY_PARAMS);
             createModelGroupRequest.source(builder);
