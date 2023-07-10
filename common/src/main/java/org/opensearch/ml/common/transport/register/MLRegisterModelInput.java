@@ -145,8 +145,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.deployModel = in.readBoolean();
         this.modelNodeIds = in.readOptionalStringArray();
         if (in.readBoolean()) {
-            String protocol = in.readString();
-            this.connector = MLCommonsClassLoader.initConnector(protocol, new Object[]{protocol, in}, String.class, StreamInput.class);
+            this.connector = Connector.fromStream(in);
         }
         this.connectorId = in.readOptionalString();
         if (in.readBoolean()) {
@@ -183,7 +182,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeOptionalStringArray(modelNodeIds);
         if (connector != null) {
             out.writeBoolean(true);
-            out.writeString(connector.getProtocol());
             connector.writeTo(out);
         } else {
             out.writeBoolean(false);
