@@ -39,7 +39,6 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
         this.modelGroupId = response.getModelGroupId();
-        System.out.println("#########################model group id is: " + this.modelGroupId);
     }
 
     public void test_update_public_model_group() {

@@ -38,7 +38,6 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
         this.modelGroupId = response.getModelGroupId();
-        System.out.println("#########################model group id is: " + this.modelGroupId);
     }
 
     public void test_empty_body_search() {

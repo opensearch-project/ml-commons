@@ -209,7 +209,7 @@ public class MLModel implements ToXContentObject {
             modelGroupId = input.readOptionalString();
             if (input.readBoolean()) {
                 String connectorProtocol = input.readString();
-                connector = MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{input}, String.class, StreamInput.class);
+                connector = MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, input}, String.class, StreamInput.class);
             }
             connectorId = input.readOptionalString();
         }
