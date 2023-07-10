@@ -17,6 +17,8 @@ import org.opensearch.ml.common.TestHelper;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
@@ -30,12 +32,17 @@ public class ModelTensorTest {
 
     @Before
     public void setUp() {
+        Map<String, String> dataMap = new HashMap<>();
+        dataMap.put("key1", "test value1");
+        dataMap.put("key2", "test value2");
         modelTensor = ModelTensor.builder()
                 .name("model_tensor")
                 .data(new Number[]{1, 2, 3})
                 .shape(new long[]{1, 2, 3,})
                 .dataType(MLResultDataType.INT32)
                 .byteBuffer(ByteBuffer.wrap(new byte[]{0,1,0,1}))
+                .result("test result")
+                .dataAsMap(dataMap)
                 .build();
     }
 
@@ -46,7 +53,7 @@ public class ModelTensorTest {
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         ModelTensor parsedTensor = new ModelTensor(streamInput);
-//        assertEquals(parsedTensor, modelTensor);
+        assertEquals(modelTensor, parsedTensor);
     }
 
     @Test
@@ -54,7 +61,13 @@ public class ModelTensorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         modelTensor.toXContent(builder, EMPTY_PARAMS);
         String modelTensorContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"name\":\"model_tensor\",\"data_type\":\"INT32\",\"shape\":[1,2,3],\"data\":[1,2,3],\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}}", modelTensorContent);
+        assertEquals("{\"name\":\"model_tensor\"," +
+                "\"data_type\":\"INT32\"," +
+                "\"shape\":[1,2,3]," +
+                "\"data\":[1,2,3]," +
+                "\"byte_buffer\":{\"array\":\"AAEAAQ==\",\"order\":\"BIG_ENDIAN\"}," +
+                "\"result\":\"test result\"," +
+                "\"dataAsMap\":{\"key1\":\"test value1\",\"key2\":\"test value2\"}}", modelTensorContent);
     }
 
     @Test
@@ -74,7 +87,7 @@ public class ModelTensorTest {
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         ModelTensor parsedTensor = new ModelTensor(streamInput);
-//        assertEquals(parsedTensor, tensor);
+        assertEquals(tensor, parsedTensor);
     }
 
     @Test
