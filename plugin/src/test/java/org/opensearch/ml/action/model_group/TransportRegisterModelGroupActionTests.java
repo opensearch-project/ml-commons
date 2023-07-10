@@ -8,13 +8,11 @@ package org.opensearch.ml.action.model_group;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -27,7 +25,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.ConfigConstants;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
@@ -98,28 +95,14 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         );
         assertNotNull(transportRegisterModelGroupAction);
 
-        when(indexResponse.getId()).thenReturn("modelGroupID");
-
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            listener.onResponse(indexResponse);
-            return null;
-        }).when(client).index(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initModelGroupIndexIfAbsent(any());
-
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    @Ignore
-    public void test_SuccessAddAllBackendRolesTrue() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
+    public void test_Success() {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("modelGroupID");
+            return null;
+        }).when(mlModelGroupManager).createModelGroup(any(), any());
 
         MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, true);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
@@ -127,199 +110,19 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    @Ignore
-    public void test_SuccessPublic() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
+    public void test_Failure() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("Failed to init model group index"));
+            return null;
+        }).when(mlModelGroupManager).createModelGroup(any(), any());
 
         MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, null);
         transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<MLRegisterModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-    }
 
-    @Ignore
-    public void test_ExceptionAllAccessFieldsNull() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You must specify at least one backend role or make the model group public/private for registering it.",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Ignore
-    public void test_ModelAccessModeNullAddAllBackendRolesTrue() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<MLRegisterModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-    }
-
-    @Ignore
-    public void test_BackendRolesProvidedWithPublic() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PUBLIC, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
-    }
-
-    @Ignore
-    public void test_BackendRolesProvidedWithPrivate() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.PRIVATE, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
-    }
-
-    @Ignore
-    public void test_AdminSpecifiedAddAllBackendRolesForRestricted() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|admin|all_access");
-        when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
-    }
-
-    @Ignore
-    public void test_UserWithNoBackendRolesSpecifiedRestricted() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex||engineering,operations");
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You must have at least one backend role to register a restricted model group.",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Ignore
-    public void test_UserSpecifiedRestrictedButNoBackendRolesFieldF() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You must specify one or more backend roles or add all backend roles to register a restricted model group.",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Ignore
-    public void test_RestrictedAndUserSpecifiedBothBackendRolesField() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(backendRoles, AccessMode.RESTRICTED, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You cannot specify backend roles and add all backend roles at the same time.",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Ignore
-    public void test_RestrictedAndUserSpecifiedIncorrectBackendRoles() {
-        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        List<String> incorrectBackendRole = Arrays.asList("Finance");
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(incorrectBackendRole, AccessMode.RESTRICTED, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
-    }
-
-    @Ignore
-    public void test_SuccessSecurityDisabledCluster() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<MLRegisterModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
-    }
-
-    @Ignore
-    public void test_ExceptionSecurityDisabledCluster() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster.",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Ignore
-    public void test_ExceptionFailedToInitModelGroupIndex() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, true);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-    }
-
-    @Ignore
-    public void test_ExceptionFailedToIndexModelGroup() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new Exception("Index Not Found"));
-            return null;
-        }).when(client).index(any(), any());
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
-    }
-
-    @Ignore
-    public void test_ExceptionInitModelGroupIndexIfAbsent() {
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = invocation.getArgument(0);
-            actionListener.onFailure(new Exception("Index Not Found"));
-            return null;
-        }).when(mlIndicesHandler).initModelGroupIndexIfAbsent(any());
-
-        MLRegisterModelGroupRequest actionRequest = prepareRequest(null, null, null);
-        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to init model group index", argumentCaptor.getValue().getMessage());
     }
 
     private MLRegisterModelGroupRequest prepareRequest(

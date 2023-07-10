@@ -57,7 +57,6 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         this.threadPool = threadPool;
         this.client = client;
         this.clusterService = clusterService;
-        this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
     }
 
