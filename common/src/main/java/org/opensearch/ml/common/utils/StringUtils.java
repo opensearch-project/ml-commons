@@ -63,15 +63,6 @@ public class StringUtils {
         return result;
     }
 
-    public static Map<String, String> fromJson(String jsonStr) {
-        JsonElement jsonElement = JsonParser.parseString(jsonStr);
-        return gson.fromJson(jsonElement, Map.class);
-    }
-
-    public static String toJson(Map<String, String> map) {
-        return new JSONObject(map).toString();
-    }
-
     public static Map<String, String> getParameterMap(Map<String, ?> parameterObjs) {
         Map<String, String> parameters = new HashMap<>();
         for (String key : parameterObjs.keySet()) {

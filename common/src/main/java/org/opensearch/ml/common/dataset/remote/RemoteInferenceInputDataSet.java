@@ -32,13 +32,20 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
 
     public RemoteInferenceInputDataSet(StreamInput streamInput) throws IOException {
         super(MLInputDataType.REMOTE);
-        parameters = streamInput.readMap(s -> s.readString(), s-> s.readString());
+        if (streamInput.readBoolean()) {
+            parameters = streamInput.readMap(s -> s.readString(), s-> s.readString());
+        }
     }
 
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
         super.writeTo(streamOutput);
-        streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+        if (parameters !=  null) {
+            streamOutput.writeBoolean(true);
+            streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            streamOutput.writeBoolean(false);
+        }
     }
 
 }

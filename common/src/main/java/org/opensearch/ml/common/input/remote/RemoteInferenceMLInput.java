@@ -11,6 +11,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -38,8 +39,6 @@ public class RemoteInferenceMLInput extends MLInput {
     public RemoteInferenceMLInput(XContentParser parser, FunctionName functionName) throws IOException {
         super();
         this.algorithm = functionName;
-        Map<String, ?> parameterObjs = new HashMap<>();
-
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -47,30 +46,14 @@ public class RemoteInferenceMLInput extends MLInput {
 
             switch (fieldName) {
                 case PARAMETERS_FIELD:
-                    parameterObjs = parser.map();
+                    Map<String, String> parameters = StringUtils.getParameterMap(parser.map());
+                    inputDataset = new RemoteInferenceInputDataSet(parameters);
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        Map<String, String> parameters = new HashMap<>();
-        for (String key : parameterObjs.keySet()) {
-            Object value = parameterObjs.get(key);
-            try {
-                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    if (value instanceof String) {
-                        parameters.put(key, (String)value);
-                    } else {
-                        parameters.put(key, gson.toJson(value));
-                    }
-                    return null;
-                });
-            } catch (PrivilegedActionException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        inputDataset = new RemoteInferenceInputDataSet(parameters);
     }
 
 }
