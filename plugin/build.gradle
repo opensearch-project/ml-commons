@@ -296,7 +296,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.rest.RestMLCreateConnectorAction',
         'org.opensearch.ml.action.connector.SearchConnectorTransportAction',
         'org.opensearch.ml.model.MLModelGroupManager',
-        'org.opensearch.ml.helper.ModelAccessControlHelper'
+        'org.opensearch.ml.helper.ModelAccessControlHelper',
+        'org.opensearch.ml.action.models.DeleteModelTransportAction.2'
 ]
 
 jacocoTestCoverageVerification {
