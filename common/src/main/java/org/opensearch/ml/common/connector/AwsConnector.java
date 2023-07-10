@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.connector;
 
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -22,6 +23,7 @@ import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 
 @Log4j2
 @NoArgsConstructor
+@EqualsAndHashCode
 @org.opensearch.ml.common.annotation.Connector(AWS_SIGV4)
 public class AwsConnector extends HttpConnector {
 
@@ -47,6 +49,12 @@ public class AwsConnector extends HttpConnector {
     private void validate() {
         if (credential == null || !credential.containsKey(ACCESS_KEY_FIELD) || !credential.containsKey(SECRET_KEY_FIELD)) {
             throw new IllegalArgumentException("Missing credential");
+        }
+        if ((credential == null || !credential.containsKey(SERVICE_NAME_FIELD)) && (parameters == null || !parameters.containsKey(SERVICE_NAME_FIELD))) {
+            throw new IllegalArgumentException("Missing service name");
+        }
+        if ((credential == null || !credential.containsKey(REGION_FIELD)) && (parameters == null || !parameters.containsKey(REGION_FIELD))) {
+            throw new IllegalArgumentException("Missing region");
         }
     }
 

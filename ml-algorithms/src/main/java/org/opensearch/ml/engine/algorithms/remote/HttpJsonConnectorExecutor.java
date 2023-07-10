@@ -67,7 +67,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     break;
                 case "GET":
                     try {
-                        request = new HttpGet(connector.getPredictEndpoint());
+                        request = new HttpGet(connector.getPredictEndpoint(parameters));
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }
