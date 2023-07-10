@@ -5,8 +5,10 @@
 
 package org.opensearch.ml.action.connector;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.ActionListener;
@@ -58,12 +60,16 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            FetchSourceContext fetchSourceContext = request.source().fetchSource();
-            List<String> excludes = Arrays.stream(fetchSourceContext.excludes()).collect(Collectors.toList());
+            List<String> excludes = Optional.ofNullable(request.source())
+                .map(SearchSourceBuilder::fetchSource)
+                .map(FetchSourceContext::excludes)
+                .map(x -> Arrays.stream(x)
+                .collect(Collectors.toList()))
+                .orElse(new ArrayList<>());
             excludes.add(HttpConnector.CREDENTIAL_FIELD);
             FetchSourceContext rebuiltFetchSourceContext = new FetchSourceContext(
-                fetchSourceContext.fetchSource(),
-                fetchSourceContext.includes(),
+                Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::fetchSource).orElse(true),
+                Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::includes).orElse(null),
                 excludes.toArray(new String[0])
             );
             request.source().fetchSource(rebuiltFetchSourceContext);
