@@ -4,6 +4,13 @@
  */
 package org.opensearch.ml.action.connector;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -23,14 +30,6 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
 
@@ -67,7 +66,12 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        searchConnectorTransportAction = new SearchConnectorTransportAction(transportService, actionFilters, client, connectorAccessControlHelper);
+        searchConnectorTransportAction = new SearchConnectorTransportAction(
+            transportService,
+            actionFilters,
+            client,
+            connectorAccessControlHelper
+        );
 
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -77,8 +81,8 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.fetchSource(fetchSourceContext);
         when(searchRequest.source()).thenReturn(searchSourceBuilder);
-        when(fetchSourceContext.includes()).thenReturn(new String[]{});
-        when(fetchSourceContext.excludes()).thenReturn(new String[]{});
+        when(fetchSourceContext.includes()).thenReturn(new String[] {});
+        when(fetchSourceContext.excludes()).thenReturn(new String[] {});
     }
 
     public void test_doExecute_connectorAccessControlNotEnabled_searchSuccess() {
@@ -112,6 +116,5 @@ public class SearchConnectorTransportActionTests extends OpenSearchTestCase {
         searchConnectorTransportAction.doExecute(task, searchRequest, actionListener);
         verify(actionListener).onFailure(any(RuntimeException.class));
     }
-
 
 }

@@ -102,8 +102,8 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
-        when(fetchSourceContext.includes()).thenReturn(new String[]{});
-        when(fetchSourceContext.excludes()).thenReturn(new String[]{});
+        when(fetchSourceContext.includes()).thenReturn(new String[] {});
+        when(fetchSourceContext.excludes()).thenReturn(new String[] {});
         searchSourceBuilder.fetchSource(fetchSourceContext);
         when(searchRequest.source()).thenReturn(searchSourceBuilder);
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);

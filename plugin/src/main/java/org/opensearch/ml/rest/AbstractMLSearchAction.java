@@ -10,10 +10,7 @@ import static org.opensearch.ml.utils.RestActionUtils.getSourceContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.opensearch.action.ActionType;
 import org.opensearch.action.search.SearchRequest;
@@ -28,7 +25,6 @@ import org.opensearch.rest.RestResponse;
 import org.opensearch.rest.RestStatus;
 import org.opensearch.rest.action.RestResponseListener;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends BaseRestHandler {
 

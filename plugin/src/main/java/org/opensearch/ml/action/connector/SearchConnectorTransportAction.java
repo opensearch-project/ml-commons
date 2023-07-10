@@ -60,15 +60,19 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            List<String> excludes = Optional.ofNullable(request.source())
+            List<String> excludes = Optional
+                .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
                 .map(FetchSourceContext::excludes)
-                .map(x -> Arrays.stream(x)
-                .collect(Collectors.toList()))
+                .map(x -> Arrays.stream(x).collect(Collectors.toList()))
                 .orElse(new ArrayList<>());
             excludes.add(HttpConnector.CREDENTIAL_FIELD);
             FetchSourceContext rebuiltFetchSourceContext = new FetchSourceContext(
-                Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::fetchSource).orElse(true),
+                Optional
+                    .ofNullable(request.source())
+                    .map(SearchSourceBuilder::fetchSource)
+                    .map(FetchSourceContext::fetchSource)
+                    .orElse(true),
                 Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::includes).orElse(null),
                 excludes.toArray(new String[0])
             );
