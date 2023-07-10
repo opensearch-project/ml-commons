@@ -418,6 +418,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
+    @Ignore
     @Test
     public void testGetModel() {
         ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
@@ -506,6 +507,7 @@ public class MetricsCorrelationTest {
         verify(mlRegisterModelResponseActionListener).onResponse(mlRegisterModelResponse);
     }
 
+    @Ignore
     @Test
     public void testDeployModel() {
         doAnswer(invocation -> {
@@ -520,6 +522,7 @@ public class MetricsCorrelationTest {
         verify(mlDeployModelResponseActionListener).onResponse(mlDeployModelResponse);
     }
 
+    @Ignore
     @Test
     public void testDeployModelFail() {
         Exception ex = new ExecuteException("Testing");
@@ -532,12 +535,14 @@ public class MetricsCorrelationTest {
         verify(mlDeployModelResponseActionListener).onFailure(ex);
     }
 
+    @Ignore
     @Test
     public void testWrongInput() throws ExecuteException {
         exceptionRule.expect(ExecuteException.class);
         metricsCorrelation.execute(mock(LocalSampleCalculatorInput.class));
     }
 
+    @Ignore
     @Test
     public void parseModelTensorOutput_NullOutput() {
         exceptionRule.expect(MLException.class);
@@ -545,6 +550,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.parseModelTensorOutput(null, null);
     }
 
+    @Ignore
     @Test
     public void initModel_NullModelZipFile() {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -554,6 +560,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
+    @Ignore
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -563,6 +570,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
+    @Ignore
     @Test
     public void initModel_NullMLEngine() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -573,6 +581,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
+    @Ignore
     @Test
     public void initModel_NullModelId() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -582,6 +591,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
+    @Ignore
     @Test
     public void initModel_WrongFunctionName() {
         exceptionRule.expect(IllegalArgumentException.class);

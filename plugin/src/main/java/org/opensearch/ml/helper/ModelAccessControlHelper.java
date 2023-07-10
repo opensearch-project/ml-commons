@@ -26,6 +26,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.ExistsQueryBuilder;
 import org.opensearch.index.query.IdsQueryBuilder;
@@ -125,8 +126,12 @@ public class ModelAccessControlHelper {
                     wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                 }
             }, e -> {
-                log.error("Fail to get model group", e);
-                wrappedListener.onFailure(new MLValidationException("Fail to get model group"));
+                if (e instanceof IndexNotFoundException) {
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                } else {
+                    log.error("Fail to get model group", e);
+                    wrappedListener.onFailure(new MLValidationException("Fail to get model group"));
+                }
             }));
         } catch (Exception e) {
             log.error("Failed to validate Access", e);

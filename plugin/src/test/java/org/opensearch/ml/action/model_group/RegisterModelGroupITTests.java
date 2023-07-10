@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.model_group;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
@@ -28,7 +27,6 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
         super.setUp();
     }
 
-    @Ignore
     public void test_register_public_model_group() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
@@ -42,7 +40,6 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
-    @Ignore
     public void test_register_private_model_group() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
@@ -56,14 +53,12 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
-    @Ignore
     public void test_register_model_group_without_access_fields() {
         MLRegisterModelGroupInput input = new MLRegisterModelGroupInput("mock_model_group_name", "mock_model_group_desc", null, null, null);
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
-    @Ignore
     public void test_register_protected_model_group_with_addAllBackendRoles_true() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
@@ -77,7 +72,6 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
-    @Ignore
     public void test_register_protected_model_group_with_backendRoles_notEmpty() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(

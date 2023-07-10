@@ -82,6 +82,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
@@ -256,8 +257,12 @@ public class MLModelManager {
                             listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                         }
                     }, e -> {
-                        log.error("Failed to get model group", e);
-                        listener.onFailure(new MLValidationException("Failed to get model group"));
+                        if (e instanceof IndexNotFoundException) {
+                            listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        } else {
+                            log.error("Failed to get model group", e);
+                            listener.onFailure(new MLValidationException("Failed to get model group"));
+                        }
                     }));
                 } catch (Exception e) {
                     log.error("Failed to register model", e);
@@ -366,8 +371,16 @@ public class MLModelManager {
                         );
                     }
                 }, e -> {
-                    log.error("Failed to get model group", e);
-                    handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                    if (e instanceof IndexNotFoundException) {
+                        handleException(
+                            registerModelInput.getFunctionName(),
+                            mlTask.getTaskId(),
+                            new MLResourceNotFoundException("Failed to get model group")
+                        );
+                    } else {
+                        log.error("Failed to get model group", e);
+                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                    }
                 }));
             } catch (Exception e) {
                 log.error("Failed to register model", e);

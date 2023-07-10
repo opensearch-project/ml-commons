@@ -5,14 +5,8 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-
+import com.google.common.collect.ImmutableList;
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
@@ -28,10 +22,11 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
@@ -43,9 +38,13 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {
@@ -103,8 +102,12 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                         listener.onFailure(new MLResourceNotFoundException("Failed to find model group"));
                     }
                 }, e -> {
-                    logException("Failed to get model group", e, log);
-                    listener.onFailure(e);
+                    if (e instanceof IndexNotFoundException) {
+                        listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                    } else {
+                        logException("Failed to get model group", e, log);
+                        listener.onFailure(e);
+                    }
                 }));
             } catch (Exception e) {
                 logException("Failed to Update model group", e, log);
@@ -143,21 +146,23 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getName()) && !updateModelGroupInput.getName().equals(modelGroupName)) {
-            mlModelGroupManager.validateUniqueModelGroupName(updateModelGroupInput.getName(), ActionListener.wrap(modelGroups -> {
-                if (modelGroups != null
-                    && modelGroups.getHits().getTotalHits() != null
-                    && modelGroups.getHits().getTotalHits().value != 0) {
-                    throw new IllegalArgumentException(
-                        "The name you provided is already being used by another model group. Please provide a different name"
-                    );
-                } else {
-                    source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
-                    updateModelGroup(modelGroupId, source, listener);
-                }
-            }, e -> {
-                log.error("Failed to search model group index", e);
-                listener.onFailure(e);
-            }));
+            mlModelGroupManager
+                .validateUniqueModelGroupName(updateModelGroupInput.getName(), ActionListener.wrap(isModelGroupNameUnique -> {
+                    if (Boolean.FALSE.equals(isModelGroupNameUnique)) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "The name you provided is already being used by another model group. Please provide a different name."
+                                )
+                            );
+                    } else {
+                        source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
+                        updateModelGroup(modelGroupId, source, listener);
+                    }
+                }, e -> {
+                    log.error("Failed to search model group index", e);
+                    listener.onFailure(e);
+                }));
         } else {
             updateModelGroup(modelGroupId, source, listener);
         }
@@ -172,8 +177,12 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 .update(
                     updateModelGroupRequest,
                     ActionListener.wrap(r -> { listener.onResponse(new MLUpdateModelGroupResponse("Updated")); }, e -> {
-                        log.error("Failed to update Model Group", e);
-                        throw new MLException("Failed to update Model Group", e);
+                        if (e instanceof IndexNotFoundException) {
+                            listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        } else {
+                            log.error("Failed to update model group", e, log);
+                            listener.onFailure(new MLValidationException("Failed to update Model Group"));
+                        }
                     })
                 );
         } catch (Exception e) {
@@ -197,7 +206,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (!modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
-            throw new IllegalArgumentException("You don't have permissions to perform this operation on this model group.");
+            throw new IllegalArgumentException("You don't have permission to update this model group.");
         }
         AccessMode accessMode = input.getModelAccessMode();
         if ((AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode)
@@ -211,7 +220,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 throw new IllegalArgumentException("You don’t have any backend roles.");
             }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.FALSE.equals(input.getIsAddAllBackendRoles())) {
-                throw new IllegalArgumentException("User have to specify backend roles when add all backend roles is set to false.");
+                throw new IllegalArgumentException("You have to specify backend roles when add all backend roles is set to false.");
             }
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");

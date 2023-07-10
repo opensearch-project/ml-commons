@@ -44,7 +44,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //mandatory
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //optional
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
+    public static final String ACCESS_MODE = "access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
 
     private FunctionName functionName;
@@ -63,12 +63,12 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private MLModelConfig modelConfig;
     private Integer totalChunks;
     private List<String> backendRoles;
-    private AccessMode modelAccessMode;
+    private AccessMode accessMode;
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
     public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
-                                    AccessMode modelAccessMode,
+                                    AccessMode accessMode,
                                     Boolean isAddAllBackendRoles) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
@@ -101,7 +101,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.modelConfig = modelConfig;
         this.totalChunks = totalChunks;
         this.backendRoles = backendRoles;
-        this.modelAccessMode = modelAccessMode;
+        this.accessMode = accessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
     }
 
@@ -125,7 +125,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.totalChunks = in.readInt();
         this.backendRoles = in.readOptionalStringList();
         if (in.readBoolean()) {
-            modelAccessMode = in.readEnum(AccessMode.class);
+            accessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
     }
@@ -164,9 +164,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         } else {
             out.writeBoolean(false);
         }
-        if (modelAccessMode != null) {
+        if (accessMode != null) {
             out.writeBoolean(true);
-            out.writeEnum(modelAccessMode);
+            out.writeEnum(accessMode);
         } else {
             out.writeBoolean(false);
         }
@@ -200,8 +200,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (backendRoles != null && backendRoles.size() > 0) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
-        if (modelAccessMode != null) {
-            builder.field(MODEL_ACCESS_MODE, modelAccessMode);
+        if (accessMode != null) {
+            builder.field(ACCESS_MODE, accessMode);
         }
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
@@ -223,7 +223,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         MLModelConfig modelConfig = null;
         Integer totalChunks = null;
         List<String> backendRoles = null;
-        AccessMode modelAccessMode = null;
+        AccessMode accessMode = null;
         Boolean isAddAllBackendRoles = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -271,8 +271,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                         backendRoles.add(parser.text());
                     }
                     break;
-                case MODEL_ACCESS_MODE:
-                    modelAccessMode = AccessMode.from(parser.text().toLowerCase(Locale.ROOT));
+                case ACCESS_MODE:
+                    accessMode = AccessMode.from(parser.text().toLowerCase(Locale.ROOT));
                     break;
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
@@ -282,7 +282,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, modelAccessMode, isAddAllBackendRoles);
+        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles);
     }
 
 }

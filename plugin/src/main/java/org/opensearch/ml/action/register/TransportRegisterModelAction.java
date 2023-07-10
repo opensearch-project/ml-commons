@@ -17,7 +17,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 
-
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionListenerResponseHandler;
@@ -152,7 +151,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             }, listener::onFailure));
     }
 
-
     private void doRegister(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
@@ -189,9 +187,10 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLCreateConnectorRequest mlCreateConnectorRequest = createConnectorRequest();
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
+        } else {
+            createModelGroup(registerModelInput, listener);
         }
     }
-
 
     private void createModelGroup(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         if (Strings.isEmpty(registerModelInput.getModelGroupId())) {
@@ -207,7 +206,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             registerModel(registerModelInput, listener);
         }
     }
-
 
     private MLCreateConnectorRequest createConnectorRequest() {
         MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().name("dryRunConnector").build();
@@ -226,7 +224,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         // check if the connector url is trusted
         registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
     }
-
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         Pattern pattern = Pattern.compile(trustedUrlRegex);

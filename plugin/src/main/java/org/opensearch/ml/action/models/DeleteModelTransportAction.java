@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
@@ -32,7 +33,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -130,7 +132,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                     "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
                                                 )
                                             );
-                                    } else {
+                                    } else if (StringUtils.isNotEmpty(mlModel.getModelGroupId())) {
                                         searchModel(mlModel.getModelGroupId(), ActionListener.wrap(response -> {
                                             boolean isLastModelOfGroup = false;
                                             if (response != null
@@ -144,6 +146,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                             log.error("Failed to Search Model index " + modelId, e);
                                             actionListener.onFailure(e);
                                         }));
+                                    } else {
+                                        deleteModel(modelId, mlModel.getModelGroupId(), false, actionListener);
                                     }
                                 }
                             }, e -> {
@@ -166,8 +170,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void searchModel(String modelGroupId, ActionListener<SearchResponse> listener) {
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.query(QueryBuilders.matchQuery(MLModel.MODEL_GROUP_ID_FIELD, modelGroupId));
+        BoolQueryBuilder query = new BoolQueryBuilder();
+        query.filter(new TermQueryBuilder(MLModel.MODEL_GROUP_ID_FIELD, modelGroupId));
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
         SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
         client.search(searchRequest, ActionListener.wrap(response -> { listener.onResponse(response); }, e -> {
             log.error("Failed to search Model index", e);

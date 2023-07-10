@@ -22,8 +22,11 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.DEPLOY_MODEL_DONE;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.REGISTER_MODEL;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -34,7 +37,6 @@ import java.util.Map;
 import java.util.Set;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -295,7 +297,6 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals(error, exception.getValue().getMessage());
     }
 
-    @Ignore
     public void testDoExecute_RegisterModel() {
         MLForwardInput forwardInput = MLForwardInput
             .builder()
