@@ -17,7 +17,6 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.FunctionName;
@@ -98,8 +97,7 @@ public class MLInput implements Input {
             this.parameters = MLCommonsClassLoader.initMLInstance(algorithm, in, StreamInput.class);
         }
         if (in.readBoolean()) {
-            MLInputDataType inputDataType = in.readEnum(MLInputDataType.class);
-            this.inputDataset = MLCommonsClassLoader.initMLInstance(inputDataType, in, StreamInput.class);
+            this.inputDataset = MLInputDataset.fromStream(in);
         }
         this.version = in.readInt();
     }
