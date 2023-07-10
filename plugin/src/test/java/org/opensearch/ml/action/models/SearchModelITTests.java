@@ -33,7 +33,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private static final String PRE_BUILD_MODEL_URL =
-        "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b/1.0.1/torch_script/sentence-transformers_msmarco-distilbert-base-tas-b-1.0.1-torch_script.zip";
+        "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/all-MiniLM-L6-v2/1.0.1/torch_script/sentence-transformers_all-MiniLM-L6-v2-1.0.1-torch_script.zip";
 
     private String modelGroupId;
 
@@ -70,7 +70,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
             .url(PRE_BUILD_MODEL_URL)
-            .hashValue("acdc81b652b83121f914c5912ae27c0fca8fabf270e6f191ace6979a19830413")
+            .hashValue("c15f0d2e62d872be5b5bc6c84d2e0f4921541e29fefbef51d59cc10a8ae30e0f")
             .description("mock model desc")
             .build();
         MLRegisterModelRequest registerModelRequest = new MLRegisterModelRequest(input);
