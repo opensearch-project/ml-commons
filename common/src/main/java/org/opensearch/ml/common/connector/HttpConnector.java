@@ -199,6 +199,9 @@ public class HttpConnector extends AbstractConnector {
         if (input.readBoolean()) {
             this.access = input.readEnum(AccessMode.class);
         }
+        if (input.readBoolean()) {
+            this.owner = new User(input);
+        }
     }
 
     @Override
@@ -232,6 +235,12 @@ public class HttpConnector extends AbstractConnector {
         if (access != null) {
             out.writeBoolean(true);
             out.writeEnum(access);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (owner != null) {
+            out.writeBoolean(true);
+            owner.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
