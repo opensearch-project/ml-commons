@@ -133,7 +133,6 @@ public class ConnectorActionTest {
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
         ConnectorAction action = ConnectorAction.parse(parser);
-        System.out.println(action);
         Assert.assertEquals("http", action.getMethod());
         Assert.assertEquals(ConnectorAction.ActionType.PREDICT, action.getActionType());
         Assert.assertEquals("https://test.com", action.getUrl());

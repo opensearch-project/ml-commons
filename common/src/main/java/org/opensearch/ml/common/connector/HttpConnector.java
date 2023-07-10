@@ -167,8 +167,17 @@ public class HttpConnector extends AbstractConnector {
         return builder;
     }
 
+    public HttpConnector(String protocol, StreamInput input) throws IOException {
+        this.protocol = protocol;
+        parseFromStream(input);
+    }
+
     public HttpConnector(StreamInput input) throws IOException {
         this.protocol = input.readString();
+        parseFromStream(input);
+    }
+
+    private void parseFromStream(StreamInput input) throws IOException {
         this.name = input.readOptionalString();
         this.version = input.readOptionalString();
         this.description = input.readOptionalString();
@@ -274,17 +283,8 @@ public class HttpConnector extends AbstractConnector {
         }
     }
 
-    public void removeCredential() {
-        this.credential = null;
-        this.decryptedCredential = null;
-        this.decryptedHeaders = null;
-    }
-
     public String getPredictHttpMethod() {
         return findPredictAction().get().getMethod();
     }
 
-    public String getPredictEndpoint() {
-        return findPredictAction().get().getUrl();
-    }
 }

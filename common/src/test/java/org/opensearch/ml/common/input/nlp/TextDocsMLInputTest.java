@@ -48,7 +48,6 @@ public class TextDocsMLInputTest {
         XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
-        System.out.println(jsonStr);
         parseMLInput(jsonStr);
     }
 

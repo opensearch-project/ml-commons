@@ -83,12 +83,6 @@ public abstract class AbstractConnector implements Connector {
         return decryptedHeaders;
     }
 
-    protected String parseURL(String url) {
-        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-        return substitutor.replace(url);
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
     public <T> void parseResponse(T response, List<ModelTensor> modelTensors, boolean modelTensorJson) throws IOException {
         if (modelTensorJson) {
@@ -128,10 +122,16 @@ public abstract class AbstractConnector implements Connector {
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;
+        this.decryptedHeaders = null;
     }
 
+    @Override
     public String getPredictEndpoint(Map<String, String> parameters) {
-        String predictEndpoint = getPredictEndpoint();
+        Optional<ConnectorAction> predictAction = findPredictAction();
+        if (!predictAction.isPresent()) {
+            return null;
+        }
+        String predictEndpoint = predictAction.get().getUrl();
         if (parameters != null && parameters.size() > 0) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             predictEndpoint = substitutor.replace(predictEndpoint);

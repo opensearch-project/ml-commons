@@ -53,7 +53,6 @@ public interface Connector extends ToXContentObject, Writeable {
     Map<String, String> getParameters();
 
     List<ConnectorAction> getActions();
-    String getPredictEndpoint();
     String getPredictEndpoint(Map<String, String> parameters);
 
     String getPredictHttpMethod();
@@ -72,7 +71,7 @@ public interface Connector extends ToXContentObject, Writeable {
     void writeTo(StreamOutput out) throws IOException;
 
 
-    default <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException {}
+    <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException;
 
     default void validatePayload(String payload) {
         if (payload != null && payload.contains("${parameters")) {
@@ -91,7 +90,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     static Connector fromStream(StreamInput in) throws IOException {
         String connectorProtocol = in.readString();
-        return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{in}, String.class, StreamInput.class);
+        return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, in}, String.class, StreamInput.class);
     }
 
     static Connector createConnector(XContentBuilder builder, String connectorProtocol) throws IOException {

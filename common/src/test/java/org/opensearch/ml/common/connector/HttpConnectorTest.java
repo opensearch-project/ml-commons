@@ -19,12 +19,15 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
@@ -152,7 +155,7 @@ public class HttpConnectorTest {
     @Test
     public void getPredictEndpoint() {
         HttpConnector connector = createHttpConnector();
-        Assert.assertEquals("https://test.com", connector.getPredictEndpoint());
+        Assert.assertEquals("https://test.com", connector.getPredictEndpoint(null));
     }
 
     @Test
@@ -161,7 +164,102 @@ public class HttpConnectorTest {
         Assert.assertEquals("POST", connector.getPredictHttpMethod());
     }
 
-    private HttpConnector createHttpConnector() {
+    @Test
+    public void createPredictPayload_Invalid() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Some parameter placeholder not filled in payload: input");
+        HttpConnector connector = createHttpConnector();
+        String predictPayload = connector.createPredictPayload(null);
+        connector.validatePayload(predictPayload);
+    }
+
+    @Test
+    public void createPredictPayload() {
+        HttpConnector connector = createHttpConnector();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test input value");
+        String predictPayload = connector.createPredictPayload(parameters);
+        connector.validatePayload(predictPayload);
+        Assert.assertEquals("{\"input\": \"test input value\"}", predictPayload);
+    }
+
+    @Test
+    public void parseResponse_modelTensorJson() throws IOException {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> dataAsMap = new HashMap<>();
+        dataAsMap.put("key1", "test value1");
+        dataAsMap.put("key2", "test value2");
+        ModelTensor tensor = ModelTensor.builder().name("response").dataAsMap(dataAsMap).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        tensor.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String responseContent = TestHelper.xContentBuilderToString(builder);
+
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        connector.parseResponse(responseContent, modelTensors, true);
+        Assert.assertEquals("response", modelTensors.get(0).getName());
+        Assert.assertEquals(2, modelTensors.get(0).getDataAsMap().size());
+        Assert.assertEquals("test value1", modelTensors.get(0).getDataAsMap().get("key1"));
+        Assert.assertEquals("test value2", modelTensors.get(0).getDataAsMap().get("key2"));
+    }
+
+    @Test
+    public void parseResponse_modelTensorArrayJson() throws IOException {
+        HttpConnector connector = createHttpConnector();
+
+        Map<String, String> dataAsMap1 = new HashMap<>();
+        dataAsMap1.put("key1", "test value1");
+        ModelTensor tensor1 = ModelTensor.builder().name("response1").dataAsMap(dataAsMap1).build();
+        Map<String, String> dataAsMap2 = new HashMap<>();
+        dataAsMap2.put("key2", "test value2");
+        ModelTensor tensor2 = ModelTensor.builder().name("response2").dataAsMap(dataAsMap2).build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        builder.startArray();
+        tensor1.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        tensor2.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        builder.endArray();
+        String responseContent = TestHelper.xContentBuilderToString(builder);
+
+        List<ModelTensor> modelTensors = new ArrayList<>();
+        connector.parseResponse(responseContent, modelTensors, true);
+        Assert.assertEquals(2, modelTensors.size());
+
+        Assert.assertEquals("response1", modelTensors.get(0).getName());
+        Assert.assertEquals(1, modelTensors.get(0).getDataAsMap().size());
+        Assert.assertEquals("test value1", modelTensors.get(0).getDataAsMap().get("key1"));
+
+        Assert.assertEquals("response2", modelTensors.get(1).getName());
+        Assert.assertEquals(1, modelTensors.get(1).getDataAsMap().size());
+        Assert.assertEquals("test value2", modelTensors.get(1).getDataAsMap().get("key2"));
+    }
+
+    @Test
+    public void parseResponse_JsonString() throws IOException {
+        HttpConnector connector = createHttpConnector();
+        String jsonStr = "{\"output\": \"test output\"}";
+        List<ModelTensor> modelTensors = new ArrayList<>();
+
+        connector.parseResponse(jsonStr, modelTensors, false);
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals(1, modelTensors.get(0).getDataAsMap().size());
+        Assert.assertEquals("test output", modelTensors.get(0).getDataAsMap().get("output"));
+    }
+
+    @Test
+    public void parseResponse_NonJsonString() throws IOException {
+        HttpConnector connector = createHttpConnector();
+        String jsonStr = "test output";
+        List<ModelTensor> modelTensors = new ArrayList<>();
+
+        connector.parseResponse(jsonStr, modelTensors, false);
+        Assert.assertEquals(1, modelTensors.size());
+        Assert.assertEquals(1, modelTensors.get(0).getDataAsMap().size());
+        Assert.assertEquals("test output", modelTensors.get(0).getDataAsMap().get("response"));
+    }
+
+    public static HttpConnector createHttpConnector() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = "POST";
         String url = "https://test.com";
