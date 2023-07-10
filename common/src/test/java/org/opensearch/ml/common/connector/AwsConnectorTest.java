@@ -10,9 +10,19 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.TestHelper;
+import org.opensearch.search.SearchModule;
 
+import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -109,8 +119,35 @@ public class AwsConnectorTest {
     }
 
     @Test
+    public void constructor_Parser() throws IOException {
+        AwsConnector awsConnector = createAwsConnector();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        awsConnector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = TestHelper.xContentBuilderToString(builder);
+
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
+
+        AwsConnector connector = new AwsConnector(awsConnector.getProtocol(), parser);
+        Assert.assertEquals(awsConnector, connector);
+    }
+
+    @Test
     public void constructor() {
-        AwsConnector connector = createAwsConnector();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("input", "test input value");
+        parameters.put(SERVICE_NAME_FIELD, "test_service");
+        parameters.put(REGION_FIELD, "us-west-2");
+        parameters.put("endpoint", "test.com");
+
+        Map<String, String> credential = new HashMap<>();
+        credential.put(ACCESS_KEY_FIELD, "test_access_key");
+        credential.put(SECRET_KEY_FIELD, "test_secret_key");
+        credential.put(SESSION_TOKEN_FIELD, "test_session_token");
+        String url = "https://${parameters.endpoint}/model1";
+
+        AwsConnector connector = createAwsConnector(parameters, credential, url);
         connector.encrypt(encryptFunction);
         connector.decrypt(decryptFunction);
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
@@ -118,6 +155,28 @@ public class AwsConnectorTest {
         Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
         Assert.assertEquals("test_service", connector.getServiceName());
         Assert.assertEquals("us-west-2", connector.getRegion());
+        Assert.assertEquals("https://test.com/model1", connector.getPredictEndpoint(parameters));
+    }
+
+    @Test
+    public void constructor_NoParameter() {
+        Map<String, String> credential = new HashMap<>();
+        credential.put(ACCESS_KEY_FIELD, "test_access_key");
+        credential.put(SECRET_KEY_FIELD, "test_secret_key");
+        credential.put(SESSION_TOKEN_FIELD, "test_session_token");
+        credential.put(SERVICE_NAME_FIELD, "test_service");
+        credential.put(REGION_FIELD, "us-west-2");
+
+        String url = "https://test.com";
+        AwsConnector connector = createAwsConnector(null, credential, url);
+        connector.encrypt(encryptFunction);
+        connector.decrypt(decryptFunction);
+        Assert.assertEquals("decrypted: ENCRYPTED: TEST_ACCESS_KEY", connector.getAccessKey());
+        Assert.assertEquals("decrypted: ENCRYPTED: TEST_SECRET_KEY", connector.getSecretKey());
+        Assert.assertEquals("decrypted: ENCRYPTED: TEST_SESSION_TOKEN", connector.getSessionToken());
+        Assert.assertEquals("decrypted: ENCRYPTED: TEST_SERVICE", connector.getServiceName());
+        Assert.assertEquals("decrypted: ENCRYPTED: US-WEST-2", connector.getRegion());
+        Assert.assertEquals("https://test.com", connector.getPredictEndpoint(null));
     }
 
     @Test
@@ -128,17 +187,6 @@ public class AwsConnectorTest {
     }
 
     private AwsConnector createAwsConnector() {
-        ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
-        String method = "POST";
-        String url = "https://test.com";
-        Map<String, String> headers = new HashMap<>();
-        headers.put("api_key", "${credential.key}");
-        String requestBody = "{\"input\": \"${parameters.input}\"}";
-        String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
-        String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
-
-        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
-
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
         parameters.put(SERVICE_NAME_FIELD, "test_service");
@@ -148,6 +196,20 @@ public class AwsConnectorTest {
         credential.put(ACCESS_KEY_FIELD, "test_access_key");
         credential.put(SECRET_KEY_FIELD, "test_secret_key");
         credential.put(SESSION_TOKEN_FIELD, "test_session_token");
+        String url = "https://test.com";
+        return createAwsConnector(parameters, credential, url);
+    }
+
+    private AwsConnector createAwsConnector(Map<String, String> parameters, Map<String, String> credential, String url) {
+        ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String method = "POST";
+        Map<String, String> headers = new HashMap<>();
+        headers.put("api_key", "${credential.key}");
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
+        String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
+
+        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
 
         AwsConnector connector = AwsConnector.awsConnectorBuilder()
                 .name("test_connector_name")

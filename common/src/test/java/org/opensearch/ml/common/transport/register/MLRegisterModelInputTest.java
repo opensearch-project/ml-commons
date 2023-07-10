@@ -18,6 +18,8 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.HttpConnectorTest;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -229,6 +231,42 @@ public class MLRegisterModelInputTest {
         });
     }
 
+    @Test
+    public void readInputStream_WithConnectorId() throws IOException {
+        String connectorId = "test_connector_id";
+        input = MLRegisterModelInput.builder()
+                .functionName(FunctionName.REMOTE)
+                .modelName(modelName)
+                .description("test model input")
+                .version(version)
+                .modelGroupId(modelGroupId)
+                .connectorId(connectorId)
+                .build();
+        readInputStream(input, parsedInput -> {
+            assertNull(parsedInput.getModelConfig());
+            assertNull(parsedInput.getModelFormat());
+            assertNull(parsedInput.getConnector());
+            assertEquals(connectorId, parsedInput.getConnectorId());
+        });
+    }
+
+    @Test
+    public void readInputStream_WithInternalConnector() throws IOException {
+        HttpConnector connector = HttpConnectorTest.createHttpConnector();
+        input = MLRegisterModelInput.builder()
+                .functionName(FunctionName.REMOTE)
+                .modelName(modelName)
+                .description("test model input")
+                .version(version)
+                .modelGroupId(modelGroupId)
+                .connector(connector)
+                .build();
+        readInputStream(input, parsedInput -> {
+            assertNull(parsedInput.getModelConfig());
+            assertNull(parsedInput.getModelFormat());
+            assertEquals(input.getConnector(), parsedInput.getConnector());
+        });
+    }
 
     private void readInputStream(MLRegisterModelInput input, Consumer<MLRegisterModelInput> verify) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
