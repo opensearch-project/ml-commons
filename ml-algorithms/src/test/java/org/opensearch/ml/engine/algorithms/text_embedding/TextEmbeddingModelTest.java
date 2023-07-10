@@ -212,7 +212,6 @@ public class TextEmbeddingModelTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
-        System.out.println(Arrays.toString(mlModelOutputs.get(0).getMlModelTensors().get(0).getData()));
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
@@ -327,12 +326,6 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model not deployed");
         textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
     }
-
-    @Test
-    public void testA() {
-        System.out.println("a1 ".repeat(10));
-    }
-
 
     @After
     public void tearDown() {
