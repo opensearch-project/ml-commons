@@ -50,18 +50,6 @@ public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends
         searchSourceBuilder.parseXContent(request.contentOrSourceParamParser());
         searchSourceBuilder.fetchSource(getSourceContext(request, searchSourceBuilder));
         searchSourceBuilder.seqNoAndPrimaryTerm(true).version(true);
-        FetchSourceContext fetchSourceContext = searchSourceBuilder.fetchSource();
-        if (fetchSourceContext == null) {
-            searchSourceBuilder.fetchSource(null, new String[] { "connector" });
-        } else {
-            String[] excludes = fetchSourceContext.excludes();
-            if (excludes != null) {
-                Set<String> newExcludes = new HashSet<>();
-                newExcludes.addAll(Arrays.asList(excludes));
-                excludes = newExcludes.toArray(new String[0]);
-            }
-            searchSourceBuilder.fetchSource(fetchSourceContext.includes(), excludes);
-        }
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(index);
         return channel -> client.execute(actionType, searchRequest, search(channel));
     }
