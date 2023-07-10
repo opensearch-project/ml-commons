@@ -6,14 +6,20 @@
 package org.opensearch.ml.action.register;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -34,13 +40,17 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.forward.MLForwardResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelManager;
@@ -53,6 +63,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.collect.ImmutableList;
 
 public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Rule
@@ -117,15 +129,29 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     private String trustedUrlRegex = "^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
 
+    private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
+        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
+
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
+
+    @Mock
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        settings = Settings.builder().put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex).build();
+        settings = Settings
+            .builder()
+            .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
+            .putList(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.getKey(), TRUSTED_CONNECTOR_ENDPOINTS_REGEXES)
+            .build();
         threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_TRUSTED_URL_REGEX);
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_TRUSTED_URL_REGEX,
+            ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+        );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         transportRegisterModelAction = new TransportRegisterModelAction(
             transportService,
@@ -141,7 +167,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             nodeFilter,
             mlTaskDispatcher,
             mlStats,
-            modelAccessControlHelper
+            modelAccessControlHelper,
+            connectorAccessControlHelper
         );
         assertNotNull(transportRegisterModelAction);
 
@@ -167,6 +194,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(mlTaskDispatcher).dispatch(any());
 
         when(clusterService.localNode()).thenReturn(node2);
+        when(node2.getId()).thenReturn("node2Id");
 
         doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any());
 
@@ -271,6 +299,118 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, prepareRequest(), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    public void test_execute_registerRemoteModel_withConnectorId_success() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void test_execute_registerRemoteModel_withConnectorId_noPermissionToConnectorId() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(false);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
+            listener.onResponse(response);
+            return null;
+        }).when(mlModelManager).registerMLModel(any(), any());
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "You don't have permission to use the connector provided, connector id: mockConnectorId",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void test_execute_registerRemoteModel_withConnectorId_connectorValidationException() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getConnectorId()).thenReturn("mockConnectorId");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onFailure(new Exception("Failed to validate access"));
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_execute_registerRemoteModel_withInternalConnector_success() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        Connector connector = mock(Connector.class);
+        when(input.getConnector()).thenReturn(connector);
+        when(connector.getPredictEndpoint(any(Map.class))).thenReturn("https://api.openai.com");
+        MLCreateConnectorResponse mlCreateConnectorResponse = mock(MLCreateConnectorResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLCreateConnectorResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlCreateConnectorResponse);
+            return null;
+        }).when(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), isA(ActionListener.class));
+        MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void test_execute_registerRemoteModel_withInternalConnector_connectorIsNull() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getConnector()).thenReturn(null);
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "You must provide connector content when creating a remote model without connector id!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void test_execute_registerRemoteModel_withInternalConnector_predictEndpointIsNull() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        Connector connector = mock(Connector.class);
+        when(connector.getPredictEndpoint(any(Map.class))).thenReturn(null);
+        when(input.getConnector()).thenReturn(connector);
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Connector endpoint is required when creating a remote model without connector id!",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     private MLRegisterModelRequest prepareRequest() {
