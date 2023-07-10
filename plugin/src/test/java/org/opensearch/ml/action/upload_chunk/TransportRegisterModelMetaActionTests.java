@@ -28,6 +28,7 @@ import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -44,6 +45,8 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLModelManager mlModelManager;
+    @Mock
+    private MLModelGroupManager mlModelGroupManager;
 
     @Mock
     private ActionListener<MLRegisterModelMetaResponse> actionListener;
@@ -69,7 +72,14 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
 
-        action = new TransportRegisterModelMetaAction(transportService, actionFilters, mlModelManager, client, modelAccessControlHelper);
+        action = new TransportRegisterModelMetaAction(
+            transportService,
+            actionFilters,
+            mlModelManager,
+            client,
+            modelAccessControlHelper,
+            mlModelGroupManager
+        );
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);

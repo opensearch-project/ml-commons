@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.model_group;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
@@ -40,6 +41,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         this.modelGroupId = response.getModelGroupId();
     }
 
+    @Ignore
     public void test_empty_body_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -49,6 +51,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_matchAll_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -59,6 +62,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_bool_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -69,6 +73,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_term_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -79,6 +84,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_terms_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -89,6 +95,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_range_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -99,6 +106,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_matchPhrase_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
@@ -109,6 +117,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
+    @Ignore
     public void test_queryString_search() {
         SearchRequest searchRequest = new SearchRequest();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();

@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
@@ -20,6 +21,8 @@ import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -29,6 +32,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -43,6 +47,7 @@ import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.RestStatus;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -109,7 +114,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                 if (!access) {
                                     actionListener
                                         .onFailure(
-                                            new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                            new MLValidationException("User doesn't have privilege to perform this operation on this model")
                                         );
                                 } else {
                                     MLModelState mlModelState = mlModel.getModelState();
@@ -126,22 +131,19 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 )
                                             );
                                     } else {
-                                        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
-                                        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-                                            @Override
-                                            public void onResponse(DeleteResponse deleteResponse) {
-                                                deleteModelChunks(modelId, deleteResponse, actionListener);
+                                        searchModel(mlModel.getModelGroupId(), ActionListener.wrap(response -> {
+                                            boolean isLastModelOfGroup = false;
+                                            if (response != null
+                                                && response.getHits() != null
+                                                && response.getHits().getTotalHits() != null
+                                                && response.getHits().getTotalHits().value == 1) {
+                                                isLastModelOfGroup = true;
                                             }
-
-                                            @Override
-                                            public void onFailure(Exception e) {
-                                                log.error("Failed to delete model meta data for model: " + modelId, e);
-                                                if (e instanceof ResourceNotFoundException) {
-                                                    deleteModelChunks(modelId, null, actionListener);
-                                                }
-                                                actionListener.onFailure(e);
-                                            }
-                                        });
+                                            deleteModel(modelId, mlModel.getModelGroupId(), isLastModelOfGroup, actionListener);
+                                        }, e -> {
+                                            log.error("Failed to Search Model index " + modelId, e);
+                                            actionListener.onFailure(e);
+                                        }));
                                     }
                                 }
                             }, e -> {
@@ -161,6 +163,16 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             log.error("Failed to delete ML model " + modelId, e);
             actionListener.onFailure(e);
         }
+    }
+
+    private void searchModel(String modelGroupId, ActionListener<SearchResponse> listener) {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(QueryBuilders.matchQuery(MLModel.MODEL_GROUP_ID_FIELD, modelGroupId));
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
+        client.search(searchRequest, ActionListener.wrap(response -> { listener.onResponse(response); }, e -> {
+            log.error("Failed to search Model index", e);
+            listener.onFailure(e);
+        }));
     }
 
     @VisibleForTesting
@@ -199,5 +211,47 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }
         log.debug(response.toString());
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
+    }
+
+    private void deleteModel(
+        String modelId,
+        String modelGroupId,
+        boolean isLastModelOfGroup,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
+        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                if (isLastModelOfGroup) {
+                    deleteModelGroup(modelGroupId);
+                }
+                deleteModelChunks(modelId, deleteResponse, actionListener);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.error("Failed to delete model meta data for model: " + modelId, e);
+                if (e instanceof ResourceNotFoundException) {
+                    deleteModelChunks(modelId, null, actionListener);
+                }
+                actionListener.onFailure(e);
+            }
+        });
+    }
+
+    private void deleteModelGroup(String modelGroupId) {
+        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
+        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                log.debug("Completed Delete Model Group for modelGroupId:{}", modelGroupId);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.error("Failed to delete ML Model Group with Id:{} " + modelGroupId, e);
+            }
+        });
     }
 }

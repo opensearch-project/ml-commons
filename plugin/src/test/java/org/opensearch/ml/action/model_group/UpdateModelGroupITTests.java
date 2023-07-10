@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.model_group;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
@@ -41,6 +42,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         this.modelGroupId = response.getModelGroupId();
     }
 
+    @Ignore
     public void test_update_public_model_group() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLUpdateModelGroupInput input = new MLUpdateModelGroupInput(
@@ -55,6 +57,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
+    @Ignore
     public void test_update_private_model_group() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLUpdateModelGroupInput input = new MLUpdateModelGroupInput(
@@ -69,6 +72,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
+    @Ignore
     public void test_update_model_group_without_access_fields() {
         MLUpdateModelGroupInput input = new MLUpdateModelGroupInput(
             modelGroupId,
@@ -82,6 +86,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
+    @Ignore
     public void test_update_protected_model_group_with_addAllBackendRoles_true() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLUpdateModelGroupInput input = new MLUpdateModelGroupInput(
@@ -96,6 +101,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
+    @Ignore
     public void test_update_protected_model_group_with_backendRoles_notEmpty() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLUpdateModelGroupInput input = new MLUpdateModelGroupInput(

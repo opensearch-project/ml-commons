@@ -37,6 +37,7 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
@@ -56,6 +57,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
+    MLModelGroupManager mlModelGroupManager;
 
     @Inject
     public TransportUpdateModelGroupAction(
@@ -64,7 +66,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         Client client,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLModelGroupManager mlModelGroupManager
     ) {
         super(MLUpdateModelGroupAction.NAME, transportService, actionFilters, MLUpdateModelGroupRequest::new);
         this.actionFilters = actionFilters;
@@ -73,6 +76,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlModelGroupManager = mlModelGroupManager;
     }
 
     @Override
@@ -119,6 +123,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         ActionListener<MLUpdateModelGroupResponse> listener,
         User user
     ) {
+        String modelGroupName = (String) source.get(MLModelGroup.MODEL_GROUP_NAME_FIELD);
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
             if (AccessMode.RESTRICTED != updateModelGroupInput.getModelAccessMode()) {
@@ -134,13 +139,32 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
             source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
         }
-        if (StringUtils.isNotBlank(updateModelGroupInput.getName())) {
-            source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
-        }
         if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
         }
+        if (StringUtils.isNotBlank(updateModelGroupInput.getName()) && !updateModelGroupInput.getName().equals(modelGroupName)) {
+            mlModelGroupManager.validateUniqueModelGroupName(updateModelGroupInput.getName(), ActionListener.wrap(modelGroups -> {
+                if (modelGroups != null
+                    && modelGroups.getHits().getTotalHits() != null
+                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    throw new IllegalArgumentException(
+                        "The name you provided is already being used by another model group. Please provide a different name"
+                    );
+                } else {
+                    source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
+                    updateModelGroup(modelGroupId, source, listener);
+                }
+            }, e -> {
+                log.error("Failed to search model group index", e);
+                listener.onFailure(e);
+            }));
+        } else {
+            updateModelGroup(modelGroupId, source, listener);
+        }
 
+    }
+
+    private void updateModelGroup(String modelGroupId, Map<String, Object> source, ActionListener<MLUpdateModelGroupResponse> listener) {
         UpdateRequest updateModelGroupRequest = new UpdateRequest();
         updateModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId).doc(source);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -175,11 +199,11 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
             throw new IllegalArgumentException("You don't have permissions to perform this operation on this model group.");
         }
-        AccessMode modelAccessMode = input.getModelAccessMode();
-        if ((AccessMode.PUBLIC == modelAccessMode || AccessMode.PRIVATE == modelAccessMode)
+        AccessMode accessMode = input.getModelAccessMode();
+        if ((AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(input.getIsAddAllBackendRoles()))) {
             throw new IllegalArgumentException("You can specify backend roles only for a model group with the restricted access mode.");
-        } else if (modelAccessMode == null || AccessMode.RESTRICTED == modelAccessMode) {
+        } else if (accessMode == null || AccessMode.RESTRICTED == accessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
@@ -192,7 +216,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
             }
-            if (AccessMode.RESTRICTED == modelAccessMode
+            if (AccessMode.RESTRICTED == accessMode
                 && CollectionUtils.isEmpty(input.getBackendRoles())
                 && !Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException(
