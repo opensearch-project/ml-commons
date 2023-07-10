@@ -22,8 +22,10 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
@@ -72,7 +74,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
                 if (!access) {
-                    actionListener.onFailure(new MLValidationException("User Doesn't have privilege to perform this operation"));
+                    actionListener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
                 } else {
                     BoolQueryBuilder query = new BoolQueryBuilder();
                     query.filter(new TermQueryBuilder(PARAMETER_MODEL_GROUP_ID, modelGroupId));
@@ -99,8 +101,12 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                         }
 
                     }, e -> {
-                        log.error("Failed to search models with the specified Model Group Id " + modelGroupId, e);
-                        actionListener.onFailure(e);
+                        if (e instanceof IndexNotFoundException) {
+                            actionListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        } else {
+                            log.error("Failed to search models with the specified Model Group Id " + modelGroupId, e);
+                            actionListener.onFailure(e);
+                        }
                     }));
                 }
             }, e -> {
