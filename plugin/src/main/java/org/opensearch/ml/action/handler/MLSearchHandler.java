@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
@@ -31,13 +32,16 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.indices.InvalidIndexNameException;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import com.google.common.base.Throwables;
 
@@ -76,6 +80,23 @@ public class MLSearchHandler {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            List<String> excludes = Optional
+                .ofNullable(request.source())
+                .map(SearchSourceBuilder::fetchSource)
+                .map(FetchSourceContext::excludes)
+                .map(x -> Arrays.stream(x).collect(Collectors.toList()))
+                .orElse(new ArrayList<>());
+            excludes.add(MLModel.CONNECTOR_FIELD + "." + HttpConnector.CREDENTIAL_FIELD);
+            FetchSourceContext rebuiltFetchSourceContext = new FetchSourceContext(
+                Optional
+                    .ofNullable(request.source())
+                    .map(SearchSourceBuilder::fetchSource)
+                    .map(FetchSourceContext::fetchSource)
+                    .orElse(true),
+                Optional.ofNullable(request.source()).map(SearchSourceBuilder::fetchSource).map(FetchSourceContext::includes).orElse(null),
+                excludes.toArray(new String[0])
+            );
+            request.source().fetchSource(rebuiltFetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
                 client.search(request, listener);
             } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {

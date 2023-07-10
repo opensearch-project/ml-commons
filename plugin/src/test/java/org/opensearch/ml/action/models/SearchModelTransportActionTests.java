@@ -46,6 +46,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -84,6 +85,9 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ClusterService clusterService;
 
+    @Mock
+    private FetchSourceContext fetchSourceContext;
+
     @Rule
     public ExpectedException thrown = ExpectedException.none();
 
@@ -98,6 +102,9 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
+        when(fetchSourceContext.includes()).thenReturn(new String[] {});
+        when(fetchSourceContext.excludes()).thenReturn(new String[] {});
+        searchSourceBuilder.fetchSource(fetchSourceContext);
         when(searchRequest.source()).thenReturn(searchSourceBuilder);
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(false);
 
