@@ -28,7 +28,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
     public static final String NAME_FIELD = "name"; //mandatory
     public static final String DESCRIPTION_FIELD = "description"; //optional
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_MODE = "model_access_mode"; //optional
+    public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
 
     private String name;

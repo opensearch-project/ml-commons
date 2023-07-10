@@ -43,6 +43,7 @@ import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
 import org.opensearch.ml.common.transport.forward.MLForwardRequestType;
 import org.opensearch.ml.common.transport.forward.MLForwardResponse;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
@@ -51,6 +52,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
@@ -87,6 +89,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ModelAccessControlHelper modelAccessControlHelper;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
+    MLModelGroupManager mlModelGroupManager;
 
     @Inject
     public TransportRegisterModelAction(
@@ -104,7 +107,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         MLTaskDispatcher mlTaskDispatcher,
         MLStats mlStats,
         ModelAccessControlHelper modelAccessControlHelper,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLModelGroupManager mlModelGroupManager
     ) {
         super(MLRegisterModelAction.NAME, transportService, actionFilters, MLRegisterModelRequest::new);
         this.transportService = transportService;
@@ -120,6 +124,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlModelGroupManager = mlModelGroupManager;
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
@@ -152,7 +157,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
                 connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
                     if (Boolean.TRUE.equals(r)) {
-                        registerModel(registerModelInput, listener);
+                        createModelGroup(registerModelInput, listener);
                     } else {
                         listener
                             .onFailure(
@@ -174,7 +179,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 validateInternalConnector(registerModelInput);
                 ActionListener<MLCreateConnectorResponse> dryRunResultListener = ActionListener.wrap(res -> {
                     log.info("Dry run create connector successfully");
-                    registerModel(registerModelInput, listener);
+                    createModelGroup(registerModelInput, listener);
                 }, e -> {
                     log.error(e.getMessage(), e);
                     listener.onFailure(e);
@@ -182,6 +187,21 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 MLCreateConnectorRequest mlCreateConnectorRequest = createConnectorRequest();
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
+        } else {
+            createModelGroup(registerModelInput, listener);
+        }
+    }
+
+    private void createModelGroup(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
+        if (Strings.isEmpty(registerModelInput.getModelGroupId())) {
+            MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(registerModelInput);
+            mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
+                registerModelInput.setModelGroupId(modelGroupId);
+                registerModel(registerModelInput, listener);
+            }, e -> {
+                logException("Failed to create Model Group", e, log);
+                listener.onFailure(e);
+            }));
         } else {
             registerModel(registerModelInput, listener);
         }
@@ -295,5 +315,16 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             logException("Failed to register model", e, log);
             listener.onFailure(e);
         }));
+    }
+
+    private MLRegisterModelGroupInput createRegisterModelGroupRequest(MLRegisterModelInput registerModelInput) {
+        return MLRegisterModelGroupInput
+            .builder()
+            .name(registerModelInput.getModelName())
+            .description(registerModelInput.getDescription())
+            .backendRoles(registerModelInput.getBackendRoles())
+            .modelAccessMode(registerModelInput.getAccessMode())
+            .isAddAllBackendRoles(registerModelInput.getAddAllBackendRoles())
+            .build();
     }
 }

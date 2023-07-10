@@ -238,7 +238,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 
     public void test_updateModelGroup_userIsNonOwner_withoutPermissionFields() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("You don't have permissions to perform this operation on this model group.");
+        exceptionRule.expectMessage("You don't have permission to update this model group.");
         MLUpdateModelGroupInput mlUpdateModelGroupInput = createUpdateModelGroupInput(
             this.modelGroupId,
             "new_name",

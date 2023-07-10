@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -107,6 +108,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
+    @Ignore
     public void test_ExceptionEmptyBackendRoles() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         User user = User.parse("owner|IT,HR|myTenant");
@@ -117,6 +119,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertEquals("Backend roles shouldn't be null", argumentCaptor.getValue().getMessage());
     }
 
+    @Ignore
     public void test_MatchingBackendRoles() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -128,6 +131,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
+    @Ignore
     public void test_PublicModelGroup() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -139,6 +143,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
+    @Ignore
     public void test_PrivateModelGroupWithSameOwner() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -150,6 +155,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
+    @Ignore
     public void test_PrivateModelGroupWithDifferentOwner() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");

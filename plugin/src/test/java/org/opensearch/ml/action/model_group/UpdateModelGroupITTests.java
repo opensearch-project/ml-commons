@@ -72,7 +72,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
     public void test_update_model_group_without_access_fields() {
         MLUpdateModelGroupInput input = new MLUpdateModelGroupInput(
             modelGroupId,
-            "mock_model_group_name",
+            "mock_model_group_name2",
             "mock_model_group_desc",
             null,
             null,
