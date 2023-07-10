@@ -5,11 +5,12 @@
 
 package org.opensearch.ml.settings;
 
-import com.google.common.collect.ImmutableList;
-import org.opensearch.common.settings.Setting;
-
 import java.util.List;
 import java.util.function.Function;
+
+import org.opensearch.common.settings.Setting;
+
+import com.google.common.collect.ImmutableList;
 
 public final class MLCommonsSettings {
 

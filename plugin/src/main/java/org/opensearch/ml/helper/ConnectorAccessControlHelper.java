@@ -128,8 +128,8 @@ public class ConnectorAccessControlHelper {
         AccessMode modelAccessMode = connector.getAccess();
         return AccessMode.RESTRICTED == modelAccessMode
             && (user.getBackendRoles() != null
-            && connector.getBackendRoles() != null
-            && connector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x)));
+                && connector.getBackendRoles() != null
+                && connector.getBackendRoles().stream().anyMatch(x -> user.getBackendRoles().contains(x)));
     }
 
     private boolean previouslyPublicConnector(Connector connector) {
