@@ -7,6 +7,7 @@ package org.opensearch.ml.utils;
 
 import static org.apache.http.entity.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
@@ -70,6 +71,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
@@ -201,6 +203,49 @@ public class TestHelper {
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
+    }
+
+    public static RestRequest getCreateConnectorRestRequest() {
+        final String requestContent = "{\n"
+            + "    \"name\": \"OpenAI Connector\",\n"
+            + "    \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
+            + "    \"version\": 1,\n"
+            + "    \"protocol\": \"http\",\n"
+            + "    \"parameters\": {\n"
+            + "        \"endpoint\": \"api.openai.com\",\n"
+            + "        \"auth\": \"API_Key\",\n"
+            + "        \"content_type\": \"application/json\",\n"
+            + "        \"max_tokens\": 7,\n"
+            + "        \"temperature\": 0,\n"
+            + "        \"model\": \"text-davinci-003\"\n"
+            + "    },\n"
+            + "    \"credential\": {\n"
+            + "        \"openAI_key\": \"xxxxxxxx\"\n"
+            + "    },\n"
+            + "    \"actions\": [\n"
+            + "        {\n"
+            + "            \"action_type\": \"predict\",\n"
+            + "            \"method\": \"POST\",\n"
+            + "            \"url\": \"https://${parameters.endpoint}/v1/completions\",\n"
+            + "            \"headers\": {\n"
+            + "                \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
+            + "            },\n"
+            + "            \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"prompt\\\": \\\"${parameters.prompt}\\\", \\\"max_tokens\\\": ${parameters.max_tokens}, \\\"temperature\\\": ${parameters.temperature} }\"\n"
+            + "        }\n"
+            + "    ],\n"
+            + "    \"access_mode\": \"public\"\n"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static void verifyParsedCreateConnectorInput(MLCreateConnectorInput mlCreateConnectorInput) {
+        assertEquals("OpenAI Connector", mlCreateConnectorInput.getName());
+        assertEquals("http", mlCreateConnectorInput.getProtocol());
+        assertNotNull(mlCreateConnectorInput.getActions());
+        assertNotNull(mlCreateConnectorInput.getCredential());
     }
 
     public static RestRequest getStatsRestRequest(MLStatsInput input) throws IOException {
