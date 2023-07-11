@@ -17,6 +17,8 @@ import java.io.UncheckedIOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 public class MLModelDeleteRequestTest {
     private String modelId;
@@ -34,6 +36,14 @@ public class MLModelDeleteRequestTest {
         mlModelDeleteRequest.writeTo(bytesStreamOutput);
         MLModelDeleteRequest parsedModel = new MLModelDeleteRequest(bytesStreamOutput.bytes().streamInput());
         assertEquals(parsedModel.getModelId(), modelId);
+    }
+
+    @Test
+    public void validate_Success() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).build();
+        ActionRequestValidationException actionRequestValidationException = mlModelDeleteRequest.validate();
+        assertNull(actionRequestValidationException);
     }
 
     @Test
@@ -78,5 +88,15 @@ public class MLModelDeleteRequestTest {
             }
         };
         MLModelDeleteRequest.fromActionRequest(actionRequest);
+    }
+
+
+    @Test
+    public void fromActionRequestWithModelDeleteRequest_Success() {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder()
+                .modelId(modelId).build();
+        MLModelDeleteRequest mlModelDeleteRequestFromActionRequest = MLModelDeleteRequest.fromActionRequest(mlModelDeleteRequest);
+        assertSame(mlModelDeleteRequest, mlModelDeleteRequestFromActionRequest);
+        assertEquals(mlModelDeleteRequest.getModelId(), mlModelDeleteRequestFromActionRequest.getModelId());
     }
 }

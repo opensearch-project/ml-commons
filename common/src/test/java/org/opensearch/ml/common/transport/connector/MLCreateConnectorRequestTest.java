@@ -35,6 +35,7 @@ public class MLCreateConnectorRequestTest {
                 .protocol("http")
                 .version("1")
                 .description("test")
+                .addAllBackendRoles(true)
                 .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(input);
         BytesStreamOutput output = new BytesStreamOutput();
