@@ -89,6 +89,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.backendRoles = backendRoles;
         this.addAllBackendRoles = addAllBackendRoles;
         this.access = access;
+        this.dryRun = dryRun;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
