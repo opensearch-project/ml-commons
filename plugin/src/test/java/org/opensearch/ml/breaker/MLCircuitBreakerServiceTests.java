@@ -6,6 +6,7 @@
 package org.opensearch.ml.breaker;
 
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_JVM_HEAP_MEM_THRESHOLD;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
 
 import java.nio.file.Path;
@@ -95,8 +96,15 @@ public class MLCircuitBreakerServiceTests {
 
     @Test
     public void testInit() {
-        Settings settings = Settings.builder().put(ML_COMMONS_NATIVE_MEM_THRESHOLD.getKey(), 90).build();
-        ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_NATIVE_MEM_THRESHOLD)));
+        Settings settings = Settings
+            .builder()
+            .put(ML_COMMONS_NATIVE_MEM_THRESHOLD.getKey(), 90)
+            .put(ML_COMMONS_JVM_HEAP_MEM_THRESHOLD.getKey(), 95)
+            .build();
+        ClusterSettings clusterSettings = new ClusterSettings(
+            settings,
+            new HashSet<>(Arrays.asList(ML_COMMONS_NATIVE_MEM_THRESHOLD, ML_COMMONS_JVM_HEAP_MEM_THRESHOLD))
+        );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         mlCircuitBreakerService = new MLCircuitBreakerService(jvmService, osService, settings, clusterService);
         Assert.assertNotNull(mlCircuitBreakerService.init(Path.of("/")));
