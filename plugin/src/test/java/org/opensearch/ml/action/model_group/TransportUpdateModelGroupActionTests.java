@@ -6,7 +6,9 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +16,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -22,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -45,6 +49,9 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
+import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -134,9 +141,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
 
+        SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(true);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
             return null;
         }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
 
@@ -385,13 +393,14 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ModelGroupNameNotUnique() {
+    public void test_ModelGroupNameNotUnique() throws IOException {
 
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(1);
-            listener.onResponse(false);
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(client).search(any(), isA(ActionListener.class));
 
         when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
         when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
@@ -402,7 +411,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name you provided is already being used by another model group. Please provide a different name.",
+            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -430,6 +439,23 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             .isAddAllBackendRoles(isAddAllBackendRoles)
             .build();
         return new MLUpdateModelGroupRequest(UpdateModelGroupInput);
+    }
+
+    private SearchResponse createModelGroupSearchResponse(long totalHits) throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        String modelContent = "{\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"access\": \"public\",\n"
+            + "                    \"latest_version\": 0,\n"
+            + "                    \"last_updated_time\": 1684981986069,\n"
+            + "                    \"_id\": \"model_group_ID\",\n"
+            + "                    \"name\": \"model_group_IT\",\n"
+            + "                    \"description\": \"This is an example description\"\n"
+            + "                }";
+        SearchHit modelGroup = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { modelGroup }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
     }
 
 }
