@@ -38,6 +38,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
+@Ignore
 public class MLModelGroupManagerTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -105,7 +106,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    @Ignore
     public void test_SuccessAddAllBackendRolesTrue() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -116,7 +116,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    @Ignore
     public void test_SuccessPublic() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -126,7 +125,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    @Ignore
     public void test_ExceptionAllAccessFieldsNull() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -140,7 +138,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void test_ModelAccessModeNullAddAllBackendRolesTrue() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -151,7 +148,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    @Ignore
     public void test_BackendRolesProvidedWithPublic() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -162,7 +158,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_BackendRolesProvidedWithPrivate() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -173,7 +168,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_AdminSpecifiedAddAllBackendRolesForRestricted() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "admin|admin|all_access");
         when(modelAccessControlHelper.isAdmin(any())).thenReturn(true);
@@ -186,7 +180,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("Admin users cannot add all backend roles to a model group.", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_UserWithNoBackendRolesSpecifiedRestricted() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex||engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -201,7 +194,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void test_UserSpecifiedRestrictedButNoBackendRolesFieldF() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -216,7 +208,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void test_RestrictedAndUserSpecifiedBothBackendRolesField() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -231,7 +222,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void test_RestrictedAndUserSpecifiedIncorrectBackendRoles() {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
@@ -245,7 +235,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("You don't have the backend roles specified.", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_SuccessSecurityDisabledCluster() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
@@ -255,7 +244,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    @Ignore
     public void test_ExceptionSecurityDisabledCluster() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
@@ -269,7 +257,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         );
     }
 
-    @Ignore
     public void test_ExceptionFailedToInitModelGroupIndex() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -279,7 +266,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
-    @Ignore
     public void test_ExceptionFailedToIndexModelGroup() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
         doAnswer(invocation -> {
@@ -295,7 +281,6 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_ExceptionInitModelGroupIndexIfAbsent() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
         doAnswer(invocation -> {

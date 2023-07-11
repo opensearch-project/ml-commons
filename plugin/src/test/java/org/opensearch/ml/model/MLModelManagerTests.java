@@ -483,7 +483,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
-        assertEquals("Fail to find model", exception.getValue().getMessage());
+        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
@@ -503,7 +503,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
-        assertEquals("Fail to find model", exception.getValue().getMessage());
+        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
