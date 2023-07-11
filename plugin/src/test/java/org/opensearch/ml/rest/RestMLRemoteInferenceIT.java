@@ -61,9 +61,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException {
         disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();;
+        setEncryptionMasterKey();
     }
-    
 
     public void testCreateConnector() throws IOException {
         Response response = createConnector(completionModelConnectorEntity);
