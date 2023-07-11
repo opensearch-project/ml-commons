@@ -1,0 +1,31 @@
+name: Just test
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        jdk: [17]
+        platform: ["ubuntu-latest"]
+    if: github.repository == 'opensearch-project/ml-commons'
+    runs-on: ${{ matrix.platform }}
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+#      - uses: actions/setup-java@v3
+#        with:
+#          distribution: temurin # Temurin is a distribution of adoptium
+#          java-version: ${{ matrix.jdk }}
+      - uses: actions/checkout@v3
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::419213735998:role/ml-role
+          aws-region: us-west-2
+
