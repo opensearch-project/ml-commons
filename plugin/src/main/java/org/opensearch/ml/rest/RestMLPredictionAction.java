@@ -99,7 +99,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
             }, e -> {
                 log.error("Failed to get ML model", e);
                 try {
-                    channel.sendResponse(new BytesRestResponse(channel, RestStatus.BAD_REQUEST, e));
+                    channel.sendResponse(new BytesRestResponse(channel, RestStatus.NOT_FOUND, e));
                 } catch (IOException ex) {
                     log.error("Failed to send error response", ex);
                 }

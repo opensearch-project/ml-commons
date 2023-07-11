@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
@@ -34,6 +35,7 @@ import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -110,7 +112,13 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new IllegalArgumentException("Failed to find model with the provided model id: " + modelId));
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Failed to find model with the provided model id: " + modelId,
+                                RestStatus.NOT_FOUND
+                            )
+                        );
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
