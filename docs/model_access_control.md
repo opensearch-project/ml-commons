@@ -178,7 +178,7 @@ Updating a model group request is very similar to register model group request. 
 ### Path and HTTP method
 
 ```
-PUT /_plugins/_ml/model_groups/<model_group_id>/_update
+PUT /_plugins/_ml/model_groups/<model_group_id>
 ```
 
 A user can make updates to a model group to which he/she has access which is determined by the access mode of the model group.
@@ -196,7 +196,7 @@ For example,
 Sample request allowed by admin/owner
 
 ```
-PUT /_plugins/_ml/model_groups/<model_group_id>/_update
+PUT /_plugins/_ml/model_groups/<model_group_id>
 {
   "name": "model_group_test",
   "description": "This is an example description",
@@ -215,7 +215,7 @@ PUT /_plugins/_ml/model_groups/<model_group_id>/_update
 Sample update request allowed by any other user with access to model group.
 
 ```
-PUT /_plugins/_ml/model_groups/<model_group_id>/_update
+PUT /_plugins/_ml/model_groups/<model_group_id>
 {
     "name": "model_group_test",
     "description": "This is an example description"

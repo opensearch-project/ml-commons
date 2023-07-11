@@ -697,8 +697,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public void updateModelGroup(RestClient client, String modelGroupId, String input, Consumer<Map<String, Object>> function)
         throws IOException {
-        Response response = TestHelper
-            .makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId + "/_update", null, input, null);
+        Response response = TestHelper.makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId, null, input, null);
         verifyResponse(function, response);
     }
 
