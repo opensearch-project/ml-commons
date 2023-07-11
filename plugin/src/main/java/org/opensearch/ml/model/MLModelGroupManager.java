@@ -193,7 +193,9 @@ public class MLModelGroupManager {
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {
-        if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
+        if (input.getModelAccessMode() != null
+            || input.getIsAddAllBackendRoles() != null
+            || !CollectionUtils.isEmpty(input.getBackendRoles())) {
             throw new IllegalArgumentException(
                 "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
             );
