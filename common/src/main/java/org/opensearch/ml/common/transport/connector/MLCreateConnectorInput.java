@@ -10,6 +10,7 @@ import lombok.Data;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -184,7 +185,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (actions != null) {
             builder.field(CONNECTOR_ACTIONS_FIELD, actions);
         }
-        if (backendRoles != null) {
+        if (!CollectionUtils.isEmpty(backendRoles)) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
         if (addAllBackendRoles != null) {
@@ -224,7 +225,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
-        if (backendRoles != null) {
+        if (!CollectionUtils.isEmpty(backendRoles)) {
             output.writeBoolean(true);
             output.writeOptionalStringCollection(backendRoles);
         } else {
