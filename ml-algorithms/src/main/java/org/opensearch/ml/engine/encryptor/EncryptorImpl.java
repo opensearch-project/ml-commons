@@ -13,14 +13,15 @@ import org.opensearch.ml.engine.exceptions.MetaDataException;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Base64;
 
 public class EncryptorImpl implements Encryptor {
 
     private volatile String masterKey;
 
-    public EncryptorImpl(String masterKey) {
-        this.masterKey = masterKey;
+    public EncryptorImpl() {
+        this.masterKey = null;
     }
 
     @Override
@@ -60,14 +61,17 @@ public class EncryptorImpl implements Encryptor {
         return new String(decryptedResult.getResult());
     }
 
+    @Override
+    public String generateMasterKey() {
+        byte[] keyBytes = new byte[16];
+        new SecureRandom().nextBytes(keyBytes);
+        String base64Key = Base64.getEncoder().encodeToString(keyBytes);
+        return base64Key;
+    }
+
     private void checkMasterKey() {
-        if (masterKey == "0000000000000000" || masterKey == null) {
-            throw new MetaDataException("Please provide a masterKey for credential encryption! Example: PUT /_cluster/settings\n" +
-                    "{\n" +
-                    "  \"persistent\" : {\n" +
-                    "    \"plugins.ml_commons.encryption.master_key\" : \"1234567x\"  \n" +
-                    "  }\n" +
-                    "}");
+        if (masterKey == null) {
+            throw new MetaDataException("Encryption key not created yet.");
         }
     }
 }

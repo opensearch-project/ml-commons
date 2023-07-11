@@ -19,6 +19,8 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -50,12 +52,16 @@ public class ModelHelperTest {
     @Mock
     ActionListener<MLRegisterModelInput> registerModelListener;
 
+    Encryptor encryptor;
+
     @Before
     public void setup() throws URISyntaxException {
         MockitoAnnotations.openMocks(this);
         modelFormat = MLModelFormat.TORCH_SCRIPT;
         modelId = "model_id";
-        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), null);
+        encryptor = new EncryptorImpl();
+        encryptor.setMasterKey("0000000000000001");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), Path.of("/tmp/test_config"), encryptor);
         modelHelper = new ModelHelper(mlEngine);
     }
 

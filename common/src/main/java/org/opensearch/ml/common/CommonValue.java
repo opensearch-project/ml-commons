@@ -24,6 +24,9 @@ public class CommonValue {
     public static final String UNDEPLOYED = "undeployed";
     public static final String NOT_FOUND = "not_found";
 
+    public static final String MASTER_KEY = "master_key";
+    public static final String CREATE_TIME_FIELD = "create_time";
+
     public static final String BOX_TYPE_KEY = "box_type";
     //hot node
     public static String HOT_BOX_TYPE = "hot";
@@ -37,6 +40,8 @@ public class CommonValue {
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
     public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
     public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 1;
+    public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
+    public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 1;
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
@@ -298,6 +303,21 @@ public class CommonValue {
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
             + AbstractConnector.LAST_UPDATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
+
+    public static final String ML_CONFIG_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_CONFIG_INDEX_SCHEMA_VERSION
+            + "},\n"
+            + "    \"properties\": {\n"
+            + "      \""
+            + MASTER_KEY
+            + "\": {\"type\": \"keyword\"},\n"
+            + "      \""
+            + CREATE_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
             + "    }\n"
             + "}";

@@ -64,6 +64,7 @@ dependencies {
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.0'
     implementation 'com.jayway.jsonpath:json-path:2.8.0'
     implementation group: 'org.json', name: 'json', version: '20230227'
+    implementation group: 'org.yaml', name: 'snakeyaml', version: '2.0'
 }
 
 configurations.all {
