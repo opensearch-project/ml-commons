@@ -65,6 +65,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   Boolean addAllBackendRoles,
                                   AccessMode access
     ) {
+        if (name == null) {
+            throw new IllegalArgumentException("Connector name is null");
+        }
+        if (version == null) {
+            throw new IllegalArgumentException("Connector version is null");
+        }
+        if (protocol == null) {
+            throw new IllegalArgumentException("Connector protocol is null");
+        }
         this.name = name;
         this.description = description;
         this.version = version;
@@ -181,7 +190,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         output.writeString(name);
-        output.writeString(description);
+        output.writeOptionalString(description);
         output.writeString(version);
         output.writeString(protocol);
         if (parameters != null) {
@@ -211,9 +220,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
-        if (addAllBackendRoles != null) {
-            output.writeBoolean(addAllBackendRoles);
-        }
+        output.writeOptionalBoolean(addAllBackendRoles);
         if (access != null) {
             output.writeBoolean(true);
             output.writeEnum(access);
@@ -224,7 +231,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
         name = input.readString();
-        description = input.readString();
+        description = input.readOptionalString();
         version = input.readString();
         protocol = input.readString();
         if (input.readBoolean()) {
