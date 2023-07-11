@@ -91,7 +91,7 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.PUT, route.getMethod());
-        assertEquals("/_plugins/_ml/model_groups/{model_group_id}/_update", route.getPath());
+        assertEquals("/_plugins/_ml/model_groups/{model_group_id}", route.getPath());
     }
 
     public void testUpdateModelGroupRequest() throws Exception {
@@ -119,7 +119,7 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
         params.put("model_group_id", "test_modelGroupId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/model_groups/{model_group_id}/_update")
+            .withPath("/_plugins/_ml/model_groups/{model_group_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -132,7 +132,7 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
         params.put("model_group_id", "test_modelGroupId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/model_groups/{model_group_id}/_update")
+            .withPath("/_plugins/_ml/model_groups/{model_group_id}")
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();

@@ -63,6 +63,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -891,7 +892,7 @@ public class MLModelManager {
                     listener.onFailure(e);
                 }
             } else {
-                listener.onFailure(new MLResourceNotFoundException("Fail to find model"));
+                listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
             }
         }, e -> { listener.onFailure(e); }));
     }
