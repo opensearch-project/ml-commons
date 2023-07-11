@@ -141,6 +141,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
         input = MLCreateConnectorInput
             .builder()
+            .name("test_name")
+            .version("1")
             .actions(actions)
             .parameters(parameters)
             .protocol(ConnectorProtocols.HTTP)
@@ -430,6 +432,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         MLCreateConnectorInput mlCreateConnectorInput = mock(MLCreateConnectorInput.class);
         when(mlCreateConnectorInput.getName()).thenReturn(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
+        when(mlCreateConnectorInput.isDryRun()).thenReturn(true);
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
