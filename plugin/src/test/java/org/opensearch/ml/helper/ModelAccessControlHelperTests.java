@@ -199,8 +199,12 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     public void test_IsUserHasBackendRole() {
         User user = User.parse("owner|IT,HR|all_access");
         MLModelGroupBuilder builder = MLModelGroup.builder();
-        assertTrue(modelAccessControlHelper.isUserHasBackendRole(null, builder.access(AccessMode.PUBLIC.getValue()).build()));
-        assertFalse(modelAccessControlHelper.isUserHasBackendRole(null, builder.access(AccessMode.PRIVATE.getValue()).build()));
+        assertTrue(
+            modelAccessControlHelper.isUserHasBackendRole(null, builder.name("test_group").access(AccessMode.PUBLIC.getValue()).build())
+        );
+        assertFalse(
+            modelAccessControlHelper.isUserHasBackendRole(null, builder.name("test_group").access(AccessMode.PRIVATE.getValue()).build())
+        );
         assertTrue(
             modelAccessControlHelper
                 .isUserHasBackendRole(
@@ -218,9 +222,13 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         User userLostAccess = User.parse("owner|Finance|myTenant");
         assertTrue(modelAccessControlHelper.isOwnerStillHasPermission(null, null));
         MLModelGroupBuilder builder = MLModelGroup.builder();
-        assertTrue(modelAccessControlHelper.isOwnerStillHasPermission(user, builder.access(AccessMode.PUBLIC.getValue()).build()));
         assertTrue(
-            modelAccessControlHelper.isOwnerStillHasPermission(user, builder.access(AccessMode.PRIVATE.getValue()).owner(owner).build())
+            modelAccessControlHelper
+                .isOwnerStillHasPermission(user, builder.name("test_group").access(AccessMode.PUBLIC.getValue()).build())
+        );
+        assertTrue(
+            modelAccessControlHelper
+                .isOwnerStillHasPermission(user, builder.name("test_group").access(AccessMode.PRIVATE.getValue()).owner(owner).build())
         );
         assertFalse(
             modelAccessControlHelper
