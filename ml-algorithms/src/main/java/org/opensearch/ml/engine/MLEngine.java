@@ -5,12 +5,17 @@
 
 package org.opensearch.ml.engine;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.stream.JsonReader;
 import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
@@ -18,14 +23,24 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
 /**
  * This is the interface to all ml algorithms.
  */
+@Log4j2
 public class MLEngine {
 
     public static final String REGISTER_MODEL_FOLDER = "register";
@@ -36,12 +51,58 @@ public class MLEngine {
     private final Path mlCachePath;
     private final Path mlModelsCachePath;
 
-    private final Encryptor encryptor;
+    private Encryptor encryptor;
 
-    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
+    private final Gson gson;
+
+    public MLEngine(Path opensearchDataFolder) {
+        gson = new GsonBuilder().setPrettyPrinting().create();
         mlCachePath = opensearchDataFolder.resolve("ml_cache");
         mlModelsCachePath = mlCachePath.resolve("models_cache");
-        this.encryptor = encryptor;
+        initMasterKey();
+    }
+
+
+    private String generateMasterKey() {
+        byte[] keyBytes = new byte[16];
+        new SecureRandom().nextBytes(keyBytes);
+        String base64Key = Base64.getEncoder().encodeToString(keyBytes);
+        return base64Key;
+    }
+
+    private synchronized void initMasterKey() {
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                Path configFilePath = mlCachePath.resolve("security_config.json");
+                Map<String, String> config = null;
+                if (Files.exists(configFilePath)) {
+                    try (JsonReader reader = new JsonReader(new FileReader(configFilePath.toFile()))) {
+                        config = gson.fromJson(reader, Map.class);
+                    }
+                }
+                if (config == null) {
+                    config = new HashMap<>();
+                }
+
+                Files.createDirectories(mlCachePath);
+                if (!config.containsKey("master_key")) {
+                    String masterKey = generateMasterKey();
+                    config.put("master_key", masterKey);
+                    try (FileWriter writer = new FileWriter(configFilePath.toFile())) {
+                        String json = gson.toJson(config);
+                        writer.write(json);
+                        log.info("ml-commons master key initialized successfully");
+                        encryptor = new EncryptorImpl(masterKey);
+                    }
+                } else {
+                    encryptor = new EncryptorImpl(config.get("master_key"));
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            log.error("Failed to save master key", e);
+            throw new MLException(e);
+        }
     }
 
     public String getPrebuiltModelMetaListPath() {
@@ -195,7 +256,4 @@ public class MLEngine {
         return encryptor.encrypt(credential);
     }
 
-    public void setMasterKey(String masterKey) {
-        encryptor.setMasterKey(masterKey);
-    }
 }

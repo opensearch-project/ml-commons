@@ -71,7 +71,7 @@ public class TextEmbeddingModelTest {
     @Before
     public void setUp() throws URISyntaxException {
         djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        mlEngine = new MLEngine(djlCachePath, encryptor);
+        mlEngine = new MLEngine(djlCachePath);
         modelId = "test_model_id";
         modelName = "test_model_name";
         functionName = FunctionName.TEXT_EMBEDDING;

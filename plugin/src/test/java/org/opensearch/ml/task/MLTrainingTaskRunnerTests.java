@@ -50,8 +50,6 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
-import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -106,13 +104,11 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     ThreadContext threadContext;
 
     MLEngine mlEngine;
-    Encryptor encryptor;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl("0000000000000000");
-        mlEngine = new MLEngine(Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)), encryptor);
+        mlEngine = new MLEngine(Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)));
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         remoteNode = new DiscoveryNode("remoteNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         when(clusterService.localNode()).thenReturn(localNode);

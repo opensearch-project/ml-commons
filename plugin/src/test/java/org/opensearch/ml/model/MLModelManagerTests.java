@@ -26,7 +26,6 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
@@ -98,8 +97,6 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -158,7 +155,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private Long modelContentSize;
     @Mock
     private MLModelCacheHelper modelCacheHelper;
-    private Encryptor encryptor;
     private MLEngine mlEngine;
     @Mock
     ThresholdCircuitBreaker thresholdCircuitBreaker;
@@ -171,22 +167,18 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() throws URISyntaxException {
-        String masterKey = "0000000000000001";
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl(masterKey);
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)));
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE.getKey(), 10).build();
-        settings = Settings.builder().put(ML_COMMONS_MASTER_SECRET_KEY.getKey(), masterKey).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
             ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE,
             ML_COMMONS_MONITORING_REQUEST_COUNT,
-            ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
-            ML_COMMONS_MASTER_SECRET_KEY
+            ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;

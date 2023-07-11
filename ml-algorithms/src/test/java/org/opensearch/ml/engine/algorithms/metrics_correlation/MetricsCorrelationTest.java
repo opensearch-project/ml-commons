@@ -144,9 +144,6 @@ public class MetricsCorrelationTest {
 
     Map<String, Object> params = new HashMap<>();
 
-    @Mock
-    private Encryptor encryptor;
-
     public MetricsCorrelationTest() {
     }
 
@@ -156,7 +153,7 @@ public class MetricsCorrelationTest {
         System.setProperty("testMode", "true");
 
         djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        mlEngine = new MLEngine(djlCachePath, encryptor);
+        mlEngine = new MLEngine(djlCachePath);
         modelConfig = MetricsCorrelationModelConfig.builder()
                 .modelType(MetricsCorrelation.MODEL_TYPE)
                 .allConfig(null)

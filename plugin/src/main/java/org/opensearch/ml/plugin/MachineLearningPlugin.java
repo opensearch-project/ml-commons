@@ -7,8 +7,8 @@ package org.opensearch.ml.plugin;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -116,8 +116,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
-import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -276,17 +274,16 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         Settings settings = environment.settings();
-        String masterKey = ML_COMMONS_MASTER_SECRET_KEY.get(clusterService.getSettings());
-        Encryptor encryptor = new EncryptorImpl(masterKey);
+        Path path = environment.dataFiles()[0];
 
-        mlEngine = new MLEngine(environment.dataFiles()[0], encryptor);
+        mlEngine = new MLEngine(path);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
         MLCircuitBreakerService mlCircuitBreakerService = new MLCircuitBreakerService(jvmService, osService, settings, clusterService)
-            .init(environment.dataFiles()[0]);
+            .init(path);
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
         // cluster level stats
@@ -601,7 +598,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
-                MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY,
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             );
