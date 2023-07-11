@@ -38,10 +38,7 @@ public class RestMLUpdateModelGroupAction extends BaseRestHandler {
     public List<Route> routes() {
         return ImmutableList
             .of(
-                new Route(
-                    RestRequest.Method.PUT,
-                    String.format(Locale.ROOT, "%s/model_groups/{%s}/_update", ML_BASE_URI, PARAMETER_MODEL_GROUP_ID)
-                )
+                new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/model_groups/{%s}", ML_BASE_URI, PARAMETER_MODEL_GROUP_ID))
             );
     }
 
