@@ -11,9 +11,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 public class MLHttpClientFactoryTests {
 
@@ -41,6 +43,45 @@ public class MLHttpClientFactoryTests {
     public void test_validateIp_privateIp_throwException() throws UnknownHostException {
         expectedException.expect(IllegalArgumentException.class);
         MLHttpClientFactory.validateIp("localhost");
+    }
+
+    @Test
+    public void test_validateIp_rarePrivateIp_throwException() throws UnknownHostException {
+        try {
+            MLHttpClientFactory.validateIp("0254.020.00.01");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("172.1048577");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("2886729729");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("192.11010049");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("3232300545");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
+
+        try {
+            MLHttpClientFactory.validateIp("0:0:0:0:0:ffff:127.0.0.1");
+        } catch (IllegalArgumentException e) {
+            assertNotNull(e);
+        }
     }
 
     @Test
