@@ -313,7 +313,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         // Currently, the OpenAI Edits model does not work 100% of the time. This loop tries 3 times to see if the problem is with the model
         // or with OpenSearch.
         boolean editsModelSuccess = false;
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 5; i++) {
             response = predictRemoteModel(modelId, predictInput);
             responseMap = parseResponseToMap(response);
             List responseList = (List) responseMap.get("inference_results");
