@@ -892,7 +892,7 @@ public class MLModelManager {
                     listener.onFailure(e);
                 }
             } else {
-                listener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
+                listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
             }
         }, e -> { listener.onFailure(e); }));
     }
