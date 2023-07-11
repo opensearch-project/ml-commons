@@ -184,7 +184,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     log.error(e.getMessage(), e);
                     listener.onFailure(e);
                 });
-                MLCreateConnectorRequest mlCreateConnectorRequest = createConnectorRequest();
+                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest();
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
         } else {
@@ -207,8 +207,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
     }
 
-    private MLCreateConnectorRequest createConnectorRequest() {
-        MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().name("dryRunConnector").build();
+    private MLCreateConnectorRequest createDryRunConnectorRequest() {
+        MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().dryRun(true).build();
         return new MLCreateConnectorRequest(createConnectorInput);
     }
 
