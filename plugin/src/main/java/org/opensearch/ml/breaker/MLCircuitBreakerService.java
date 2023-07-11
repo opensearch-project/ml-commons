@@ -74,7 +74,7 @@ public class MLCircuitBreakerService {
      */
     public MLCircuitBreakerService init(Path path) {
         // Register memory circuit breaker
-        registerBreaker(BreakerName.MEMORY, new MemoryCircuitBreaker(this.jvmService));
+        registerBreaker(BreakerName.MEMORY, new MemoryCircuitBreaker(this.settings, this.clusterService, this.jvmService));
         log.info("Registered ML memory breaker.");
         registerBreaker(BreakerName.DISK, new DiskCircuitBreaker(path.toString()));
         log.info("Registered ML disk breaker.");
