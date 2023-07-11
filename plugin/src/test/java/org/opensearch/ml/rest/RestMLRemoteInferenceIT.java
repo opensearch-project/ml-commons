@@ -59,31 +59,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
-    private void setEncryptionMasterKey() throws IOException {
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.encryption.master_key\":\"0000000000000011\"}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
+    public void setup() throws IOException {
+        disableClusterConnectorAccessControl();
+        setEncryptionMasterKey();;
     }
+    
 
     public void testCreateConnector() throws IOException {
-        System.out.println(System.getenv());
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         assertNotNull((String) responseMap.get("connector_id"));
     }
 
     public void testGetConnector() throws IOException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -97,8 +85,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     @Ignore
     public void testDeleteConnector() throws IOException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -108,8 +94,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public void testSearchConnectors() throws IOException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         createConnector(completionModelConnectorEntity);
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
@@ -120,8 +104,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public void testRegisterRemoteModel() throws IOException, InterruptedException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -135,8 +117,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public void testDeployRemoteModel() throws IOException, InterruptedException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -155,8 +135,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public void testPredictRemoteModel() throws IOException, InterruptedException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -185,8 +163,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public void testUndeployRemoteModel() throws IOException, InterruptedException {
-        disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -675,6 +651,19 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":false}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
+    }
+
+    private void setEncryptionMasterKey() throws IOException {
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.encryption.master_key\":\"0000000000000011\"}}",
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
