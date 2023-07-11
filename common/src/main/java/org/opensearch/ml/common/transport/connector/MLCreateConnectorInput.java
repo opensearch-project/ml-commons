@@ -39,6 +39,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
     public static final String OWNER_FIELD = "owner";
     public static final String ACCESS_MODE_FIELD = "access_mode";
+    public static final String DRY_RUN_FIELD = "dry_run";
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -52,6 +53,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private List<String> backendRoles;
     private Boolean addAllBackendRoles;
     private AccessMode access;
+    private boolean dryRun = false;
 
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(String name,
@@ -63,8 +65,20 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                                   List<ConnectorAction> actions,
                                   List<String> backendRoles,
                                   Boolean addAllBackendRoles,
-                                  AccessMode access
+                                  AccessMode access,
+                                  boolean dryRun
     ) {
+        if (!dryRun) {
+            if (name == null) {
+                throw new IllegalArgumentException("Connector name is null");
+            }
+            if (version == null) {
+                throw new IllegalArgumentException("Connector version is null");
+            }
+            if (protocol == null) {
+                throw new IllegalArgumentException("Connector protocol is null");
+            }
+        }
         this.name = name;
         this.description = description;
         this.version = version;
@@ -75,6 +89,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.backendRoles = backendRoles;
         this.addAllBackendRoles = addAllBackendRoles;
         this.access = access;
+        this.dryRun = dryRun;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -88,6 +103,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         List<String> backendRoles = null;
         Boolean addAllBackendRoles = null;
         AccessMode access = null;
+        boolean dryRun = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -133,12 +149,15 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case ACCESS_MODE_FIELD:
                     access = AccessMode.from(parser.text());
                     break;
+                case DRY_RUN_FIELD:
+                    dryRun = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions, backendRoles, addAllBackendRoles, access);
+        return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions, backendRoles, addAllBackendRoles, access, dryRun);
     }
 
     @Override
@@ -181,7 +200,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         output.writeString(name);
-        output.writeString(description);
+        output.writeOptionalString(description);
         output.writeString(version);
         output.writeString(protocol);
         if (parameters != null) {
@@ -211,20 +230,19 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
-        if (addAllBackendRoles != null) {
-            output.writeBoolean(addAllBackendRoles);
-        }
+        output.writeOptionalBoolean(addAllBackendRoles);
         if (access != null) {
             output.writeBoolean(true);
             output.writeEnum(access);
         } else {
             output.writeBoolean(false);
         }
+        output.writeBoolean(dryRun);
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
         name = input.readString();
-        description = input.readString();
+        description = input.readOptionalString();
         version = input.readString();
         protocol = input.readString();
         if (input.readBoolean()) {
@@ -247,5 +265,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.access = input.readEnum(AccessMode.class);
         }
+        dryRun = input.readBoolean();
     }
 }
