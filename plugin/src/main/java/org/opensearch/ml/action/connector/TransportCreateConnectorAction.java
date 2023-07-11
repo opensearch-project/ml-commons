@@ -84,7 +84,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
-        if (MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME.equals(mlCreateConnectorInput.getName())) {
+        if (mlCreateConnectorInput.isDryRun()) {
             MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
             listener.onResponse(response);
             return;

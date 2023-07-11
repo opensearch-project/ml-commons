@@ -409,6 +409,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
         when(request.getRegisterModelInput()).thenReturn(input);
         when(input.getModelName()).thenReturn("Test Model");
+        when(input.getVersion()).thenReturn("1");
         when(input.getModelGroupId()).thenReturn("modelGroupID");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         Connector connector = mock(Connector.class);
