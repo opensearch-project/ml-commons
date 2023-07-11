@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -57,6 +58,9 @@ public class MLModelGroup implements ToXContentObject {
                         String modelGroupId,
                         Instant createdTime,
                         Instant lastUpdatedTime) {
+        if (name == null) {
+            throw new IllegalArgumentException("model group name is null");
+        }
         this.name = name;
         this.description = description;
         this.latestVersion = latestVersion;
@@ -73,7 +77,9 @@ public class MLModelGroup implements ToXContentObject {
         name = input.readString();
         description = input.readOptionalString();
         latestVersion = input.readInt();
-        backendRoles = input.readOptionalStringList();
+        if (input.readBoolean()) {
+            backendRoles = input.readStringList();
+        }
         if (input.readBoolean()) {
             this.owner = new User(input);
         } else {
@@ -89,8 +95,14 @@ public class MLModelGroup implements ToXContentObject {
         out.writeString(name);
         out.writeOptionalString(description);
         out.writeInt(latestVersion);
-        out.writeStringCollection(backendRoles);
+        if (!CollectionUtils.isEmpty(backendRoles)) {
+            out.writeBoolean(true);
+            out.writeStringCollection(backendRoles);
+        } else {
+            out.writeBoolean(false);
+        }
         if (owner != null) {
+            out.writeBoolean(true);
             owner.writeTo(out);
         } else {
             out.writeBoolean(false);
@@ -109,7 +121,7 @@ public class MLModelGroup implements ToXContentObject {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (backendRoles != null) {
+        if (!CollectionUtils.isEmpty(backendRoles)) {
             builder.field(BACKEND_ROLES_FIELD, backendRoles);
         }
         if (owner != null) {
@@ -134,8 +146,8 @@ public class MLModelGroup implements ToXContentObject {
     public static MLModelGroup parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
-        List<String> backendRoles = new ArrayList<>();
-        Integer latestVersion = null;
+        List<String> backendRoles = null;
+        int latestVersion = 0;
         User owner = null;
         String access = null;
         String modelGroupId = null;
@@ -155,6 +167,7 @@ public class MLModelGroup implements ToXContentObject {
                     description = parser.text();
                     break;
                 case BACKEND_ROLES_FIELD:
+                    backendRoles = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                         backendRoles.add(parser.text());
