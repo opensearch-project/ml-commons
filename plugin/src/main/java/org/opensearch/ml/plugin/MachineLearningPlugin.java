@@ -278,9 +278,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
-        System.out.println("----------------ylwwwdebug");
-        System.out.println(configFile);
-        System.out.println("----------------ylwwwdebugend");
 
         Encryptor encryptor = new EncryptorImpl();
 
