@@ -19,6 +19,7 @@ import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 import org.apache.logging.log4j.util.Strings;
 
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
@@ -42,10 +43,7 @@ public class MLHttpClientFactory {
             }
         });
 
-        builder.setDnsResolver(hostName -> {
-            validateIp(hostName);
-            return InetAddress.getAllByName(hostName);
-        });
+        builder.setDnsResolver(MLHttpClientFactory::validateIp);
 
         builder.setRedirectStrategy(new LaxRedirectStrategy() {
             @Override
@@ -79,15 +77,51 @@ public class MLHttpClientFactory {
         }
     }
 
-    protected static void validateIp(String hostName) throws UnknownHostException {
+    protected static InetAddress[] validateIp(String hostName) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(hostName);
         if (hasPrivateIpAddress(addresses)) {
             log.error("Remote inference host name has private ip address: " + hostName);
             throw new IllegalArgumentException(hostName);
         }
+        return addresses;
     }
 
     private static boolean hasPrivateIpAddress(InetAddress[] ipAddress) {
+        for (InetAddress ip : ipAddress) {
+            if (ip instanceof Inet4Address) {
+                byte[] bytes = ip.getAddress();
+                if (bytes.length != 4) {
+                    return true;
+                } else {
+                    int firstOctets = bytes[0] & 0xff;
+                    int firstInOctal = parseWithOctal(String.valueOf(firstOctets));
+                    int firstInHex = Integer.parseInt(String.valueOf(firstOctets), 16);
+                    if (firstInOctal == 127 || firstInHex == 127) {
+                        return bytes[1] == 0 && bytes[2] == 0 && bytes[3] == 1;
+                    } else if (firstInOctal == 10 || firstInHex == 10) {
+                        return true;
+                    } else if (firstInOctal == 172 || firstInHex == 172) {
+                        int secondOctets = bytes[1] & 0xff;
+                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
+                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
+                        return (secondInOctal >= 16 && secondInOctal <= 32) || (secondInHex >= 16 && secondInHex <= 32);
+                    } else if (firstInOctal == 192 || firstInHex == 192) {
+                        int secondOctets = bytes[1] & 0xff;
+                        int secondInOctal = parseWithOctal(String.valueOf(secondOctets));
+                        int secondInHex = Integer.parseInt(String.valueOf(secondOctets), 16);
+                        return secondInOctal == 168 || secondInHex == 168;
+                    }
+                }
+            }
+        }
         return Arrays.stream(ipAddress).anyMatch(x -> x.isSiteLocalAddress() || x.isLoopbackAddress() || x.isAnyLocalAddress());
+    }
+
+    private static int parseWithOctal(String input) {
+        try {
+            return Integer.parseInt(input, 8);
+        } catch (NumberFormatException e) {
+            return Integer.parseInt(input);
+        }
     }
 }
