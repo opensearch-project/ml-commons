@@ -1,4 +1,4 @@
-name: Just test
+name: Just test 2
 
 on:
   workflow_dispatch:
