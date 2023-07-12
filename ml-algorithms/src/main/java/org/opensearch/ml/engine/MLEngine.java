@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine;
 
 import lombok.Getter;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -18,7 +19,6 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
@@ -26,6 +26,7 @@ import java.util.Map;
 /**
  * This is the interface to all ml algorithms.
  */
+@Log4j2
 public class MLEngine {
 
     public static final String REGISTER_MODEL_FOLDER = "register";
@@ -33,14 +34,18 @@ public class MLEngine {
     private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
 
     @Getter
+    private final Path mlConfigPath;
+
+    @Getter
     private final Path mlCachePath;
     private final Path mlModelsCachePath;
 
-    private final Encryptor encryptor;
+    private Encryptor encryptor;
 
     public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
-        mlCachePath = opensearchDataFolder.resolve("ml_cache");
-        mlModelsCachePath = mlCachePath.resolve("models_cache");
+        this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
+        this.mlModelsCachePath = mlCachePath.resolve("models_cache");
+        this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
     }
 
@@ -195,7 +200,4 @@ public class MLEngine {
         return encryptor.encrypt(credential);
     }
 
-    public void setMasterKey(String masterKey) {
-        encryptor.setMasterKey(masterKey);
-    }
 }
