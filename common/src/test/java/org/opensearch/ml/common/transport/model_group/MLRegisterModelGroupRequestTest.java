@@ -35,18 +35,17 @@ public class MLRegisterModelGroupRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-
         MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder()
                 .registerModelGroupInput(mlRegisterModelGroupInput)
                 .build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
-        request = new MLRegisterModelGroupRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals("name", request.getRegisterModelGroupInput().getName());
-        assertEquals("description", request.getRegisterModelGroupInput().getDescription());
-        assertEquals("IT", request.getRegisterModelGroupInput().getBackendRoles().get(0));
-        assertEquals(AccessMode.RESTRICTED, request.getRegisterModelGroupInput().getModelAccessMode());
-        assertEquals(true, request.getRegisterModelGroupInput().getIsAddAllBackendRoles());
+        MLRegisterModelGroupRequest parsedRequest = new MLRegisterModelGroupRequest(bytesStreamOutput.bytes().streamInput());
+        assertEquals(request.getRegisterModelGroupInput().getName(), parsedRequest.getRegisterModelGroupInput().getName());
+        assertEquals(request.getRegisterModelGroupInput().getDescription(), parsedRequest.getRegisterModelGroupInput().getDescription());
+        assertEquals(request.getRegisterModelGroupInput().getBackendRoles().get(0), parsedRequest.getRegisterModelGroupInput().getBackendRoles().get(0));
+        assertEquals(request.getRegisterModelGroupInput().getModelAccessMode(), parsedRequest.getRegisterModelGroupInput().getModelAccessMode());
+        assertEquals(request.getRegisterModelGroupInput().getIsAddAllBackendRoles() ,parsedRequest.getRegisterModelGroupInput().getIsAddAllBackendRoles());
     }
 
     @Test

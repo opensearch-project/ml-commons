@@ -227,7 +227,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (!CollectionUtils.isEmpty(backendRoles)) {
             output.writeBoolean(true);
-            output.writeOptionalStringCollection(backendRoles);
+            output.writeStringCollection(backendRoles);
         } else {
             output.writeBoolean(false);
         }
