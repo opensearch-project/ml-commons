@@ -30,7 +30,6 @@ import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -38,13 +37,13 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -74,14 +73,8 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
-    @Mock
-    private MLModelManager mlModelManager;
-
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-
-    @Mock
-    ClusterService clusterService;
 
     DeleteConnectorTransportAction deleteConnectorTransportAction;
     MLConnectorDeleteRequest mlConnectorDeleteRequest;
@@ -124,6 +117,24 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
+        verify(actionListener).onResponse(deleteResponse);
+    }
+
+    public void testDeleteConnector_ModelIndexNotFoundSuccess() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        SearchResponse searchResponse = getEmptySearchResponse();
+        doAnswer(invocation -> {
+            ActionListener<Exception> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException("ml_model index not found!"));
             return null;
         }).when(client).search(any(), any());
 

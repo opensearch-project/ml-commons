@@ -20,6 +20,7 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
@@ -85,6 +86,10 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                                 );
                         }
                     }, e -> {
+                        if (e instanceof IndexNotFoundException) {
+                            deleteConnector(deleteRequest, connectorId, actionListener);
+                            return;
+                        }
                         log.error("Failed to delete ML connector: " + connectorId, e);
                         actionListener.onFailure(e);
                     }));
