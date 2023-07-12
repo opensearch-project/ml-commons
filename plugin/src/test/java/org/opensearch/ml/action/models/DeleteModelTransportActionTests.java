@@ -30,6 +30,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -332,7 +333,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void testDeleteModel_ModelNotFoundException() throws IOException {
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new Exception());
+            actionListener.onFailure(new Exception("Fail to find model"));
             return null;
         }).when(client).get(any(), any());
 
@@ -396,9 +397,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find model to delete with the provided model id: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModelChunks_Success() {
