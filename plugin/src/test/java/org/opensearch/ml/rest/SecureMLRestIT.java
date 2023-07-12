@@ -111,7 +111,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
         // Create public model group
-        mlRegisterModelGroupInput = createRegisterModelGroupInput(null, AccessMode.PUBLIC, false);
+        mlRegisterModelGroupInput = createRegisterModelGroupInput("modelGroupName", null, AccessMode.PUBLIC, false);
 
         registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             this.modelGroupId = (String) registerModelGroupResult.get("model_group_id");
