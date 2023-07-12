@@ -668,13 +668,14 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     public MLRegisterModelGroupInput createRegisterModelGroupInput(
+        String name,
         List<String> backendRoles,
         AccessMode modelAccessMode,
         Boolean isAddAllBackendRoles
     ) {
         return MLRegisterModelGroupInput
             .builder()
-            .name("modelGroupName")
+            .name(name)
             .description("This is a test model group")
             .backendRoles(backendRoles)
             .modelAccessMode(modelAccessMode)

@@ -218,7 +218,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             && !modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
             throw new IllegalArgumentException(
-                "You don’t have the specified backend role to update access control data. For more information, contact your administrator."
+                "You don’t have the specified backend role to update this model group. For more information, contact your administrator."
             );
         }
         AccessMode accessMode = input.getModelAccessMode();
@@ -258,7 +258,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLUpdateModelGroupInput input) {
-        if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
+        if (input.getModelAccessMode() != null
+            || input.getIsAddAllBackendRoles() != null
+            || !CollectionUtils.isEmpty(input.getBackendRoles())) {
             throw new IllegalArgumentException(
                 "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
             );
