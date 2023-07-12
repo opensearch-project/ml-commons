@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.engine;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.stream.JsonReader;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
@@ -15,7 +12,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
@@ -23,24 +19,9 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
-
-import java.io.FileInputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
-import java.security.SecureRandom;
-import java.util.Base64;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 
 /**
  * This is the interface to all ml algorithms.
@@ -68,33 +49,6 @@ public class MLEngine {
         this.mlUserConfigPath = opensearchConfigFolder.resolve("opensearch-ml");
         this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
-        initMasterKey();
-    }
-
-    private synchronized void initMasterKey() {
-        try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                Path userConfigFilePath = mlUserConfigPath.resolve("security_config.json");
-                Map<String, String> config = null;
-                if (Files.exists(userConfigFilePath)) {
-                    try (FileInputStream fis = new FileInputStream(userConfigFilePath.toFile());) {
-                        Yaml yaml = new Yaml();
-                        config = yaml.load(fis);
-                    }
-                }
-                if (config == null) {
-                    config = new HashMap<>();
-                }
-
-                if (config.containsKey(MASTER_KEY)) {
-                    encryptor.setMasterKey(config.get(MASTER_KEY));
-                }
-                return null;
-            });
-        } catch (Exception e) {
-            log.error("Failed to save master key", e);
-            throw new MLException(e);
-        }
     }
 
     public String getPrebuiltModelMetaListPath() {
