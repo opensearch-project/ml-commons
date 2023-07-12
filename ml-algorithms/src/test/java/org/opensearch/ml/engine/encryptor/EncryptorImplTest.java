@@ -18,6 +18,9 @@ import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.threadpool.ThreadPool;
 
 import java.time.Instant;
 
@@ -43,10 +46,15 @@ public class EncryptorImplTest {
 
     String masterKey;
 
+    @Mock
+    ThreadPool threadPool;
+    ThreadContext threadContext;
+    final String USER_STRING = "myuser|role1,role2|myTenant";
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        masterKey = "0000000000000001";
+        masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -72,6 +80,12 @@ public class EncryptorImplTest {
                                 .build())
                         .build()).build();
         when(clusterState.metadata()).thenReturn(metadata);
+
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     @Test
@@ -81,6 +95,17 @@ public class EncryptorImplTest {
         String encrypted = encryptor.encrypt("test");
         Assert.assertNotNull(encrypted);
         Assert.assertEquals(masterKey, encryptor.getMasterKey());
+    }
+
+    @Test
+    public void encrypt_DifferentMasterKey() {
+        Encryptor encryptor = new EncryptorImpl(masterKey);
+        Assert.assertNotNull(encryptor.getMasterKey());
+        String encrypted1 = encryptor.encrypt("test");
+
+        encryptor.setMasterKey(encryptor.generateMasterKey());
+        String encrypted2 = encryptor.encrypt("test");
+        Assert.assertNotEquals(encrypted1, encrypted2);
     }
 
     @Test
