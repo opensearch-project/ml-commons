@@ -9,10 +9,12 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Iterator;
 
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -32,6 +34,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import lombok.extern.log4j.Log4j2;
@@ -62,11 +65,22 @@ public class MLModelGroupManager {
             String modelName = input.getName();
             User user = RestActionUtils.getUserContext(client);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                validateUniqueModelGroupName(input.getName(), ActionListener.wrap(isUniqueModelGroupName -> {
-                    if (Boolean.FALSE.equals(isUniqueModelGroupName)) {
-                        throw new IllegalArgumentException(
-                            "The name you provided is already being used by another model group. Please provide a different name"
-                        );
+                validateUniqueModelGroupName(input.getName(), ActionListener.wrap(modelGroups -> {
+                    if (modelGroups != null
+                        && modelGroups.getHits().getTotalHits() != null
+                        && modelGroups.getHits().getTotalHits().value != 0) {
+                        Iterator<SearchHit> iterator = modelGroups.getHits().iterator();
+                        while (iterator.hasNext()) {
+                            String id = iterator.next().getId();
+                            listener
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "The name you provided is already being used by another model with ID: "
+                                            + id
+                                            + ". Please provide a different name"
+                                    )
+                                );
+                        }
                     } else {
                         MLModelGroup.MLModelGroupBuilder builder = MLModelGroup.builder();
                         MLModelGroup mlModelGroup;
@@ -170,21 +184,16 @@ public class MLModelGroupManager {
         }
     }
 
-    public void validateUniqueModelGroupName(String name, ActionListener<Boolean> listener) throws IllegalArgumentException {
+    public void validateUniqueModelGroupName(String name, ActionListener<SearchResponse> listener) throws IllegalArgumentException {
         BoolQueryBuilder query = new BoolQueryBuilder();
         query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
         SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
 
-        client.search(searchRequest, ActionListener.wrap(modelGroups -> {
-            listener
-                .onResponse(
-                    modelGroups == null || modelGroups.getHits().getTotalHits() == null || modelGroups.getHits().getTotalHits().value == 0
-                );
-        }, e -> {
+        client.search(searchRequest, ActionListener.wrap(modelGroups -> { listener.onResponse(modelGroups); }, e -> {
             if (e instanceof IndexNotFoundException) {
-                listener.onResponse(true);
+                listener.onResponse(null);
             } else {
                 log.error("Failed to search model group index", e);
                 listener.onFailure(e);
