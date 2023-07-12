@@ -10,7 +10,8 @@ Compatible with OpenSearch 2.9.0
 * connector transport actions, requests and responses ([#1053](https://github.com/opensearch-project/ml-commons/pull/1053))
 * refactor predictable: add method to check if model is ready ([#1057](https://github.com/opensearch-project/ml-commons/pull/1057))
 * Add basic connector access control classes ([#1055](https://github.com/opensearch-project/ml-commons/pull/1055))
-* connector transport actions and disable native memory CB [#1056](https://github.com/opensearch-project/ml-commons/pull/1056))
+* connector transport actions and disable native memory CB ([#1056](https://github.com/opensearch-project/ml-commons/pull/1056))
+* restful connector actions and UT ([#1065](https://github.com/opensearch-project/ml-commons/pull/1065))
 * Change connector access control creation allow empty list ([#1069](https://github.com/opensearch-project/ml-commons/pull/1069))
 
 ### Enhancements
@@ -24,7 +25,6 @@ Compatible with OpenSearch 2.9.0
 * add unit test for connector class in commons ([#1058](https://github.com/opensearch-project/ml-commons/pull/1058))
 * remote inference: add unit test for model and register model input ([#1059](https://github.com/opensearch-project/ml-commons/pull/1059))
 * remote inference: add unit test for StringUtils and remote inference input ([#1061](https://github.com/opensearch-project/ml-commons/pull/1061))
-* restful connector actions and UT ([#1065](https://github.com/opensearch-project/ml-commons/pull/1065))
 * more UT for rest and trasport actions ([#1066](https://github.com/opensearch-project/ml-commons/pull/1066))
 * remote inference: add unit test for create connector request/response ([#1067](https://github.com/opensearch-project/ml-commons/pull/1067))
 * Add more UT for remote inference classes ([#1077](https://github.com/opensearch-project/ml-commons/pull/1077))
