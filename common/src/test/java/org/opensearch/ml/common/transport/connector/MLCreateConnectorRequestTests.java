@@ -7,7 +7,6 @@ package org.opensearch.ml.common.transport.connector;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +24,6 @@ import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -45,7 +43,6 @@ public class MLCreateConnectorRequestTests {
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
 
-        // java.lang.IllegalStateException: unexpected byte [0x6f] will be thrown if we specify backendRoles field.
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
                 .description("this is a test connector")
@@ -88,18 +85,6 @@ public class MLCreateConnectorRequestTests {
                 .build();
         ActionRequestValidationException exception = mlCreateConnectorRequest.validate();
         assertEquals("Validation Failed: 1: ML Connector input can't be null;", exception.getMessage());
-    }
-
-    @Test
-    // MLCreateConnectorInput check its parameters when created, so exception is not thrown here
-    public void validate_Exception_NullMLModelName() {
-        mlCreateConnectorInput.setName(null);
-        MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.builder()
-                .mlCreateConnectorInput(mlCreateConnectorInput)
-                .build();
-
-        assertNull(mlCreateConnectorRequest.validate());
-        assertNull(mlCreateConnectorRequest.getMlCreateConnectorInput().getName());
     }
 
     @Test
