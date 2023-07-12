@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -395,24 +394,22 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
     public void test_ModelGroupNameNotUnique() throws IOException {
 
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
+
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(any(), isA(ActionListener.class));
-
-        when(modelAccessControlHelper.isOwner(any(), any())).thenReturn(true);
-        when(modelAccessControlHelper.isOwnerStillHasPermission(any(), any())).thenReturn(true);
-        when(modelAccessControlHelper.isAdmin(any())).thenReturn(false);
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name",
-            argumentCaptor.getValue().getMessage()
+                "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name",
+                argumentCaptor.getValue().getMessage()
         );
     }
 
