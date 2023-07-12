@@ -6,15 +6,18 @@
 package org.opensearch.ml.model;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
@@ -22,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -33,12 +37,14 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-@Ignore
 public class MLModelGroupManagerTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -81,7 +87,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     private final List<String> backendRoles = Arrays.asList("IT", "HR");
 
     @Before
-    public void setup() {
+    public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -102,6 +108,13 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(mlIndicesHandler).initModelGroupIndexIfAbsent(any());
 
+        SearchResponse searchResponse = createModelGroupSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
@@ -116,6 +129,26 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    public void test_ModelGroupNameNotUnique() throws IOException {
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        MLRegisterModelGroupInput mlRegisterModelGroupInput = prepareRequest(null, null, true);
+
+        mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name",
+            argumentCaptor.getValue().getMessage()
+        );
+
+    }
+
     public void test_SuccessPublic() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
@@ -125,17 +158,13 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ExceptionAllAccessFieldsNull() {
+    public void test_DefaultPrivateModelGroup() {
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
 
         MLRegisterModelGroupInput mlRegisterModelGroupInput = prepareRequest(null, null, null);
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-                "You must specify at least one backend role or make the model group public/private for registering it.",
-                argumentCaptor.getValue().getMessage()
-        );
+        ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
     public void test_ModelAccessModeNullAddAllBackendRolesTrue() {
@@ -156,6 +185,16 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You can specify backend roles only for a model group with the restricted access mode.", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_ProvidedBothBackendRolesAndAddAllBackendRolesWithNoAccessMode() {
+        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
+
+        MLRegisterModelGroupInput mlRegisterModelGroupInput = prepareRequest(backendRoles, null, true);
+        mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You cannot specify backend roles and add all backend roles at the same time.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_BackendRolesProvidedWithPrivate() {
@@ -305,6 +344,23 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             .modelAccessMode(modelAccessMode)
             .isAddAllBackendRoles(isAddAllBackendRoles)
             .build();
+    }
+
+    private SearchResponse createModelGroupSearchResponse(long totalHits) throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        String modelContent = "{\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"access\": \"public\",\n"
+            + "                    \"latest_version\": 0,\n"
+            + "                    \"last_updated_time\": 1684981986069,\n"
+            + "                    \"_id\": \"model_group_ID\",\n"
+            + "                    \"name\": \"model_group_IT\",\n"
+            + "                    \"description\": \"This is an example description\"\n"
+            + "                }";
+        SearchHit modelGroup = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { modelGroup }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
     }
 
 }

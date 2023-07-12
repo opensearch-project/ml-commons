@@ -11,6 +11,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
@@ -43,6 +44,7 @@ import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.RestStatus;
+import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -150,23 +152,30 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getName()) && !updateModelGroupInput.getName().equals(modelGroupName)) {
-            mlModelGroupManager
-                .validateUniqueModelGroupName(updateModelGroupInput.getName(), ActionListener.wrap(isModelGroupNameUnique -> {
-                    if (Boolean.FALSE.equals(isModelGroupNameUnique)) {
+            mlModelGroupManager.validateUniqueModelGroupName(updateModelGroupInput.getName(), ActionListener.wrap(modelGroups -> {
+                if (modelGroups != null
+                    && modelGroups.getHits().getTotalHits() != null
+                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    Iterator<SearchHit> iterator = modelGroups.getHits().iterator();
+                    while (iterator.hasNext()) {
+                        String id = iterator.next().getId();
                         listener
                             .onFailure(
                                 new IllegalArgumentException(
-                                    "The name you provided is already being used by another model group. Please provide a different name."
+                                    "The name you provided is already being used by another model with ID: "
+                                        + id
+                                        + ". Please provide a different name"
                                 )
                             );
-                    } else {
-                        source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
-                        updateModelGroup(modelGroupId, source, listener);
                     }
-                }, e -> {
-                    log.error("Failed to search model group index", e);
-                    listener.onFailure(e);
-                }));
+                } else {
+                    source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
+                    updateModelGroup(modelGroupId, source, listener);
+                }
+            }, e -> {
+                log.error("Failed to search model group index", e);
+                listener.onFailure(e);
+            }));
         } else {
             updateModelGroup(modelGroupId, source, listener);
         }
