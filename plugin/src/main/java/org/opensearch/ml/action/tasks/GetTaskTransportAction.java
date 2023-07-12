@@ -9,6 +9,7 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
@@ -25,6 +26,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -68,7 +70,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
+                    actionListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {

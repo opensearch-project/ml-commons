@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
@@ -41,6 +42,7 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.rest.RestStatus;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -101,7 +103,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                             updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener, user);
                         }
                     } else {
-                        listener.onFailure(new MLResourceNotFoundException("Failed to find model group"));
+                        listener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
                     }
                 }, e -> {
                     if (e instanceof IndexNotFoundException) {
@@ -197,18 +199,18 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (hasAccessControlChange(input)) {
             if (!modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user) && !modelAccessControlHelper.isAdmin(user)) {
                 throw new IllegalArgumentException("Only owner or admin can update access control data.");
-            } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
-                && !modelAccessControlHelper.isAdmin(user)
-                && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
-                throw new IllegalArgumentException(
-                    "You don’t have the specified backend role to update access control data. For more information, contact your administrator."
-                );
             }
         }
         if (!modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
             && !modelAccessControlHelper.isUserHasBackendRole(user, mlModelGroup)) {
             throw new IllegalArgumentException("You don't have permission to update this model group.");
+        } else if (modelAccessControlHelper.isOwner(mlModelGroup.getOwner(), user)
+            && !modelAccessControlHelper.isAdmin(user)
+            && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
+            throw new IllegalArgumentException(
+                "You don’t have the specified backend role to update access control data. For more information, contact your administrator."
+            );
         }
         AccessMode accessMode = input.getModelAccessMode();
         if ((AccessMode.PUBLIC == accessMode || AccessMode.PRIVATE == accessMode)
