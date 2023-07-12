@@ -15,7 +15,7 @@ import org.opensearch.ml.common.TestHelper;
 
 import java.io.IOException;
 
-public class MLCreateConnectorResponseTest {
+public class MLCreateConnectorResponseTests {
 
     @Test
     public void toXContent() throws IOException {

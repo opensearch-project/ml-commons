@@ -7,8 +7,10 @@ package org.opensearch.ml.common.transport.model;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.action.ActionResponse;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
@@ -19,6 +21,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import static org.junit.Assert.*;
 import static org.junit.Assert.assertEquals;
@@ -65,5 +68,38 @@ public class MLModelGetResponseTest {
                 "\"model_version\":\"1.0.0\"," +
                 "\"model_content\":\"content\"," +
                 "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},\"model_state\":\"TRAINED\"}", jsonStr);
+    }
+
+    @Test
+    public void fromActionResponseWithMLModelGetResponse_Success() {
+        MLModelGetResponse mlModelGetResponse = MLModelGetResponse.builder().mlModel(mlModel).build();
+        MLModelGetResponse mlModelGetResponseFromActionResponse = MLModelGetResponse.fromActionResponse(mlModelGetResponse);
+        assertSame(mlModelGetResponse, mlModelGetResponseFromActionResponse);
+        assertEquals(mlModelGetResponse.mlModel, mlModelGetResponseFromActionResponse.mlModel);
+    }
+
+    @Test
+    public void fromActionResponse_Success() {
+        MLModelGetResponse mlModelGetResponse = MLModelGetResponse.builder().mlModel(mlModel).build();
+        ActionResponse actionResponse = new ActionResponse() {
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                mlModelGetResponse.writeTo(out);
+            }
+        };
+        MLModelGetResponse mlModelGetResponseFromActionResponse = MLModelGetResponse.fromActionResponse(actionResponse);
+        assertNotSame(mlModelGetResponse, mlModelGetResponseFromActionResponse);
+        assertNotEquals(mlModelGetResponse.mlModel, mlModelGetResponseFromActionResponse.mlModel);
+    }
+
+    @Test(expected = UncheckedIOException.class)
+    public void fromActionResponse_IOException() {
+        ActionResponse actionResponse = new ActionResponse() {
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                throw new IOException();
+            }
+        };
+        MLModelGetResponse.fromActionResponse(actionResponse);
     }
 }
