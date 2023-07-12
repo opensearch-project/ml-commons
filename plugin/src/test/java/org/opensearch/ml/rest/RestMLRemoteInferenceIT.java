@@ -161,7 +161,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertNotNull(responseMap.get("text"));
+        assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
     public void testUndeployRemoteModel() throws IOException, InterruptedException {
@@ -184,7 +184,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertTrue(responseMap.toString().contains("undeployed"));
     }
 
-    @Ignore
     public void testOpenAIChatCompletionModel() throws IOException, InterruptedException {
         String entity = "{\n"
             + "  \"name\": \"OpenAI chat model Connector\",\n"
@@ -237,6 +236,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
+        // TODO handle throttling error
+        assertNotNull(responseMap);
     }
 
     public void testOpenAIEditsModel() throws IOException, InterruptedException {
@@ -301,7 +302,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertNotNull(((String) responseMap.get("text")));
+        assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
     public void testOpenAIModerationsModel() throws IOException, InterruptedException {
@@ -486,7 +487,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
-    @Ignore
     public void testCohereClassifyModel() throws IOException, InterruptedException {
         String entity = "{\n"
             + "  \"name\": \"Cohere classify model Connector\",\n"
@@ -583,6 +583,13 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
+        List responseList = (List) responseMap.get("inference_results");
+        responseMap = (Map) responseList.get(0);
+        responseList = (List) responseMap.get("output");
+        responseMap = (Map) responseList.get(0);
+        responseMap = (Map) responseMap.get("dataAsMap");
+        responseList = (List) responseMap.get("classifications");
+        assertFalse(responseList.isEmpty());
     }
 
     private Response createConnector(String input) throws IOException {
