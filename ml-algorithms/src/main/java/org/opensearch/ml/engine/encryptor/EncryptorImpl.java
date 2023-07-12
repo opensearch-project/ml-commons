@@ -17,6 +17,7 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.ml.common.exception.MLException;
 
 import javax.crypto.spec.SecretKeySpec;
@@ -62,9 +63,9 @@ public class EncryptorImpl implements Encryptor {
         final AwsCrypto crypto = AwsCrypto.builder()
                 .withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt)
                 .build();
-
+        byte[] bytes = Base64.getDecoder().decode(masterKey);
         JceMasterKey jceMasterKey
-                = JceMasterKey.getInstance(new SecretKeySpec(masterKey.getBytes(), "AES"), "Custom", "",
+                = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "",
                 "AES/GCM/NoPadding");
 
         final CryptoResult<byte[], JceMasterKey> encryptResult = crypto.encryptData(jceMasterKey,
@@ -79,8 +80,9 @@ public class EncryptorImpl implements Encryptor {
                 .withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt)
                 .build();
 
+        byte[] bytes = Base64.getDecoder().decode(masterKey);
         JceMasterKey jceMasterKey
-                = JceMasterKey.getInstance(new SecretKeySpec(masterKey.getBytes(), "AES"), "Custom", "",
+                = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "",
                 "AES/GCM/NoPadding");
 
         final CryptoResult<byte[], JceMasterKey> decryptedResult
@@ -90,7 +92,7 @@ public class EncryptorImpl implements Encryptor {
 
     @Override
     public String generateMasterKey() {
-        byte[] keyBytes = new byte[16];
+        byte[] keyBytes = new byte[32];
         new SecureRandom().nextBytes(keyBytes);
         String base64Key = Base64.getEncoder().encodeToString(keyBytes);
         return base64Key;
@@ -104,18 +106,20 @@ public class EncryptorImpl implements Encryptor {
 
         CountDownLatch latch = new CountDownLatch(1);
         if (clusterService.state().metadata().hasIndex(ML_CONFIG_INDEX)) {
-            GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
-            client.get(getRequest, new LatchedActionListener(ActionListener.<GetResponse>wrap(r -> {
-                if (r.isExists()) {
-                    String masterKey = (String) r.getSourceAsMap().get(MASTER_KEY);
-                    setMasterKey(masterKey);
-                } else {
-                    exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
-                }
-            }, e -> {
-                log.error("Failed to get ML encryption master key", e);
-                exceptionRef.set(e);
-            }), latch));
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                client.get(getRequest, new LatchedActionListener(ActionListener.<GetResponse>wrap(r -> {
+                    if (r.isExists()) {
+                        String masterKey = (String) r.getSourceAsMap().get(MASTER_KEY);
+                        setMasterKey(masterKey);
+                    } else {
+                        exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
+                    }
+                }, e -> {
+                    log.error("Failed to get ML encryption master key", e);
+                    exceptionRef.set(e);
+                }), latch));
+            }
         } else {
             exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
         }

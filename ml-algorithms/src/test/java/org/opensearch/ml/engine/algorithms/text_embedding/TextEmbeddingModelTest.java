@@ -73,7 +73,7 @@ public class TextEmbeddingModelTest {
     @Before
     public void setUp() throws URISyntaxException {
         mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
-        encryptor = new EncryptorImpl("0000000000000001");
+        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(mlCachePath, encryptor);
         modelId = "test_model_id";
         modelName = "test_model_name";
