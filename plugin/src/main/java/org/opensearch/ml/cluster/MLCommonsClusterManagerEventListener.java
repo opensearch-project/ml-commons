@@ -14,6 +14,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
@@ -30,6 +31,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
     private Scheduler.Cancellable syncModelRoutingCron;
     private DiscoveryNodeHelper nodeHelper;
     private final MLIndicesHandler mlIndicesHandler;
+    private final Encryptor encryptor;
 
     private volatile Integer jobInterval;
 
@@ -39,7 +41,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         Settings settings,
         ThreadPool threadPool,
         DiscoveryNodeHelper nodeHelper,
-        MLIndicesHandler mlIndicesHandler
+        MLIndicesHandler mlIndicesHandler,
+        Encryptor encryptor
     ) {
         this.clusterService = clusterService;
         this.client = client;
@@ -47,6 +50,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         this.clusterService.addListener(this);
         this.nodeHelper = nodeHelper;
         this.mlIndicesHandler = mlIndicesHandler;
+        this.encryptor = encryptor;
 
         this.jobInterval = ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS, it -> {
@@ -67,7 +71,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         if (jobInterval > 0) {
             syncModelRoutingCron = threadPool
                 .scheduleWithFixedDelay(
-                    new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler),
+                    new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor),
                     TimeValue.timeValueSeconds(jobInterval),
                     GENERAL_THREAD_POOL
                 );

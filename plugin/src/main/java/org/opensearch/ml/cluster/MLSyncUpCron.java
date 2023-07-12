@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.cluster;
 
+import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.time.Instant;
@@ -19,7 +22,10 @@ import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -33,6 +39,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -50,19 +57,30 @@ public class MLSyncUpCron implements Runnable {
     private ClusterService clusterService;
     private DiscoveryNodeHelper nodeHelper;
     private MLIndicesHandler mlIndicesHandler;
+    private Encryptor encryptor;
+    private volatile Boolean mlConfigInited;
     @VisibleForTesting
     Semaphore updateModelStateSemaphore;
 
-    public MLSyncUpCron(Client client, ClusterService clusterService, DiscoveryNodeHelper nodeHelper, MLIndicesHandler mlIndicesHandler) {
+    public MLSyncUpCron(
+        Client client,
+        ClusterService clusterService,
+        DiscoveryNodeHelper nodeHelper,
+        MLIndicesHandler mlIndicesHandler,
+        Encryptor encryptor
+    ) {
         this.client = client;
         this.clusterService = clusterService;
         this.nodeHelper = nodeHelper;
         this.mlIndicesHandler = mlIndicesHandler;
         this.updateModelStateSemaphore = new Semaphore(1);
+        this.mlConfigInited = false;
+        this.encryptor = encryptor;
     }
 
     @Override
     public void run() {
+        initMLConfig();
         if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX)) {
             // no need to run sync up job if no model index
             return;
@@ -71,6 +89,7 @@ public class MLSyncUpCron implements Runnable {
         DiscoveryNode[] allNodes = nodeHelper.getAllNodes();
         MLSyncUpInput gatherInfoInput = MLSyncUpInput.builder().getDeployedModels(true).build();
         MLSyncUpNodesRequest gatherInfoRequest = new MLSyncUpNodesRequest(allNodes, gatherInfoInput);
+
         // gather running model/tasks on nodes
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
             List<MLSyncUpNodeResponse> responses = r.getNodes();
@@ -140,6 +159,34 @@ public class MLSyncUpCron implements Runnable {
                     log.error("Failed to init model index", e);
                 }));
         }, e -> { log.error("Failed to sync model routing", e); }));
+    }
+
+    @VisibleForTesting
+    void initMLConfig() {
+        if (mlConfigInited) {
+            return;
+        }
+        mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
+            GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+            client.get(getRequest, ActionListener.wrap(getResponse -> {
+                if (!getResponse.isExists()) {
+                    IndexRequest indexRequest = new IndexRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                    final String masterKey = encryptor.generateMasterKey();
+                    indexRequest.source(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+                    indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                    client.index(indexRequest, ActionListener.wrap(indexResponse -> {
+                        log.info("ML configuration initialized successfully");
+                        encryptor.setMasterKey(masterKey);
+                        mlConfigInited = true;
+                    }, e -> { log.debug("Failed to save ML encryption master key", e); }));
+                } else {
+                    final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY);
+                    encryptor.setMasterKey(masterKey);
+                    mlConfigInited = true;
+                    log.info("ML configuration already initialized, no action needed");
+                }
+            }, e -> { log.debug("Failed to get ML encryption master key", e); }));
+        }, e -> { log.debug("Failed to init ML config index", e); }));
     }
 
     @VisibleForTesting
