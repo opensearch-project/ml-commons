@@ -170,7 +170,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() throws URISyntaxException {
-        String masterKey = "0000000000000001";
+        String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(masterKey);
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
