@@ -7,11 +7,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ResourceNotFoundException;
-import org.opensearch.action.ActionListener;
-import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -28,11 +23,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.script.ScriptService;
 
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 
 @Log4j2
 @Function(FunctionName.REMOTE)
@@ -87,42 +77,11 @@ public class RemoteModel implements Predictable {
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
             Connector connector = model.getConnector().cloneConnector();
-
-            ClusterService clusterService = (ClusterService) params.get(CLUSTER_SERVICE);
-            Client client = (Client) params.get(CLIENT);
-            CountDownLatch latch = new CountDownLatch(1);
-            AtomicReference<Exception> exceptionRef = new AtomicReference<>();
-            if (encryptor.getMasterKey() == null) {
-                if (clusterService.state().metadata().hasIndex(ML_CONFIG_INDEX)) {
-                    GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
-                    client.get(getRequest, new LatchedActionListener(ActionListener.< GetResponse >wrap(r-> {
-                        if (r.isExists()) {
-                            String masterKey = (String)r.getSourceAsMap().get(MASTER_KEY);
-                            encryptor.setMasterKey(masterKey);
-                        } else {
-                            exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
-                        }
-                    }, e-> {
-                        log.error("Failed to get ML encryption master key", e);
-                        exceptionRef.set(e);
-                    }), latch));
-                } else {
-                    exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
-                }
-            }
-
-            if (exceptionRef.get() != null) {
-                throw exceptionRef.get();
-            }
-            if (encryptor.getMasterKey() != null) {
-                connector.decrypt((credential) -> encryptor.decrypt(credential));
-            } else {
-                throw new MLException("ML encryptor not initialized");
-            }
+            connector.decrypt((credential) -> encryptor.decrypt(credential));
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
-            this.connectorExecutor.setClusterService(clusterService);
-            this.connectorExecutor.setClient(client);
+            this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
+            this.connectorExecutor.setClient((Client) params.get(CLIENT));
             this.connectorExecutor.setXContentRegistry((NamedXContentRegistry) params.get(XCONTENT_REGISTRY));
         } catch (RuntimeException e) {
             log.error("Failed to init remote model", e);

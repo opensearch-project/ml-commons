@@ -279,7 +279,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
 
-        Encryptor encryptor = new EncryptorImpl();
+        Encryptor encryptor = new EncryptorImpl(clusterService, client);
 
         mlEngine = new MLEngine(dataPath, configFile, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
