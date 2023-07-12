@@ -657,13 +657,14 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     }
 
     public MLRegisterModelGroupInput createRegisterModelGroupInput(
+        String name,
         List<String> backendRoles,
         AccessMode modelAccessMode,
         Boolean isAddAllBackendRoles
     ) {
         return MLRegisterModelGroupInput
             .builder()
-            .name("modelGroupName")
+            .name(name)
             .description("This is a test model group")
             .backendRoles(backendRoles)
             .modelAccessMode(modelAccessMode)
@@ -697,8 +698,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
     public void updateModelGroup(RestClient client, String modelGroupId, String input, Consumer<Map<String, Object>> function)
         throws IOException {
-        Response response = TestHelper
-            .makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId + "/_update", null, input, null);
+        Response response = TestHelper.makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId, null, input, null);
         verifyResponse(function, response);
     }
 

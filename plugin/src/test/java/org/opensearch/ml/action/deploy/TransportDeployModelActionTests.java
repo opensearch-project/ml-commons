@@ -142,7 +142,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN)));
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
-        encryptor = new EncryptorImpl("0000000000000000");
+        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         modelHelper = new ModelHelper(mlEngine);
         when(mlDeployModelRequest.getModelId()).thenReturn("mockModelId");

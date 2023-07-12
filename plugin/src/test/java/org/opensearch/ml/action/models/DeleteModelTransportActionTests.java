@@ -30,6 +30,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -147,7 +148,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -172,16 +173,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        MLModel mlModel = MLModel
-            .builder()
-            .modelId("test_id")
-            .modelState(MLModelState.REGISTERED)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .build();
-        XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
-        BytesReference bytesReference = BytesReference.bytes(content);
-        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -213,17 +205,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
 
-        MLModel mlModel = MLModel
-            .builder()
-            .modelId("test_id")
-            .modelGroupId("modelGroupID")
-            .modelState(MLModelState.REGISTERED)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .build();
-        XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
-        BytesReference bytesReference = BytesReference.bytes(content);
-        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID");
+
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -296,17 +279,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), isA(ActionListener.class));
 
-        MLModel mlModel = MLModel
-            .builder()
-            .modelId("test_id")
-            .modelGroupId("modelGroupID")
-            .modelState(MLModelState.REGISTERED)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .build();
-        XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
-        BytesReference bytesReference = BytesReference.bytes(content);
-        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID");
+
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -320,7 +294,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void test_UserHasNoAccessException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, "modelGroupID");
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -340,7 +314,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_CheckModelState() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING);
+        GetResponse getResponse = prepareMLModel(MLModelState.DEPLOYING, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -359,7 +333,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void testDeleteModel_ModelNotFoundException() throws IOException {
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new Exception());
+            actionListener.onFailure(new Exception("Fail to find model"));
             return null;
         }).when(client).get(any(), any());
 
@@ -383,7 +357,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -397,7 +371,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void test_ValidationFailedException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -423,9 +397,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find model to delete with the provided model id: test_id", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModelChunks_Success() {
@@ -441,7 +415,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_RuntimeException() throws IOException {
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED);
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
             actionListener.onResponse(getResponse);
@@ -535,8 +509,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public GetResponse prepareMLModel(MLModelState mlModelState) throws IOException {
-        MLModel mlModel = MLModel.builder().modelId("test_id").modelState(mlModelState).build();
+    public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID) throws IOException {
+        MLModel mlModel = MLModel.builder().modelId("test_id").modelState(mlModelState).modelGroupId(modelGroupID).build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);

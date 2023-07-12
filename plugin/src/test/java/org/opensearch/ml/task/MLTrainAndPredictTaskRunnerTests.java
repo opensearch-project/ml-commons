@@ -101,7 +101,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        encryptor = new EncryptorImpl("0000000000000000");
+        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().build();
         MockitoAnnotations.openMocks(this);

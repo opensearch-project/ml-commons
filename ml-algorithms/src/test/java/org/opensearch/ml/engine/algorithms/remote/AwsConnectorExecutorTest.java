@@ -67,7 +67,7 @@ public class AwsConnectorExecutorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl("0000000000000001");
+        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
     }
 
     @Test

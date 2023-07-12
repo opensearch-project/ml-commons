@@ -17,7 +17,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -108,7 +107,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    @Ignore
     public void test_ExceptionEmptyBackendRoles() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         User user = User.parse("owner|IT,HR|myTenant");
@@ -119,7 +117,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertEquals("Backend roles shouldn't be null", argumentCaptor.getValue().getMessage());
     }
 
-    @Ignore
     public void test_MatchingBackendRoles() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -131,7 +128,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    @Ignore
     public void test_PublicModelGroup() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -143,7 +139,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    @Ignore
     public void test_PrivateModelGroupWithSameOwner() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -155,7 +150,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    @Ignore
     public void test_PrivateModelGroupWithDifferentOwner() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
@@ -199,8 +193,12 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     public void test_IsUserHasBackendRole() {
         User user = User.parse("owner|IT,HR|all_access");
         MLModelGroupBuilder builder = MLModelGroup.builder();
-        assertTrue(modelAccessControlHelper.isUserHasBackendRole(null, builder.access(AccessMode.PUBLIC.getValue()).build()));
-        assertFalse(modelAccessControlHelper.isUserHasBackendRole(null, builder.access(AccessMode.PRIVATE.getValue()).build()));
+        assertTrue(
+            modelAccessControlHelper.isUserHasBackendRole(null, builder.name("test_group").access(AccessMode.PUBLIC.getValue()).build())
+        );
+        assertFalse(
+            modelAccessControlHelper.isUserHasBackendRole(null, builder.name("test_group").access(AccessMode.PRIVATE.getValue()).build())
+        );
         assertTrue(
             modelAccessControlHelper
                 .isUserHasBackendRole(
@@ -218,9 +216,13 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         User userLostAccess = User.parse("owner|Finance|myTenant");
         assertTrue(modelAccessControlHelper.isOwnerStillHasPermission(null, null));
         MLModelGroupBuilder builder = MLModelGroup.builder();
-        assertTrue(modelAccessControlHelper.isOwnerStillHasPermission(user, builder.access(AccessMode.PUBLIC.getValue()).build()));
         assertTrue(
-            modelAccessControlHelper.isOwnerStillHasPermission(user, builder.access(AccessMode.PRIVATE.getValue()).owner(owner).build())
+            modelAccessControlHelper
+                .isOwnerStillHasPermission(user, builder.name("test_group").access(AccessMode.PUBLIC.getValue()).build())
+        );
+        assertTrue(
+            modelAccessControlHelper
+                .isOwnerStillHasPermission(user, builder.name("test_group").access(AccessMode.PRIVATE.getValue()).owner(owner).build())
         );
         assertFalse(
             modelAccessControlHelper

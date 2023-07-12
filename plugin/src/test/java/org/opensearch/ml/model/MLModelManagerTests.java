@@ -26,7 +26,6 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MASTER_SECRET_KEY;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
@@ -171,7 +170,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() throws URISyntaxException {
-        String masterKey = "0000000000000001";
+        String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl(masterKey);
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
@@ -179,14 +178,12 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE.getKey(), 10).build();
-        settings = Settings.builder().put(ML_COMMONS_MASTER_SECRET_KEY.getKey(), masterKey).build();
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MAX_MODELS_PER_NODE,
             ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE,
             ML_COMMONS_MONITORING_REQUEST_COUNT,
-            ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE,
-            ML_COMMONS_MASTER_SECRET_KEY
+            ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null));
         xContentRegistry = NamedXContentRegistry.EMPTY;
@@ -483,7 +480,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
-        assertEquals("Fail to find model", exception.getValue().getMessage());
+        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
@@ -503,7 +500,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
-        assertEquals("Fail to find model", exception.getValue().getMessage());
+        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),

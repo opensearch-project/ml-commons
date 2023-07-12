@@ -27,6 +27,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
 import java.io.File;
@@ -62,7 +63,8 @@ public class TextEmbeddingModelTest {
     private ModelHelper modelHelper;
     private Map<String, Object> params;
     private TextEmbeddingModel textEmbeddingModel;
-    private Path djlCachePath;
+    private Path mlCachePath;
+    private Path mlConfigPath;
     private TextDocsInputDataSet inputDataSet;
     private int dimension = 384;
     private MLEngine mlEngine;
@@ -70,8 +72,9 @@ public class TextEmbeddingModelTest {
 
     @Before
     public void setUp() throws URISyntaxException {
-        djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        mlEngine = new MLEngine(djlCachePath, encryptor);
+        mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
+        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        mlEngine = new MLEngine(mlCachePath, encryptor);
         modelId = "test_model_id";
         modelName = "test_model_name";
         functionName = FunctionName.TEXT_EMBEDDING;
@@ -329,7 +332,7 @@ public class TextEmbeddingModelTest {
 
     @After
     public void tearDown() {
-        FileUtils.deleteFileQuietly(djlCachePath);
+        FileUtils.deleteFileQuietly(mlCachePath);
     }
 
     private int findSentenceEmbeddingPosition(ModelTensors modelTensors) {

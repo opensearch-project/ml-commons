@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine.encryptor;
 
+import java.security.SecureRandom;
+import java.util.Base64;
+
 public interface Encryptor {
 
     /**
@@ -29,4 +32,8 @@ public interface Encryptor {
      * @param masterKey masterKey to be set.
      */
     void setMasterKey(String masterKey);
+    String getMasterKey();
+
+    String generateMasterKey();
+
 }
