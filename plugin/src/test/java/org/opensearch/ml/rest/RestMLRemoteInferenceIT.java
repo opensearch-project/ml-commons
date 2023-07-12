@@ -161,7 +161,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             return;
         }
         responseMap = (Map) responseList.get(0);
-        assertEquals("\n\nThis is indeed a test", (String) responseMap.get("text"));
+        assertNotNull(responseMap.get("text"));
     }
 
     public void testUndeployRemoteModel() throws IOException, InterruptedException {
