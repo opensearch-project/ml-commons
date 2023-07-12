@@ -58,6 +58,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -128,7 +129,8 @@ public class MetricsCorrelationTest {
     ActionListener<MLDeployModelResponse> mlDeployModelResponseActionListener;
     private MetricsCorrelation metricsCorrelation;
     private MetricsCorrelationInput input, extendedInput;
-    private Path djlCachePath;
+    private Path mlCachePath;
+    private Path mlConfigPath;
     private MLModel model;
 
     private MetricsCorrelationModelConfig modelConfig;
@@ -144,7 +146,6 @@ public class MetricsCorrelationTest {
 
     Map<String, Object> params = new HashMap<>();
 
-    @Mock
     private Encryptor encryptor;
 
     public MetricsCorrelationTest() {
@@ -155,8 +156,9 @@ public class MetricsCorrelationTest {
 
         System.setProperty("testMode", "true");
 
-        djlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        mlEngine = new MLEngine(djlCachePath, encryptor);
+        mlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
+        encryptor = new EncryptorImpl("0000000000000001");
+        mlEngine = new MLEngine(mlCachePath, encryptor);
         modelConfig = MetricsCorrelationModelConfig.builder()
                 .modelType(MetricsCorrelation.MODEL_TYPE)
                 .allConfig(null)
