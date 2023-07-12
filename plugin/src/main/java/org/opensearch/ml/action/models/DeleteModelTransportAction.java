@@ -40,7 +40,6 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -159,10 +158,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener
-                        .onFailure(new IllegalArgumentException("Failed to find model to delete with the provided model id: " + modelId));
+                    actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                 }
-            }, e -> { actionListener.onFailure(new MLResourceNotFoundException("Fail to find model")); }));
+            }, e -> { actionListener.onFailure(e); }));
         } catch (Exception e) {
             log.error("Failed to delete ML model " + modelId, e);
             actionListener.onFailure(e);
