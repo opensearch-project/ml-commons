@@ -99,7 +99,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
         assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
-
     }
 
     public void testRegisterRemoteModel() throws IOException, InterruptedException {
@@ -157,6 +156,10 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseList.get(0);
         responseMap = (Map) responseMap.get("dataAsMap");
         responseList = (List) responseMap.get("choices");
+        if (responseList == null) {
+            assertTrue(checkThrottlingOpenAI(responseMap));
+            return;
+        }
         responseMap = (Map) responseList.get(0);
         assertEquals("\n\nThis is indeed a test", (String) responseMap.get("text"));
     }
@@ -293,6 +296,10 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseList.get(0);
         responseMap = (Map) responseMap.get("dataAsMap");
         responseList = (List) responseMap.get("choices");
+        if (responseList == null) {
+            assertTrue(checkThrottlingOpenAI(responseMap));
+            return;
+        }
         responseMap = (Map) responseList.get(0);
         assertNotNull(((String) responseMap.get("text")));
     }
@@ -349,6 +356,10 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseList.get(0);
         responseMap = (Map) responseMap.get("dataAsMap");
         responseList = (List) responseMap.get("results");
+        if (responseList == null) {
+            assertTrue(checkThrottlingOpenAI(responseMap));
+            return;
+        }
         responseMap = (Map) responseList.get(0);
         assertTrue((Boolean) responseMap.get("flagged"));
         responseMap = (Map) responseMap.get("categories");
@@ -633,6 +644,12 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "  }\n"
             + "}";
         return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/models/" + modelId + "/_undeploy", null, undeployEntity, null);
+    }
+
+    private boolean checkThrottlingOpenAI(Map responseMap) {
+        Map map = (Map) responseMap.get("error");
+        String message = (String) map.get("message");
+        return message.equals("You exceeded your current quota, please check your plan and billing details.");
     }
 
     private Map parseResponseToMap(Response response) throws IOException {
