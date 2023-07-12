@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.connector;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +43,6 @@ public class MLCreateConnectorInputTests {
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
         ConnectorAction action = new ConnectorAction(actionType, method, url, headers, mlCreateConnectorRequestBody, preProcessFunction, postProcessFunction);
 
-        // java.lang.IllegalStateException: unexpected byte [0x6f] will be thrown if we specify backendRoles field.
         mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test_connector_name")
                 .description("this is a test connector")
@@ -52,7 +52,8 @@ public class MLCreateConnectorInputTests {
                 .credential(Map.of("key", "test_key_value"))
                 .actions(List.of(action))
                 .access(AccessMode.PUBLIC)
-                .addAllBackendRoles(true)
+                .backendRoles(Arrays.asList("role1", "role2"))
+                .addAllBackendRoles(false)
                 .build();
     }
 

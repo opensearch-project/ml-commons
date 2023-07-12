@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.connector;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,8 @@ public class MLCreateConnectorRequestTests {
                 .credential(Map.of("key", "test_key_value"))
                 .actions(List.of(action))
                 .access(AccessMode.PUBLIC)
-                .addAllBackendRoles(true)
+                .backendRoles(Arrays.asList("role1", "role2"))
+                .addAllBackendRoles(false)
                 .build();
     }
 
