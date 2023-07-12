@@ -172,7 +172,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "You don’t have the specified backend role to update access control data. For more information, contact your administrator.",
+            "You don’t have the specified backend role to update this model group. For more information, contact your administrator.",
             argumentCaptor.getValue().getMessage()
         );
     }
