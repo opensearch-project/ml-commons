@@ -1,4 +1,4 @@
-name: Just test 2
+name: Just test
 
 on:
   workflow_dispatch:
@@ -11,21 +11,27 @@ jobs:
       matrix:
         jdk: [17]
         platform: ["ubuntu-latest"]
-    if: github.repository == 'opensearch-project/ml-commons'
+    #if: github.repository == 'opensearch-project/ml-commons'
     runs-on: ${{ matrix.platform }}
-
+    #environment: integtest-ml2
     permissions:
       id-token: write
-      contents: write
+      contents: read
 
     steps:
 #      - uses: actions/setup-java@v3
 #        with:
 #          distribution: temurin # Temurin is a distribution of adoptium
 #          java-version: ${{ matrix.jdk }}
-      - uses: actions/checkout@v3
+#      - uses: actions/checkout@v3
       - uses: aws-actions/configure-aws-credentials@v1
         with:
-          role-to-assume: arn:aws:iam::419213735998:role/ml-role
-          aws-region: us-west-2
+          role-to-assume: ${{ secrets.ML_ROLE }}
+          aws-region: us-east-1
+
+#      - name: test run
+#        run: |
+#          export TESTHAHA=$(aws secretsmanager get-secret-value --secret-id test_123 --query SecretString --output text)
+#          echo "::add-mask::$TESTHAHA"
+#          echo $TESTHAHA
 
