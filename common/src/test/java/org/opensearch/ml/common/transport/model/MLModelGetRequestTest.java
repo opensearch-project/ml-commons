@@ -17,6 +17,8 @@ import java.io.UncheckedIOException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 
 public class MLModelGetRequestTest {
     private String modelId;
@@ -78,5 +80,20 @@ public class MLModelGetRequestTest {
             }
         };
         MLModelGetRequest.fromActionRequest(actionRequest);
+    }
+
+    @Test
+    public void validate_Success() {
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
+        ActionRequestValidationException actionRequestValidationException = mlModelGetRequest.validate();
+        assertNull(actionRequestValidationException);
+    }
+
+    @Test
+    public void fromActionRequestWithMLModelGetRequest_Success() {
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
+        MLModelGetRequest mlModelGetRequestFromActionRequest = MLModelGetRequest.fromActionRequest(mlModelGetRequest);
+        assertSame(mlModelGetRequest, mlModelGetRequestFromActionRequest);
+        assertEquals(mlModelGetRequest.getModelId(), mlModelGetRequestFromActionRequest.getModelId());
     }
 }
