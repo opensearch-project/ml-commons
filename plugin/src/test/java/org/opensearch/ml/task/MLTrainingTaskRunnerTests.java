@@ -112,11 +112,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         encryptor = new EncryptorImpl("0000000000000001");
-        mlEngine = new MLEngine(
-            Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)),
-            Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)),
-            encryptor
-        );
+        mlEngine = new MLEngine(Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)), encryptor);
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         remoteNode = new DiscoveryNode("remoteNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         when(clusterService.localNode()).thenReturn(localNode);
