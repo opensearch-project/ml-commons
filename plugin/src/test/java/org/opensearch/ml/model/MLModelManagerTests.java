@@ -172,9 +172,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void setup() throws URISyntaxException {
         String masterKey = "0000000000000001";
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl();
-        encryptor.setMasterKey(masterKey);
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
+        encryptor = new EncryptorImpl(masterKey);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MONITORING_REQUEST_COUNT.getKey(), 10).build();

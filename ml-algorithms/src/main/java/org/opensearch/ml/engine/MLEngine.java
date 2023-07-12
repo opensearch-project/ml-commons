@@ -33,7 +33,6 @@ public class MLEngine {
     public static final String DEPLOY_MODEL_FOLDER = "deploy";
     private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
 
-    private final Path mlUserConfigPath;
     @Getter
     private final Path mlConfigPath;
 
@@ -43,10 +42,9 @@ public class MLEngine {
 
     private Encryptor encryptor;
 
-    public MLEngine(Path opensearchDataFolder, Path opensearchConfigFolder, Encryptor encryptor) {
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
         this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
         this.mlModelsCachePath = mlCachePath.resolve("models_cache");
-        this.mlUserConfigPath = opensearchConfigFolder.resolve("opensearch-ml");
         this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
     }

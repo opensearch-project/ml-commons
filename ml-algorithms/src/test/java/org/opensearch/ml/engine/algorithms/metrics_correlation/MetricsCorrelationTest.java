@@ -157,10 +157,8 @@ public class MetricsCorrelationTest {
         System.setProperty("testMode", "true");
 
         mlCachePath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        mlConfigPath = Path.of("/tmp/djl_cache_" + UUID.randomUUID());
-        encryptor = new EncryptorImpl();
-        encryptor.setMasterKey("0000000000000001");
-        mlEngine = new MLEngine(mlCachePath, mlConfigPath, encryptor);
+        encryptor = new EncryptorImpl("0000000000000001");
+        mlEngine = new MLEngine(mlCachePath, encryptor);
         modelConfig = MetricsCorrelationModelConfig.builder()
                 .modelType(MetricsCorrelation.MODEL_TYPE)
                 .allConfig(null)

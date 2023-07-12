@@ -281,7 +281,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client);
 
-        mlEngine = new MLEngine(dataPath, configFile, encryptor);
+        mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
 

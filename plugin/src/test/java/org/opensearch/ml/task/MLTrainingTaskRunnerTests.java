@@ -111,8 +111,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl();
-        encryptor.setMasterKey("0000000000000001");
+        encryptor = new EncryptorImpl("0000000000000001");
         mlEngine = new MLEngine(
             Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)),
             Path.of("/tmp/djl-cache_" + randomAlphaOfLength(10)),

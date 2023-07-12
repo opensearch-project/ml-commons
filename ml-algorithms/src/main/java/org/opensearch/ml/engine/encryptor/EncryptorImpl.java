@@ -9,7 +9,6 @@ import com.amazonaws.encryptionsdk.AwsCrypto;
 import com.amazonaws.encryptionsdk.CommitmentPolicy;
 import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
-import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionListener;
@@ -43,8 +42,8 @@ public class EncryptorImpl implements Encryptor {
         this.client = client;
     }
 
-    @VisibleForTesting
-    public EncryptorImpl() {
+    public EncryptorImpl(String masterKey) {
+        this.masterKey = masterKey;
     }
 
     @Override

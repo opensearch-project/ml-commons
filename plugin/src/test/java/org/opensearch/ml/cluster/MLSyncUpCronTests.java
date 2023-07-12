@@ -105,7 +105,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlNode1 = new DiscoveryNode(mlNode1Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         mlNode2 = new DiscoveryNode(mlNode2Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
-        encryptor = spy(new EncryptorImpl());
+        encryptor = spy(new EncryptorImpl(null));
         syncUpCron = new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor);
 
         testState = setupTestClusterState();

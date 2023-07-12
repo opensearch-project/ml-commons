@@ -93,13 +93,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl();
-        encryptor.setMasterKey("0000000000000000");
-        mlEngine = new MLEngine(
-            Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)),
-            Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)),
-            encryptor
-        );
+        encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/djl-cache/" + randomAlphaOfLength(10)), encryptor);
         when(threadPool.executor(anyString())).thenReturn(executorService);
         doAnswer(invocation -> {
             Runnable runnable = invocation.getArgument(0);

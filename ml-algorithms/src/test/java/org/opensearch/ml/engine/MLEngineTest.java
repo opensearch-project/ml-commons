@@ -53,9 +53,8 @@ public class MLEngineTest {
 
     @Before
     public void setUp() {
-        Encryptor encryptor = new EncryptorImpl();
-        encryptor.setMasterKey("0000000000000000");
-        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
+        Encryptor encryptor = new EncryptorImpl("0000000000000000");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
     @Test

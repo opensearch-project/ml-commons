@@ -48,8 +48,7 @@ public class RemoteModelTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         remoteModel = new RemoteModel();
-        encryptor = spy(new EncryptorImpl());
-        encryptor.setMasterKey("0000000000000001");
+        encryptor = spy(new EncryptorImpl("0000000000000001"));
     }
 
     @Test

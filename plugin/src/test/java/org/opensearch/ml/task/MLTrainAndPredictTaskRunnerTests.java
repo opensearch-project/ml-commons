@@ -101,9 +101,8 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        encryptor = new EncryptorImpl();
-        encryptor.setMasterKey("0000000000000001");
-        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
+        encryptor = new EncryptorImpl("0000000000000001");
+        mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().build();
         MockitoAnnotations.openMocks(this);
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
