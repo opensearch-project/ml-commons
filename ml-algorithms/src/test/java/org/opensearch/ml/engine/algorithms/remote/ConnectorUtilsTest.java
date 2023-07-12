@@ -84,7 +84,7 @@ public class ConnectorUtilsTest {
         processInput_TextDocsInputDataSet_PreprocessFunction(
                 "{\"input\": ${parameters.input}}",
                 "{\"parameters\": { \"input\": [\"test_value1\", \"test_value2\"] } }",
-                "[\\\"test_value1\\\",\\\"test_value2\\\"]");
+                "[\"test_value1\",\"test_value2\"]");
     }
 
     @Test
