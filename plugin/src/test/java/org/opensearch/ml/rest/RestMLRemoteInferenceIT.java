@@ -343,7 +343,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"input\": \"I want to kill them.\"\n" + "  }\n" + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
-        System.out.println(responseMap);
         List responseList = (List) responseMap.get("inference_results");
         responseMap = (Map) responseList.get(0);
         responseList = (List) responseMap.get("output");
