@@ -16,7 +16,7 @@ jobs:
   Build-ml:
     strategy:
       matrix:
-        java: [11]
+        java: [11, 17]
 
     name: Build and Test MLCommons Plugin
     if: github.repository == 'opensearch-project/ml-commons'
@@ -107,36 +107,36 @@ jobs:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
 
-#  Build-ml-windows:
-#    strategy:
-#      matrix:
-#        java: [11, 17]
-#    name: Build and Test MLCommons Plugin on Windows
-#    if: github.repository == 'opensearch-project/ml-commons'
-#    environment: ml-commons-cicd-env
-#    runs-on: windows-latest
-#
-#    steps:
-#      - name: Setup Java ${{ matrix.java }}
-#        uses: actions/setup-java@v1
-#        with:
-#          java-version: ${{ matrix.java }}
-#
-#      - uses: aws-actions/configure-aws-credentials@v2
-#        with:
-#          role-to-assume: ${{ secrets.ML_ROLE }}
-#          aws-region: us-west-2
-#
-#      # ml-commons
-#      - name: Checkout MLCommons
-#        uses: actions/checkout@v2
-#
-#      - name: Build and Run Tests
-#        run: |
-#          ./gradlew.bat build
-#      - name: Publish to Maven Local
-#        run: |
-#          ./gradlew publishToMavenLocal
+  Build-ml-windows:
+    strategy:
+      matrix:
+        java: [11, 17]
+    name: Build and Test MLCommons Plugin on Windows
+    if: github.repository == 'opensearch-project/ml-commons'
+    environment: ml-commons-cicd-env
+    runs-on: windows-latest
+
+    steps:
+      - name: Setup Java ${{ matrix.java }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java }}
+
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.ML_ROLE }}
+          aws-region: us-west-2
+
+      # ml-commons
+      - name: Checkout MLCommons
+        uses: actions/checkout@v2
+
+      - name: Build and Run Tests
+        run: |
+          ./gradlew.bat build
+      - name: Publish to Maven Local
+        run: |
+          ./gradlew publishToMavenLocal
 #      - name: Multi Nodes Integration Testing
 #        run: |
 #          export OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
