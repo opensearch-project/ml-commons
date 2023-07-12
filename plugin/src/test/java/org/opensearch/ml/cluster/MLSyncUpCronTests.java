@@ -57,7 +57,10 @@ import org.opensearch.cluster.node.DiscoveryNodeRole;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.bytes.BytesReference;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -75,12 +78,12 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 public class MLSyncUpCronTests extends OpenSearchTestCase {
-
     @Mock
     private Client client;
     @Mock
@@ -100,6 +103,11 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     private ClusterState testState;
     private Encryptor encryptor;
 
+    @Mock
+    ThreadPool threadPool;
+    ThreadContext threadContext;
+    final String USER_STRING = "myuser|role1,role2|myTenant";
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -116,6 +124,12 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             actionListener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        Settings settings = Settings.builder().build();
+        threadContext = new ThreadContext(settings);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     public void testInitMlConfig_MasterKeyNotExist() {
