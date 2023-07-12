@@ -59,9 +59,9 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws IOException, InterruptedException {
         disableClusterConnectorAccessControl();
-        setEncryptionMasterKey();
+        Thread.sleep(10000);
     }
 
     public void testCreateConnector() throws IOException {
@@ -343,6 +343,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"input\": \"I want to kill them.\"\n" + "  }\n" + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
+        System.out.println(responseMap);
         List responseList = (List) responseMap.get("inference_results");
         responseMap = (Map) responseList.get(0);
         responseList = (List) responseMap.get("output");
@@ -650,19 +651,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 "_cluster/settings",
                 null,
                 "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":false}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
-    }
-
-    private void setEncryptionMasterKey() throws IOException {
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.encryption.master_key\":\"0000000000000011\"}}",
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
