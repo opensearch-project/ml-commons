@@ -27,6 +27,7 @@ import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 
@@ -111,7 +112,7 @@ public class EncryptorImpl implements Encryptor {
                 client.get(getRequest, new LatchedActionListener(ActionListener.<GetResponse>wrap(r -> {
                     if (r.isExists()) {
                         String masterKey = (String) r.getSourceAsMap().get(MASTER_KEY);
-                        setMasterKey(masterKey);
+                        this.masterKey = masterKey;
                     } else {
                         exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
                     }
@@ -122,6 +123,13 @@ public class EncryptorImpl implements Encryptor {
             }
         } else {
             exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
+            latch.countDown();
+        }
+
+        try {
+            latch.await(5, SECONDS);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
         }
 
         if (exceptionRef.get() != null) {
@@ -131,6 +139,9 @@ public class EncryptorImpl implements Encryptor {
             } else {
                 throw new MLException(exceptionRef.get());
             }
+        }
+        if (masterKey == null) {
+            throw new ResourceNotFoundException("ML encryption master key not initialized yet");
         }
     }
 }
