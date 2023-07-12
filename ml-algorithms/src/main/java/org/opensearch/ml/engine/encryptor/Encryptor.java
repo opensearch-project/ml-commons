@@ -32,6 +32,7 @@ public interface Encryptor {
      * @param masterKey masterKey to be set.
      */
     void setMasterKey(String masterKey);
+    String getMasterKey();
 
     String generateMasterKey();
 

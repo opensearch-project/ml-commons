@@ -30,6 +30,11 @@ public class EncryptorImpl implements Encryptor {
     }
 
     @Override
+    public String getMasterKey() {
+        return masterKey;
+    }
+
+    @Override
     public String encrypt(String plainText) {
         checkMasterKey();
         final AwsCrypto crypto = AwsCrypto.builder()

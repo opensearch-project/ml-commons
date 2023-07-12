@@ -13,6 +13,16 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.ResourceNotFoundException;
+import org.opensearch.Version;
+import org.opensearch.action.ActionListener;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -22,18 +32,37 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
 
 public class RemoteModelTest {
 
     @Mock
     MLInput mlInput;
+
+    @Mock
+    Client client;
+
+    @Mock
+    ClusterService clusterService;
+
+    @Mock
+    ClusterState clusterState;
 
     @Mock
     MLModel mlModel;
@@ -44,12 +73,46 @@ public class RemoteModelTest {
     RemoteModel remoteModel;
     Encryptor encryptor;
 
+    String masterKey;
+
+    Map<String, Object> params;
+    private static final AtomicInteger portGenerator = new AtomicInteger();
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         remoteModel = new RemoteModel();
         encryptor = spy(new EncryptorImpl());
-        encryptor.setMasterKey("0000000000000001");
+        masterKey = "0000000000000001";
+        encryptor.setMasterKey(masterKey);
+        params = new HashMap<>();
+        params.put(CLIENT, client);
+        params.put(CLUSTER_SERVICE, clusterService);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse response = mock(GetResponse.class);
+            when(response.isExists()).thenReturn(true);
+            when(response.getSourceAsMap())
+                    .thenReturn(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+
+        when(clusterService.state()).thenReturn(clusterState);
+
+        Metadata metadata = new Metadata.Builder()
+                .indices(ImmutableMap
+                        .<String, IndexMetadata>builder()
+                        .put(ML_CONFIG_INDEX, IndexMetadata.builder(ML_CONFIG_INDEX)
+                                .settings(Settings.builder()
+                                        .put("index.number_of_shards", 1)
+                                        .put("index.number_of_replicas", 1)
+                                        .put("index.version.created", Version.CURRENT.id))
+                                .build())
+                        .build()).build();
+        when(clusterState.metadata()).thenReturn(metadata);
     }
 
     @Test
@@ -110,6 +173,80 @@ public class RemoteModelTest {
 
         remoteModel.close();
         Assert.assertNull(remoteModel.getConnectorExecutor());
+    }
+
+    @Test
+    public void initModel_WithHeader_NullMasterKey_MasterKeyExistInIndex() {
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        Encryptor encryptor = new EncryptorImpl();
+        remoteModel.initModel(mlModel, params, encryptor);
+        Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
+        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+        Assert.assertNotNull(executor);
+        Assert.assertNull(decryptedHeaders);
+        Assert.assertNotNull(executor.getConnector().getDecryptedHeaders());
+        Assert.assertEquals(1, executor.getConnector().getDecryptedHeaders().size());
+        Assert.assertEquals("Bearer test_api_key", executor.getConnector().getDecryptedHeaders().get("Authorization"));
+
+        remoteModel.close();
+        Assert.assertNull(remoteModel.getConnectorExecutor());
+    }
+
+    @Test
+    public void initModel_WithHeader_NullMasterKey_MasterKeyNotExistInIndex() {
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage("ML encryption master key not initialized yet");
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse response = mock(GetResponse.class);
+            when(response.isExists()).thenReturn(false);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        Encryptor encryptor = new EncryptorImpl();
+        remoteModel.initModel(mlModel, params, encryptor);
+    }
+
+    @Test
+    public void initModel_WithHeader_GetMasterKey_Exception() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("test error");
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("test error"));
+            return null;
+        }).when(client).get(any(), any());
+
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        Encryptor encryptor = new EncryptorImpl();
+        remoteModel.initModel(mlModel, params, encryptor);
+    }
+
+    @Test
+    public void initModel_WithHeader_IndexNotFound() {
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage("ML encryption master key not initialized yet");
+
+        Metadata metadata = new Metadata.Builder().indices(ImmutableMap.of()).build();
+        when(clusterState.metadata()).thenReturn(metadata);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("test error"));
+            return null;
+        }).when(client).get(any(), any());
+
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        Encryptor encryptor = new EncryptorImpl();
+        remoteModel.initModel(mlModel, params, encryptor);
     }
 
     private Connector createConnector(Map<String, String> headers) {
