@@ -35,7 +35,6 @@ jobs:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
-      # ml-commons
       - name: Checkout MLCommons
         uses: actions/checkout@v2
 
