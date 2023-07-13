@@ -954,7 +954,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user4Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don’t have any backend roles."));
+                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have any backend roles."));
             }
             try {
                 mlUpdateModelGroupInput = createUpdateModelGroupInput(
@@ -1020,7 +1020,7 @@ public class MLModelGroupRestIT extends MLCommonsRestTestCase {
                 updateModelGroup(user4Client, modelGroupId, TestHelper.toJsonString(mlUpdateModelGroupInput), null);
             } catch (Exception e) {
                 assertEquals(ResponseException.class, e.getClass());
-                assertTrue(Throwables.getStackTraceAsString(e).contains("You don’t have any backend roles."));
+                assertTrue(Throwables.getStackTraceAsString(e).contains("You don't have any backend roles."));
             }
             try {
                 mlUpdateModelGroupInput = createUpdateModelGroupInput(modelGroupId, "name", "description", null, null, null);
