@@ -15,7 +15,7 @@ import org.opensearch.ml.common.FunctionName;
 import java.io.IOException;
 import java.util.Locale;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Setter
 @Getter

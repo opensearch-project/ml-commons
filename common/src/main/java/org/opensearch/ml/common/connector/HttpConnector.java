@@ -5,18 +5,11 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.extern.log4j.Log4j2;
-import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.AccessMode;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -26,12 +19,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
-import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
 
 @Log4j2
 @NoArgsConstructor

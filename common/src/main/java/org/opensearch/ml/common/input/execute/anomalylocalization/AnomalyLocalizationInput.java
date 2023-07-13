@@ -11,8 +11,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -28,7 +28,7 @@ import org.opensearch.search.aggregations.AggregatorFactories;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
 
 /**

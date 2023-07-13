@@ -1,21 +1,20 @@
 package org.opensearch.ml.common.transport.model_group;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Arrays;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.AccessMode;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.Arrays;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 
 public class MLUpdateModelGroupRequestTest {
 

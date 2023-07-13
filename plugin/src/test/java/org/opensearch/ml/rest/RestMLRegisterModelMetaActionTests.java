@@ -26,11 +26,11 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
@@ -122,7 +122,7 @@ public class RestMLRegisterModelMetaActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLRegisterModelMetaAction.INSTANCE), argumentCaptor.capture(), any());
         MLRegisterModelMetaInput metaModelRequest = argumentCaptor.getValue().getMlRegisterModelMetaInput();
         assertEquals("all-MiniLM-L6-v3", metaModelRequest.getName());
-        assertEquals("1", metaModelRequest.getModelGroupId());
+        assertEquals("1", metaModelRequest.getVersion());
         assertEquals(Integer.valueOf(2), metaModelRequest.getTotalChunks());
     }
 

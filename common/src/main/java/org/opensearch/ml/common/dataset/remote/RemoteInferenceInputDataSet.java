@@ -5,17 +5,16 @@
 
 package org.opensearch.ml.common.dataset.remote;
 
+import java.io.IOException;
+import java.util.Map;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
-
-import java.io.IOException;
-import java.util.Map;
 
 @Getter
 @InputDataSet(MLInputDataType.REMOTE)

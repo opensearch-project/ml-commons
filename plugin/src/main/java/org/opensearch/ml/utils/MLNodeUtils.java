@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.utils;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_ROLE_NAME;
 
 import java.io.IOException;
@@ -13,10 +13,10 @@ import java.util.Set;
 import java.util.function.Function;
 
 import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;

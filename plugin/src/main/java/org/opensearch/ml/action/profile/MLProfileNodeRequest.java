@@ -8,8 +8,8 @@ package org.opensearch.ml.action.profile;
 import java.io.IOException;
 
 import org.opensearch.action.support.nodes.BaseNodeRequest;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import lombok.Getter;
 

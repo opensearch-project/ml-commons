@@ -7,8 +7,8 @@ package org.opensearch.ml.common.transport.deploy;
 
 import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodeRequest;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import java.io.IOException;
 

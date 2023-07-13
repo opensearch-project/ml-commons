@@ -16,7 +16,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.common.io.stream.NotSerializableExceptionWrapper;
+import org.opensearch.core.common.io.stream.NotSerializableExceptionWrapper;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.test.OpenSearchIntegTestCase;
