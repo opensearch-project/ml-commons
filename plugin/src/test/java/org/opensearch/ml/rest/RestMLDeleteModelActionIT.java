@@ -12,8 +12,8 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.utils.TestHelper;
-import org.opensearch.rest.RestStatus;
 
 public class RestMLDeleteModelActionIT extends MLCommonsRestTestCase {
     @Rule

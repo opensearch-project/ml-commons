@@ -7,8 +7,8 @@ package org.opensearch.ml.common.dataframe;
 
 import java.io.IOException;
 
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.Writeable;
 
 public class ColumnValueReader implements Writeable.Reader<ColumnValue> {
     @Override
