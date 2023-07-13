@@ -7,8 +7,8 @@ package org.opensearch.ml.common.output.execute.samplecalculator;
 
 import lombok.Builder;
 import lombok.Data;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.annotation.ExecuteOutput;

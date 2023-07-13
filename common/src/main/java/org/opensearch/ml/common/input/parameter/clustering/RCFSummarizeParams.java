@@ -7,8 +7,8 @@ package org.opensearch.ml.common.input.parameter.clustering;
 
 import lombok.Builder;
 import lombok.Data;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -19,7 +19,7 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 
 import java.io.IOException;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 @Data
 @MLAlgoParameter(algorithms={FunctionName.RCF_SUMMARIZE})
