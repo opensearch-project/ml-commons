@@ -140,6 +140,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Build and Run Tests
+        shell: bash
         run: |
           export OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
           export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
@@ -150,6 +151,7 @@ jobs:
         run: |
           ./gradlew publishToMavenLocal
 #      - name: Multi Nodes Integration Testing
+#        shell: bash
 #        run: |
 #          export OPENAI_KEY=$(aws secretsmanager get-secret-value --secret-id github_openai_key --query SecretString --output text)
 #          export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
