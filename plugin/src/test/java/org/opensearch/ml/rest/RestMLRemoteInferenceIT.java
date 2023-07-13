@@ -61,7 +61,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException, InterruptedException {
         disableClusterConnectorAccessControl();
-        Thread.sleep(10000);
+        Thread.sleep(20000);
     }
 
     public void testCreateConnector() throws IOException {
