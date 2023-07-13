@@ -218,7 +218,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             && !modelAccessControlHelper.isAdmin(user)
             && !modelAccessControlHelper.isOwnerStillHasPermission(user, mlModelGroup)) {
             throw new IllegalArgumentException(
-                "You don’t have the specified backend role to update this model group. For more information, contact your administrator."
+                "You don't have the specified backend role to update this model group. For more information, contact your administrator."
             );
         }
         AccessMode accessMode = input.getModelAccessMode();
@@ -230,7 +230,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                 throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles()) && CollectionUtils.isEmpty(user.getBackendRoles())) {
-                throw new IllegalArgumentException("You don’t have any backend roles.");
+                throw new IllegalArgumentException("You don't have any backend roles.");
             }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.FALSE.equals(input.getIsAddAllBackendRoles())) {
                 throw new IllegalArgumentException("You have to specify backend roles when add all backend roles is set to false.");
