@@ -82,7 +82,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertEquals("http", (String) responseMap.get("protocol"));
     }
 
-    @Ignore
     public void testDeleteConnector() throws IOException {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
