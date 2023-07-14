@@ -172,7 +172,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "You don’t have the specified backend role to update this model group. For more information, contact your administrator.",
+            "You don't have the specified backend role to update this model group. For more information, contact your administrator.",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -236,7 +236,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don’t have any backend roles.", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have any backend roles.", argumentCaptor.getValue().getMessage());
     }
 
     public void test_UserSpecifiedRestrictedButNoBackendRolesField() {
