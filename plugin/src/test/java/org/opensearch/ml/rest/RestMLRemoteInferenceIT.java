@@ -672,7 +672,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
                 "PUT",
                 "_cluster/settings",
                 null,
-                "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":false}}",
+                "{\"persistent\":{\"plugins.ml_commons.connector_access_control_enabled\":false, \"plugins.ml_commons.sync_up_job_interval_in_seconds\":3}}",
                 ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
             );
         assertEquals(200, response.getStatusLine().getStatusCode());
