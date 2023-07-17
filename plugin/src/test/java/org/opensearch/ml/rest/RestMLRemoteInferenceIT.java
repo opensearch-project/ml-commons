@@ -131,7 +131,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
     }
 
-    @Ignore
     public void testPredictRemoteModel() throws IOException, InterruptedException {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
@@ -184,7 +183,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertTrue(responseMap.toString().contains("undeployed"));
     }
 
-    @Ignore
     public void testOpenAIChatCompletionModel() throws IOException, InterruptedException {
         String entity = "{\n"
             + "  \"name\": \"OpenAI chat model Connector\",\n"
@@ -241,7 +239,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertNotNull(responseMap);
     }
 
-    @Ignore
     public void testOpenAIEditsModel() throws IOException, InterruptedException {
         String entity = "{\n"
             + "  \"name\": \"OpenAI Edit model Connector\",\n"
@@ -307,7 +304,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
-    @Ignore
     public void testOpenAIModerationsModel() throws IOException, InterruptedException {
         String entity = "{\n"
             + "  \"name\": \"OpenAI moderations model Connector\",\n"
