@@ -29,6 +29,12 @@ Compatible with OpenSearch 2.9.0
 * remote inference: add unit test for create connector request/response ([#1067](https://github.com/opensearch-project/ml-commons/pull/1067))
 * Add more UT for remote inference classes ([#1077](https://github.com/opensearch-project/ml-commons/pull/1077))
 * IT Security Tests for model access control ([#1095](https://github.com/opensearch-project/ml-commons/pull/1095))
+* Add integration tests for the remote inference feature ([#1073](https://github.com/opensearch-project/ml-commons/pull/1073))
+* Temporarily ignore OpenAI Tests ([#1118](https://github.com/opensearch-project/ml-commons/pull/1118))
+* Increase sleep time on remote inference integration tests ([#1124](https://github.com/opensearch-project/ml-commons/pull/1124))
+* fix remote inference it: update job interval ([#1129](https://github.com/opensearch-project/ml-commons/pull/1129))
+* Add null key check for remote inference integration tests ([#1113](https://github.com/opensearch-project/ml-commons/pull/1113))
+* Reenable OpenAI Remote Inference Tests ([#1127](https://github.com/opensearch-project/ml-commons/pull/1127))
 
 ### Bug Fixes
 
@@ -41,6 +47,8 @@ Compatible with OpenSearch 2.9.0
 * modify error message when model group not unique is provided ([#1078](https://github.com/opensearch-project/ml-commons/pull/1078))
 * stash context before accessing ml config index ([#1092](https://github.com/opensearch-project/ml-commons/pull/1092))
 * fix init master key bug ([#1094](https://github.com/opensearch-project/ml-commons/pull/1094))
+* delete connector successfully if model index is missing ([#1106](https://github.com/opensearch-project/ml-commons/pull/1106))
+* fix encoding US-ASCII error ([#1126](https://github.com/opensearch-project/ml-commons/pull/1126))
 
 ### Documentation
 
@@ -54,4 +62,6 @@ Compatible with OpenSearch 2.9.0
 * Fix build. ([#1018](https://github.com/opensearch-project/ml-commons/pull/1018))
 * Fix the refactor change brought by core backport ([#1047](https://github.com/opensearch-project/ml-commons/pull/1047))
 * change to compileOnly to avoid jarhell ([#1062](https://github.com/opensearch-project/ml-commons/pull/1062))
+* Update ml CI workflow checkout ref to be PR commit ([#1114](https://github.com/opensearch-project/ml-commons/pull/1114))
+* Add shell bash settings for windows github actions to export credentials ([#1116](https://github.com/opensearch-project/ml-commons/pull/1116))
 
