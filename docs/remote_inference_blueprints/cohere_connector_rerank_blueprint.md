@@ -1,11 +1,13 @@
-### Cohere connector blueprint example for embedding:
+### Cohere connector blueprint example for rerank:
+
+#### this blueprint is created from Cohere doc: https://docs.cohere.com/reference/rerank-1
 
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-  "name": "Cohere Rerank Connector",
-  "description": "The connector to Cohere Rerank Model",
-  "version": 1,
+  "name": "<YOUR MODEL NAME>",
+  "description": "<YOUR MODEL DESCRIPTION>",
+  "version": "<YOUR MODEL VERSION>",
   "protocol": "http",
   "parameters": {
     "endpoint": "api.cohere.ai",

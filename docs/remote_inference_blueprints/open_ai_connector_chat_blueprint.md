@@ -1,11 +1,12 @@
 ### OpenAI connector blueprint example for chat:
 
+#### this blueprint is created from OpenAI doc: https://platform.openai.com/docs/api-reference/chat
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-  "name": "OpenAI Chat Connector",
-  "description": "The connector to public OpenAI model service for GPT 3.5",
-  "version": 1,
+  "name": "<YOUR MODEL NAME>",
+  "description": "<YOUR MODEL DESCRIPTION>",
+  "version": "<YOUR MODEL VERSION>",
   "protocol": "http",
   "parameters": {
     "endpoint": "api.openai.com",
