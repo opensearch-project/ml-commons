@@ -24,7 +24,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "url": "<PLEASE ADD YOUR Sagemaker MODEL ENDPOINT URL>",
-      "request_body": "<PLEASE ADD YOUR REQUEST BODY. Example: [\"${parameters.inputs}\"]>"
+      "request_body": "<PLEASE ADD YOUR REQUEST BODY. Example: ${parameters.inputs}>"
     }
   ]
 }
