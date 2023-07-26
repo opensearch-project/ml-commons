@@ -390,7 +390,7 @@ POST /_plugins/_ml/models/_register
 {
   "name": "openAI-GPT-3.5 completions: internal connector",
   "function_name": "remote",
-  "model_group_id": "wlcnb4kBJ1eYAeTMHlV6",
+  "model_group_id": "WSmckYkBrQ7TyjgDAhjb",
   "description": "test model",
   "connector": {
     "name": "OpenAI Chat Connector",
