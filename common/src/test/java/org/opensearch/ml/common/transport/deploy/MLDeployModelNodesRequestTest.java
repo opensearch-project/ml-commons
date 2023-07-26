@@ -8,7 +8,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.Version;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;

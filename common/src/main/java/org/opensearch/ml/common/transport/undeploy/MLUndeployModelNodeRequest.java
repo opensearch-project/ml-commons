@@ -5,12 +5,11 @@
 
 package org.opensearch.ml.common.transport.undeploy;
 
+import java.io.IOException;
 import lombok.Getter;
 import org.opensearch.action.support.nodes.BaseNodeRequest;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-
-import java.io.IOException;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 public class MLUndeployModelNodeRequest extends BaseNodeRequest {
     @Getter

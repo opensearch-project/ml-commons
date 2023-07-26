@@ -5,23 +5,22 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.util.CollectionUtils;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
+import org.opensearch.common.util.CollectionUtils;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 
 @Getter
 public class MLModelGroup implements ToXContentObject {

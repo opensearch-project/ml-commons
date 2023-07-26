@@ -9,9 +9,9 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.FieldDefaults;
-import org.opensearch.common.io.stream.StreamOutput;
 
 import java.io.IOException;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @RequiredArgsConstructor

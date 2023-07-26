@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.common.input.nlp;
 
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
  * ML input class which supports a list fo text docs.

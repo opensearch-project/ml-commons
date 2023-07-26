@@ -5,14 +5,13 @@
 
 package org.opensearch.ml.common.transport.deploy;
 
+import java.io.IOException;
 import lombok.Builder;
 import lombok.Data;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.ml.common.MLTask;
-
-import java.io.IOException;
 
 @Data
 public class MLDeployModelInput implements Writeable {

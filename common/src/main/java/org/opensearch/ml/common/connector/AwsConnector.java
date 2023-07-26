@@ -10,7 +10,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;

@@ -19,8 +19,8 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Client;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -99,7 +99,7 @@ import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCor
 import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MODEL_CONTENT_HASH;
 
 //TODO: fix mockito error: Cannot mock/spy class org.opensearch.common.settings.Settings final class
-    
+
 @Ignore
 public class MetricsCorrelationTest {
     @Rule
@@ -198,7 +198,7 @@ public class MetricsCorrelationTest {
         extendedInput = MetricsCorrelationInput.builder().inputData(extendedInputData).build();
     }
 
-        
+
     @Test
     public void testWhenModelIdNotNullButModelIsNotDeployed() throws ExecuteException {
         metricsCorrelation.initModel(model, params);
@@ -227,7 +227,7 @@ public class MetricsCorrelationTest {
         assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
     }
 
-        
+
     @Test
     public void testExecuteWithModelInIndexAndEmptyOutput() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -290,7 +290,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
-        
+
     @Test
     public void testExecuteWithNoModelIndexAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -331,7 +331,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
-        
+
     @Test
     public void testExecuteWithModelInIndexAndInvokeDeployAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -379,7 +379,7 @@ public class MetricsCorrelationTest {
     }
 
 
-        
+
     @Test
     public void testExecuteWithNoModelInIndexAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -421,7 +421,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
-        
+
     @Test
     public void testGetModel() {
         ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
@@ -486,7 +486,7 @@ public class MetricsCorrelationTest {
         assertEquals(MLModel.MODEL_VERSION_FIELD, versionQueryBuilder.fieldName());
     }
 
-        
+
     @Test
     public void testRegisterModel() throws InterruptedException {
         doAnswer(invocation -> {
@@ -510,7 +510,7 @@ public class MetricsCorrelationTest {
         verify(mlRegisterModelResponseActionListener).onResponse(mlRegisterModelResponse);
     }
 
-        
+
     @Test
     public void testDeployModel() {
         doAnswer(invocation -> {
@@ -525,7 +525,7 @@ public class MetricsCorrelationTest {
         verify(mlDeployModelResponseActionListener).onResponse(mlDeployModelResponse);
     }
 
-        
+
     @Test
     public void testDeployModelFail() {
         Exception ex = new ExecuteException("Testing");
@@ -538,14 +538,14 @@ public class MetricsCorrelationTest {
         verify(mlDeployModelResponseActionListener).onFailure(ex);
     }
 
-        
+
     @Test
     public void testWrongInput() throws ExecuteException {
         exceptionRule.expect(ExecuteException.class);
         metricsCorrelation.execute(mock(LocalSampleCalculatorInput.class));
     }
 
-        
+
     @Test
     public void parseModelTensorOutput_NullOutput() {
         exceptionRule.expect(MLException.class);
@@ -553,7 +553,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.parseModelTensorOutput(null, null);
     }
 
-        
+
     @Test
     public void initModel_NullModelZipFile() {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -563,7 +563,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
-        
+
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -573,7 +573,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
-        
+
     @Test
     public void initModel_NullMLEngine() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -584,7 +584,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
-        
+
     @Test
     public void initModel_NullModelId() throws URISyntaxException {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -594,7 +594,7 @@ public class MetricsCorrelationTest {
         metricsCorrelation.initModel(model, params);
     }
 
-        
+
     @Test
     public void initModel_WrongFunctionName() {
         exceptionRule.expect(IllegalArgumentException.class);

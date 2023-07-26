@@ -5,21 +5,8 @@
 
 package org.opensearch.ml.common.connector;
 
-import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.Strings;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.MLCommonsClassLoader;
-import org.opensearch.ml.common.output.model.ModelTensor;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -31,9 +18,21 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.common.Strings;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.MLCommonsClassLoader;
+import org.opensearch.ml.common.output.model.ModelTensor;
 
 /**
  * Connector defines how to connect to a remote service.

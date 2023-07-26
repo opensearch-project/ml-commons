@@ -7,7 +7,7 @@
 
 package org.opensearch.ml.helper;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 

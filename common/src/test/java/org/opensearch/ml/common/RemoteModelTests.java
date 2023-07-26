@@ -5,22 +5,21 @@
 
 package org.opensearch.ml.common;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
-
-import java.io.IOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 public class RemoteModelTests {
 

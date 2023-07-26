@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.action.handler;
 
-import static org.opensearch.rest.RestStatus.BAD_REQUEST;
-import static org.opensearch.rest.RestStatus.INTERNAL_SERVER_ERROR;
+import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
+import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +23,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.CollectionUtils;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
@@ -38,7 +39,6 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.rest.RestStatus;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;

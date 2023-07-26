@@ -13,8 +13,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -28,7 +28,7 @@ import org.opensearch.ml.common.annotation.ExecuteOutput;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.output.Output;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
  * Output of localized results.

@@ -7,7 +7,7 @@ package org.opensearch.ml.common.dataframe;
 
 import java.io.IOException;
 
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 
 import lombok.AccessLevel;
 import lombok.Getter;

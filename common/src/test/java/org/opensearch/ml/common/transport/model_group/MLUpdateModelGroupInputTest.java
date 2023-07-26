@@ -1,15 +1,14 @@
 package org.opensearch.ml.common.transport.model_group;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.ml.common.AccessMode;
+import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.util.Arrays;
-
-import static org.junit.Assert.assertEquals;
+import org.junit.Before;
+import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.ml.common.AccessMode;
 
 public class MLUpdateModelGroupInputTest {
 

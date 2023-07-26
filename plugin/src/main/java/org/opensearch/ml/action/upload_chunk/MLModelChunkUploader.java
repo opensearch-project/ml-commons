@@ -4,7 +4,7 @@
  */
 package org.opensearch.ml.action.upload_chunk;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;

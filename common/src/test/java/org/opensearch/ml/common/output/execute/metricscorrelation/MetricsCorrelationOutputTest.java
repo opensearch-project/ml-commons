@@ -8,7 +8,7 @@ package org.opensearch.ml.common.output.execute.metricscorrelation;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
 import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;

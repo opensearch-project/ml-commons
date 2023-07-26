@@ -5,29 +5,29 @@
 
 package org.opensearch.ml.common.transport.connector;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.action.ActionRequest;
-import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -37,13 +37,6 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.search.SearchModule;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 
 public class MLCreateConnectorInputTests {
     private MLCreateConnectorInput mlCreateConnectorInput;

@@ -8,8 +8,8 @@ package org.opensearch.ml.common;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -28,7 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 

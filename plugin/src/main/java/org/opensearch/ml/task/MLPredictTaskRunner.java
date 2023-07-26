@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
