@@ -15,6 +15,7 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -34,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJava;
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostprocessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
@@ -94,6 +95,18 @@ public class ConnectorUtils {
             inputData = (RemoteInferenceInputDataSet)mlInput.getInputDataset();
         } else {
             throw new IllegalArgumentException("Wrong input type");
+        }
+        if (inputData.getParameters() != null) {
+            Map<String, String> newParameters = new HashMap<>();
+            inputData.getParameters().entrySet().forEach(entry -> {
+                if (StringUtils.isJson(entry.getValue())) {
+                    // no need to escape if it's already valid json
+                    newParameters.put(entry.getKey(), entry.getValue());
+                } else {
+                    newParameters.put(entry.getKey(), escapeJson(entry.getValue()));
+                }
+            });
+            inputData.setParameters(newParameters);
         }
         return inputData;
     }
