@@ -15,8 +15,8 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
@@ -133,7 +133,7 @@ public class RowTest {
 
     @Test
     public void testToXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         row.toXContent(builder);
 
         assertNotNull(builder);

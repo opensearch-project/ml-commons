@@ -14,6 +14,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -88,7 +89,7 @@ public class MLUndeployModelNodesResponseTest {
 
         List<FailedNodeException> failures = new ArrayList<>();
         MLUndeployModelNodesResponse response = new MLUndeployModelNodesResponse(clusterName, nodes, failures);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals(

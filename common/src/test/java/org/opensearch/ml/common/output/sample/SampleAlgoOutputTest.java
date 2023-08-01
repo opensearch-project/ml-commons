@@ -12,6 +12,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.output.MLOutputType;
@@ -32,7 +33,7 @@ public class SampleAlgoOutputTest {
 
     @Test
     public void toXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{\"sample_result\":1.0}", jsonStr);
@@ -41,7 +42,7 @@ public class SampleAlgoOutputTest {
     @Test
     public void toXContent_EmptyOutput() throws IOException {
         SampleAlgoOutput output = SampleAlgoOutput.builder().build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = org.opensearch.common.Strings.toString(builder);
         assertEquals("{}", jsonStr);

@@ -7,8 +7,8 @@ package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
 import org.opensearch.common.Strings;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -34,7 +34,7 @@ public class StringValueTest {
     @Test
     public void testToXContent() throws IOException {
         StringValue value = new StringValue("str");
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         value.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
         assertNotNull(builder);

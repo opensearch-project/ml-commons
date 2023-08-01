@@ -10,6 +10,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
@@ -27,7 +28,7 @@ public class TestHelper {
 
     public static <T> void testParse(ToXContentObject obj, Function<XContentParser, T> function, boolean wrapWithObject)
             throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         if (wrapWithObject) {
             builder.startObject();
         }
@@ -49,7 +50,7 @@ public class TestHelper {
     }
 
     public static String contentObjectToString(ToXContentObject obj) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         obj.toXContent(builder, ToXContent.EMPTY_PARAMS);
         return xContentBuilderToString(builder);
     }

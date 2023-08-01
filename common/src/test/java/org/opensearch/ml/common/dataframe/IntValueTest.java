@@ -7,8 +7,8 @@ package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
 import org.opensearch.common.Strings;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
@@ -29,7 +29,7 @@ public class IntValueTest {
     @Test
     public void testToXContent() throws IOException {
         IntValue intValue = new IntValue(2);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         intValue.toXContent(builder);
 
         assertNotNull(builder);

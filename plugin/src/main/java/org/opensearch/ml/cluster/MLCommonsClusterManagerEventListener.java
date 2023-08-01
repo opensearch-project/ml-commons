@@ -11,7 +11,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JO
 import org.opensearch.client.Client;
 import org.opensearch.cluster.LocalNodeClusterManagerListener;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.component.LifecycleListener;
+import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.ml.indices.MLIndicesHandler;
