@@ -72,6 +72,46 @@ public class ConnectorUtilsTest {
     }
 
     @Test
+    public void processInput_RemoteInferenceInputDataSet_EscapeString() {
+        String input = "hello \"world\" \n \t";
+        String expectedInput = "hello \\\"world\\\" \\n \\t";
+        processInput_RemoteInferenceInputDataSet(input, expectedInput);
+    }
+
+    @Test
+    public void processInput_RemoteInferenceInputDataSet_NotEscapeStringValue() {
+        String input = "test value";
+        processInput_RemoteInferenceInputDataSet(input, input);
+    }
+
+    @Test
+    public void processInput_RemoteInferenceInputDataSet_NotEscapeArrayString() {
+        String input = "[\"test value1\"]";
+        processInput_RemoteInferenceInputDataSet(input, input);
+    }
+
+    @Test
+    public void processInput_RemoteInferenceInputDataSet_NotEscapeJsonString() {
+        String input = "{\"key1\": \"value\", \"key2\": 123}";
+        processInput_RemoteInferenceInputDataSet(input, input);
+    }
+
+    private void processInput_RemoteInferenceInputDataSet(String input, String expectedInput) {
+        RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", input)).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
+
+        ConnectorAction predictAction = ConnectorAction.builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
+        Assert.assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
+    }
+
+    @Test
     public void processInput_TextDocsInputDataSet_PreprocessFunction_OneTextDoc() {
         processInput_TextDocsInputDataSet_PreprocessFunction(
                 "{\"input\": \"${parameters.input}\"}",
