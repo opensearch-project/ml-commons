@@ -12,6 +12,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -32,7 +33,7 @@ public class LocalSampleCalculatorOutputTest {
 
     @Test
     public void toXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
@@ -43,7 +44,7 @@ public class LocalSampleCalculatorOutputTest {
     @Test
     public void toXContent_EmptyOutput() throws IOException {
         LocalSampleCalculatorOutput output = LocalSampleCalculatorOutput.builder().build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();

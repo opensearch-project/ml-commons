@@ -16,6 +16,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -147,7 +148,7 @@ public class MLInputTest {
     private void testParse(FunctionName algorithm, MLInputDataset inputDataset, String expectedInputStr,
             Consumer<MLInput> verify) throws IOException {
         MLInput input = MLInput.builder().inputDataset(inputDataset).algorithm(algorithm).build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = org.opensearch.common.Strings.toString(builder);
