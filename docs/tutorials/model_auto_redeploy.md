@@ -10,7 +10,7 @@ node is handling more traffic than it expected. To address this we introduced mo
 feature is pretty simple.
 
 # Enable model auto redeploy
-There's several configurations to control the model auto redeploy feature behavior including: 
+There are several configurations to control the model auto redeploy feature behavior including: 
 ### plugins.ml_commons.model_auto_redeploy.enable
 The default value of this configuration is false, once it's set to true, it means the model auto redeploy feature is enabled.
 ### plugins.ml_commons.model_auto_redeploy.lifetime_retry_times
