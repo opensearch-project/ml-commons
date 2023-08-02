@@ -143,7 +143,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name or add \"model_group_id\": \"lMPmr4kB4eSCtCCDmCDm\" to request body",
+            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name or add \"model_group_id\": \"model_group_ID\" to request body",
             argumentCaptor.getValue().getMessage()
         );
 

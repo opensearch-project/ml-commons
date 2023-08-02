@@ -34,7 +34,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 @Log4j2
 public class EncryptorImpl implements Encryptor {
 
-    public static final String MASTER_KEY_NOT_READY_ERROR = "ML encryption master key not initialized yet. Please retry after 10 seconds.";
+    public static final String MASTER_KEY_NOT_READY_ERROR = "The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.";
     private ClusterService clusterService;
     private Client client;
     private volatile String masterKey;

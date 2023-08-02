@@ -77,7 +77,9 @@ public class MLModelGroupManager {
                                     new IllegalArgumentException(
                                         "The name you provided is already being used by another model with ID: "
                                             + id
-                                            + ". Please provide a different name or add \"model_group_id\": \"lMPmr4kB4eSCtCCDmCDm\" to request body"
+                                            + ". Please provide a different name or add \"model_group_id\": \""
+                                            + id
+                                            + "\" to request body"
                                     )
                                 );
                         }
