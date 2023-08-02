@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.utils;
 
 import com.google.gson.Gson;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -18,6 +19,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
+@Log4j2
 public class ScriptUtils {
 
     public static final Gson gson;
@@ -37,6 +39,7 @@ public class ScriptUtils {
         }
         return Optional.empty();
     }
+
     public static Optional<String> executePostprocessFunction(ScriptService scriptService,
                                                               String postProcessFunction,
                                                               String resultJson) {
@@ -51,8 +54,12 @@ public class ScriptUtils {
     }
 
     public static String executeScript(ScriptService scriptService, String painlessScript, Map<String, Object> params) {
+        long start = System.nanoTime();
         Script script = new Script(ScriptType.INLINE, "painless", painlessScript, Collections.emptyMap());
         TemplateScript templateScript = scriptService.compile(script, TemplateScript.CONTEXT).newInstance(params);
+        long end = System.nanoTime();
+        double durationInMs = (end - start) / 1e6;
+        log.info("----------------- painless script execution time: {} ms", durationInMs);
         return templateScript.execute();
     }
 }

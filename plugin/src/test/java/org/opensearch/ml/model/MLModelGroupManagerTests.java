@@ -129,7 +129,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ModelGroupNameNotUnique() throws IOException {
+    public void test_ModelGroupNameNotUnique() throws IOException {//
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
@@ -143,7 +143,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name",
+            "The name you provided is already being used by another model with ID: model_group_ID. Please provide a different name or add \"model_group_id\": \"lMPmr4kB4eSCtCCDmCDm\" to request body",
             argumentCaptor.getValue().getMessage()
         );
 
