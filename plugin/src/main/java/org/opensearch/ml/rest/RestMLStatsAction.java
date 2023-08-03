@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.splitCommaSeparatedParam;
@@ -26,6 +27,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
@@ -54,6 +56,9 @@ public class RestMLStatsAction extends BaseRestHandler {
     private MLStats mlStats;
     private ClusterService clusterService;
     private IndexUtils indexUtils;
+    private NamedXContentRegistry xContentRegistry;
+    private static final String QUERY_ALL_MODEL_META_DOC =
+        "{\"query\":{\"bool\":{\"must_not\":{\"exists\":{\"field\":\"chunk_number\"}}}}}";
 
     /**
      * Constructor
@@ -61,10 +66,16 @@ public class RestMLStatsAction extends BaseRestHandler {
      * @param clusterService cluster service
      * @param indexUtils index util
      */
-    public RestMLStatsAction(MLStats mlStats, ClusterService clusterService, IndexUtils indexUtils) {
+    public RestMLStatsAction(
+        MLStats mlStats,
+        ClusterService clusterService,
+        IndexUtils indexUtils,
+        NamedXContentRegistry xContentRegistry
+    ) {
         this.mlStats = mlStats;
         this.clusterService = clusterService;
         this.indexUtils = indexUtils;
+        this.xContentRegistry = xContentRegistry;
     }
 
     @Override
@@ -109,14 +120,27 @@ public class RestMLStatsAction extends BaseRestHandler {
             if (finalMlStatsInput.getTargetStatLevels().contains(MLStatLevel.CLUSTER)
                 && (finalMlStatsInput.retrieveAllClusterLevelStats()
                     || finalMlStatsInput.getClusterLevelStats().contains(MLClusterLevelStat.ML_MODEL_COUNT))) {
-                indexUtils.getNumberOfDocumentsInIndex(ML_MODEL_INDEX, ActionListener.wrap(count -> {
-                    clusterStatsMap.put(MLClusterLevelStat.ML_MODEL_COUNT, count);
-                    getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
-                }, e -> {
-                    String errorMessage = "Failed to get ML model count";
-                    log.error(errorMessage, e);
-                    onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
-                }));
+                indexUtils
+                    .getNumberOfDocumentsInIndex(
+                        ML_MODEL_INDEX,
+                        QUERY_ALL_MODEL_META_DOC,
+                        xContentRegistry,
+                        ActionListener.wrap(modelCount -> {
+                            clusterStatsMap.put(MLClusterLevelStat.ML_MODEL_COUNT, modelCount);
+                            indexUtils.getNumberOfDocumentsInIndex(ML_CONNECTOR_INDEX, ActionListener.wrap(connectorCount -> {
+                                clusterStatsMap.put(MLClusterLevelStat.ML_CONNECTOR_COUNT, connectorCount);
+                                getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
+                            }, e -> {
+                                String errorMessage = "Failed to get ML model count";
+                                log.error(errorMessage, e);
+                                onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
+                            }));
+                        }, e -> {
+                            String errorMessage = "Failed to get ML model count";
+                            log.error(errorMessage, e);
+                            onFailure(channel, RestStatus.INTERNAL_SERVER_ERROR, errorMessage, e);
+                        })
+                    );
             } else {
                 getNodeStats(finalMlStatsInput, clusterStatsMap, client, mlStatsNodesRequest, channel);
             }
