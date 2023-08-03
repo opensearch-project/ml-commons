@@ -145,7 +145,7 @@ public class MLRegisterModelInputTest {
 
     @Test
     public void testToXContent() throws Exception {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
@@ -161,7 +161,7 @@ public class MLRegisterModelInputTest {
         input.setModelConfig(null);
         input.setModelFormat(null);
         input.setModelNodeIds(null);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);

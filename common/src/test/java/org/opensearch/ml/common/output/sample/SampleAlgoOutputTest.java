@@ -31,7 +31,7 @@ public class SampleAlgoOutputTest {
 
     @Test
     public void toXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals("{\"sample_result\":1.0}", jsonStr);
@@ -40,7 +40,7 @@ public class SampleAlgoOutputTest {
     @Test
     public void toXContent_EmptyOutput() throws IOException {
         SampleAlgoOutput output = SampleAlgoOutput.builder().build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals("{}", jsonStr);

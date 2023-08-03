@@ -47,7 +47,7 @@ public class DoubleValueTest {
     @Test
     public void testToXContent() throws IOException {
         DoubleValue doubleValue = new DoubleValue(5.0D);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         doubleValue.toXContent(builder);
 
         assertNotNull(builder);

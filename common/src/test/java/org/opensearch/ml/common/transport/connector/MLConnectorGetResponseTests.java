@@ -55,7 +55,7 @@ public class MLConnectorGetResponseTests {
     @Test
     public void toXContentTest() throws IOException {
         MLConnectorGetResponse mlConnectorGetResponse = MLConnectorGetResponse.builder().mlConnector(connector).build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlConnectorGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);

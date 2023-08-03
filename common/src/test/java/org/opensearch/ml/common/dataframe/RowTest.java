@@ -133,7 +133,7 @@ public class RowTest {
 
     @Test
     public void testToXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         row.toXContent(builder);
 
         assertNotNull(builder);

@@ -29,7 +29,7 @@ public class BooleanValueTest {
     @Test
     public void testToXContent() throws IOException {
         BooleanValue value = new BooleanValue(true);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         value.toXContent(builder);
 
         assertNotNull(builder);

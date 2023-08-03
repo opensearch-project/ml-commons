@@ -43,7 +43,7 @@ public class MLDeployModelResponseTest {
         // Setup
         MLDeployModelResponse response = new MLDeployModelResponse(taskId, status);
         // Run the test
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);

@@ -91,7 +91,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         }
         String connectorName = mlCreateConnectorInput.getName();
         try {
-            XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+            XContentBuilder builder = XContentFactory.jsonBuilder();
             mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
             Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
             connector.validateConnectorURL(trustedConnectorEndpointsRegex);

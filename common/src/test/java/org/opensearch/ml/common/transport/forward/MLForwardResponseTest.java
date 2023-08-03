@@ -60,7 +60,7 @@ public class MLForwardResponseTest {
         // Setup
         MLForwardResponse response = new MLForwardResponse(status, predictionOutput);
         // Run the test
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);

@@ -26,7 +26,7 @@ public class TestHelper {
     }
 
     public static <T> void testParse(ToXContentObject obj, Function<XContentParser, T> function, boolean wrapWithObject) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         if (wrapWithObject) {
             builder.startObject();
         }
@@ -46,7 +46,7 @@ public class TestHelper {
     }
 
     public static String contentObjectToString(ToXContentObject obj) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         obj.toXContent(builder, ToXContent.EMPTY_PARAMS);
         return xContentBuilderToString(builder);
     }

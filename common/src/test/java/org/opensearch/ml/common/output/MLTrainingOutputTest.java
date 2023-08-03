@@ -21,7 +21,7 @@ public class MLTrainingOutputTest {
     public void parse_MLTrain() throws IOException {
         MLTrainingOutput output = MLTrainingOutput.builder()
                 .modelId("test_modelId").status("test_status").build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals("{\"model_id\":\"test_modelId\",\"status\":\"test_status\"}", jsonStr);

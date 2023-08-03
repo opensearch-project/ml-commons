@@ -30,7 +30,7 @@ public class NullValueTest {
     @Test
     public void testToXContent() throws IOException {
         NullValue value = new NullValue();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         value.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
         assertNotNull(builder);

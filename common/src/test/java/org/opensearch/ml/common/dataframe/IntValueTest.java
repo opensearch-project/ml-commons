@@ -29,7 +29,7 @@ public class IntValueTest {
     @Test
     public void testToXContent() throws IOException {
         IntValue intValue = new IntValue(2);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         intValue.toXContent(builder);
 
         assertNotNull(builder);

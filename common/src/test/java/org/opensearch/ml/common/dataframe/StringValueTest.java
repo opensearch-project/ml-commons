@@ -34,7 +34,7 @@ public class StringValueTest {
     @Test
     public void testToXContent() throws IOException {
         StringValue value = new StringValue("str");
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         value.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
         assertNotNull(builder);

@@ -89,7 +89,7 @@ public class MLUndeployModelNodesResponseTest {
 
         List<FailedNodeException> failures = new ArrayList<>();
         MLUndeployModelNodesResponse response = new MLUndeployModelNodesResponse(clusterName, nodes, failures);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals(

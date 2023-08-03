@@ -69,7 +69,7 @@ public class MLTaskGetResponseTest {
     @Test
     public void toXContentTest() throws IOException {
         MLTaskGetResponse mlTaskGetResponse = MLTaskGetResponse.builder().mlTask(mlTask).build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlTaskGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);

@@ -29,7 +29,7 @@ public class ShortValueTest {
     @Test
     public void testToXContent() throws IOException {
         ShortValue shortValue = new ShortValue((short)2);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         shortValue.toXContent(builder);
 
         assertNotNull(builder);

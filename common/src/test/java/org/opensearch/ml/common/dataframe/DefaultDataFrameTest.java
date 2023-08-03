@@ -227,7 +227,7 @@ public class DefaultDataFrameTest {
 
     @Test
     public void testToXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
         defaultDataFrame.toXContent(builder);
         builder.endObject();

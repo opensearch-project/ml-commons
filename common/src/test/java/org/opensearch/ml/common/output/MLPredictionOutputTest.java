@@ -46,7 +46,7 @@ public class MLPredictionOutputTest {
     }
     @Test
     public void toXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":" +
@@ -58,7 +58,7 @@ public class MLPredictionOutputTest {
     @Test
     public void toXContent_EmptyOutput() throws IOException {
         MLPredictionOutput output = MLPredictionOutput.builder().build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         assertEquals("{}", jsonStr);

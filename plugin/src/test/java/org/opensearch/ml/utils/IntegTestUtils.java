@@ -189,7 +189,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
         mlPredictionOutput.getPredictionResult().toXContent(builder, ToXContent.EMPTY_PARAMS);

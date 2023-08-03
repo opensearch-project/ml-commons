@@ -45,7 +45,7 @@ public class TextDocsMLInputTest {
 
     @Test
     public void parseTextDocsMLInput() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = Strings.toString(builder);
         parseMLInput(jsonStr);

@@ -141,7 +141,7 @@ public class MLCreateConnectorInputTests {
 
     @Test
     public void testToXContent_FullFields() throws Exception {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);
@@ -150,7 +150,7 @@ public class MLCreateConnectorInputTests {
 
     @Test
     public void testToXContent_NullFields() throws Exception {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateDryRunConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = Strings.toString(builder);

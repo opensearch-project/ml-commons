@@ -30,7 +30,7 @@ public class FloatValueTest {
     @Test
     public void testToXContent() throws IOException {
         FloatValue floatValue = new FloatValue(2.1f);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         floatValue.toXContent(builder);
 
         assertNotNull(builder);

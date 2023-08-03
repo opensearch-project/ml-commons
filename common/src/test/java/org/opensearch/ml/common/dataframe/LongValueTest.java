@@ -29,7 +29,7 @@ public class LongValueTest {
     @Test
     public void testToXContent() throws IOException {
         LongValue longValue = new LongValue((long)2);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         longValue.toXContent(builder);
 
         assertNotNull(builder);

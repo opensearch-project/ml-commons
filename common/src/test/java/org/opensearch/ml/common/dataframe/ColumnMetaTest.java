@@ -51,7 +51,7 @@ public class ColumnMetaTest {
 
     @Test
     public void testToXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         columnMeta.toXContent(builder);
 
         assertNotNull(builder);
