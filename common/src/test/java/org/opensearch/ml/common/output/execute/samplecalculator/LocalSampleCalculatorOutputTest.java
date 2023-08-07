@@ -37,7 +37,7 @@ public class LocalSampleCalculatorOutputTest {
         builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"result\":1.0}", jsonStr);
     }
 
@@ -48,7 +48,7 @@ public class LocalSampleCalculatorOutputTest {
         builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{}", jsonStr);
     }
 

@@ -151,7 +151,7 @@ public class MLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals(expectedInputStr, jsonStr);
 
         XContentParser parser = XContentType.JSON.xContent()

@@ -13,7 +13,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.common.Strings;
+
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -137,7 +137,7 @@ public class RowTest {
         row.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
 
         assertEquals("{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}", jsonStr);
     }

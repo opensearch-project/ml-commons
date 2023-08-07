@@ -56,7 +56,7 @@ public class ColumnMetaTest {
         columnMeta.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"name\":\"columnMetaName\",\"column_type\":\"STRING\"}", jsonStr);
     }
 

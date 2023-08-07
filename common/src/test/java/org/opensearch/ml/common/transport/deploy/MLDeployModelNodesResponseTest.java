@@ -75,7 +75,7 @@ public class MLDeployModelNodesResponseTest {
         MLDeployModelNodesResponse response = new MLDeployModelNodesResponse(clusterName, nodes, failures);
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals(
                 "{\"foo1\":{\"stats\":{\"modelName:version1\":\"response\"}},\"foo2\":{\"stats\":{\"modelName:version2\":\"response\"}}}",
                 jsonStr);

@@ -51,7 +51,7 @@ public class MLPredictionOutputTest {
     public void toXContent() throws IOException {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":" +
                 "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":" +
                 "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\"," +
@@ -63,7 +63,7 @@ public class MLPredictionOutputTest {
         MLPredictionOutput output = MLPredictionOutput.builder().build();
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{}", jsonStr);
     }
 

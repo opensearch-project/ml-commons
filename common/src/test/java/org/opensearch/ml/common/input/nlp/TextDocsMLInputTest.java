@@ -50,7 +50,7 @@ public class TextDocsMLInputTest {
     public void parseTextDocsMLInput() throws IOException {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         System.out.println(jsonStr);
         parseMLInput(jsonStr);
     }
