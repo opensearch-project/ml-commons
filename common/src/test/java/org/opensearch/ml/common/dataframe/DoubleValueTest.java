@@ -8,7 +8,6 @@ package org.opensearch.ml.common.dataframe;
 import java.io.IOException;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -51,7 +50,7 @@ public class DoubleValueTest {
         doubleValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"column_type\":\"DOUBLE\",\"value\":5.0}", jsonStr);
     }
 }

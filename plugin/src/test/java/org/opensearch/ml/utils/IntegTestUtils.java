@@ -196,7 +196,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
         mlPredictionOutput.getPredictionResult().toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         String expectedStr1 = "{\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}],"
             + "\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}]}";
         String expectedStr2 = "{\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}],"

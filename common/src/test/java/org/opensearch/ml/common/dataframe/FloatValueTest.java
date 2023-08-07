@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -34,7 +33,7 @@ public class FloatValueTest {
         floatValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"column_type\":\"FLOAT\",\"value\":2.1}", jsonStr);
     }
 }

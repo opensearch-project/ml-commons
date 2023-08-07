@@ -59,7 +59,7 @@ public class MLModelGetResponseTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         mlModelGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"name\":\"model\"," +
                 "\"algorithm\":\"KMEANS\"," +
                 "\"model_version\":\"1.0.0\"," +

@@ -128,7 +128,7 @@ public class MLPredictionTaskResponseTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"task_id\":\"b5009b99-268f-476d-a676-379a30f82457\"," +
                 "\"status\":\"Success\"," +
                 "\"prediction_result\":{" +

@@ -14,7 +14,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentType;
@@ -233,7 +232,7 @@ public class DefaultDataFrameTest {
         builder.endObject();
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"column_metas\":[" +
              "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
              "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +

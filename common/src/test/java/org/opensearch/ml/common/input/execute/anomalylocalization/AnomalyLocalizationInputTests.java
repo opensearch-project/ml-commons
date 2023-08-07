@@ -38,7 +38,7 @@ public class AnomalyLocalizationInputTests {
                                 Optional.of(QueryBuilders.matchAllQuery()));
                 XContentBuilder builder = XContentFactory.jsonBuilder();
                 builder = input.toXContent(builder, null);
-                String json = org.opensearch.common.Strings.toString(builder);
+                String json = builder.toString();
 
                 XContentParser parser = XContentType.JSON.xContent()
                                 .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
@@ -56,7 +56,7 @@ public class AnomalyLocalizationInputTests {
                                 "@timestamp", 0L, 10L, 1L, 2, Optional.empty(), Optional.empty());
                 XContentBuilder builder = XContentFactory.jsonBuilder();
                 builder = input.toXContent(builder, null);
-                String json = org.opensearch.common.Strings.toString(builder);
+                String json = builder.toString();
 
                 XContentParser parser = XContentType.JSON.xContent()
                                 .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,

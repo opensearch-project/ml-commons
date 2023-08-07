@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.logging.log4j.Logger;
-import org.opensearch.common.Strings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -39,7 +38,7 @@ public class MLExceptionUtils {
             builder.field(entry.getKey(), entry.getValue());
         }
         builder.endObject();
-        return Strings.toString(builder);
+        return builder.toString();
     }
 
     public static void logException(String errorMessage, Exception e, Logger log) {

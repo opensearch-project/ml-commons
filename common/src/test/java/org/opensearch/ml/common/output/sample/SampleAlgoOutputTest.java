@@ -35,7 +35,7 @@ public class SampleAlgoOutputTest {
     public void toXContent() throws IOException {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"sample_result\":1.0}", jsonStr);
     }
 
@@ -44,7 +44,7 @@ public class SampleAlgoOutputTest {
         SampleAlgoOutput output = SampleAlgoOutput.builder().build();
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{}", jsonStr);
     }
 

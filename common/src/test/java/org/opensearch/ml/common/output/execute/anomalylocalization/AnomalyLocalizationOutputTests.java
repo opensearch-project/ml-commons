@@ -9,7 +9,6 @@ import java.util.Arrays;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -51,7 +50,7 @@ public class AnomalyLocalizationOutputTests {
         builder.startObject();
         builder = output.toXContent(builder, null);
         builder.endObject();
-        String json = Strings.toString(builder);
+        String json = builder.toString();
         XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
         AnomalyLocalizationOutput newOutput = AnomalyLocalizationOutput.parse(parser);
 

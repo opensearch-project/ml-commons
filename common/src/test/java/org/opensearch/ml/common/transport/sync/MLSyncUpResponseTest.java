@@ -46,7 +46,7 @@ public class MLSyncUpResponseTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = org.opensearch.common.Strings.toString(builder);
+        String jsonStr = builder.toString();
         // Verify the results
         assertEquals("{\"status\":\"test\"}", jsonStr);
     }
