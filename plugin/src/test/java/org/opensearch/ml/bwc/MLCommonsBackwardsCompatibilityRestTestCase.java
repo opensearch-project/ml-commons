@@ -61,6 +61,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
+import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -173,7 +174,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
     @After
     protected void wipeAllODFEIndices() throws IOException {
         Response response = adminClient().performRequest(new Request("GET", "/_cat/indices?format=json&expand_wildcards=all"));
-        XContentType xContentType = XContentType.fromMediaType(response.getEntity().getContentType().getValue());
+        MediaType xContentType = MediaType.fromMediaType(response.getEntity().getContentType().getValue());
         try (
             XContentParser parser = xContentType
                 .xContent()

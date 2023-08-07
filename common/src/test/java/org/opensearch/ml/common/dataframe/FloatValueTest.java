@@ -6,9 +6,9 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
@@ -30,11 +30,11 @@ public class FloatValueTest {
     @Test
     public void testToXContent() throws IOException {
         FloatValue floatValue = new FloatValue(2.1f);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         floatValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"column_type\":\"FLOAT\",\"value\":2.1}", jsonStr);
     }
 }

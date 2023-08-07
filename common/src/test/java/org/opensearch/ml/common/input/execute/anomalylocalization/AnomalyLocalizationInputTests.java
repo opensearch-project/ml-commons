@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.Optional;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.NamedWriteableAwareStreamInput;
 import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
@@ -36,7 +35,7 @@ public class AnomalyLocalizationInputTests {
                 Optional.of(QueryBuilders.matchAllQuery()));
         XContentBuilder builder = XContentFactory.jsonBuilder();
         builder = input.toXContent(builder, null);
-        String json = Strings.toString(builder);
+        String json = builder.toString();
 
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, json);
@@ -52,7 +51,7 @@ public class AnomalyLocalizationInputTests {
                 "@timestamp", 0L, 10L, 1L, 2, Optional.empty(), Optional.empty());
         XContentBuilder builder = XContentFactory.jsonBuilder();
         builder = input.toXContent(builder, null);
-        String json = Strings.toString(builder);
+        String json = builder.toString();
 
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, json);
