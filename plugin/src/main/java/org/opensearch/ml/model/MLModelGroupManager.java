@@ -167,7 +167,7 @@ public class MLModelGroupManager {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
-            if (CollectionUtils.isEmpty(user.getBackendRoles())) {
+            if (!modelAccessControlHelper.isAdmin(user) && CollectionUtils.isEmpty(user.getBackendRoles())) {
                 throw new IllegalArgumentException("You must have at least one backend role to register a restricted model group.");
             }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(isAddAllBackendRoles)) {
