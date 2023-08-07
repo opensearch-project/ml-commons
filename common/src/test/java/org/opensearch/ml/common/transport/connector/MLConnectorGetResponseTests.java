@@ -16,10 +16,9 @@ import java.io.UncheckedIOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionResponse;
-import org.opensearch.common.Strings;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -55,10 +54,10 @@ public class MLConnectorGetResponseTests {
     @Test
     public void toXContentTest() throws IOException {
         MLConnectorGetResponse mlConnectorGetResponse = MLConnectorGetResponse.builder().mlConnector(connector).build();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         mlConnectorGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         assertEquals("{\"name\":\"test_connector_name\"," +
                 "\"version\":\"1\",\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
                 "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +

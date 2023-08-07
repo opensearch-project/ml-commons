@@ -6,9 +6,8 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
@@ -29,11 +28,11 @@ public class BooleanValueTest {
     @Test
     public void testToXContent() throws IOException {
         BooleanValue value = new BooleanValue(true);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         value.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         assertEquals("{\"column_type\":\"BOOLEAN\",\"value\":true}", jsonStr);
     }
 }

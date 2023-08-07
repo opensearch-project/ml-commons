@@ -7,11 +7,10 @@ package org.opensearch.ml.common.transport.prediction;
 
 import org.junit.Test;
 import org.opensearch.action.ActionResponse;
-import org.opensearch.common.Strings;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
@@ -120,10 +119,10 @@ public class MLPredictionTaskResponseTest {
             .output(output)
             .build();
 
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         assertEquals("{\"task_id\":\"b5009b99-268f-476d-a676-379a30f82457\"," +
              "\"status\":\"Success\"," +
              "\"prediction_result\":{" +

@@ -6,10 +6,9 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
 
@@ -29,11 +28,11 @@ public class IntValueTest {
     @Test
     public void testToXContent() throws IOException {
         IntValue intValue = new IntValue(2);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         intValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         assertEquals("{\"column_type\":\"INTEGER\",\"value\":2}", jsonStr);
     }
 }

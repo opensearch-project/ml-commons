@@ -14,14 +14,13 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -227,13 +226,13 @@ public class DefaultDataFrameTest {
 
     @Test
     public void testToXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
         defaultDataFrame.toXContent(builder);
         builder.endObject();
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         assertEquals("{\"column_metas\":[" +
              "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
              "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +

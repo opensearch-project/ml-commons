@@ -8,11 +8,10 @@ package org.opensearch.ml.common.dataframe;
 import java.io.IOException;
 
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -47,11 +46,11 @@ public class DoubleValueTest {
     @Test
     public void testToXContent() throws IOException {
         DoubleValue doubleValue = new DoubleValue(5.0D);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         doubleValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         assertEquals("{\"column_type\":\"DOUBLE\",\"value\":5.0}", jsonStr);
     }
 }

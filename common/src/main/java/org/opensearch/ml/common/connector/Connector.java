@@ -19,7 +19,6 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.common.Strings;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -33,6 +32,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.utils.StringUtils;
 
 /**
  * Connector defines how to connect to a remote service.
@@ -93,7 +93,7 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     static Connector createConnector(XContentBuilder builder, String connectorProtocol) throws IOException {
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         return createConnector(jsonStr, connectorProtocol);
     }
 

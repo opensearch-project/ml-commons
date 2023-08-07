@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common;
 
-import org.opensearch.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -15,6 +14,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
 import java.util.function.Function;
@@ -26,7 +26,7 @@ public class TestHelper {
     }
 
     public static <T> void testParse(ToXContentObject obj, Function<XContentParser, T> function, boolean wrapWithObject) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         if (wrapWithObject) {
             builder.startObject();
         }
@@ -34,7 +34,7 @@ public class TestHelper {
         if (wrapWithObject) {
             builder.endObject();
         }
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         testParseFromString(obj, jsonStr, function);
     }
 
@@ -46,7 +46,7 @@ public class TestHelper {
     }
 
     public static String contentObjectToString(ToXContentObject obj) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         obj.toXContent(builder, ToXContent.EMPTY_PARAMS);
         return xContentBuilderToString(builder);
     }

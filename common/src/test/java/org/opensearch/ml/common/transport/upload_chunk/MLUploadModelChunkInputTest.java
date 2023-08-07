@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
@@ -90,7 +90,7 @@ public class MLUploadModelChunkInputTest {
 	public void testMLUploadModelChunkInputParser() throws IOException {
 		XContentBuilder builder = XContentFactory.jsonBuilder();
 		builder = mlUploadModelChunkInput.toXContent(builder, null);
-		String json = Strings.toString(builder);
+		String json = StringUtils.xContentBuilderToString(builder);
 		XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(
 				new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()), null, json);
 		parser.nextToken();

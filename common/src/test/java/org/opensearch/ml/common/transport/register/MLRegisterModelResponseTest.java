@@ -2,10 +2,9 @@ package org.opensearch.ml.common.transport.register;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -43,10 +42,10 @@ public class MLRegisterModelResponseTest {
         // Setup
         MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, status);
         // Run the test
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = StringUtils.xContentBuilderToString(builder);
         // Verify the results
         assertEquals("{\"task_id\":\"test_id\"," +
                 "\"status\":\"test\"}", jsonStr);
