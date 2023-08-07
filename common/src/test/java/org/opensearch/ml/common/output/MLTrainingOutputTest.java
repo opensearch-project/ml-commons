@@ -6,8 +6,6 @@
 package org.opensearch.ml.common.output;
 
 import org.junit.Test;
-
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;

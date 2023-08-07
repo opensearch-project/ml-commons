@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;

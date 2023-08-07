@@ -8,7 +8,6 @@ package org.opensearch.ml.common.dataframe;
 import java.io.IOException;
 
 import org.junit.Test;
-
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;

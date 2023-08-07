@@ -9,7 +9,6 @@ import java.util.Arrays;
 
 import org.junit.Before;
 import org.junit.Test;
-
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
