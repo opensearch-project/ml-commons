@@ -11,6 +11,8 @@ import com.google.gson.JsonParser;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -81,5 +83,9 @@ public class StringUtils {
             }
         }
         return parameters;
+    }
+
+    public static String xContentBuilderToString(XContentBuilder builder) {
+        return BytesReference.bytes(builder).utf8ToString();
     }
 }
