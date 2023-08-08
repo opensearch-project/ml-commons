@@ -21,7 +21,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -144,7 +143,7 @@ public class MLCreateConnectorInputTests {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals(expectedInputStr, jsonStr);
     }
 
@@ -153,7 +152,7 @@ public class MLCreateConnectorInputTests {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateDryRunConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{}", jsonStr);
     }
 

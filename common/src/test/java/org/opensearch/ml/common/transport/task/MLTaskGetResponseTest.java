@@ -2,7 +2,6 @@ package org.opensearch.ml.common.transport.task;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -71,7 +70,7 @@ public class MLTaskGetResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlTaskGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"task_id\":\"id\"," +
                 "\"model_id\":\"model id\"," +
                 "\"task_type\":\"EXECUTION\"," +

@@ -7,7 +7,6 @@ package org.opensearch.ml.common.output.execute.samplecalculator;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -34,7 +33,7 @@ public class LocalSampleCalculatorOutputTest {
         builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"result\":1.0}", jsonStr);
     }
 
@@ -45,7 +44,7 @@ public class LocalSampleCalculatorOutputTest {
         builder.startObject();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{}", jsonStr);
     }
 

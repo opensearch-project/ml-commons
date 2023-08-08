@@ -1,7 +1,6 @@
 package org.opensearch.ml.common.transport.execute;
 
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
@@ -89,7 +88,7 @@ public class MLExecuteTaskResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"function_name\":\"METRICS_CORRELATION\"," +
                 "\"output\":{\"inference_results\":[{" +
                 "\"event_window\":[4.0,5.0,6.0]," +

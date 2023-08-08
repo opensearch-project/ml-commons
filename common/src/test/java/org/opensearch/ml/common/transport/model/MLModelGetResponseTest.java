@@ -16,7 +16,6 @@ import java.io.UncheckedIOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionResponse;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -63,7 +62,7 @@ public class MLModelGetResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlModelGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"name\":\"model\"," +
                 "\"algorithm\":\"KMEANS\"," +
                 "\"model_version\":\"1.0.0\"," +

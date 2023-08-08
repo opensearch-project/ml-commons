@@ -32,7 +32,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.utils.StringUtils;
 
 /**
  * Connector defines how to connect to a remote service.
@@ -93,7 +92,7 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     static Connector createConnector(XContentBuilder builder, String connectorProtocol) throws IOException {
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         return createConnector(jsonStr, connectorProtocol);
     }
 

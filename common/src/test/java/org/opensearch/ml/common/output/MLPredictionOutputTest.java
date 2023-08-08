@@ -7,7 +7,6 @@ package org.opensearch.ml.common.output;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -47,7 +46,7 @@ public class MLPredictionOutputTest {
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"prediction_result\":" +
                 "{\"column_metas\":[{\"name\":\"test\",\"column_type\":\"INTEGER\"}],\"rows\":[{\"values\":" +
                 "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\"," +
@@ -59,7 +58,7 @@ public class MLPredictionOutputTest {
         MLPredictionOutput output = MLPredictionOutput.builder().build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{}", jsonStr);
     }
 

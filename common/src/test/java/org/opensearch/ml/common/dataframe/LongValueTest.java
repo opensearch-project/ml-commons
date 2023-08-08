@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.dataframe;
 
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -32,7 +31,7 @@ public class LongValueTest {
         longValue.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"column_type\":\"LONG\",\"value\":2}", jsonStr);
     }
 }

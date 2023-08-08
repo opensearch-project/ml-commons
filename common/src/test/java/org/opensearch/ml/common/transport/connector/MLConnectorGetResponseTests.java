@@ -16,7 +16,6 @@ import java.io.UncheckedIOException;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionResponse;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -57,7 +56,7 @@ public class MLConnectorGetResponseTests {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlConnectorGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"name\":\"test_connector_name\"," +
                 "\"version\":\"1\",\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
                 "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +

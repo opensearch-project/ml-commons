@@ -6,7 +6,6 @@
 package org.opensearch.ml.common.output;
 
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -22,7 +21,7 @@ public class MLTrainingOutputTest {
                 .modelId("test_modelId").status("test_status").build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"model_id\":\"test_modelId\",\"status\":\"test_status\"}", jsonStr);
     }
 }

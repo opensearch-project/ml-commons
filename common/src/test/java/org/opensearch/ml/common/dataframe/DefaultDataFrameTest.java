@@ -20,7 +20,6 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.utils.StringUtils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -232,7 +231,7 @@ public class DefaultDataFrameTest {
         builder.endObject();
 
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"column_metas\":[" +
              "{\"name\":\"c1\",\"column_type\":\"STRING\"}," +
              "{\"name\":\"c2\",\"column_type\":\"INTEGER\"}," +

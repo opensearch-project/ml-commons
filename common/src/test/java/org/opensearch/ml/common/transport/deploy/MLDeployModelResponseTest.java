@@ -2,7 +2,6 @@ package org.opensearch.ml.common.transport.deploy;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.ToXContent;
@@ -45,7 +44,7 @@ public class MLDeployModelResponseTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
-        String jsonStr = StringUtils.xContentBuilderToString(builder);
+        String jsonStr = builder.toString();
         // Verify the results
         assertEquals("{\"task_id\":\"test_id\"," +
                 "\"status\":\"test\"}", jsonStr);
