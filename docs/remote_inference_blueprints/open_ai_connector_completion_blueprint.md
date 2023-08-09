@@ -5,9 +5,9 @@
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-    "name": "<YOUR MODEL NAME>",
-    "description": "<YOUR MODEL DESCRIPTION>",
-    "version": "<YOUR MODEL VERSION>",
+    "name": "<YOUR CONNECTOR NAME>",
+    "description": "<YOUR CONNECTOR DESCRIPTION>",
+    "version": "<YOUR CONNECTOR VERSION>",
     "protocol": "http",
     "parameters": {
         "endpoint": "api.openai.com",
