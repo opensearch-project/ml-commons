@@ -94,6 +94,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
@@ -688,8 +689,10 @@ public class MLModelManager {
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
-        mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
+        if (!(e instanceof MLLimitExceededException) && !(e instanceof MLResourceNotFoundException)) {
+            mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
+        }
         Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
@@ -824,20 +827,23 @@ public class MLModelManager {
                     }
                 }, e -> {
                     log.error("Failed to retrieve model " + modelId, e);
-                    handleDeployModelException(modelId, functionName, listener, e);
+                    handleDeployModelException(modelId, functionName, listener, e, false);
                 }));
             }, e -> {
                 log.error("Failed to deploy model " + modelId, e);
-                handleDeployModelException(modelId, functionName, listener, e);
+                handleDeployModelException(modelId, functionName, listener, e, false);
             })));
         } catch (Exception e) {
-            handleDeployModelException(modelId, functionName, listener, e);
+            handleDeployModelException(modelId, functionName, listener, e, true);
         }
     }
 
     private void handleDeployModelException(String modelId, FunctionName functionName, ActionListener<String> listener, Exception e) {
-        mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
+
+        if (!(e instanceof MLLimitExceededException) && !(e instanceof MLResourceNotFoundException)) {
+            mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
+        }
         removeModel(modelId);
         listener.onFailure(e);
     }
@@ -860,7 +866,7 @@ public class MLModelManager {
     }
 
     /**
-     * Get model from model index with includes/exludes filter.
+     * Get model from model index with includes/excludes filter.
      *
      * @param modelId  model id
      * @param includes fields included
