@@ -9,11 +9,9 @@ import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.common.transport.TransportAddress;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -76,9 +74,9 @@ public class MLDeployModelNodesResponseTest {
 
         List<FailedNodeException> failures = new ArrayList<>();
         MLDeployModelNodesResponse response = new MLDeployModelNodesResponse(clusterName, nodes, failures);
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals(
                 "{\"foo1\":{\"stats\":{\"modelName:version1\":\"response\"}},\"foo2\":{\"stats\":{\"modelName:version2\":\"response\"}}}",
                 jsonStr

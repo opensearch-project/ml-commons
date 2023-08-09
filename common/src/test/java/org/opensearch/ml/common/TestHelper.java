@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common;
 
-import org.opensearch.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -26,7 +25,7 @@ public class TestHelper {
     }
 
     public static <T> void testParse(ToXContentObject obj, Function<XContentParser, T> function, boolean wrapWithObject) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         if (wrapWithObject) {
             builder.startObject();
         }
@@ -34,7 +33,7 @@ public class TestHelper {
         if (wrapWithObject) {
             builder.endObject();
         }
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         testParseFromString(obj, jsonStr, function);
     }
 
@@ -46,7 +45,7 @@ public class TestHelper {
     }
 
     public static String contentObjectToString(ToXContentObject obj) throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         obj.toXContent(builder, ToXContent.EMPTY_PARAMS);
         return xContentBuilderToString(builder);
     }

@@ -7,10 +7,8 @@ package org.opensearch.ml.common.dataframe;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
@@ -51,11 +49,11 @@ public class ColumnMetaTest {
 
     @Test
     public void testToXContent() throws IOException {
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         columnMeta.toXContent(builder);
 
         assertNotNull(builder);
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         assertEquals("{\"name\":\"columnMetaName\",\"column_type\":\"STRING\"}", jsonStr);
     }
 

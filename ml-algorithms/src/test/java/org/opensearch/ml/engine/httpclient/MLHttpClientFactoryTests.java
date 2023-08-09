@@ -11,11 +11,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 
 public class MLHttpClientFactoryTests {
 
@@ -48,7 +46,7 @@ public class MLHttpClientFactoryTests {
     @Test
     public void test_validateIp_rarePrivateIp_throwException() throws UnknownHostException {
         try {
-            MLHttpClientFactory.validateIp("0254.020.00.01");
+            MLHttpClientFactory.validateIp("0177.1");
         } catch (IllegalArgumentException e) {
             assertNotNull(e);
         }

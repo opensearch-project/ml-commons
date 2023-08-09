@@ -22,7 +22,6 @@ import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
-import org.opensearch.common.Strings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -189,12 +188,12 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
-        XContentBuilder builder = XContentFactory.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
         mlPredictionOutput.getPredictionResult().toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         String expectedStr1 = "{\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}],"
             + "\"rows\":[{\"values\":[{\"column_type\":\"INTEGER\",\"value\":0}]}]}";
         String expectedStr2 = "{\"column_metas\":[{\"name\":\"ClusterID\",\"column_type\":\"INTEGER\"}],"
