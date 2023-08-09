@@ -827,14 +827,14 @@ public class MLModelManager {
                     }
                 }, e -> {
                     log.error("Failed to retrieve model " + modelId, e);
-                    handleDeployModelException(modelId, functionName, listener, e, false);
+                    handleDeployModelException(modelId, functionName, listener, e);
                 }));
             }, e -> {
                 log.error("Failed to deploy model " + modelId, e);
-                handleDeployModelException(modelId, functionName, listener, e, false);
+                handleDeployModelException(modelId, functionName, listener, e);
             })));
         } catch (Exception e) {
-            handleDeployModelException(modelId, functionName, listener, e, true);
+            handleDeployModelException(modelId, functionName, listener, e);
         }
     }
 
