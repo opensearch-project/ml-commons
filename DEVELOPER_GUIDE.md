@@ -59,7 +59,7 @@ Fork ml-commons by clicking the "Fork" button at the top of the [GitHub reposito
 Clone your forked version of ml-commons to your local machine (replace `opensearch-project` in the command below with your GitHub username):
 
 ```bash
-$ git clone git@github.com:opensearch-project/opensearch-py-ml.git
+$ git clone git@github.com:opensearch-project/ml-commons.git
 ```
 
 ### Run OpenSearch
