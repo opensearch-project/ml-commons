@@ -1,0 +1,72 @@
+---
+"Test adding and getting back conversations":
+
+  - do:
+      _plugins.conversational_create_conversation: 
+        body: null
+  
+  - do: 
+      _plugins.conversational_create_conversation:
+        body: 
+          name: TEST
+  
+  - do:
+      _plugins.conversational_get_conversations:
+        params: null
+  
+  - match:
+      $body.conversations.0.conversationId: /.{10,}/
+
+  - match:
+      $body.conversations.1.conversationId: /.{10,}/
+
+  - match:
+      $body.conversations.0.numInteractions: 0
+
+  - match:
+      $body.conversations.1.numInteractions: 0
+
+  - match:
+      $body.conversations.0.name: TEST 
+
+  - match:
+      $body.conversations.1.name: /^$/
+
+---
+"Test paginations":
+    - do: 
+        _plugins.conversational_create_conversation:
+            body:
+                name: C1
+    
+    - do:
+        _plugins.conversational_create_conversation:
+            body:
+                name: C2
+    
+    - do:
+        _plugins.conversational_create_conversation:
+            body:
+                name: C3
+    
+    - do:
+        _plugins.conversational_get_conversations:
+            maxResults: 2
+
+    - match:
+        $body.conversations.0.name: C3
+    
+    - match:
+        $body.conversations.1.name: C2
+
+    - match:
+        $body.nextToken: 2
+    
+    - do:
+        _plugins.conversational_get_conversations:
+            maxResults: 2
+            nextToken: 2
+    
+    - match:
+        $body.conversations.0.name: C1
+

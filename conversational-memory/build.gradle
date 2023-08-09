@@ -1,0 +1,41 @@
+/*
+ * Copyright Aryn, Inc 2023
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+plugins {
+    id 'java'
+    id "io.freefair.lombok"
+}
+
+dependencies {
+    implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
+    implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: '5.2.1'
+    implementation "org.opensearch:common-utils:${common_utils_version}"
+    testImplementation (group: 'junit', name: 'junit', version: '4.13.2') {
+        exclude module : 'hamcrest'
+        exclude module : 'hamcrest-core'
+    }
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
+    testImplementation "org.opensearch.test:framework:${opensearch_version}"
+    testImplementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
+}
+
+test {
+    include "**/*Tests.class"
+    jvmArgs '-Dtests.security.manager=false'
+    //testLogging.showStandardStreams = true
+}
