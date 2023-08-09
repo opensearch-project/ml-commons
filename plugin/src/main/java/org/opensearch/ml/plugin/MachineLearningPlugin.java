@@ -167,10 +167,18 @@ import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
+import org.opensearch.plugins.SearchPipelinePlugin;
+import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
+import org.opensearch.search.pipeline.Processor;
+import org.opensearch.search.pipeline.SearchRequestProcessor;
+import org.opensearch.search.pipeline.SearchResponseProcessor;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAParamExtBuilder;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQARequestProcessor;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAResponseProcessor;
 import org.opensearch.threadpool.ExecutorBuilder;
 import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
@@ -180,7 +188,7 @@ import com.google.common.collect.ImmutableList;
 
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin {
+public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -609,5 +617,27 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
             );
         return settings;
+    }
+
+    @Override
+    public List<SearchPlugin.SearchExtSpec<?>> getSearchExts() {
+        return List
+            .of(
+                new SearchPlugin.SearchExtSpec<>(
+                    GenerativeQAParamExtBuilder.NAME,
+                    input -> new GenerativeQAParamExtBuilder(input),
+                    parser -> GenerativeQAParamExtBuilder.parse(parser)
+                )
+            );
+    }
+
+    @Override
+    public Map<String, Processor.Factory<SearchRequestProcessor>> getRequestProcessors(Parameters parameters) {
+        return Map.of(GenerativeQARequestProcessor.TYPE, new GenerativeQARequestProcessor.Factory());
+    }
+
+    @Override
+    public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
+        return Map.of(GenerativeQAResponseProcessor.TYPE, new GenerativeQAResponseProcessor.Factory(this.client));
     }
 }

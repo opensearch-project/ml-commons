@@ -13,4 +13,6 @@ include 'plugin'
 project(":plugin").name = rootProject.name + "-plugin"
 include 'ml-algorithms'
 project(":ml-algorithms").name = rootProject.name + "-algorithms"
+include 'search-processors'
+project(":search-processors").name = rootProject.name + "-search-processors"
 
