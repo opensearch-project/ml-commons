@@ -110,6 +110,23 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
+import org.opensearch.ml.conversational.ConversationalMemoryHandler;
+import org.opensearch.ml.conversational.action.memory.conversation.CreateConversationAction;
+import org.opensearch.ml.conversational.action.memory.conversation.CreateConversationRestAction;
+import org.opensearch.ml.conversational.action.memory.conversation.CreateConversationTransportAction;
+import org.opensearch.ml.conversational.action.memory.conversation.DeleteConversationAction;
+import org.opensearch.ml.conversational.action.memory.conversation.DeleteConversationRestAction;
+import org.opensearch.ml.conversational.action.memory.conversation.DeleteConversationTransportAction;
+import org.opensearch.ml.conversational.action.memory.conversation.GetConversationsAction;
+import org.opensearch.ml.conversational.action.memory.conversation.GetConversationsRestAction;
+import org.opensearch.ml.conversational.action.memory.conversation.GetConversationsTransportAction;
+import org.opensearch.ml.conversational.action.memory.interaction.CreateInteractionAction;
+import org.opensearch.ml.conversational.action.memory.interaction.CreateInteractionRestAction;
+import org.opensearch.ml.conversational.action.memory.interaction.CreateInteractionTransportAction;
+import org.opensearch.ml.conversational.action.memory.interaction.GetInteractionsAction;
+import org.opensearch.ml.conversational.action.memory.interaction.GetInteractionsRestAction;
+import org.opensearch.ml.conversational.action.memory.interaction.GetInteractionsTransportAction;
+import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
@@ -219,6 +236,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    private ConversationalMemoryHandler cmHandler;
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -251,7 +270,13 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
-                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class)
+                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
+
+                new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
+                new ActionHandler<>(GetConversationsAction.INSTANCE, GetConversationsTransportAction.class),
+                new ActionHandler<>(CreateInteractionAction.INSTANCE, CreateInteractionTransportAction.class),
+                new ActionHandler<>(GetInteractionsAction.INSTANCE, GetInteractionsTransportAction.class),
+                new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class)
             );
     }
 
@@ -284,6 +309,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
+        cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
@@ -438,7 +464,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
-                mlModelAutoRedeployer
+                mlModelAutoRedeployer,
+                cmHandler
             );
     }
 
@@ -477,6 +504,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
+
+        CreateConversationRestAction restCreateConversationAction = new CreateConversationRestAction();
+        GetConversationsRestAction restListConversationsAction = new GetConversationsRestAction();
+        CreateInteractionRestAction restCreateInteractionAction = new CreateInteractionRestAction();
+        GetInteractionsRestAction restListInteractionsAction = new GetInteractionsRestAction();
+        DeleteConversationRestAction restDeleteConversationAction = new DeleteConversationRestAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -503,7 +536,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLCreateConnectorAction,
                 restMLGetConnectorAction,
                 restMLDeleteConnectorAction,
-                restMLSearchConnectorAction
+                restMLSearchConnectorAction,
+                restCreateConversationAction,
+                restListConversationsAction,
+                restCreateInteractionAction,
+                restListInteractionsAction,
+                restDeleteConversationAction
             );
     }
 

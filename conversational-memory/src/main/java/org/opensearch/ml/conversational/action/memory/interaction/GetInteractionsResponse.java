@@ -20,8 +20,8 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.action.ActionResponse;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.conversational.action.ActionConstants;
 import org.opensearch.ml.conversational.index.Interaction;
 import org.opensearch.core.xcontent.ToXContent;
