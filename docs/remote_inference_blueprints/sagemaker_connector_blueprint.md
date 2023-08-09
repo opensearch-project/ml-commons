@@ -3,9 +3,9 @@
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-  "name": "<YOUR MODEL NAME>",
-  "description": "<YOUR MODEL DESCRIPTION>",
-  "version": "<YOUR MODEL VERSION>",
+  "name": "<YOUR CONNECTOR NAME>",
+  "description": "<YOUR CONNECTOR DESCRIPTION>",
+  "version": "<YOUR CONNECTOR VERSION>",
   "protocol": "aws_sigv4",
   "credential": {
     "access_key": "<PLEASE ADD YOUR AWS ACCESS KEY HERE>",
