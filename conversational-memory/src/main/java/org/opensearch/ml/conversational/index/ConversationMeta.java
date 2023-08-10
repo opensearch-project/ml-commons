@@ -220,7 +220,7 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
         ConversationMeta otherconversation = (ConversationMeta) other;
         if(! otherconversation.id.equals(this.id)) {
             return false;
-        } if(! otherconversation.user.equals(this.user)) {
+        } if(! (otherconversation.user == this.user || otherconversation.user.equals(this.user))) {
             return false; 
         } if(! otherconversation.created.equals(this.created)) {
             return false;
@@ -228,7 +228,7 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
             return false;
         } if(otherconversation.numInteractions != this.numInteractions) {
             return false;
-        } return otherconversation.name.equals(this.name);
+        } return otherconversation.name == this.name || otherconversation.name.equals(this.name);
     }
     
 }
