@@ -111,7 +111,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
      * @return
      */
     @Deprecated
-    private SearchResponse insertNewSearchHit(SearchResponse response, SearchHit hit) {
+    SearchResponse insertNewSearchHit(SearchResponse response, SearchHit hit) {
         SearchResponse newResponse = null;
 
         SearchResponseSections internal = response.getInternalResponse();
@@ -149,6 +149,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             Object context = docSourceMap.get(contextField);
             if (context == null) {
                 logger.error("Context " + contextField + " not found in search hit " + hit);
+                // TODO throw a more meaningful error here?
                 throw new RuntimeException();
             }
             searchResults.add(context.toString());

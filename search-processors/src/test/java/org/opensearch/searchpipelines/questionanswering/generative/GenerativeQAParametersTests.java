@@ -1,9 +1,12 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class GenerativeQAParametersTests extends OpenSearchTestCase {
@@ -16,5 +19,57 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         SearchRequest request = new SearchRequest("my_index").source(srcBulder);
         GenerativeQAParameters actual = GenerativeQAParamUtil.getGenerativeQAParameters(request);
         assertEquals(params, actual);
+    }
+
+    static class DummyStreamOutput extends StreamOutput {
+
+        List<String> list = new ArrayList<>();
+
+        @Override
+        public void writeString(String str) {
+            list.add(str);
+        }
+
+        public List<String> getList() {
+            return list;
+        }
+
+        @Override
+        public void writeByte(byte b) throws IOException {
+
+        }
+
+        @Override
+        public void writeBytes(byte[] b, int offset, int length) throws IOException {
+
+        }
+
+        @Override
+        public void flush() throws IOException {
+
+        }
+
+        @Override
+        public void close() throws IOException {
+
+        }
+
+        @Override
+        public void reset() throws IOException {
+
+        }
+    }
+    public void testWriteTo() throws IOException {
+        String conversationId = "a";
+        String llmModel = "b";
+        String llmQuestion = "c";
+        GenerativeQAParameters parameters = new GenerativeQAParameters(conversationId, llmModel, llmQuestion);
+        StreamOutput output = new DummyStreamOutput();
+        parameters.writeTo(output);
+        List<String> actual = ((DummyStreamOutput) output).getList();
+        assertEquals(3, actual.size());
+        assertEquals(conversationId, actual.get(0));
+        assertEquals(llmModel, actual.get(1));
+        assertEquals(llmQuestion, actual.get(2));
     }
 }

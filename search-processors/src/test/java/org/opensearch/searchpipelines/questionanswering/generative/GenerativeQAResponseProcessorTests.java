@@ -40,6 +40,49 @@ public class GenerativeQAResponseProcessorTests  extends OpenSearchTestCase {
         assertNotNull(processor);
     }
 
+    public void testProcessResponseNoSearchHits() throws Exception {
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put("opensearch_model_id", "dummy-model");
+        config.put("context_field", "text");
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
+            .create(null, "tag", "desc", true, config, null);
+
+        SearchRequest request = new SearchRequest(); // mock(SearchRequest.class);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder(); // mock(SearchSourceBuilder.class);
+        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.");
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(params);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 10;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
+
+        Llm llm = mock(Llm.class);
+        ChatCompletionOutput output = mock(ChatCompletionOutput.class);
+        when(llm.createChatCompletion(any())).thenReturn(output);
+        when(output.getAnswer()).thenReturn("foo");
+        processor.setLlm(llm);
+
+        ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
+        boolean errorThrown = false;
+        try {
+            SearchResponse res = processor.processResponse(request, response);
+        } catch (Exception e) {
+            errorThrown = true;
+        }
+        assertTrue(errorThrown);
+    }
+
     public void testProcessResponse() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
@@ -89,5 +132,52 @@ public class GenerativeQAResponseProcessorTests  extends OpenSearchTestCase {
         assertEquals("passage0", passages.get(0));
         assertEquals("passage1", passages.get(1));
         assertTrue(res instanceof GenerativeSearchResponse);
+    }
+
+    public void testInsertIntoSearchHits() throws Exception {
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put("opensearch_model_id", "dummy-model");
+        config.put("context_field", "text");
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
+            .create(null, "tag", "desc", true, config, null);
+
+        SearchRequest request = new SearchRequest(); // mock(SearchRequest.class);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder(); // mock(SearchSourceBuilder.class);
+        GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.");
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(params);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 10;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            XContentBuilder sourceContent = JsonXContent.contentBuilder()
+                .startObject()
+                .field("_id", String.valueOf(i))
+                .field("text", "passage" + i)
+                .field("title", "This is the title for document " + i)
+                .endObject();
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+            hitsArray[i].sourceRef(BytesReference.bytes(sourceContent));
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
+
+        XContentBuilder sourceContent = JsonXContent.contentBuilder()
+            .startObject()
+            .field("_id", String.valueOf(10))
+            .field("text", "passage" + 10)
+            .field("title", "This is the title for document " + 10)
+            .endObject();
+        SearchHit answerHit = new SearchHit(10, "doc10", Map.of(), Map.of());
+        answerHit.sourceRef(BytesReference.bytes(sourceContent));
+
+        SearchResponse res = processor.insertNewSearchHit(response, answerHit);
+        assertEquals(11, res.getHits().getHits().length);
     }
 }
