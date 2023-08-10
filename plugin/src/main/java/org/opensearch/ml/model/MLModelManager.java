@@ -689,7 +689,8 @@ public class MLModelManager {
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {
-        if (!(e instanceof MLLimitExceededException) && !(e instanceof MLResourceNotFoundException)) {
+        if (!(e instanceof MLLimitExceededException) && !(e instanceof MLResourceNotFoundException) &&
+                !(e instanceof IllegalArgumentException)) {
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
         }
@@ -840,7 +841,8 @@ public class MLModelManager {
 
     private void handleDeployModelException(String modelId, FunctionName functionName, ActionListener<String> listener, Exception e) {
 
-        if (!(e instanceof MLLimitExceededException) && !(e instanceof MLResourceNotFoundException)) {
+        if (!(e instanceof MLLimitExceededException) && !(e instanceof MLResourceNotFoundException) &&
+                !(e instanceof IllegalArgumentException)) {
             mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
             mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
         }
