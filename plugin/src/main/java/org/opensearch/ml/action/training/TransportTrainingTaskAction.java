@@ -39,6 +39,6 @@ public class TransportTrainingTaskAction extends HandledTransportAction<ActionRe
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLTrainingTaskRequest trainingRequest = MLTrainingTaskRequest.fromActionRequest(request);
-        mlTrainingTaskRunner.run(trainingRequest, transportService, listener);
+        mlTrainingTaskRunner.run(trainingRequest.getMlInput().getFunctionName(), trainingRequest, transportService, listener);
     }
 }

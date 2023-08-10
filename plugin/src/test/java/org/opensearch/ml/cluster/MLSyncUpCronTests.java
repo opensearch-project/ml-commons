@@ -62,6 +62,7 @@ import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -439,6 +440,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         XContentBuilder content = TestHelper.builder();
         content.startObject();
         content.field(MLModel.MODEL_STATE_FIELD, state);
+        content.field(MLModel.ALGORITHM_FIELD, FunctionName.KMEANS);
         content.field(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, planningWorkerNodeCount);
         if (currentWorkerNodeCount != null) {
             content.field(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkerNodeCount);

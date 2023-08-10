@@ -24,6 +24,7 @@ import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 
 import com.google.common.collect.ImmutableSet;
@@ -60,13 +61,14 @@ public class MLTaskDispatcher {
 
     /**
      * Dispatch task to target node.
+     * @param functionName function name
      * @param actionListener action listener
      */
-    public void dispatch(ActionListener<DiscoveryNode> actionListener) {
+    public void dispatch(FunctionName functionName, ActionListener<DiscoveryNode> actionListener) {
         if (ROUND_ROBIN.equals(dispatchPolicy)) {
-            dispatchTaskWithRoundRobin(actionListener);
+            dispatchTaskWithRoundRobin(functionName, actionListener);
         } else if (LEAST_LOAD.equals(dispatchPolicy)) {
-            dispatchTaskWithLeastLoad(actionListener);
+            dispatchTaskWithLeastLoad(functionName, actionListener);
         } else {
             throw new IllegalArgumentException("Unknown policy");
         }
@@ -158,13 +160,13 @@ public class MLTaskDispatcher {
         }));
     }
 
-    private void dispatchTaskWithLeastLoad(ActionListener<DiscoveryNode> listener) {
-        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+    private void dispatchTaskWithLeastLoad(FunctionName functionName, ActionListener<DiscoveryNode> listener) {
+        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
         dispatchTaskWithLeastLoad(eligibleNodes, listener);
     }
 
-    private void dispatchTaskWithRoundRobin(ActionListener<DiscoveryNode> listener) {
-        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+    private void dispatchTaskWithRoundRobin(FunctionName functionName, ActionListener<DiscoveryNode> listener) {
+        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
         if (eligibleNodes == null || eligibleNodes.length == 0) {
             throw new IllegalArgumentException(
                 "No eligible node found to execute this request. It's best practice to"

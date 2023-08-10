@@ -28,6 +28,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -116,26 +117,26 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
             switch (requestType) {
                 case DEPLOY_MODEL_DONE:
                     Set<String> workNodes = mlTaskManager.getWorkNodes(taskId);
+                    MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
+                    FunctionName functionName = mlTaskCache.getMlTask().getFunctionName();
                     if (workNodes != null) {
                         workNodes.remove(workerNodeId);
                     }
-
                     if (error != null) {
                         mlTaskManager.addNodeError(taskId, workerNodeId, error);
                     } else {
                         mlModelManager.addModelWorkerNode(modelId, workerNodeId);
-                        syncModelWorkerNodes(modelId);
+                        syncModelWorkerNodes(modelId, functionName);
                     }
 
                     if (workNodes == null || workNodes.size() == 0) {
-                        MLTaskCache mlTaskCache = mlTaskManager.getMLTaskCache(taskId);
                         int currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
                         MLTaskState taskState = mlTaskCache.hasError() ? MLTaskState.COMPLETED_WITH_ERROR : MLTaskState.COMPLETED;
                         if (mlTaskCache.allNodeFailed()) {
                             taskState = MLTaskState.FAILED;
                             currentWorkerNodeCount = 0;
                         } else {
-                            syncModelWorkerNodes(modelId);
+                            syncModelWorkerNodes(modelId, functionName);
                         }
                         ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
                         builder.put(MLTask.STATE_FIELD, taskState);
@@ -196,9 +197,9 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         return false;
     }
 
-    private void syncModelWorkerNodes(String modelId) {
+    private void syncModelWorkerNodes(String modelId, FunctionName functionName) {
         DiscoveryNode[] allNodes = nodeHelper.getAllNodes();
-        String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+        String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName);
         if (allNodes.length > 1 && workerNodes != null && workerNodes.length > 0) {
             log.debug("Sync to other nodes about worker nodes of model {}: {}", modelId, Arrays.toString(workerNodes));
             MLSyncUpInput syncUpInput = MLSyncUpInput.builder().addedWorkerNodes(ImmutableMap.of(modelId, workerNodes)).build();

@@ -41,6 +41,7 @@ import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.action.stats.MLStatsNodesResponse;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.test.OpenSearchTestCase;
 
@@ -96,7 +97,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     @Ignore
     public void testDispatchTask_Success() {
-        taskDispatcher.dispatch(listener);
+        taskDispatcher.dispatch(FunctionName.REMOTE, listener);
         verify(client).execute(any(MLStatsNodesAction.class), any(MLStatsNodesRequest.class), any());
         verify(listener).onResponse(any());
     }
@@ -104,7 +105,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
     @Ignore
     public void testDispatchTask_NullPointerException() {
         mlStatsNodesResponse = getNodesResponse_NoTaskCounts();
-        taskDispatcher.dispatch(listener);
+        taskDispatcher.dispatch(FunctionName.REMOTE, listener);
         verify(client).execute(any(MLStatsNodesAction.class), any(MLStatsNodesRequest.class), any());
         verify(listener).onFailure(any(NullPointerException.class));
     }
@@ -112,7 +113,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
     @Ignore
     public void testDispatchTask_MemoryExceedLimit() {
         mlStatsNodesResponse = getNodesResponse_MemoryExceedLimits();
-        taskDispatcher.dispatch(listener);
+        taskDispatcher.dispatch(FunctionName.REMOTE, listener);
         verify(client).execute(any(MLStatsNodesAction.class), any(MLStatsNodesRequest.class), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -125,7 +126,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
     @Ignore
     public void testDispatchTask_TaskCountExceedLimit() {
         mlStatsNodesResponse = getNodesResponse_TaskCountExceedLimits();
-        taskDispatcher.dispatch(listener);
+        taskDispatcher.dispatch(FunctionName.REMOTE, listener);
         verify(client).execute(any(MLStatsNodesAction.class), any(MLStatsNodesRequest.class), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -135,7 +136,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     @Ignore
     public void testGetEligibleNodes_DataNodeOnly() {
-        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(FunctionName.REMOTE);
         assertEquals(2, eligibleNodes.length);
         for (DiscoveryNode node : eligibleNodes) {
             assertTrue(node.isDataNode());
@@ -148,7 +149,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
         testState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
         when(clusterService.state()).thenReturn(testState);
 
-        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(FunctionName.REMOTE);
         assertEquals(1, eligibleNodes.length);
         for (DiscoveryNode node : eligibleNodes) {
             assertFalse(node.isDataNode());
