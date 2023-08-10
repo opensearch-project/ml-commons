@@ -128,6 +128,22 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /**
+     * Per PM's suggestion, remote model should be able to run on data or ML node by default.
+     * But we should also keep local model run on ML node by default. So we still keep
+     * "plugins.ml_commons.only_run_on_ml_node" as true, but only control local model.
+     * Add more setting to provide granular level control on remote and local model.
+     *
+     * 1. Add "plugins.ml_commons.task_dispatcher.eligible_node_role.remote_model" which controls
+     * only remote model can run on which node. Default value is ["data", "ml"] which means the
+     * remote model can run on data node and ML node by default.
+     * 2. Add "plugins.ml_commons.task_dispatcher.eligible_node_role.local_model" which controls
+     * only remote model can run on which node. But we have "plugins.ml_commons.only_run_on_ml_node"
+     * which controls the model can only run on ML node or not.
+     * To provide BWC, for local model, 1/ if plugins.ml_commons.only_run_on_ml_node is true, we
+     * will always run it on ML node. 2/ if plugins.ml_commons.only_run_on_ml_node is false, will
+     * run model on nodes defined in plugins.ml_commons.task_dispatcher.eligible_node_role.local_model.
+     */
     public static final Setting<List<String>> ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES = Setting
         .listSetting(
             "plugins.ml_commons.task_dispatcher.eligible_node_role.remote_model",
