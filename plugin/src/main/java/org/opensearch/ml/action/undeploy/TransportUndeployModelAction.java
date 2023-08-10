@@ -30,6 +30,7 @@ import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -238,7 +239,8 @@ public class TransportUndeployModelAction extends
         String[] removedModelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
         if (removedModelIds != null) {
             for (String modelId : removedModelIds) {
-                String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+                FunctionName functionName = mlModelManager.getModelFunctionName(modelId);
+                String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName);
                 modelWorkerNodesMap.put(modelId, workerNodes);
             }
         }

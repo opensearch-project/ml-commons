@@ -10,6 +10,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -42,6 +43,7 @@ public class TransportExecuteTaskAction extends HandledTransportAction<ActionReq
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLExecuteTaskResponse> listener) {
         MLExecuteTaskRequest mlPredictionTaskRequest = MLExecuteTaskRequest.fromActionRequest(request);
-        mlExecuteTaskRunner.run(mlPredictionTaskRequest, transportService, listener);
+        FunctionName functionName = mlPredictionTaskRequest.getFunctionName();
+        mlExecuteTaskRunner.run(functionName, mlPredictionTaskRequest, transportService, listener);
     }
 }

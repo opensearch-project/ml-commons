@@ -662,19 +662,19 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testGetWorkerNodes() {
         String[] nodes = new String[] { "node1", "node2" };
         when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
-        String[] workerNodes = modelManager.getWorkerNodes(modelId);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId, FunctionName.REMOTE);
         assertArrayEquals(nodes, workerNodes);
     }
 
     public void testGetWorkerNodes_Null() {
         when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(null);
-        String[] workerNodes = modelManager.getWorkerNodes(modelId);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId, FunctionName.REMOTE);
         assertNull(workerNodes);
     }
 
     public void testGetWorkerNodes_EmptyNodes() {
         when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(new String[] {});
-        String[] workerNodes = modelManager.getWorkerNodes(modelId);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId, FunctionName.REMOTE);
         assertEquals(0, workerNodes.length);
     }
 
@@ -683,8 +683,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
 
         String[] eligibleNodes = new String[] { "node1" };
-        when(nodeHelper.filterEligibleNodes(any())).thenReturn(eligibleNodes);
-        String[] workerNodes = modelManager.getWorkerNodes(modelId, true);
+        when(nodeHelper.filterEligibleNodes(any(), any())).thenReturn(eligibleNodes);
+        String[] workerNodes = modelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
         assertArrayEquals(eligibleNodes, workerNodes);
     }
 
@@ -694,8 +694,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         String[] nodes = new String[] { "node1", "node2" };
         when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
 
-        when(nodeHelper.filterEligibleNodes(any())).thenReturn(null);
-        modelManager.getWorkerNodes(modelId, true);
+        when(nodeHelper.filterEligibleNodes(any(), any())).thenReturn(null);
+        modelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
     }
 
     public void testGetWorkerNodes_FilterEligibleNodes_Empty() {
@@ -704,8 +704,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         String[] nodes = new String[] { "node1", "node2" };
         when(modelCacheHelper.getWorkerNodes(anyString())).thenReturn(nodes);
 
-        when(nodeHelper.filterEligibleNodes(any())).thenReturn(new String[] {});
-        modelManager.getWorkerNodes(modelId, true);
+        when(nodeHelper.filterEligibleNodes(any(), any())).thenReturn(new String[] {});
+        modelManager.getWorkerNodes(modelId, FunctionName.REMOTE, true);
     }
 
     public void test_addModelWorkerNodes_success() {

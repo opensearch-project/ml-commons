@@ -165,11 +165,11 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onResponse(localNode);
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        }).when(mlTaskDispatcher).dispatch(any(), any());
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(listener).onResponse(any());
         verify(taskRunner).handleAsyncMLTaskComplete(any(MLTask.class));
     }
@@ -177,10 +177,10 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_QueryInput() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onResponse(localNode);
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
+        }).when(mlTaskDispatcher).dispatch(any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLInputDataset> actionListener = invocation.getArgument(1);
@@ -188,7 +188,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
             return null;
         }).when(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
 
-        taskRunner.dispatchTask(requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithQuery, transportService, listener);
         verify(listener).onResponse(any());
         verify(taskRunner).handleAsyncMLTaskComplete(any(MLTask.class));
     }
@@ -196,10 +196,10 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_QueryInput_Failure() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onResponse(localNode);
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
+        }).when(mlTaskDispatcher).dispatch(any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLInputDataset> actionListener = invocation.getArgument(1);
@@ -207,7 +207,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
             return null;
         }).when(mlInputDatasetHandler).parseSearchQueryInput(any(), any());
 
-        taskRunner.dispatchTask(requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithQuery, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -218,12 +218,12 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_FailedToUpdateTask() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onResponse(localNode);
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
+        }).when(mlTaskDispatcher).dispatch(any(), any());
         doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskStateAsRunning(anyString(), anyBoolean());
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
@@ -233,21 +233,21 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnRemoteNode() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onResponse(remoteNode);
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        }).when(mlTaskDispatcher).dispatch(any(), any());
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainAndPredictionTaskAction.NAME), eq(requestWithDataFrame), any());
     }
 
     public void testExecuteTask_FailedToDispatch() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new RuntimeException(errorMessage));
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        }).when(mlTaskDispatcher).dispatch(any(), any());
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());

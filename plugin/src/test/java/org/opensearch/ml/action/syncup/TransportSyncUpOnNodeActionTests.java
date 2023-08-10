@@ -53,6 +53,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.model.MLModelState;
@@ -317,7 +318,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         MLTask mlTask = mlTaskBuilder.build();
         MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
         if (MLModelState.DEPLOY_FAILED != modelState) {
-            when(mlModelManager.getWorkerNodes(modelId)).thenReturn(new String[] { "node1" });
+            when(mlModelManager.getWorkerNodes(modelId, FunctionName.REMOTE)).thenReturn(new String[] { "node1" });
         }
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
         action.cleanUpLocalCache(runningDeployModelTasks);

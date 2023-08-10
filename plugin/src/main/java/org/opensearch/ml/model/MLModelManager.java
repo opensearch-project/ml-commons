@@ -1074,10 +1074,11 @@ public class MLModelManager {
      * Get worker nodes of specific model.
      *
      * @param modelId model id
+     * @param functionName function name
      * @param onlyEligibleNode return only eligible node
      * @return list of worker node ids
      */
-    public String[] getWorkerNodes(String modelId, boolean onlyEligibleNode) {
+    public String[] getWorkerNodes(String modelId, FunctionName functionName, boolean onlyEligibleNode) {
         String[] workerNodeIds = modelCacheHelper.getWorkerNodes(modelId);
         if (!onlyEligibleNode) {
             return workerNodeIds;
@@ -1086,7 +1087,7 @@ public class MLModelManager {
             return workerNodeIds;
         }
 
-        String[] eligibleNodeIds = nodeHelper.filterEligibleNodes(workerNodeIds);
+        String[] eligibleNodeIds = nodeHelper.filterEligibleNodes(functionName, workerNodeIds);
         if (eligibleNodeIds == null || eligibleNodeIds.length == 0) {
             throw new IllegalArgumentException("No eligible worker node found");
         }
@@ -1097,10 +1098,11 @@ public class MLModelManager {
      * Get worker node of specific model without filtering eligible node.
      *
      * @param modelId model id
+     * @param functionName function name
      * @return list of worker node ids
      */
-    public String[] getWorkerNodes(String modelId) {
-        return getWorkerNodes(modelId, false);
+    public String[] getWorkerNodes(String modelId, FunctionName functionName) {
+        return getWorkerNodes(modelId, functionName, false);
     }
 
     /**

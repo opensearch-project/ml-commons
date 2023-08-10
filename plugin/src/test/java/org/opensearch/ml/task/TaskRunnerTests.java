@@ -30,6 +30,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -138,7 +139,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
         MLTaskRequest request = new MLTaskRequest(false);
-        expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(request, transportService, listener));
+        expectThrows(MLLimitExceededException.class, () -> mlTaskRunner.run(FunctionName.REMOTE, request, transportService, listener));
         Long value = (Long) mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
         assertEquals(1L, value.longValue());
     }

@@ -178,7 +178,12 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         workerNodes.add(nodeId1);
         workerNodes.add(nodeId2);
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
-        when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1, nodeId2 });
+        when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(new String[] { nodeId1, nodeId2 });
+        MLTaskCache mlTaskCache = mock(MLTaskCache.class);
+        MLTask mlTask = mock(MLTask.class);
+        when(mlTaskCache.getMlTask()).thenReturn(mlTask);
+        when(mlTask.getFunctionName()).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(mlTaskManager.getMLTaskCache(anyString())).thenReturn(mlTaskCache);
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()
@@ -200,12 +205,15 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         Set<String> workerNodes = new HashSet<>();
         workerNodes.add(nodeId1);
         when(mlTaskManager.getWorkNodes(anyString())).thenReturn(workerNodes);
-        when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1 });
+        when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(new String[] { nodeId1 });
         MLTaskCache mlTaskCache = mock(MLTaskCache.class);
         when(mlTaskCache.getErrors()).thenReturn(ImmutableMap.of());
         when(mlTaskCache.hasError()).thenReturn(false);
         when(mlTaskCache.getWorkerNodeSize()).thenReturn(1);
         when(mlTaskCache.errorNodesCount()).thenReturn(0);
+        MLTask mlTask = mock(MLTask.class);
+        when(mlTask.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(mlTaskCache.getMlTask()).thenReturn(mlTask);
         when(mlTaskManager.getMLTaskCache(anyString())).thenReturn(mlTaskCache);
         MLForwardInput forwardInput = MLForwardInput
             .builder()
@@ -229,7 +237,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         MLTaskCache mlTaskCache = MLTaskCache.builder().mlTask(createMlTask(MLTaskType.REGISTER_MODEL)).workerNodes(workerNodes).build();
         mlTaskCache.addError(nodeId1, error);
         doReturn(mlTaskCache).when(mlTaskManager).getMLTaskCache(anyString());
-        when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1, nodeId2 });
+        when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(new String[] { nodeId1, nodeId2 });
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()
@@ -261,7 +269,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .build();
         mlTaskCache.addError(nodeId1, error);
         doReturn(mlTaskCache).when(mlTaskManager).getMLTaskCache(anyString());
-        when(mlModelManager.getWorkerNodes(anyString())).thenReturn(new String[] { nodeId1, nodeId2 });
+        when(mlModelManager.getWorkerNodes(anyString(), any())).thenReturn(new String[] { nodeId1, nodeId2 });
 
         MLForwardInput forwardInput = MLForwardInput
             .builder()

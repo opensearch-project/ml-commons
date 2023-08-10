@@ -127,4 +127,22 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    public static final Setting<List<String>> ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES = Setting
+        .listSetting(
+            "plugins.ml_commons.task_dispatcher.eligible_node_role.remote_model",
+            ImmutableList.of("data", "ml"),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<List<String>> ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES = Setting
+        .listSetting(
+            "plugins.ml_commons.task_dispatcher.eligible_node_role.local_model",
+            ImmutableList.of("data", "ml"),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
 }

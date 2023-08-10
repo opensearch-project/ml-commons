@@ -34,6 +34,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -224,6 +225,7 @@ public class MLSyncUpCron implements Runnable {
                 .fetchSource(
                     new String[] {
                         MLModel.MODEL_STATE_FIELD,
+                        MLModel.ALGORITHM_FIELD,
                         MLModel.DEPLOY_TO_ALL_NODES_FIELD,
                         MLModel.PLANNING_WORKER_NODES_FIELD,
                         MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
@@ -239,6 +241,7 @@ public class MLSyncUpCron implements Runnable {
                 for (SearchHit hit : hits) {
                     String modelId = hit.getId();
                     Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                    FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
                     MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
                     Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
                         ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
@@ -256,7 +259,7 @@ public class MLSyncUpCron implements Runnable {
                         ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
                         : new ArrayList<>();
                     if (deployToAllNodes) {
-                        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes();
+                        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
                         planningWorkerNodeCount = eligibleNodes.length;
                         List<String> eligibleNodeIds = Arrays
                             .asList(eligibleNodes)
