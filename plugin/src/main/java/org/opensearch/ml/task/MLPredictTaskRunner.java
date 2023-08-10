@@ -112,7 +112,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     @Override
-    public void dispatchTask(MLPredictionTaskRequest request, TransportService transportService, ActionListener<MLTaskResponse> listener) {
+    public void dispatchTask(
+        FunctionName functionName,
+        MLPredictionTaskRequest request,
+        TransportService transportService,
+        ActionListener<MLTaskResponse> listener
+    ) {
         String modelId = request.getModelId();
         MLInput input = request.getMlInput();
         FunctionName algorithm = input.getAlgorithm();
@@ -128,7 +133,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
                 }
             }, e -> { listener.onFailure(e); });
-            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, true);
+            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, algorithm, true);
             if (workerNodes == null || workerNodes.length == 0) {
                 if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.REMOTE) {
                     listener
@@ -139,7 +144,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         );
                     return;
                 } else {
-                    workerNodes = nodeHelper.getEligibleNodeIds();
+                    workerNodes = nodeHelper.getEligibleNodeIds(algorithm);
                 }
             }
             mlTaskDispatcher.dispatchPredictTask(workerNodes, actionListener);

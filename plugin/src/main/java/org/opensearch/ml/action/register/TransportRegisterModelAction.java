@@ -264,7 +264,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             }));
             return;
         }
-        mlTaskDispatcher.dispatch(ActionListener.wrap(node -> {
+        mlTaskDispatcher.dispatch(registerModelInput.getFunctionName(), ActionListener.wrap(node -> {
             String nodeId = node.getId();
             mlTask.setWorkerNodes(ImmutableList.of(nodeId));
 
