@@ -65,7 +65,7 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
     public void doExecute(Task task, GetInteractionsRequest request, ActionListener<GetInteractionsResponse> actionListener) {
         int maxResults = request.getMaxResults();
         int from = request.getFrom();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<GetInteractionsResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<List<Interaction>> al = ActionListener.wrap(interactions -> {
                 internalListener.onResponse(new GetInteractionsResponse(interactions, from + maxResults, interactions.size() == maxResults));

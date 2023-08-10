@@ -61,7 +61,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
     @Override
     protected void doExecute(Task task, CreateConversationRequest request, ActionListener<CreateConversationResponse> actionListener) {
         String name = request.getName();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(r -> {
                 internalListener.onResponse(new CreateConversationResponse(r));

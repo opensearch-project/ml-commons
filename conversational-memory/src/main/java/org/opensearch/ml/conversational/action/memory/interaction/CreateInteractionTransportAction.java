@@ -66,7 +66,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String rsp = request.getResponse();
         String agt = request.getAgent();
         String att = request.getAttributes();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(iid -> {
                 internalListener.onResponse(new CreateInteractionResponse(iid));

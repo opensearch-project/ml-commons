@@ -65,7 +65,7 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
     public void doExecute(Task task, GetConversationsRequest request, ActionListener<GetConversationsResponse> actionListener) {
         int maxResults = request.getMaxResults();
         int from = request.getFrom();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<GetConversationsResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<List<ConversationMeta>> al = ActionListener.wrap(conversations -> {
                 internalListener.onResponse(new GetConversationsResponse(conversations, from + maxResults, conversations.size() == maxResults));

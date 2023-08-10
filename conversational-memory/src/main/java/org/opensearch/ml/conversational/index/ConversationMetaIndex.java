@@ -19,6 +19,7 @@ package org.opensearch.ml.conversational.index;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -233,6 +234,7 @@ public class ConversationMetaIndex {
         String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            // First get the conversation. Check for access controls. Update.
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 if(!(getResponse.isExists() && getResponse.getId().equals(id))){
                     internalListener.onResponse(false);
@@ -244,7 +246,9 @@ public class ConversationMetaIndex {
                         throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + id);
                     }
                 }
-                UpdateRequest update = (new UpdateRequest(indexName, id)).doc(conversation.hit(hitTime).toIndexRequest(indexName));
+                UpdateRequest update = (new UpdateRequest(indexName, id))
+                    .doc(conversation.hit(Collections.max(List.of(hitTime, conversation.getLastHit())))
+                    .toIndexRequest(indexName));
                 client.update(update, ActionListener.wrap(response -> {
                     internalListener.onResponse(true);
                 }, e -> {
@@ -255,7 +259,15 @@ public class ConversationMetaIndex {
                 log.error("failure touching conversation", e);
                 internalListener.onFailure(e);
             });
-            client.get(getRequest, al);
+            // Refresh the index first in case of race condition updates
+            client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(
+                r -> {
+                    client.get(getRequest, al);
+                }, e -> {
+                    log.error("failed during refresh", e);
+                    internalListener.onFailure(e);
+                }
+            ));
         } catch (Exception e) {
             log.error("failed during hit conversation", e);
             listener.onFailure(e);

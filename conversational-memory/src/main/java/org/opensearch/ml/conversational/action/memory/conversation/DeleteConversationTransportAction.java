@@ -61,7 +61,7 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
     @Override
     public void doExecute(Task task, DeleteConversationRequest request, ActionListener<DeleteConversationResponse> listener) {
         String conversationId = request.getId();
-        try(ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+        try(ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<DeleteConversationResponse> internalListener = ActionListener.runBefore(listener, () -> context.restore());
             ActionListener<Boolean> al = ActionListener.wrap(success -> {
                 DeleteConversationResponse response = new DeleteConversationResponse(success);
