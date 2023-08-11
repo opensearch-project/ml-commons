@@ -19,9 +19,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.NotifyOnceListener;
+import org.opensearch.core.action.NotifyOnceListener;
 import org.opensearch.action.search.MultiSearchRequest;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -57,7 +57,7 @@ import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 
-import static org.opensearch.action.ActionListener.wrap;
+import static org.opensearch.core.action.ActionListener.wrap;
 import static org.opensearch.search.aggregations.MultiBucketConsumerService.MAX_BUCKET_SETTING;
 
 /**

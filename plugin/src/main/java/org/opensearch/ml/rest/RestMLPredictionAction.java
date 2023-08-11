@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;

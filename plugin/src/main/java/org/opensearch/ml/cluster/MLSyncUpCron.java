@@ -18,13 +18,13 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;

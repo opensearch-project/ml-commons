@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.transport.prediction;
 
 import org.junit.Test;
-import org.opensearch.action.ActionResponse;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
