@@ -6,8 +6,8 @@
 package org.opensearch.ml.utils;
 
 import org.junit.Ignore;
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.support.master.AcknowledgedResponse;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableMap;
