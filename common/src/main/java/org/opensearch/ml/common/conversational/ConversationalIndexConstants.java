@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.ml.conversational.index;
+package org.opensearch.ml.common.conversational;
 
 /**
  * Class containing a bunch of constant defining how the conversational indices are formatted
@@ -34,7 +34,7 @@ public class ConversationalIndexConstants {
     /** Name of the owning user field in all indices */
     public final static String USER_FIELD = "user";
     /** Mappings for the conversational metadata index */
-    protected final static String META_MAPPING = "{\n"
+    public final static String META_MAPPING = "{\n"
         + "    \"properties\": {\n"
         + "        \""
         + META_NAME_FIELD
@@ -71,7 +71,7 @@ public class ConversationalIndexConstants {
         /** Name of the interaction field for any excess metadata */
         public final static String INTERACTIONS_METADATA_FIELD = "metadata";
         /** Mappings for the interactions index */
-        protected final static String INTERACTIONS_MAPPINGS = "{\n"
+        public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"properties\": {\n"
         + "        \""
         + INTERACTIONS_CONVERSATION_ID_FIELD

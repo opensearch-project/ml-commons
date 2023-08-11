@@ -41,6 +41,8 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
+import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.SortOrder;

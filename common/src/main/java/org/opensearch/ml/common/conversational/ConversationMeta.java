@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.ml.conversational.index;
+package org.opensearch.ml.common.conversational;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -25,7 +25,6 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.ml.conversational.action.ActionConstants;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.search.SearchHit;

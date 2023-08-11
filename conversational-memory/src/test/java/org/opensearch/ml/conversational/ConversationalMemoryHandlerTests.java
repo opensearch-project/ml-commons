@@ -33,8 +33,8 @@ import org.opensearch.common.CheckedConsumer;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.opensearch.commons.ConfigConstants;
-import org.opensearch.ml.conversational.index.ConversationMeta;
-import org.opensearch.ml.conversational.index.Interaction;
+import org.opensearch.ml.common.conversational.ConversationMeta;
+import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchIntegTestCase;
 

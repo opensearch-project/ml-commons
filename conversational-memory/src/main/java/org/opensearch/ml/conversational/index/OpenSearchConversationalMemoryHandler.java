@@ -26,8 +26,10 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.common.conversational.ConversationMeta;
+import org.opensearch.ml.common.conversational.Interaction;
+import org.opensearch.ml.common.conversational.Interaction.InteractionBuilder;
 import org.opensearch.ml.conversational.ConversationalMemoryHandler;
-import org.opensearch.ml.conversational.index.Interaction.InteractionBuilder;
 
 
 /**

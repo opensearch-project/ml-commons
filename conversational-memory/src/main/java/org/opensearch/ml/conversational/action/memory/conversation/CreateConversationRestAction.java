@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.ml.conversational.action.ActionConstants;
+import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
