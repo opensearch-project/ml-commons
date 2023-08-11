@@ -13,7 +13,7 @@ import java.util.HashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import org.opensearch.action.ActionFuture;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexAction;
 import org.opensearch.action.index.IndexRequest;

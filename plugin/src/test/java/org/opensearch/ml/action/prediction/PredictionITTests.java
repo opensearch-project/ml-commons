@@ -14,7 +14,7 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.action.ActionFuture;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.common.FunctionName;
