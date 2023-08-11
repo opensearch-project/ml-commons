@@ -19,7 +19,6 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.MissingResourceException;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -136,12 +135,11 @@ public class CreateInteractionRequest extends ActionRequest {
      * Create a PutInteractionRequest from a RestRequest
      * @param request a RestRequest for a put interaction op
      * @return new PutInteractionRequest object
-     * @throws MissingResourceException if request has no body
      * @throws IOException if something goes wrong reading from request
      */
-    public static CreateInteractionRequest fromRestRequest(RestRequest request) throws MissingResourceException, IOException {
+    public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
         if(!request.hasContent()) {
-            throw new MissingResourceException("Put interaction request must have body", "RestRequest", "content");
+            throw new IOException("Put interaction request must have body");
         }
         Map<String, String> bodyMap = request.contentParser().mapStrings();
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
