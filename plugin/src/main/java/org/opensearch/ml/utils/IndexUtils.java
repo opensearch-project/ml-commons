@@ -8,13 +8,13 @@ package org.opensearch.ml.utils;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.health.ClusterIndexHealth;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.core.action.ActionListener;
 
 public class IndexUtils {
     /**

@@ -7,7 +7,7 @@ package org.opensearch.ml.common.transport.task;
 
 import lombok.Builder;
 import lombok.Getter;
-import org.opensearch.action.ActionResponse;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
