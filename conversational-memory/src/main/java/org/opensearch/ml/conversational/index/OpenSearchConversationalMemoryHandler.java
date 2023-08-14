@@ -109,11 +109,14 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         ActionListener<String> listener
     ) {
         Instant time = Instant.now();
-        conversationMetaIndex.hitConversation(conversationId, time, ActionListener.wrap(r->{}, e->{}));
-        interactionsIndex.createInteraction(
-            conversationId, input, prompt, 
-            response, agent, metadata, time, listener
-        );
+        conversationMetaIndex.hitConversation(conversationId, time, ActionListener.wrap(r->{
+            interactionsIndex.createInteraction(
+                conversationId, input, prompt, 
+                response, agent, metadata, time, listener
+            );
+        }, e->{
+            listener.onFailure(e);
+        }));
     }
 
     /**
