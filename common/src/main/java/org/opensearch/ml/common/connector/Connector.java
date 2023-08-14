@@ -87,13 +87,21 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     static Connector fromStream(StreamInput in) throws IOException {
-        String connectorProtocol = in.readString();
-        return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, in}, String.class, StreamInput.class);
+        try {
+            String connectorProtocol = in.readString();
+            return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, in}, String.class, StreamInput.class);
+        } catch (IllegalArgumentException illegalArgumentException) {
+            throw illegalArgumentException;
+        }
     }
 
     static Connector createConnector(XContentBuilder builder, String connectorProtocol) throws IOException {
-        String jsonStr = builder.toString();
-        return createConnector(jsonStr, connectorProtocol);
+        try {
+            String jsonStr = builder.toString();
+            return createConnector(jsonStr, connectorProtocol);
+        } catch (IllegalArgumentException illegalArgumentException) {
+            throw illegalArgumentException;
+        }
     }
 
     static Connector createConnector(XContentParser parser) throws IOException {
@@ -117,7 +125,12 @@ public interface Connector extends ToXContentObject, Writeable {
                 throw new IllegalArgumentException("connector protocol is null");
             }
             return MLCommonsClassLoader.initConnector(connectorProtocol, new Object[]{connectorProtocol, connectorParser}, String.class, XContentParser.class);
-        }
+        } catch (Exception ex) {
+            if (ex instanceof IllegalArgumentException) {
+                throw ex;
+            }
+            return null;
+	    }
     }
 
     default void validateConnectorURL(List<String> urlRegexes) {
