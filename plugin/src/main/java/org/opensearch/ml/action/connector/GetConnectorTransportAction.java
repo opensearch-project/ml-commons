@@ -23,7 +23,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
@@ -92,7 +91,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find connector"));
+                    log.error("Failed to get connector index", e);
+                    actionListener.onFailure(new IllegalArgumentException("Fail to find connector"));
                 } else {
                     log.error("Failed to get ML connector " + connectorId, e);
                     actionListener.onFailure(e);
