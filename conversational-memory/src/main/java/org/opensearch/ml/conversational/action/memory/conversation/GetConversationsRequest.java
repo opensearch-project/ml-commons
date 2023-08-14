@@ -26,14 +26,17 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
+import lombok.Getter;
+
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * ActionRequest for list conversations action
  */
 public class GetConversationsRequest extends ActionRequest {
-
+    @Getter
     private int maxResults = ActionConstants.DEFAULT_MAX_RESULTS;
+    @Getter
     private int from = 0;
 
     /**
@@ -72,22 +75,6 @@ public class GetConversationsRequest extends ActionRequest {
         super(in);
         this.maxResults = in.readInt();
         this.from = in.readInt();
-    }
-
-    /**
-     * max results to be returned by this action
-     * @return max results
-     */
-    public int getMaxResults() {
-        return maxResults;
-    }
-
-    /**
-     * what position to start at in retrieving conversations
-     * @return the position
-     */
-    public int getFrom() {
-        return from;
     }
 
     @Override

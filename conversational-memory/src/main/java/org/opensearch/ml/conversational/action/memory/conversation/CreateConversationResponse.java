@@ -27,9 +27,12 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversational.ActionConstants;
 
+import lombok.AllArgsConstructor;
+
 /**
  * Action Response for CreateConversation
  */
+@AllArgsConstructor
 public class CreateConversationResponse extends ActionResponse implements ToXContentObject {
 
     String conversationId;
@@ -42,15 +45,6 @@ public class CreateConversationResponse extends ActionResponse implements ToXCon
     public CreateConversationResponse(StreamInput in) throws IOException {
         super(in);
         this.conversationId = in.readString();
-    }
-
-    /**
-     * Constructor
-     * @param conversationId unique id of the newly-created conversation
-     */
-    public CreateConversationResponse(String conversationId) {
-        super();
-        this.conversationId = conversationId;
     }
 
     @Override

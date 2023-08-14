@@ -261,7 +261,7 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
                 ConversationMeta conversation = conversations.get(0);
                 assert(conversation.getId().equals(addConversationListener.result()));
                 assert(conversation.getLastHit().equals(pit));
-                assert(conversation.getLength() == 1);
+                assert(conversation.getNumInteractions() == 1);
             }, e -> {
                 log.error(e);
             }

@@ -29,43 +29,27 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.search.SearchHit;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Class for holding conversational metadata
  */
+@AllArgsConstructor
 public final class ConversationMeta implements Writeable, ToXContentObject {
 
+    @Getter
     private String id;
+    @Getter
     private Instant created;
+    @Getter
     private Instant lastHit;
+    @Getter
     private int numInteractions;
+    @Getter
     private String name;
+    @Getter
     private String user;
-
-    /**
-     * Most naive constructor
-     * @param id the UID of this conversation
-     * @param created the timestamp of this conversation's creation
-     * @param lastHit the timestamp of the most recent interaction belonging to this conversation 
-     *      or the time of creation if there are no interactions
-     * @param numInteractions the length of this conversation
-     * @param name a user-defined name for the conversation
-     * @param user the user who owns this conversation
-     */
-    public ConversationMeta(
-        String id,
-        Instant created,
-        Instant lastHit,
-        int numInteractions,
-        String name,
-        String user
-    ) {
-        this.id = id;
-        this.created = created;
-        this.lastHit = lastHit;
-        this.numInteractions = numInteractions;
-        this.name = name;
-        this.user = user;
-    }
 
     /**
      * Creates a conversationMeta object from a SearchHit object
@@ -120,34 +104,6 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
     }
 
     /**
-     * @return the unique id of this conversationMeta object
-     */
-    public String getId() {
-        return id;
-    }
-
-    /**
-     * @return the Instant when this conversation was first created
-     */
-    public Instant getCreated() {
-        return created;
-    }
-
-    /**
-     * @return the Instant when this conversation was last interacted with
-     */
-    public Instant getLastHit() {
-        return lastHit;
-    }
-
-    /**
-     * @return the number of interactions in this conversation
-     */
-    public int getLength() {
-        return numInteractions;
-    }
-
-    /**
      * Hit this conversationMeta at this time, increasing the converation length
      * @param hitTime the Instant when the new interaction was created
      * @return this conversationMeta object (fields updated)
@@ -158,20 +114,7 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
         return this;
     }
 
-    /**
-     * @return the name of this conversation. Could be the empty string.
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
-     * @return the user who owns this conversation
-     */
-    public String getUser() {
-        return user;
-    }
-
+    
     /**
      * Convert this conversationMeta object into an IndexRequest so it can be indexed
      * @param index the index to send this conversation to. Should usually be .conversational-meta

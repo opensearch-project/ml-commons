@@ -25,6 +25,10 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.common.conversational.Interaction;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -32,8 +36,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 /**
  * Action Response for get interactions
  */
+@AllArgsConstructor
 public class GetInteractionsResponse extends ActionResponse implements ToXContentObject {
-    
+    @Getter
     private List<Interaction> interactions;
     private int nextToken;
     private boolean hasMoreTokens;
@@ -50,31 +55,12 @@ public class GetInteractionsResponse extends ActionResponse implements ToXConten
         hasMoreTokens = in.readBoolean();
     }
 
-    /**
-     * Constructor
-     * @param interactions list of interactions returned by this response
-     * @param nextToken token representing the next page of results
-     * @param hasMoreTokens whether there are more results after this page
-     */
-    public GetInteractionsResponse(List<Interaction> interactions, int nextToken, boolean hasMoreTokens) {
-        this.interactions = interactions;
-        this.nextToken = nextToken;
-        this.hasMoreTokens = hasMoreTokens;
-    }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeList(interactions);
         out.writeInt(nextToken);
         out.writeBoolean(hasMoreTokens);
-    }
-
-    /**
-     * Get the list of interactions
-     * @return the list of interactions returned by this response
-     */
-    public List<Interaction> getInteractions() {
-        return interactions;
     }
 
     /**

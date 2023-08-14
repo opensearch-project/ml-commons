@@ -27,11 +27,13 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
+import lombok.Getter;
+
 /**
  * Action Request for creating a conversation
  */
 public class CreateConversationRequest extends ActionRequest {
-
+    @Getter
     private String name = null;
 
     /**
@@ -62,13 +64,6 @@ public class CreateConversationRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeString(name);
-    }
-
-    /**
-     * @return name of the conversation to be created
-     */
-    public String getName() {
-        return name;
     }
 
     @Override

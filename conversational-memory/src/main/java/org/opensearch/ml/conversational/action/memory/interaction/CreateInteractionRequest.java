@@ -27,17 +27,27 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * Action Request for create interaction
  */
+@AllArgsConstructor
 public class CreateInteractionRequest extends ActionRequest {
+    @Getter
     private String conversationId;
+    @Getter
     private String input;
+    @Getter
     private String prompt;
+    @Getter
     private String response;
+    @Getter
     private String agent;
+    @Getter
     private String attributes;
 
     /**
@@ -53,31 +63,6 @@ public class CreateInteractionRequest extends ActionRequest {
         this.prompt = in.readOptionalString();
         this.agent = in.readOptionalString();
         this.attributes = in.readOptionalString();
-    }
-
-    /**
-     * Constructor. Should probably turn this into a builder idiom
-     * @param conversationId id of the conversation to add to
-     * @param input human input for this interaction
-     * @param prompt prompt template for this interaction
-     * @param response genAI response for this interaction
-     * @param agent AI agent used for this interaction
-     * @param attributes any extra stuff attached to this interaction
-     */
-    public CreateInteractionRequest(
-        String conversationId,
-        String input,
-        String prompt,
-        String response,
-        String agent,
-        String attributes
-    ) {
-        this.conversationId = conversationId;
-        this.input = input;
-        this.prompt = prompt;
-        this.response = response;
-        this.agent = agent;
-        this.attributes = attributes;
     }
 
     @Override
@@ -99,37 +84,6 @@ public class CreateInteractionRequest extends ActionRequest {
         }
         return exception;
     }
-
-    /**
-     * conversation this interaction belongs to
-     * @return the id of the conversation this interaction belongs to
-     */
-    public String getConversationId() { return conversationId; }
-    /**
-     * input in this interaction
-     * @return the human input that sparked this interaction
-     */
-    public String getInput() { return input; }
-    /**
-     * prompt used in this interaction
-     * @return the prompt template used in this interaction
-     */
-    public String getPrompt() { return prompt; }
-    /**
-     * AI response from this interaction
-     * @return the AI-Generated response in this interaction
-     */
-    public String getResponse() { return response; }
-    /**
-     * Agent in this interaction
-     * @return the agent (some identifier) that was interacted with
-     */
-    public String getAgent() { return agent; }
-    /**
-     * Arbitrary JSON object of extra data
-     * @return arbitrary string for extra data the agent might have generated
-     */
-    public String getAttributes() { return attributes; }
 
     /**
      * Create a PutInteractionRequest from a RestRequest

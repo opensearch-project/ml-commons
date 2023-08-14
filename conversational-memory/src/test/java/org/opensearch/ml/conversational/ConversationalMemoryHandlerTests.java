@@ -216,7 +216,7 @@ public class ConversationalMemoryHandlerTests extends OpenSearchIntegTestCase {
                 assert(conversations.size() == 1);
                 ConversationMeta conversation = conversations.get(0);
                 assert(conversation.getLastHit().equals(interactions.get(0).getTimestamp()));
-                assert(conversation.getLength() == 2);
+                assert(conversation.getNumInteractions() == 2);
             }, e -> {
                 assert(false);
             }

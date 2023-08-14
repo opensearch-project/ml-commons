@@ -25,6 +25,10 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.common.conversational.ConversationMeta;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -32,9 +36,11 @@ import org.opensearch.core.xcontent.XContentBuilder;
 /**
  * Action Response for CreateConversation
  */
+@AllArgsConstructor
 public class GetConversationsResponse extends ActionResponse implements ToXContentObject {
-    
+    @Getter
     private List<ConversationMeta> conversations;
+    @Getter
     private int nextToken;
     private boolean hasMoreTokens;
 
@@ -50,39 +56,11 @@ public class GetConversationsResponse extends ActionResponse implements ToXConte
         this.hasMoreTokens = in.readBoolean();
     }
 
-    /**
-     * Constructor
-     * @param conversations list of conversations in this response
-     * @param nextToken the position of the next conversation after these
-     * @param hasMoreTokens whether there are more conversations after this set of results
-     */
-    public GetConversationsResponse(List<ConversationMeta> conversations, int nextToken, boolean hasMoreTokens) {
-        this.conversations = conversations;
-        this.nextToken = nextToken;
-        this.hasMoreTokens = hasMoreTokens;
-    }
-
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeList(conversations);
         out.writeInt(nextToken);
         out.writeBoolean(hasMoreTokens);
-    }
-
-    /**
-     * Returns the list of conversations in this response
-     * @return the list of conversations returned by this action
-     */
-    public List<ConversationMeta> getConversations() {
-        return conversations;
-    }
-
-    /**
-     * the token for the next page in the pagination 
-     * @return the token (position) for the next page in the pagination
-     */
-    public int getNextToken() {
-        return nextToken;
     }
 
     /**

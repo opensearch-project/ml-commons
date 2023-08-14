@@ -26,9 +26,12 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversational.ActionConstants;
 
+import lombok.AllArgsConstructor;
+
 /**
  * Action Response for Delete Conversation Action
  */
+@AllArgsConstructor
 public class DeleteConversationResponse extends ActionResponse implements ToXContentObject {
     private boolean success;
 
@@ -40,15 +43,6 @@ public class DeleteConversationResponse extends ActionResponse implements ToXCon
     public DeleteConversationResponse(StreamInput in) throws IOException {
         super(in);
         success = in.readBoolean();
-    }
-
-    /**
-     * Constructor
-     * @param success whether the deletion was successful
-     */
-    public DeleteConversationResponse(boolean success) {
-        super();
-        this.success = success;
     }
 
     @Override

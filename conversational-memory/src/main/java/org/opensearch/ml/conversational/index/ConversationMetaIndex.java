@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 import org.opensearch.OpenSearchSecurityException;
@@ -60,22 +61,13 @@ import org.opensearch.search.sort.SortOrder;
  * Class for handling the conversational metadata index
  */
 @Log4j2
+@AllArgsConstructor
 public class ConversationMetaIndex {
 
     private Client client;
     private ClusterService clusterService;
     private final String indexName = ConversationalIndexConstants.META_INDEX_NAME;
 
-
-    /**
-     * Constructor
-     * @param client base OpenSearch client to use for dealing with the OS cluster
-     * @param clusterService a ClusterService object for managing OS
-     */
-    public ConversationMetaIndex(Client client, ClusterService clusterService){
-        this.client = client;
-        this.clusterService = clusterService;
-    }
 
     /**
      * Creates the conversational meta index if it doesn't already exist

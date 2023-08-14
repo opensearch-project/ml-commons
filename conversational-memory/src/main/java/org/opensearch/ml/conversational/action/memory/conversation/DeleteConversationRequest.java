@@ -26,11 +26,14 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
+import lombok.AllArgsConstructor;
+
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * Action Request for Delete Conversation
  */
+@AllArgsConstructor
 public class DeleteConversationRequest extends ActionRequest {
     private String conversationId;
 
@@ -42,14 +45,6 @@ public class DeleteConversationRequest extends ActionRequest {
     public DeleteConversationRequest(StreamInput in) throws IOException {
         super(in);
         this.conversationId = in.readString();
-    }
-
-    /**
-     * Constructor
-     * @param conversationId id of the conversation to be deleted
-     */
-    public DeleteConversationRequest(String conversationId) {
-        this.conversationId = conversationId;
     }
 
     @Override

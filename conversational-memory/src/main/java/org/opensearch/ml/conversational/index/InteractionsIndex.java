@@ -47,30 +47,20 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.SortOrder;
 
+import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 /**
  * Class for handling the interactions index
  */
 @Log4j2
+@AllArgsConstructor
 public class InteractionsIndex {
 
     private Client client;
     private ClusterService clusterService;
     private ConversationMetaIndex conversationMetaIndex;
     private final String indexName = ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
-
-    /**
-     * Constructor
-     * @param client Opensearch client to use for all operations
-     * @param clusterService ClusterService object for managing OS
-     * @param conversationMetaIndex the ConversationMetaIndex that holds higher-level conversational info
-     */
-    public InteractionsIndex(Client client, ClusterService clusterService, ConversationMetaIndex conversationMetaIndex) {
-        this.client = client;
-        this.clusterService = clusterService;
-        this.conversationMetaIndex = conversationMetaIndex;
-    }
 
     /**
      * 'PUT's the index in opensearch if it's not there already

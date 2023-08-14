@@ -26,15 +26,19 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
+import lombok.Getter;
+
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * ActionRequest for get interactions
  */
 public class GetInteractionsRequest extends ActionRequest {
-
+    @Getter
     private int maxResults = ActionConstants.DEFAULT_MAX_RESULTS;
+    @Getter
     private int from = 0;
+    @Getter
     private String conversationId;
 
     /**
@@ -100,30 +104,6 @@ public class GetInteractionsRequest extends ActionRequest {
             exception = addValidationError("must start at nonnegative position", exception);
         }
         return exception;
-    }
-
-    /**
-     * Get the UID of the conversation to retrieve from
-     * @return the UID of the conversation this request is trying to retrieve from
-     */
-    public String getConversationId() {
-        return this.conversationId;
-    }
-
-    /**
-     * Get the maximum number of results to return
-     * @return the max number of interactions to return from this action
-     */
-    public int getMaxResults() {
-        return this.maxResults;
-    }
-
-    /**
-     * what position to start at in retrieving interactions
-     * @return the position
-     */
-    public int getFrom() {
-        return from;
     }
 
     /**
