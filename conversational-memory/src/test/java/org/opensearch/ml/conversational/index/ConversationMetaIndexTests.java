@@ -291,7 +291,7 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
 
         StepListener<List<ConversationMeta>> listConversationListener2 = new StepListener<>();
         listConversationListener1.whenComplete(conversations1 -> {
-            index.getConversations(1,1,listConversationListener2);
+            index.getConversations(1, 1,listConversationListener2);
         }, e -> {
             cdl.countDown();
             assert(false);
@@ -302,8 +302,10 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
                 List<ConversationMeta> conversations1 = listConversationListener1.result();
                 String cid1 = addConversationListener1.result();
                 String cid2 = addConversationListener2.result();
-                assert(conversations1.get(0).getId().equals(cid2));
-                assert(conversations2.get(0).getId().equals(cid1));
+                if(!conversations1.get(0).getLastHit().equals(conversations2.get(0).getLastHit())) {
+                    assert(conversations1.get(0).getId().equals(cid2));
+                    assert(conversations2.get(0).getId().equals(cid1));
+                }
             }, e -> { 
                 assert(false); 
             }
@@ -405,8 +407,10 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
 
             originalConversationsListener.whenComplete(conversations -> {
                 assert(conversations.size() == 2);
-                assert(conversations.get(0).getId().equals(cid2.result()));
-                assert(conversations.get(1).getId().equals(cid1.result()));
+                if(!conversations.get(0).getLastHit().equals(conversations.get(1).getLastHit())) {
+                    assert(conversations.get(0).getId().equals(cid2.result()));
+                    assert(conversations.get(1).getId().equals(cid1.result()));
+                }
                 assert(conversations.get(0).getUser().equals(user1));
                 assert(conversations.get(1).getUser().equals(user1));
                 contextStack.pop().restore();
