@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
-import org.opensearch.action.ActionFuture;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.plugins.Plugin;

@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 import org.junit.Test;
-import org.opensearch.action.ActionResponse;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;

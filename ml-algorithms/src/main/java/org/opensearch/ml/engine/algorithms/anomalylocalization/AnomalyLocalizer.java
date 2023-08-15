@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.anomalylocalization;
 
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
 

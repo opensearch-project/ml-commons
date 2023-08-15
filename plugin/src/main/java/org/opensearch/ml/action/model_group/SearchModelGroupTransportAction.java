@@ -7,7 +7,6 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -17,6 +16,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.helper.ModelAccessControlHelper;

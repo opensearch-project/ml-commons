@@ -21,7 +21,6 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -32,6 +31,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
