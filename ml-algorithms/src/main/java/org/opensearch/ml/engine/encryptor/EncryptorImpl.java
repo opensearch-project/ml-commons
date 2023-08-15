@@ -34,6 +34,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 @Log4j2
 public class EncryptorImpl implements Encryptor {
 
+    public static final String MASTER_KEY_NOT_READY_ERROR = "The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.";
     private ClusterService clusterService;
     private Client client;
     private volatile String masterKey;
@@ -114,7 +115,7 @@ public class EncryptorImpl implements Encryptor {
                         String masterKey = (String) r.getSourceAsMap().get(MASTER_KEY);
                         this.masterKey = masterKey;
                     } else {
-                        exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
+                        exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
                     }
                 }, e -> {
                     log.error("Failed to get ML encryption master key", e);
@@ -122,7 +123,7 @@ public class EncryptorImpl implements Encryptor {
                 }), latch));
             }
         } else {
-            exceptionRef.set(new ResourceNotFoundException("ML encryption master key not initialized yet"));
+            exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
             latch.countDown();
         }
 
@@ -141,7 +142,7 @@ public class EncryptorImpl implements Encryptor {
             }
         }
         if (masterKey == null) {
-            throw new ResourceNotFoundException("ML encryption master key not initialized yet");
+            throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
         }
     }
 }

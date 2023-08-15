@@ -37,6 +37,7 @@ public class ScriptUtils {
         }
         return Optional.empty();
     }
+
     public static Optional<String> executePostprocessFunction(ScriptService scriptService,
                                                               String postProcessFunction,
                                                               String resultJson) {
