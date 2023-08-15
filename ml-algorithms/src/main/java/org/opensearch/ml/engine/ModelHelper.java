@@ -10,7 +10,7 @@ import ai.djl.training.util.ProgressBar;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;

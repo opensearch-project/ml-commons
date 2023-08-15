@@ -18,12 +18,12 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.concurrent.ExecutorService;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.index.get.GetResult;

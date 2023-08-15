@@ -6,8 +6,8 @@
 package org.opensearch.ml.client;
 
 
-import org.opensearch.action.ActionFuture;
-import org.opensearch.action.ActionListener;
+import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
