@@ -8,13 +8,22 @@ package org.opensearch.ml.utils;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.admin.indices.stats.IndicesStatsRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.health.ClusterIndexHealth;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class IndexUtils {
     /**
@@ -91,6 +100,35 @@ public class IndexUtils {
                 long count = r.getIndex(indexName).getPrimaries().docs.getCount();
                 listener.onResponse(count);
             }, e -> { listener.onFailure(e); }));
+        } else {
+            listener.onResponse(0L);
+        }
+    }
+
+    // TODO: add connector count stats
+    public void getNumberOfDocumentsInIndex(
+        String indexName,
+        String searchQuery,
+        NamedXContentRegistry xContentRegistry,
+        ActionListener<Long> listener
+    ) {
+        if (clusterService.state().getRoutingTable().hasIndex(indexName)) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                SearchRequest searchRequest = new SearchRequest();
+                XContentParser parser = XContentType.JSON
+                    .xContent()
+                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, searchQuery);
+                SearchSourceBuilder builder = SearchSourceBuilder.fromXContent(parser);
+                builder.fetchSource(false);
+                searchRequest.source(builder).indices(indexName);
+
+                client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+                    long count = r.getHits().getTotalHits().value;
+                    listener.onResponse(count);
+                }, e -> { listener.onFailure(e); }), () -> context.restore()));
+            } catch (Exception e) {
+                throw new OpenSearchStatusException("Failed to search index " + indexName, RestStatus.BAD_REQUEST);
+            }
         } else {
             listener.onResponse(0L);
         }
