@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
@@ -28,6 +29,7 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
@@ -45,11 +47,14 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
     private MLModelManager modelManager;
 
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     /**
      * Constructor
      */
-    public RestMLPredictionAction(MLModelManager modelManager) {
+    public RestMLPredictionAction(MLModelManager modelManager, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.modelManager = modelManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -117,6 +122,9 @@ public class RestMLPredictionAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
+        if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+        }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm);
