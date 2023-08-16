@@ -31,6 +31,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
 
 public class EncryptorImplTest {
     @Rule
@@ -121,7 +122,7 @@ public class EncryptorImplTest {
     @Test
     public void encrypt_NullMasterKey_NullMasterKey_MasterKeyNotExistInIndex() {
         exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage("ML encryption master key not initialized yet");
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -155,7 +156,7 @@ public class EncryptorImplTest {
     @Test
     public void decrypt_MLConfigIndexNotFound() {
         exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage("ML encryption master key not initialized yet");
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
 
         Metadata metadata = new Metadata.Builder().indices(ImmutableMap.of()).build();
         when(clusterState.metadata()).thenReturn(metadata);
