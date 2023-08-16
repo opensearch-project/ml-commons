@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.List;
@@ -34,10 +35,12 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -62,6 +65,9 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private ClusterService clusterService;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private Settings settings;
 
     @Before
@@ -70,7 +76,8 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), true).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -87,7 +94,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLRegisterModelAction registerModelAction = new RestMLRegisterModelAction();
+        RestMLRegisterModelAction registerModelAction = new RestMLRegisterModelAction(mlFeatureEnabledSetting);
         assertNotNull(registerModelAction);
     }
 
@@ -130,11 +137,20 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
     }
 
+    public void testRegisterModelRequestRemoteInferenceDisabled() throws Exception {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        RestRequest request = getRestRequestWithNullModelId();
+        restMLRegisterModelAction.handleRequest(request, channel, client);
+    }
+
     public void testRegisterModelUrlNotAllowed() throws Exception {
         settings = Settings.builder().put(ML_COMMONS_ALLOW_MODEL_URL.getKey(), false).build();
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_MODEL_URL);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
+        restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings, mlFeatureEnabledSetting);
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule
             .expectMessage(
@@ -226,7 +242,9 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
                 "model_format",
                 "TORCH_SCRIPT",
                 "model_config",
-                modelConfig
+                modelConfig,
+                "function_name",
+                FunctionName.REMOTE
             );
         String requestContent = new Gson().toJson(model).toString();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
