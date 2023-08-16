@@ -51,7 +51,7 @@ public class GetConversationsResponse extends ActionResponse implements ToXConte
      */
     public GetConversationsResponse(StreamInput in) throws IOException {
         super(in);
-        conversations = in.readList(ConversationMeta::fromStream);
+        this.conversations = in.readList(ConversationMeta::fromStream);
         this.nextToken = in.readInt();
         this.hasMoreTokens = in.readBoolean();
     }

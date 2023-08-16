@@ -100,7 +100,7 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
         out.writeInstant(lastHit);
         out.writeInt(numInteractions);
         out.writeString(name);
-        out.writeString(user);
+        out.writeOptionalString(user);
     }
 
     /**

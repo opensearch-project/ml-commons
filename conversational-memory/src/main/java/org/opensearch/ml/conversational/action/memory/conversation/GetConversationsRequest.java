@@ -87,8 +87,8 @@ public class GetConversationsRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if(this.maxResults == 0) {
-            exception = addValidationError("Can't list 0 conversations", exception);
+        if(this.maxResults <= 0) {
+            exception = addValidationError("Can't list 0 or negative conversations", exception);
         }
         return exception;
     }
