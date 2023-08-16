@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_DEPLOY_MODEL;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_VERSION;
@@ -20,9 +21,11 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -33,20 +36,24 @@ import com.google.common.collect.ImmutableList;
 public class RestMLRegisterModelAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_ACTION = "ml_register_model_action";
     private volatile boolean isModelUrlAllowed;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLRegisterModelAction() {}
+    public RestMLRegisterModelAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     /**
      * Constructor
      * @param clusterService cluster service
      * @param settings settings
      */
-    public RestMLRegisterModelAction(ClusterService clusterService, Settings settings) {
+    public RestMLRegisterModelAction(ClusterService clusterService, Settings settings, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         isModelUrlAllowed = ML_COMMONS_ALLOW_MODEL_URL.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ALLOW_MODEL_URL, it -> isModelUrlAllowed = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -93,6 +100,9 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
+        if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+        }
         if (mlInput.getUrl() != null && !isModelUrlAllowed) {
             throw new IllegalArgumentException(
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use opensearch pre-trained models."

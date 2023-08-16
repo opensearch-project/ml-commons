@@ -18,6 +18,8 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 public class MLExceptionUtils {
 
     public static final String NOT_SERIALIZABLE_EXCEPTION_WRAPPER = "NotSerializableExceptionWrapper: ";
+    public static final String REMOTE_INFERENCE_DISABLED_ERR_MSG =
+        "Remote Inference is disabled. To enable update the setting plugins.ml_commons.remote_inference_enabled to true";
 
     public static String getRootCauseMessage(final Throwable throwable) {
         String message = ExceptionUtils.getRootCauseMessage(throwable);

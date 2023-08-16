@@ -11,6 +11,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.getCreateConnectorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.verifyParsedCreateConnectorInput;
 
@@ -24,6 +26,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -33,6 +36,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -53,9 +57,14 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
-        restMLCreateConnectorAction = new RestMLCreateConnectorAction();
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -75,7 +84,7 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLCreateConnectorAction mlCreateConnectorAction = new RestMLCreateConnectorAction();
+        RestMLCreateConnectorAction mlCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         assertNotNull(mlCreateConnectorAction);
     }
 
@@ -118,6 +127,15 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
 
+        restMLCreateConnectorAction.handleRequest(request, channel, client);
+    }
+
+    public void testPrepareRequestFeatureDisabled() throws Exception {
+        thrown.expect(IllegalStateException.class);
+        thrown.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        RestRequest request = getCreateConnectorRestRequest();
         restMLCreateConnectorAction.handleRequest(request, channel, client);
     }
 }

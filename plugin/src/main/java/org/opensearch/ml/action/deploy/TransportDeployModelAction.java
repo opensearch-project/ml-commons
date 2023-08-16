@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,6 +53,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
@@ -83,6 +85,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
 
     private volatile boolean allowCustomDeploymentPlan;
     private ModelAccessControlHelper modelAccessControlHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportDeployModelAction(
@@ -99,7 +102,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLModelManager mlModelManager,
         MLStats mlStats,
         Settings settings,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLDeployModelAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -114,6 +118,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlModelManager = mlModelManager;
         this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
         clusterService
             .getClusterSettings()
@@ -129,6 +134,9 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                if (mlModel.getAlgorithm() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+                    throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+                }
                 modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                     if (!access) {
                         listener
