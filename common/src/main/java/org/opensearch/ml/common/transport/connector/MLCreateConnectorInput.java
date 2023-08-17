@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
@@ -125,7 +126,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     protocol = parser.text();
                     break;
                 case CONNECTOR_PARAMETERS_FIELD:
-                    parameters = parser.mapStrings();
+                    parameters = getParameterMap(parser.map());
                     break;
                 case CONNECTOR_CREDENTIAL_FIELD:
                     credential = parser.mapStrings();
