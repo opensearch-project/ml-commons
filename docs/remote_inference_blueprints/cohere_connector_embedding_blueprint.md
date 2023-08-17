@@ -12,6 +12,10 @@ POST /_plugins/_ml/connectors/_create
   "credential": {
     "cohere_key": "<PLEASE ADD YOUR Cohere API KEY HERE>"
   },
+  "parameters": {
+    "model": "embed-english-v2.0",
+    "truncate": "END"
+  },
   "actions": [
     {
       "action_type": "predict",
@@ -20,7 +24,7 @@ POST /_plugins/_ml/connectors/_create
       "headers": {
         "Authorization": "Bearer ${credential.cohere_key}"
       },
-      "request_body": "{ \"texts\": ${parameters.prompt}, \"truncate\": \"END\" }"
+      "request_body": "{ \"texts\": ${parameters.texts}, \"truncate\": \"${parameters.truncate}\", \"model\": \"${parameters.model}\" }"
     }
   ]
 }
@@ -39,7 +43,7 @@ POST /_plugins/_ml/connectors/_create
 POST /_plugins/_ml/models/<ENTER MODEL ID HERE>/_predict
 {
   "parameters": {
-    "prompt": ["Say this is a test"]
+    "texts": ["Say this is a test"]
   }
 }
 ```
