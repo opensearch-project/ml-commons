@@ -18,7 +18,6 @@
 package org.opensearch.ml.conversational.action.memory.interaction;
 
 import java.io.IOException;
-import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -71,9 +70,9 @@ public class CreateInteractionRequest extends ActionRequest {
         out.writeString(conversationId);
         out.writeString(input);
         out.writeString(response);
-        out.writeString(prompt);
-        out.writeString(agent);
-        out.writeString(attributes);
+        out.writeOptionalString(prompt);
+        out.writeOptionalString(agent);
+        out.writeOptionalString(attributes);
     }
     
     @Override
@@ -92,16 +91,12 @@ public class CreateInteractionRequest extends ActionRequest {
      * @throws IOException if something goes wrong reading from request
      */
     public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
-        if(!request.hasContent()) {
-            throw new IOException("Put interaction request must have body");
-        }
-        Map<String, String> bodyMap = request.contentParser().mapStrings();
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
-        String inp = bodyMap.get(ActionConstants.INPUT_FIELD);
-        String prp = bodyMap.get(ActionConstants.PROMPT_FIELD);
-        String rsp = bodyMap.get(ActionConstants.AI_RESPONSE_FIELD);
-        String agt = bodyMap.get(ActionConstants.AI_AGENT_FIELD);
-        String att = bodyMap.get(ActionConstants.INTER_ATTRIBUTES_FIELD);
+        String inp = request.param(ActionConstants.INPUT_FIELD);
+        String prp = request.param(ActionConstants.PROMPT_FIELD);
+        String rsp = request.param(ActionConstants.AI_RESPONSE_FIELD);
+        String agt = request.param(ActionConstants.AI_AGENT_FIELD);
+        String att = request.param(ActionConstants.INTER_ATTRIBUTES_FIELD);
         return new CreateInteractionRequest(cid, inp, prp, rsp, agt, att);
     }
 

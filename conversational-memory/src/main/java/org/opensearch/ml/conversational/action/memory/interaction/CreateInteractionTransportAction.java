@@ -17,7 +17,7 @@
  */
 package org.opensearch.ml.conversational.action.memory.interaction;
 
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;

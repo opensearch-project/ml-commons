@@ -111,7 +111,7 @@ public class Interaction implements Writeable, ToXContentObject {
         out.writeString(prompt);
         out.writeString(response);
         out.writeString(agent);
-        out.writeString(metadata);
+        out.writeOptionalString(metadata);
     }
 
     @Override

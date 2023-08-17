@@ -20,8 +20,8 @@ package org.opensearch.ml.conversational.index;
 import java.time.Instant;
 import java.util.List;
 
-import org.opensearch.action.ActionFuture;
-import org.opensearch.action.ActionListener;
+import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;

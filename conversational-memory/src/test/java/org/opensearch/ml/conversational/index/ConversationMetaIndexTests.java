@@ -29,7 +29,7 @@ import java.util.function.Consumer;
 
 import org.junit.Before;
 import org.opensearch.OpenSearchSecurityException;
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.client.Client;

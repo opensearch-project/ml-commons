@@ -19,6 +19,7 @@ package org.opensearch.ml.conversational.action.memory.conversation;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,7 +30,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -107,6 +108,40 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         assert(argCaptor.getValue().getId().equals("testID"));
+    }
+
+    public void testCreateConversationWithNullName() {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(0);
+            listener.onResponse("testID-2");
+            return null;
+        }).when(cmHandler).createConversation(any(ActionListener.class));
+        String nullstr = null;
+        this.request = new CreateConversationRequest(nullstr);
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        assert(argCaptor.getValue().getId().equals("testID-2"));
+    }
+
+    public void testCreateConversationFails_thenFail() {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("Testing Error"));
+            return null;
+        }).when(cmHandler).createConversation(any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Testing Error"));
+    }
+
+    public void testDoExecuteFails_thenFail() {
+        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).createConversation(any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Test doExecute Error"));
     }
 
 }

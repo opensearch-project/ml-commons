@@ -20,7 +20,7 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 import java.io.IOException;
 import java.util.List;
 
-import org.opensearch.action.ActionResponse;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.conversational.ActionConstants;
@@ -40,6 +40,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 public class GetInteractionsResponse extends ActionResponse implements ToXContentObject {
     @Getter
     private List<Interaction> interactions;
+    @Getter
     private int nextToken;
     private boolean hasMoreTokens;
 

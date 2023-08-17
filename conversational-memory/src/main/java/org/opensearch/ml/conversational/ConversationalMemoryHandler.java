@@ -19,8 +19,8 @@ package org.opensearch.ml.conversational;
 
 import java.util.List;
 
-import org.opensearch.action.ActionFuture;
-import org.opensearch.action.ActionListener;
+import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversational.ConversationMeta;
 import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.ml.common.conversational.Interaction.InteractionBuilder;

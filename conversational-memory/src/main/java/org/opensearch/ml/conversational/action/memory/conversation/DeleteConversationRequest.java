@@ -49,6 +49,7 @@ public class DeleteConversationRequest extends ActionRequest {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
         out.writeString(conversationId);
     }
 

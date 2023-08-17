@@ -20,6 +20,7 @@ package org.opensearch.ml.conversational.action.memory.conversation;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,7 +34,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -161,5 +162,25 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         verify(al2).onResponse(argCaptor.capture());
         assert(argCaptor.getValue().getConversations().equals(testResult));
         assert(!argCaptor.getValue().hasMorePages());
+    }
+
+    public void testGetFails_thenFail() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> al = invocation.getArgument(2);
+            al.onFailure(new Exception("Test Fail Case"));
+            return null;
+        }).when(cmHandler).getConversations(anyInt(), anyInt(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Test Fail Case"));
+    }
+
+    public void testdoExecuteFails_thenFail() {
+        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).getConversations(anyInt(), anyInt(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Test doExecute Error"));
     }
 }

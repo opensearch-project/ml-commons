@@ -19,6 +19,7 @@ package org.opensearch.ml.conversational.action.memory.conversation;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -29,7 +30,7 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.action.ActionListener;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -109,5 +110,24 @@ public class DeleteConversationTransportActionTests extends OpenSearchTestCase {
         assert(argCaptor.getValue().wasSuccessful());
     }
 
+    public void testDeleteFails_thenFail() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Test Fail Case"));
+            return null;
+        }).when(cmHandler).deleteConversation(any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Test Fail Case"));
+    }
+
+    public void testdoExecuteFails_thenFail() {
+        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).deleteConversation(any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Test doExecute Error"));
+    }
 
 }
