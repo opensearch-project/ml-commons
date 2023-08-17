@@ -24,11 +24,11 @@ public class ConversationalIndexConstants {
     /** Name of the conversational metadata index */
     public final static String META_INDEX_NAME = ".conversational-meta";
     /** Name of the metadata field for initial timestamp */
-    public final static String META_CREATED_FIELD = "createTime";
+    public final static String META_CREATED_FIELD = "create_time";
     /** Name of the metadata field for most recent timestamp */
-    public final static String META_ENDED_FIELD = "lastInteractionTime";
+    public final static String META_ENDED_FIELD = "last_interaction_time";
     /** Name of the metadata field for number of interactions */
-    public final static String META_LENGTH_FIELD = "numInteractions";
+    public final static String META_LENGTH_FIELD = "num_interactions";
     /** Name of the metadata field for name of the conversation */
     public final static String META_NAME_FIELD = "name";
     /** Name of the owning user field in all indices */

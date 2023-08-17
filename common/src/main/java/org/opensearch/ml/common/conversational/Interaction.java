@@ -118,7 +118,7 @@ public class Interaction implements Writeable, ToXContentObject {
     public XContentBuilder toXContent(XContentBuilder builder, ToXContentObject.Params params) throws IOException {
         builder.startObject();
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, conversationId);
-        builder.field(ActionConstants.RESPONSE_INTER_ID_FIELD, id);
+        builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, id);
         builder.field(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, timestamp);
         builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
         builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD, prompt);

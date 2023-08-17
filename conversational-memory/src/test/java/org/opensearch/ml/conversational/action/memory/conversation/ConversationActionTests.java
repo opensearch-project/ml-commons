@@ -19,7 +19,7 @@ package org.opensearch.ml.conversational.action.memory.conversation;
 
 import org.opensearch.test.OpenSearchTestCase;
 
-public class ActionTests extends OpenSearchTestCase {
+public class ConversationActionTests extends OpenSearchTestCase {
     public void testActions() {
         assert(CreateConversationAction.INSTANCE instanceof CreateConversationAction);
         assert(DeleteConversationAction.INSTANCE instanceof DeleteConversationAction);

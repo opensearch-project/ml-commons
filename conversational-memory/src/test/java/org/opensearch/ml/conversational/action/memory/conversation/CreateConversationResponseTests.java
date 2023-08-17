@@ -46,7 +46,7 @@ public class CreateConversationResponseTests extends OpenSearchTestCase {
     public void testToXContent() throws IOException {
         CreateConversationResponse response = new CreateConversationResponse("createme");
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
-        String expected = "{\"conversationId\":\"createme\"}";
+        String expected = "{\"conversation_id\":\"createme\"}";
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
         assert(result.equals(expected));

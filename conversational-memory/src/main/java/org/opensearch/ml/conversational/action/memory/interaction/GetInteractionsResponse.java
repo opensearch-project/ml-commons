@@ -75,7 +75,7 @@ public class GetInteractionsResponse extends ActionResponse implements ToXConten
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
-        builder.startArray(ActionConstants.RESPONSE_INTER_LIST_FIELD);
+        builder.startArray(ActionConstants.RESPONSE_INTERACTION_LIST_FIELD);
         for(Interaction inter : interactions ){
             inter.toXContent(builder, params);
         }

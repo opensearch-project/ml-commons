@@ -60,7 +60,7 @@ public class CreateInteractionResponse extends ActionResponse implements ToXCont
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContentObject.Params params) throws IOException {
         builder.startObject();
-        builder.field(ActionConstants.RESPONSE_INTER_ID_FIELD, this.interactionId);
+        builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, this.interactionId);
         builder.endObject();
         return builder;
     }

@@ -71,7 +71,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"conversationId\":\"cid\",\"interactionId\":\"id0\",\"timestamp\":\"" + interaction.getTimestamp() + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}],\"nextToken\":2}";
+        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\"" + interaction.getTimestamp() + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}],\"next_token\":2}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
@@ -86,7 +86,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"conversationId\":\"cid\",\"interactionId\":\"id0\",\"timestamp\":\"" + interaction.getTimestamp() + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}]}";
+        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\"" + interaction.getTimestamp() + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}]}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
