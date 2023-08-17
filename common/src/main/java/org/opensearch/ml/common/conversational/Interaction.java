@@ -124,7 +124,9 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD, prompt);
         builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
         builder.field(ConversationalIndexConstants.INTERACTIONS_AGENT_FIELD, agent);
-        builder.field(ActionConstants.INTER_ATTRIBUTES_FIELD, metadata);
+        if(metadata != null) {
+            builder.field(ActionConstants.INTER_ATTRIBUTES_FIELD, metadata);
+        }
         builder.endObject();
         return builder;
     }

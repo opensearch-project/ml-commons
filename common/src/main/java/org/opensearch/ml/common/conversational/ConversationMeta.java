@@ -149,7 +149,9 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.META_ENDED_FIELD, this.lastHitTime);
         builder.field(ConversationalIndexConstants.META_LENGTH_FIELD, this.numInteractions);
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
-        builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
+        if(this.user != null) {
+            builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
+        }
         builder.endObject();
         return builder;
     }
