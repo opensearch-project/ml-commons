@@ -20,6 +20,7 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,7 +101,7 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
     }
 
-    public void testGetInteractions() {
+    public void testGetInteractions_noMorePages() {
         log.info("test get interactions transport");
         Interaction testInteraction = new Interaction("test-iid", Instant.now(), "test-cid", "test-input", "test-prompt", 
                 "test-response", "test-agent", "{\"test\":\"metadata\"}");
@@ -117,6 +118,46 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         Interaction interaction = interactions.get(0);
         assert(interaction.equals(testInteraction));
         assert(!argCaptor.getValue().hasMorePages());
+    }
+
+    public void testGetInteractions_MorePages() {
+        log.info("test get interactions transport");
+        Interaction testInteraction = new Interaction("test-iid", Instant.now(), "test-cid", "test-input", "test-prompt", 
+                "test-response", "test-agent", "{\"test\":\"metadata\"}");
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(3);
+            listener.onResponse(List.of(testInteraction));
+            return null;
+        }).when(cmHandler).getInteractions(any(), anyInt(), anyInt(), any());
+        GetInteractionsRequest shortPageRequest = new GetInteractionsRequest("test-cid", 1);
+        action.doExecute(null, shortPageRequest, actionListener);
+        ArgumentCaptor<GetInteractionsResponse> argCaptor = ArgumentCaptor.forClass(GetInteractionsResponse.class);
+        verify(actionListener).onResponse(argCaptor.capture());
+        List<Interaction> interactions = argCaptor.getValue().getInteractions();
+        assert(interactions.size() == 1);
+        Interaction interaction = interactions.get(0);
+        assert(interaction.equals(testInteraction));
+        assert(argCaptor.getValue().hasMorePages());
+    }
+
+    public void testGetInteractionsFails_thenFail() {
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(3);
+            listener.onFailure(new Exception("Testing Failure"));
+            return null;
+        }).when(cmHandler).getInteractions(any(), anyInt(), anyInt(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Testing Failure"));
+    }
+
+    public void testDoExecuteFails_thenFail() {
+        doThrow(new RuntimeException("Failure in doExecute")).when(cmHandler).getInteractions(any(), anyInt(), anyInt(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Failure in doExecute"));
     }
 
 }

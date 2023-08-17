@@ -260,7 +260,7 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
             conversations -> {
                 ConversationMeta conversation = conversations.get(0);
                 assert(conversation.getId().equals(addConversationListener.result()));
-                assert(conversation.getLastHit().equals(pit));
+                assert(conversation.getLastHitTime().equals(pit));
                 assert(conversation.getNumInteractions() == 1);
             }, e -> {
                 log.error(e);
@@ -302,7 +302,7 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
                 List<ConversationMeta> conversations1 = listConversationListener1.result();
                 String cid1 = addConversationListener1.result();
                 String cid2 = addConversationListener2.result();
-                if(!conversations1.get(0).getLastHit().equals(conversations2.get(0).getLastHit())) {
+                if(!conversations1.get(0).getLastHitTime().equals(conversations2.get(0).getLastHitTime())) {
                     assert(conversations1.get(0).getId().equals(cid2));
                     assert(conversations2.get(0).getId().equals(cid1));
                 }
@@ -407,7 +407,7 @@ public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
 
             originalConversationsListener.whenComplete(conversations -> {
                 assert(conversations.size() == 2);
-                if(!conversations.get(0).getLastHit().equals(conversations.get(1).getLastHit())) {
+                if(!conversations.get(0).getLastHitTime().equals(conversations.get(1).getLastHitTime())) {
                     assert(conversations.get(0).getId().equals(cid2.result()));
                     assert(conversations.get(1).getId().equals(cid1.result()));
                 }

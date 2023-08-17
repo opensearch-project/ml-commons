@@ -241,7 +241,7 @@ public class ConversationMetaIndex {
                     }
                 }
                 UpdateRequest update = (new UpdateRequest(indexName, id))
-                    .doc(conversation.hit(Collections.max(List.of(hitTime, conversation.getLastHit())))
+                    .doc(conversation.hit(Collections.max(List.of(hitTime, conversation.getLastHitTime())))
                     .toIndexRequest(indexName));
                 client.update(update, ActionListener.wrap(response -> {
                     internalListener.onResponse(true);

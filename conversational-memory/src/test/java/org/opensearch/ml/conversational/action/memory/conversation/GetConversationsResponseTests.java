@@ -72,7 +72,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\"" + conversation.getCreated() + "\",\"last_interaction_time\":\"" + conversation.getLastHit() + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
+        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\"" + conversation.getCreatedTime() + "\",\"last_interaction_time\":\"" + conversation.getLastHitTime() + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);
@@ -88,7 +88,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\"" + conversation.getCreated() + "\",\"last_interaction_time\":\"" + conversation.getLastHit() + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}]}";
+        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\"" + conversation.getCreatedTime() + "\",\"last_interaction_time\":\"" + conversation.getLastHitTime() + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}]}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);

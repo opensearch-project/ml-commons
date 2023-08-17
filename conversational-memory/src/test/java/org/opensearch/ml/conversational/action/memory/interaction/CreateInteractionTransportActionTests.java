@@ -19,6 +19,7 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -108,6 +109,28 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         assert(argCaptor.getValue().getId().equals("testID"));
+    }
+
+    public void testCreateInteractionFails_thenFail() {
+        log.info("testing create interaction transport");
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(6);
+            listener.onFailure(new Exception("Testing Failure"));
+            return null;
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Testing Failure"));
+    }
+
+    public void testDoExecuteFails_thenFail() {
+        log.info("testing create interaction transport");
+        doThrow(new RuntimeException("Failure in doExecute")).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert(argCaptor.getValue().getMessage().equals("Failure in doExecute"));
     }
 
 }

@@ -41,9 +41,9 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
     @Getter
     private String id;
     @Getter
-    private Instant created;
+    private Instant createdTime;
     @Getter
-    private Instant lastHit;
+    private Instant lastHitTime;
     @Getter
     private int numInteractions;
     @Getter
@@ -96,8 +96,8 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
-        out.writeInstant(created);
-        out.writeInstant(lastHit);
+        out.writeInstant(createdTime);
+        out.writeInstant(lastHitTime);
         out.writeInt(numInteractions);
         out.writeString(name);
         out.writeOptionalString(user);
@@ -109,7 +109,7 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
      * @return this conversationMeta object (fields updated)
      */
     public ConversationMeta hit(Instant hitTime) {
-        this.lastHit = hitTime;
+        this.lastHitTime = hitTime;
         this.numInteractions++;
         return this;
     }
@@ -123,8 +123,8 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
     public IndexRequest toIndexRequest(String index) {
         IndexRequest request = new IndexRequest(index);
         return request.id(this.id).source(
-            ConversationalIndexConstants.META_CREATED_FIELD, this.created,
-            ConversationalIndexConstants.META_ENDED_FIELD, this.lastHit,
+            ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime,
+            ConversationalIndexConstants.META_ENDED_FIELD, this.lastHitTime,
             ConversationalIndexConstants.META_LENGTH_FIELD, this.numInteractions,
             ConversationalIndexConstants.META_NAME_FIELD, this.name
         );
@@ -135,8 +135,8 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
         return "{id=" + id
             + ", name=" + name
             + ", length=" + numInteractions
-            + ", created=" + created.toString()
-            + ", lastHit=" + lastHit.toString()
+            + ", created=" + createdTime.toString()
+            + ", lastHit=" + lastHitTime.toString()
             + ", user=" + user
             + "}";
     }
@@ -145,8 +145,8 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
     public XContentBuilder toXContent(XContentBuilder builder, ToXContentObject.Params params) throws IOException {
         builder.startObject();
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, this.id);
-        builder.field(ConversationalIndexConstants.META_CREATED_FIELD, this.created);
-        builder.field(ConversationalIndexConstants.META_ENDED_FIELD, this.lastHit);
+        builder.field(ConversationalIndexConstants.META_CREATED_FIELD, this.createdTime);
+        builder.field(ConversationalIndexConstants.META_ENDED_FIELD, this.lastHitTime);
         builder.field(ConversationalIndexConstants.META_LENGTH_FIELD, this.numInteractions);
         builder.field(ConversationalIndexConstants.META_NAME_FIELD, this.name);
         builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
@@ -164,9 +164,9 @@ public final class ConversationMeta implements Writeable, ToXContentObject {
             return false;
         } if(! (otherconversation.user == this.user || otherconversation.user.equals(this.user))) {
             return false; 
-        } if(! otherconversation.created.equals(this.created)) {
+        } if(! otherconversation.createdTime.equals(this.createdTime)) {
             return false;
-        } if(! otherconversation.lastHit.equals(this.lastHit)) {
+        } if(! otherconversation.lastHitTime.equals(this.lastHitTime)) {
             return false;
         } if(otherconversation.numInteractions != this.numInteractions) {
             return false;
