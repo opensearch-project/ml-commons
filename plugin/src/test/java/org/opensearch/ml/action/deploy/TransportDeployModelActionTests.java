@@ -21,6 +21,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 
 import java.lang.reflect.Field;
 import java.nio.file.Path;
@@ -65,6 +66,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -130,6 +132,9 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
     @Rule
@@ -167,6 +172,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT))).thenReturn(mlStat);
         transportDeployModelAction = new TransportDeployModelAction(
@@ -183,7 +190,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlModelManager,
             mlStats,
             settings,
-            modelAccessControlHelper
+            modelAccessControlHelper,
+            mlFeatureEnabledSetting
         );
     }
 
@@ -229,6 +237,23 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
         assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDoExecuteRemoteInferenceDisabled() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+        assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
     }
 
     public void test_ValidationFailedException() {
@@ -277,7 +302,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlModelManager,
             mlStats,
             settings,
-            modelAccessControlHelper
+            modelAccessControlHelper,
+            mlFeatureEnabledSetting
         );
 
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, mock(ActionListener.class));
@@ -302,7 +328,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 mlStats,
                 settings,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
         MLDeployModelRequest MLDeployModelRequest1 = mock(MLDeployModelRequest.class);
