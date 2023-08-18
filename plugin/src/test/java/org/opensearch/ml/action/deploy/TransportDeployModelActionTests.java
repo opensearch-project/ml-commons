@@ -149,7 +149,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlDeployModelRequest.getModelNodeIds()).thenReturn(new String[] { "node1" });
         DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
         DiscoveryNode[] discoveryNodes = new DiscoveryNode[] { discoveryNode };
-        when(nodeFilter.getEligibleNodes()).thenReturn(discoveryNodes);
+        when(nodeFilter.getEligibleNodes(any())).thenReturn(discoveryNodes);
         when(discoveryNode.getId()).thenReturn("node1");
 
         when(clusterService.localNode()).thenReturn(discoveryNode);
@@ -286,7 +286,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     @Ignore
     public void testDoExecute_whenDeployModelRequestNodeIdsEmpty_thenMLResourceNotFoundException() {
         DiscoveryNodeHelper nodeHelper = mock(DiscoveryNodeHelper.class);
-        when(nodeHelper.getEligibleNodes()).thenReturn(new DiscoveryNode[] {});
+        when(nodeHelper.getEligibleNodes(FunctionName.REMOTE)).thenReturn(new DiscoveryNode[] {});
         TransportDeployModelAction deployModelAction = spy(
             new TransportDeployModelAction(
                 transportService,
