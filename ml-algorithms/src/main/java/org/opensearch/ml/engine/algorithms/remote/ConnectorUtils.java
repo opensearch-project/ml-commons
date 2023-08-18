@@ -99,7 +99,9 @@ public class ConnectorUtils {
         if (inputData.getParameters() != null) {
             Map<String, String> newParameters = new HashMap<>();
             inputData.getParameters().entrySet().forEach(entry -> {
-                if (StringUtils.isJson(entry.getValue())) {
+                if (entry.getValue() == null) {
+                    newParameters.put(entry.getKey(), entry.getValue());
+                } else if (StringUtils.isJson(entry.getValue())) {
                     // no need to escape if it's already valid json
                     newParameters.put(entry.getKey(), entry.getValue());
                 } else {
