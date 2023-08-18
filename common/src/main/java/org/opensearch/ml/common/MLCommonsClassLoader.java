@@ -259,6 +259,8 @@ public class MLCommonsClassLoader {
             Throwable cause = e.getCause();
             if (cause instanceof MLException) {
                 throw (MLException)cause;
+	    } else if (cause instanceof IllegalArgumentException) {
+                throw (IllegalArgumentException) cause;
             } else {
                 log.error("Failed to init instance for type " + type, e);
                 return null;
