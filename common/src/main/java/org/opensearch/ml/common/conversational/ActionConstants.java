@@ -52,15 +52,15 @@ public class ActionConstants {
     public final static String SUCCESS_FIELD = "success";
 
     /** path for create conversation */
-    public final static String CREATE_CONVERSATION_PATH = "/_plugins/ml/conversational/memory";
+    public final static String CREATE_CONVERSATION_PATH = "/_plugins/_ml/conversational/memory";
     /** path for list conversations */
-    public final static String LIST_CONVERSATIONS_PATH  = "/_plugins/ml/conversational/memory";
+    public final static String LIST_CONVERSATIONS_PATH  = "/_plugins/_ml/conversational/memory";
     /** path for put interaction */
-    public final static String CREATE_INTERACTION_PATH = "/_plugins/ml/conversational/memory/{conversationId}";
+    public final static String CREATE_INTERACTION_PATH = "/_plugins/_ml/conversational/memory/{conversation_id}";
     /** path for get interactions */
-    public final static String GET_INTERACTIONS_PATH = "/_plugins/ml/conversational/memory/{conversationId}";
+    public final static String GET_INTERACTIONS_PATH = "/_plugins/_ml/conversational/memory/{conversation_id}";
     /** path for delete conversation */
-    public final static String DELETE_CONVERSATION_PATH = "/_plugins/ml/conversational/memory/{conversationId}";
+    public final static String DELETE_CONVERSATION_PATH = "/_plugins/_ml/conversational/memory/{conversation_id}";
 
     /** default max results returned by get operations */
     public final static int DEFAULT_MAX_RESULTS = 10;
