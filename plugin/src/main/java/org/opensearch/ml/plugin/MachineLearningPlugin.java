@@ -152,6 +152,7 @@ import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -220,6 +221,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     private ModelAccessControlHelper modelAccessControlHelper;
 
     private ConnectorAccessControlHelper connectorAccessControlHelper;
+
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
@@ -330,6 +333,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         connectorAccessControlHelper = new ConnectorAccessControlHelper(clusterService, settings);
+        mlFeatureEnabledSetting = new MLFeatureEnabledSetting(clusterService, settings);
+
         mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
@@ -436,6 +441,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlExecuteTaskRunner,
                 modelAccessControlHelper,
                 connectorAccessControlHelper,
+                mlFeatureEnabledSetting,
                 mlSearchHandler,
                 mlTaskDispatcher,
                 mlModelChunkUploader,
@@ -460,7 +466,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLStatsAction restMLStatsAction = new RestMLStatsAction(mlStats, clusterService, indexUtils, xContentRegistry);
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
-        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager);
+        RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
@@ -469,7 +475,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
         RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
         RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
-        RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction(clusterService, settings);
+        RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction(
+            clusterService,
+            settings,
+            mlFeatureEnabledSetting
+        );
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
@@ -478,7 +488,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
         RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
-        RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction();
+        RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
@@ -613,7 +623,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
-                MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES
+                MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED
             );
         return settings;
     }

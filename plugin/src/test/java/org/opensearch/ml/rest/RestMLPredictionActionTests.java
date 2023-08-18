@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.TestHelper.getKMeansRestRequest;
 import static org.opensearch.ml.utils.TestHelper.verifyParsedKMeansMLInput;
@@ -36,6 +37,7 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -57,12 +59,15 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     RestChannel channel;
     @Mock
     MLModelManager modelManager;
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(modelManager.getOptionalModelFunctionName(anyString())).thenReturn(Optional.empty());
-        restMLPredictionAction = new RestMLPredictionAction(modelManager);
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        restMLPredictionAction = new RestMLPredictionAction(modelManager, mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -81,7 +86,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction(modelManager);
+        RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction(modelManager, mlFeatureEnabledSetting);
         assertNotNull(mlPredictionAction);
     }
 
@@ -106,6 +111,15 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
 
         MLInput mlInput = mlPredictionTaskRequest.getMlInput();
         verifyParsedKMeansMLInput(mlInput);
+    }
+
+    public void testGetRequest_RemoteInferenceDisabled() throws IOException {
+        thrown.expect(IllegalStateException.class);
+        thrown.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest_PredictModel();
+        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.REMOTE.name(), request);
     }
 
     public void testPrepareRequest() throws Exception {
