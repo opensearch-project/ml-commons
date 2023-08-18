@@ -19,6 +19,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -81,7 +84,7 @@ public class HttpConnector extends AbstractConnector {
                     description = parser.text();
                     break;
                 case PROTOCOL_FIELD:
-                    protocol = parser.text();
+                    this.protocol = parser.text();
                     break;
                 case PARAMETERS_FIELD:
                     Map<String, Object> map = parser.map();
@@ -250,6 +253,7 @@ public class HttpConnector extends AbstractConnector {
         Optional<ConnectorAction> predictAction = findPredictAction();
         if (predictAction.isPresent() && predictAction.get().getRequestBody() != null) {
             String payload = predictAction.get().getRequestBody();
+            payload = fillNullParameters(parameters, payload);
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             payload = substitutor.replace(payload);
 
@@ -259,6 +263,30 @@ public class HttpConnector extends AbstractConnector {
             return (T) payload;
         }
         return (T) parameters.get("http_body");
+    }
+
+    protected String fillNullParameters(Map<String, String> parameters, String payload) {
+        List<String> bodyParams = findStringParametersWithNullDefaultValue(payload);
+        String newPayload = payload;
+        for (String key : bodyParams) {
+            if (!parameters.containsKey(key) || parameters.get(key) == null) {
+                newPayload = newPayload.replace("\"${parameters." + key + ":-null}\"", "null");
+            }
+        }
+        return newPayload;
+    }
+
+    private List<String> findStringParametersWithNullDefaultValue(String input) {
+        String regex = "\"\\$\\{parameters\\.(\\w+):-null}\"";
+        Pattern pattern = Pattern.compile(regex);
+        Matcher matcher = pattern.matcher(input);
+
+        List<String> paramList = new ArrayList<>();
+        while (matcher.find()) {
+            String parameterValue = matcher.group(1);
+            paramList.add(parameterValue);
+        }
+        return paramList;
     }
 
     @Override

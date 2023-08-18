@@ -96,8 +96,16 @@ public class ConnectorUtilsTest {
         processInput_RemoteInferenceInputDataSet(input, input);
     }
 
+    @Test
+    public void processInput_RemoteInferenceInputDataSet_NullParam() {
+        String input = null;
+        processInput_RemoteInferenceInputDataSet(input, input);
+    }
+
     private void processInput_RemoteInferenceInputDataSet(String input, String expectedInput) {
-        RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", input)).build();
+        Map<String, String> params = new HashMap<>();
+        params.put("input", input);
+        RemoteInferenceInputDataSet dataSet = RemoteInferenceInputDataSet.builder().parameters(params).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
         ConnectorAction predictAction = ConnectorAction.builder()
