@@ -259,6 +259,14 @@ public class HttpConnectorTest {
         Assert.assertEquals("test output", modelTensors.get(0).getDataAsMap().get("response"));
     }
 
+    @Test
+    public void fillNullParameters() {
+        HttpConnector connector = createHttpConnector();
+        Map<String, String> parameters = new HashMap<>();
+        String output = connector.fillNullParameters(parameters, "{\"input1\": \"${parameters.input1:-null}\"}");
+        Assert.assertEquals("{\"input1\": null}", output);
+    }
+
     public static HttpConnector createHttpConnector() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = "POST";
