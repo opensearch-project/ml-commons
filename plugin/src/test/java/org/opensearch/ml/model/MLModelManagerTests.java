@@ -733,7 +733,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
         modelManager.deployModel(modelId, modelContentHashValue, functionName, true, mlTask, listener);
         verify(modelCacheHelper).removeModel(eq(modelId));
-        verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT));
+        verify(mlStats).createCounterStatIfAbsent(eq(functionName), eq(ActionName.DEPLOY), eq(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
+        verify(mlStats).getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT));
     }
 
     private void mock_client_index_ModelChunkFailure(Client client, String modelId) {

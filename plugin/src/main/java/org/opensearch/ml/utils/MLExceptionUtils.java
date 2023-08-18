@@ -43,9 +43,11 @@ public class MLExceptionUtils {
 
     public static void logException(String errorMessage, Exception e, Logger log) {
         Throwable rootCause = ExceptionUtils.getRootCause(e);
-        if (e instanceof MLLimitExceededException || e instanceof MLResourceNotFoundException) {
+        if (e instanceof MLLimitExceededException || e instanceof MLResourceNotFoundException || e instanceof IllegalArgumentException) {
             log.warn(e.getMessage());
-        } else if (rootCause instanceof MLLimitExceededException || rootCause instanceof MLResourceNotFoundException) {
+        } else if (rootCause instanceof MLLimitExceededException
+            || rootCause instanceof MLResourceNotFoundException
+            || rootCause instanceof IllegalArgumentException) {
             log.warn(rootCause.getMessage());
         } else {
             log.error(errorMessage, e);
