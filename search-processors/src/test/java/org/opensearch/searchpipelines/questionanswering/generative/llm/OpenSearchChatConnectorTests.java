@@ -9,7 +9,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.opensearch.action.ActionFuture;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.ml.client.MachineLearningClient;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
