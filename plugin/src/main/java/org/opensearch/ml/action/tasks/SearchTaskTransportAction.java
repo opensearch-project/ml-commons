@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.tasks;
 
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -13,6 +12,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
