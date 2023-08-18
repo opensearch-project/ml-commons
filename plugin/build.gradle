@@ -35,10 +35,6 @@ checkstyle {
     toolVersion = '10.12.2'
 }
 
-lombok {
-    version = "1.18.28"
-}
-
 opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
@@ -304,7 +300,7 @@ jacocoTestCoverageVerification {
             excludes = jacocoExclusions
             limit {
                 counter = 'BRANCH'
-                minimum = 0.6
+                minimum = 0.7  //TODO: change this value to 0.7
             }
         }
         rule {
@@ -313,7 +309,7 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.6
+                minimum = 0.8  //TODO: change this value to 0.8
             }
         }
     }
