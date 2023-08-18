@@ -39,7 +39,15 @@ public class RestConversationalCreateConversationActionIT extends MLCommonsRestT
     }
 
     public void testCreateConversationNamed() throws IOException {
-        Response response = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "name"), "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_CONVERSATION_PATH,
+                Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "name"),
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();

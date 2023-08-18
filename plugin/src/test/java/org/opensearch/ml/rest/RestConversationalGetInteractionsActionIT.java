@@ -28,7 +28,7 @@ import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTestCase {
-    
+
     public void testGetInteractions_NoConversation() throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/coffee", null, "", null);
         assert (response != null);
@@ -72,13 +72,19 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map.of(
-            ActionConstants.INPUT_FIELD, "input", 
-            ActionConstants.PROMPT_FIELD, "prompt", 
-            ActionConstants.AI_RESPONSE_FIELD, "response", 
-            ActionConstants.AI_AGENT_FIELD, "agent", 
-            ActionConstants.INTER_ATTRIBUTES_FIELD, "attributes"
-        );
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_FIELD,
+                "prompt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.AI_AGENT_FIELD,
+                "agent",
+                ActionConstants.INTER_ATTRIBUTES_FIELD,
+                "attributes"
+            );
         Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
@@ -112,13 +118,19 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map.of(
-            ActionConstants.INPUT_FIELD, "input", 
-            ActionConstants.PROMPT_FIELD, "prompt", 
-            ActionConstants.AI_RESPONSE_FIELD, "response", 
-            ActionConstants.AI_AGENT_FIELD, "agent", 
-            ActionConstants.INTER_ATTRIBUTES_FIELD, "attributes"
-        );
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_FIELD,
+                "prompt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.AI_AGENT_FIELD,
+                "agent",
+                ActionConstants.INTER_ATTRIBUTES_FIELD,
+                "attributes"
+            );
         Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
@@ -128,7 +140,15 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (map.containsKey("interaction_id"));
         String iid = (String) map.get("interaction_id");
 
-        Response response1 = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/" + cid, Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"), "", null);
+        Response response1 = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                "_plugins/_ml/conversational/memory/" + cid,
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
+                "",
+                null
+            );
         assert (response1 != null);
         assert (TestHelper.restStatus(response1) == RestStatus.OK);
         HttpEntity httpEntity1 = response1.getEntity();
@@ -153,13 +173,19 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map.of(
-            ActionConstants.INPUT_FIELD, "input", 
-            ActionConstants.PROMPT_FIELD, "prompt", 
-            ActionConstants.AI_RESPONSE_FIELD, "response", 
-            ActionConstants.AI_AGENT_FIELD, "agent", 
-            ActionConstants.INTER_ATTRIBUTES_FIELD, "attributes"
-        );
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_FIELD,
+                "prompt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.AI_AGENT_FIELD,
+                "agent",
+                ActionConstants.INTER_ATTRIBUTES_FIELD,
+                "attributes"
+            );
         Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
@@ -178,7 +204,15 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (map2.containsKey("interaction_id"));
         String iid2 = (String) map2.get("interaction_id");
 
-        Response response1 = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/" + cid, Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"), "", null);
+        Response response1 = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                "_plugins/_ml/conversational/memory/" + cid,
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
+                "",
+                null
+            );
         assert (response1 != null);
         assert (TestHelper.restStatus(response1) == RestStatus.OK);
         HttpEntity httpEntity1 = response1.getEntity();
@@ -192,7 +226,15 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (((String) interactions.get(0).get("interaction_id")).equals(iid2));
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
-        Response response3 = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/" + cid, Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_TOKEN_FIELD, "1"), "", null);
+        Response response3 = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                "_plugins/_ml/conversational/memory/" + cid,
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_TOKEN_FIELD, "1"),
+                "",
+                null
+            );
         assert (response3 != null);
         assert (TestHelper.restStatus(response3) == RestStatus.OK);
         HttpEntity httpEntity3 = response3.getEntity();

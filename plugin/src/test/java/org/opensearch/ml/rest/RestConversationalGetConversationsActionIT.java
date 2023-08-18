@@ -28,7 +28,7 @@ import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestConversationalGetConversationsActionIT extends MLCommonsRestTestCase {
-    
+
     public void testNoConversations_EmptyList() throws IOException {
         Response response = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/", null, "", null);
         assert (response != null);
@@ -76,7 +76,15 @@ public class RestConversationalGetConversationsActionIT extends MLCommonsRestTes
         assert (ccmap.containsKey("conversation_id"));
         String id = (String) ccmap.get("conversation_id");
 
-        Response response = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/", Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"), "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                "_plugins/_ml/conversational/memory/",
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -111,7 +119,15 @@ public class RestConversationalGetConversationsActionIT extends MLCommonsRestTes
         assert (ccmap2.containsKey("conversation_id"));
         String id2 = (String) ccmap2.get("conversation_id");
 
-        Response response1 = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/", Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"), "", null);
+        Response response1 = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                "_plugins/_ml/conversational/memory/",
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
+                "",
+                null
+            );
         assert (response1 != null);
         assert (TestHelper.restStatus(response1) == RestStatus.OK);
         HttpEntity httpEntity1 = response1.getEntity();
@@ -126,7 +142,15 @@ public class RestConversationalGetConversationsActionIT extends MLCommonsRestTes
         assert (((String) conversations1.get(0).get("conversation_id")).equals(id2));
         assert (((Double) map1.get("next_token")).intValue() == 1);
 
-        Response response = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/", Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_TOKEN_FIELD, "1"), "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                "_plugins/_ml/conversational/memory/",
+                Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_TOKEN_FIELD, "1"),
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();

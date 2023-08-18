@@ -38,13 +38,19 @@ public class RestConversationalCreateInteractionActionIT extends MLCommonsRestTe
         assert (ccmap.containsKey("conversation_id"));
         String id = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map.of(
-            ActionConstants.INPUT_FIELD, "input", 
-            ActionConstants.PROMPT_FIELD, "prompt", 
-            ActionConstants.AI_RESPONSE_FIELD, "response", 
-            ActionConstants.AI_AGENT_FIELD, "agent", 
-            ActionConstants.INTER_ATTRIBUTES_FIELD, "attributes"
-        );
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_FIELD,
+                "prompt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.AI_AGENT_FIELD,
+                "agent",
+                ActionConstants.INTER_ATTRIBUTES_FIELD,
+                "attributes"
+            );
         Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + id, params, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);

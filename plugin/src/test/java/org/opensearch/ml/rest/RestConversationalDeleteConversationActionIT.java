@@ -28,7 +28,7 @@ import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestConversationalDeleteConversationActionIT extends MLCommonsRestTestCase {
-    
+
     public void testDeleteConversation_ThatExists() throws IOException {
         Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
         assert (ccresponse != null);
@@ -70,13 +70,19 @@ public class RestConversationalDeleteConversationActionIT extends MLCommonsRestT
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Map<String, String> params = Map.of(
-            ActionConstants.INPUT_FIELD, "input", 
-            ActionConstants.PROMPT_FIELD, "prompt", 
-            ActionConstants.AI_RESPONSE_FIELD, "response", 
-            ActionConstants.AI_AGENT_FIELD, "agent", 
-            ActionConstants.INTER_ATTRIBUTES_FIELD, "attributes"
-        );
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_FIELD,
+                "prompt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.AI_AGENT_FIELD,
+                "agent",
+                ActionConstants.INTER_ATTRIBUTES_FIELD,
+                "attributes"
+            );
         Response ciresponse = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
         assert (ciresponse != null);
         assert (TestHelper.restStatus(ciresponse) == RestStatus.OK);
