@@ -56,9 +56,6 @@ public class RestMLCreateConnectorAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLCreateConnectorRequest getRequest(RestRequest request) throws IOException {
-        if (!request.hasContent()) {
-            throw new IOException("Create Connector request has empty body");
-        }
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.parse(parser);
