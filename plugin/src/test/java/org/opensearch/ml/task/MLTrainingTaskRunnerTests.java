@@ -183,7 +183,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_SyncRequest() {
         setupMocks(true, false, false, false);
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager, never()).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -195,7 +195,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_SyncRequest_QueryInput() {
         setupMocks(true, false, false, false);
-        taskRunner.dispatchTask(requestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithQuery, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager, never()).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -207,7 +207,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_AsyncRequest_QueryInput_Failure() {
         setupMocks(true, false, false, true);
-        taskRunner.dispatchTask(asyncRequestWithQuery, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, asyncRequestWithQuery, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -220,7 +220,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_AsyncRequest() {
         setupMocks(true, false, false, false);
-        taskRunner.dispatchTask(asyncRequestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, asyncRequestWithDataFrame, transportService, listener);
         verify(listener).onResponse(any());
         verify(mlTaskManager).createMLTask(any(MLTask.class), any());
         verify(mlTaskManager).add(any(MLTask.class));
@@ -232,7 +232,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_AsyncRequest_FailToCreateTask() {
         setupMocks(true, true, false, false);
-        taskRunner.dispatchTask(asyncRequestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, asyncRequestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -249,7 +249,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnLocalNode_AsyncRequest_FailToCreateTaskWithException() {
         setupMocks(true, true, true, false);
-        taskRunner.dispatchTask(asyncRequestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, asyncRequestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -266,7 +266,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
     @Ignore
     public void testExecuteTask_OnRemoteNode_SyncRequest() {
         setupMocks(false, false, false, false);
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), eq(requestWithDataFrame), any());
     }
 
@@ -276,7 +276,7 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
         doThrow(new NodeNotConnectedException(remoteNode, errorMessage))
             .when(transportService)
             .sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), any(), any());
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(transportService).sendRequest(eq(remoteNode), eq(MLTrainingTaskAction.NAME), eq(requestWithDataFrame), any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -285,11 +285,11 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
 
     public void testExecuteTask_FailedToDispatch() {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new RuntimeException(errorMessage));
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
-        taskRunner.dispatchTask(requestWithDataFrame, transportService, listener);
+        }).when(mlTaskDispatcher).dispatch(any(), any());
+        taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(listener, never()).onResponse(any());
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
@@ -303,14 +303,14 @@ public class MLTrainingTaskRunnerTests extends OpenSearchTestCase {
         boolean failedToParseQueryInput
     ) {
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> actionListener = invocation.getArgument(1);
             if (runOnLocalNode) {
                 actionListener.onResponse(localNode);
             } else {
                 actionListener.onResponse(remoteNode);
             }
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
+        }).when(mlTaskDispatcher).dispatch(any(), any());
 
         if (throwExceptionWhenCreateMLTask) {
             doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).createMLTask(any(), any());

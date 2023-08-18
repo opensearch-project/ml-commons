@@ -10,7 +10,9 @@ import static java.util.Collections.emptySet;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.BUILT_IN_ROLES;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -33,6 +35,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.test.OpenSearchTestCase;
 
 import com.google.common.collect.ImmutableMap;
@@ -88,7 +91,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             Version.CURRENT
         );
         dataNode2 = new DiscoveryNode(
-            dataNode1Name,
+            dataNode2Name,
             dataNode2Id,
             buildNewFakeTransportAddress(),
             ImmutableMap.of(CommonValue.BOX_TYPE_KEY, CommonValue.HOT_BOX_TYPE),
@@ -140,13 +143,33 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             .builder()
             .put(ML_COMMONS_ONLY_RUN_ON_ML_NODE.getKey(), onlyRunOnMLNode)
             .put(ML_COMMONS_EXCLUDE_NODE_NAMES.getKey(), excludedNodeName)
+            .putList(ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES.getKey(), "data", "ml")
+            .putList(ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES.getKey(), "data")
             .build();
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ONLY_RUN_ON_ML_NODE, ML_COMMONS_EXCLUDE_NODE_NAMES);
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_ONLY_RUN_ON_ML_NODE,
+            ML_COMMONS_EXCLUDE_NODE_NAMES,
+            ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
+            ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES
+        );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
     }
 
-    public void testGetEligibleNodes_MLNode() {
-        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes();
+    public void testGetEligibleNodes_MLNode_RemoteModel() {
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.REMOTE);
+        assertEquals(4, eligibleNodes.length);
+        Set<String> nodeIds = new HashSet<>();
+        nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
+        assertTrue(nodeIds.contains(mlNode1.getId()));
+        assertTrue(nodeIds.contains(mlNode2.getId()));
+        assertTrue(nodeIds.contains(dataNode1.getId()));
+        assertTrue(nodeIds.contains(dataNode2.getId()));
+        assertFalse(nodeIds.contains(warmDataNode1.getId()));
+    }
+
+    public void testGetEligibleNodes_MLNode_LocalModel() {
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING);
         assertEquals(2, eligibleNodes.length);
         Set<String> nodeIds = new HashSet<>();
         nodeIds.addAll(Arrays.asList(eligibleNodes).stream().map(n -> n.getId()).collect(Collectors.toList()));
@@ -161,7 +184,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
         clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
         when(clusterService.state()).thenReturn(clusterState);
 
-        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes();
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.REMOTE);
         assertEquals(2, eligibleNodes.length);
         assertEquals(dataNode1.getName(), eligibleNodes[0].getName());
         assertEquals(dataNode2.getName(), eligibleNodes[1].getName());
@@ -170,38 +193,45 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     public void testGetEligibleNodes_MLNode_Excluded() {
         mockSettings(false, mlNode1.getName() + "," + mlNode2.getName());
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
-        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes();
+        DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING);
         assertEquals(2, eligibleNodes.length);
         assertEquals(dataNode1.getName(), eligibleNodes[0].getName());
-        assertEquals(dataNode1.getName(), eligibleNodes[1].getName());
+        assertEquals(dataNode2.getName(), eligibleNodes[1].getName());
     }
 
     public void testFilterEligibleNodes_Null() {
         mockSettings(false, mlNode1.getName() + "," + mlNode2.getName());
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
-        String[] eligibleNodes = discoveryNodeHelper.filterEligibleNodes(null);
+        String[] eligibleNodes = discoveryNodeHelper.filterEligibleNodes(FunctionName.REMOTE, null);
         assertNull(eligibleNodes);
     }
 
     public void testFilterEligibleNodes_Empty() {
         mockSettings(false, mlNode1.getName() + "," + mlNode2.getName());
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
-        String[] eligibleNodes = discoveryNodeHelper.filterEligibleNodes(new String[] {});
+        String[] eligibleNodes = discoveryNodeHelper.filterEligibleNodes(FunctionName.REMOTE, new String[] {});
         assertEquals(0, eligibleNodes.length);
     }
 
     public void testFilterEligibleNodes() {
         mockSettings(true, mlNode1.getName());
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
-        String[] eligibleNodes = discoveryNodeHelper.filterEligibleNodes(new String[] { mlNode1Id, mlNode2Id, dataNode1Id });
-        assertEquals(1, eligibleNodes.length);
-        assertEquals(mlNode2Id, eligibleNodes[0]);
+        String[] eligibleNodes = discoveryNodeHelper
+            .filterEligibleNodes(FunctionName.REMOTE, new String[] { mlNode1Id, mlNode2Id, dataNode1Id });
+        Set<String> nodeIds = new HashSet<>();
+        for (String node : eligibleNodes) {
+            nodeIds.add(node);
+        }
+        assertEquals(2, eligibleNodes.length);
+        assertTrue(nodeIds.contains(mlNode2Id));
+        assertTrue(nodeIds.contains(dataNode1Id));
     }
 
     public void testFilterEligibleNodes_BothMLAndDataNodes() {
         mockSettings(false, mlNode1.getName());
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
-        String[] eligibleNodes = discoveryNodeHelper.filterEligibleNodes(new String[] { mlNode1Id, mlNode2Id, dataNode1Id });
+        String[] eligibleNodes = discoveryNodeHelper
+            .filterEligibleNodes(FunctionName.REMOTE, new String[] { mlNode1Id, mlNode2Id, dataNode1Id });
         assertEquals(2, eligibleNodes.length);
         Set<String> nodeIds = new HashSet<>();
         nodeIds.addAll(Arrays.asList(eligibleNodes));

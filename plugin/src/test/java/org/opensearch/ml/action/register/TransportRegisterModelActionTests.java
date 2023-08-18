@@ -193,10 +193,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(mlTaskManager).createMLTask(any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<DiscoveryNode> listener = invocation.getArgument(0);
+            ActionListener<DiscoveryNode> listener = invocation.getArgument(1);
             listener.onResponse(node1);
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
+        }).when(mlTaskDispatcher).dispatch(any(), any());
 
         when(clusterService.localNode()).thenReturn(node2);
         when(node2.getId()).thenReturn("node2Id");
@@ -305,10 +305,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     public void testTransportRegisterModelActionDoExecuteWithDispatchException() {
         doAnswer(invocation -> {
-            ActionListener<Exception> listener = invocation.getArgument(0);
+            ActionListener<Exception> listener = invocation.getArgument(1);
             listener.onFailure(new Exception("Failed to dispatch register model task "));
             return null;
-        }).when(mlTaskDispatcher).dispatch(any());
+        }).when(mlTaskDispatcher).dispatch(any(), any());
         when(node1.getId()).thenReturn("NodeId1");
         when(clusterService.localNode()).thenReturn(node1);
         transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", "modelGroupID"), actionListener);
