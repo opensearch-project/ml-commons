@@ -24,6 +24,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -113,8 +114,8 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testPrepareRequest_EmptyContent() throws Exception {
-        thrown.expect(IOException.class);
-        thrown.expectMessage("Create Connector request has empty body");
+        thrown.expect(OpenSearchParseException.class);
+        thrown.expectMessage("request body is required");
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
 
