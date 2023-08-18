@@ -6,10 +6,11 @@
 package org.opensearch.ml.cluster;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_EXCLUDE_NODE_NAMES;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +22,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.utils.MLNodeUtils;
 
 import lombok.extern.log4j.Log4j2;
@@ -31,6 +33,8 @@ public class DiscoveryNodeHelper {
     private final HotDataNodePredicate eligibleNodeFilter;
     private volatile Boolean onlyRunOnMLNode;
     private volatile Set<String> excludedNodeNames;
+    private volatile Set<String> remoteModelEligibleNodeRoles;
+    private volatile Set<String> localModelEligibleNodeRoles;
 
     public DiscoveryNodeHelper(ClusterService clusterService, Settings settings) {
         this.clusterService = clusterService;
@@ -41,10 +45,20 @@ public class DiscoveryNodeHelper {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_EXCLUDE_NODE_NAMES, it -> excludedNodeNames = Strings.commaDelimitedListToSet(it));
+        remoteModelEligibleNodeRoles = new HashSet<>();
+        remoteModelEligibleNodeRoles.addAll(ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES.get(settings));
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES, it -> {
+            remoteModelEligibleNodeRoles = new HashSet<>(it);
+        });
+        localModelEligibleNodeRoles = new HashSet<>();
+        localModelEligibleNodeRoles.addAll(ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES.get(settings));
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES, it -> {
+            localModelEligibleNodeRoles = new HashSet<>(it);
+        });
     }
 
-    public String[] getEligibleNodeIds() {
-        DiscoveryNode[] nodes = getEligibleNodes();
+    public String[] getEligibleNodeIds(FunctionName functionName) {
+        DiscoveryNode[] nodes = getEligibleNodes(functionName);
         String[] nodeIds = new String[nodes.length];
         for (int i = 0; i < nodes.length; i++) {
             nodeIds[i] = nodes[i].getId();
@@ -52,33 +66,40 @@ public class DiscoveryNodeHelper {
         return nodeIds;
     }
 
-    public DiscoveryNode[] getEligibleNodes() {
+    public DiscoveryNode[] getEligibleNodes(FunctionName functionName) {
         ClusterState state = this.clusterService.state();
-        final List<DiscoveryNode> eligibleMLNodes = new ArrayList<>();
-        final List<DiscoveryNode> eligibleDataNodes = new ArrayList<>();
+        final List<DiscoveryNode> eligibleNodes = new ArrayList<>();
         for (DiscoveryNode node : state.nodes()) {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
             }
-            if (MLNodeUtils.isMLNode(node)) {
-                eligibleMLNodes.add(node);
-            }
-            if (!onlyRunOnMLNode && node.isDataNode() && isEligibleDataNode(node)) {
-                eligibleDataNodes.add(node);
+            if (functionName == FunctionName.REMOTE) {// remote model
+                getEligibleNodes(remoteModelEligibleNodeRoles, eligibleNodes, node);
+            } else { // local model
+                if (onlyRunOnMLNode) {
+                    if (MLNodeUtils.isMLNode(node)) {
+                        eligibleNodes.add(node);
+                    }
+                } else {
+                    getEligibleNodes(localModelEligibleNodeRoles, eligibleNodes, node);
+                }
             }
         }
-        if (eligibleMLNodes.size() > 0) {
-            DiscoveryNode[] mlNodes = eligibleMLNodes.toArray(new DiscoveryNode[0]);
-            log.debug("Find {} dedicated ML nodes: {}", eligibleMLNodes.size(), Arrays.toString(mlNodes));
-            return mlNodes;
-        } else {
-            DiscoveryNode[] dataNodes = eligibleDataNodes.toArray(new DiscoveryNode[0]);
-            log.debug("Find no dedicated ML nodes. But have {} data nodes: {}", eligibleDataNodes.size(), Arrays.toString(dataNodes));
-            return dataNodes;
+        return eligibleNodes.toArray(new DiscoveryNode[0]);
+    }
+
+    private void getEligibleNodes(Set<String> allowedNodeRoles, List<DiscoveryNode> eligibleNodes, DiscoveryNode node) {
+        if (allowedNodeRoles.contains("data") && isEligibleDataNode(node)) {
+            eligibleNodes.add(node);
+        }
+        for (String nodeRole : allowedNodeRoles) {
+            if (!"data".equals(nodeRole) && node.getRoles().stream().anyMatch(r -> r.roleName().equals(nodeRole))) {
+                eligibleNodes.add(node);
+            }
         }
     }
 
-    public String[] filterEligibleNodes(String[] nodeIds) {
+    public String[] filterEligibleNodes(FunctionName functionName, String[] nodeIds) {
         if (nodeIds == null || nodeIds.length == 0) {
             return nodeIds;
         }
@@ -88,14 +109,30 @@ public class DiscoveryNodeHelper {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
             }
-            if (MLNodeUtils.isMLNode(node)) {
-                eligibleNodes.add(node.getId());
-            }
-            if (!onlyRunOnMLNode && node.isDataNode() && isEligibleDataNode(node)) {
-                eligibleNodes.add(node.getId());
+            if (functionName == FunctionName.REMOTE) {// remote model
+                getEligibleNodes(remoteModelEligibleNodeRoles, eligibleNodes, node);
+            } else { // local model
+                if (onlyRunOnMLNode) {
+                    if (MLNodeUtils.isMLNode(node)) {
+                        eligibleNodes.add(node.getId());
+                    }
+                } else {
+                    getEligibleNodes(localModelEligibleNodeRoles, eligibleNodes, node);
+                }
             }
         }
         return eligibleNodes.toArray(new String[0]);
+    }
+
+    private void getEligibleNodes(Set<String> allowedNodeRoles, Set<String> eligibleNodes, DiscoveryNode node) {
+        if (allowedNodeRoles.contains("data") && isEligibleDataNode(node)) {
+            eligibleNodes.add(node.getId());
+        }
+        for (String nodeRole : allowedNodeRoles) {
+            if (!"data".equals(nodeRole) && node.getRoles().stream().anyMatch(r -> r.roleName().equals(nodeRole))) {
+                eligibleNodes.add(node.getId());
+            }
+        }
     }
 
     public DiscoveryNode[] getAllNodes() {

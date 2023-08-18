@@ -129,6 +129,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                FunctionName functionName = mlModel.getAlgorithm();
                 modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                     if (!access) {
                         listener
@@ -141,7 +142,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         }
                         // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
                         mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-                        DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes();
+                        DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes(functionName);
                         Map<String, DiscoveryNode> nodeMapping = new HashMap<>();
                         for (DiscoveryNode node : allEligibleNodes) {
                             nodeMapping.put(node.getId(), node);
@@ -161,7 +162,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                     nodeIds.add(nodeId);
                                 }
                             }
-                            String[] workerNodes = mlModelManager.getWorkerNodes(modelId);
+                            String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName);
                             if (workerNodes != null && workerNodes.length > 0) {
                                 Set<String> difference = new HashSet<String>(Arrays.asList(workerNodes));
                                 difference.removeAll(Arrays.asList(targetNodeIds));

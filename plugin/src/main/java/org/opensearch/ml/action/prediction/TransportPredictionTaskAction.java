@@ -15,6 +15,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -86,6 +87,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
+                FunctionName functionName = mlModel.getAlgorithm();
                 modelAccessControlHelper
                     .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                         if (!access) {
@@ -97,12 +99,13 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             String requestId = mlPredictionTaskRequest.getRequestID();
                             log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
                             long startTime = System.nanoTime();
-                            mlPredictTaskRunner.run(mlPredictionTaskRequest, transportService, ActionListener.runAfter(listener, () -> {
-                                long endTime = System.nanoTime();
-                                double durationInMs = (endTime - startTime) / 1e6;
-                                modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
-                                log.debug("completed predict request " + requestId + " for model " + modelId);
-                            }));
+                            mlPredictTaskRunner
+                                .run(functionName, mlPredictionTaskRequest, transportService, ActionListener.runAfter(listener, () -> {
+                                    long endTime = System.nanoTime();
+                                    double durationInMs = (endTime - startTime) / 1e6;
+                                    modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+                                    log.debug("completed predict request " + requestId + " for model " + modelId);
+                                }));
                         }
                     }, e -> {
                         log.error("Failed to Validate Access for ModelId " + modelId, e);
