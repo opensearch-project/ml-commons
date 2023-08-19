@@ -113,7 +113,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         Map<Enum, MLStat<?>> statMap = ImmutableMap
             .<Enum, MLStat<?>>builder()
-            .put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()))
+            .put(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()))
             .build();
         mlStats = new MLStats(statMap);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -209,7 +209,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_node_total_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
                 )
         );
     }
@@ -218,7 +218,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         doAnswer(invocation -> {
             ActionListener<MLStatsNodesResponse> actionListener = invocation.getArgument(2);
             List<MLStatsNodeResponse> nodes = new ArrayList<>();
-            Map<MLNodeLevelStat, Object> nodeStats = ImmutableMap.of(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, nodeTotalRequestCount);
+            Map<MLNodeLevelStat, Object> nodeStats = ImmutableMap.of(MLNodeLevelStat.ML_REQUEST_COUNT, nodeTotalRequestCount);
             Map<FunctionName, MLAlgoStats> algoStats = new HashMap<>();
             Map<ActionName, MLActionStats> actionStats = ImmutableMap
                 .of(
@@ -299,7 +299,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_node_total_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
                 )
         );
     }
@@ -309,7 +309,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
 
         RestRequest request = getStatsRestRequest(
             node.getId(),
-            MLClusterLevelStat.ML_MODEL_COUNT + "," + MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT
+            MLClusterLevelStat.ML_MODEL_COUNT + "," + MLNodeLevelStat.ML_TOTAL_MODEL_COUNT
         );
         restAction.handleRequest(request, channel, client);
 
@@ -321,7 +321,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertTrue(input.getTargetStatLevels().contains(MLStatLevel.NODE));
         assertEquals(1, input.getClusterLevelStats().size());
         assertTrue(input.getClusterLevelStats().contains(MLClusterLevelStat.ML_MODEL_COUNT));
-        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT));
+        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT));
 
         ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
         verify(channel, times(1)).sendResponse(argumentCaptor.capture());
@@ -334,7 +334,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_node_total_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
                 )
         );
     }
@@ -342,7 +342,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
     public void testPrepareRequest_ClusterAndNodeLevelStates_RequestParams_NodeLevelStat() throws Exception {
         prepareResponse();
 
-        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT.name());
+        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_TOTAL_MODEL_COUNT.name());
         restAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLStatsNodesRequest> inputArgumentCaptor = ArgumentCaptor.forClass(MLStatsNodesRequest.class);
@@ -352,7 +352,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertTrue(input.getTargetStatLevels().contains(MLStatLevel.NODE));
         assertEquals(0, input.getClusterLevelStats().size());
         assertEquals(1, input.getNodeLevelStats().size());
-        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT));
+        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT));
 
         ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
         verify(channel, times(1)).sendResponse(argumentCaptor.capture());
@@ -360,17 +360,17 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
         assertEquals(
-            "{\"nodes\":{\"node\":{\"ml_node_total_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
+            "{\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
             content.utf8ToString()
         );
     }
 
     public void testCreateMlStatsInputFromRequestParams_NodeStat() {
-        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT.name().toLowerCase(Locale.ROOT));
+        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_TOTAL_MODEL_COUNT.name().toLowerCase(Locale.ROOT));
         MLStatsInput input = restAction.createMlStatsInputFromRequestParams(request);
         assertEquals(1, input.getTargetStatLevels().size());
         assertTrue(input.getTargetStatLevels().contains(MLStatLevel.NODE));
-        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT));
+        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT));
         assertEquals(0, input.getClusterLevelStats().size());
     }
 

@@ -228,8 +228,8 @@ public class TransportUndeployModelAction extends
     }
 
     private MLUndeployModelNodeResponse createUndeployModelNodeResponse(MLUndeployModelNodesRequest MLUndeployModelNodesRequest) {
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
 
         String[] modelIds = MLUndeployModelNodesRequest.getModelIds();
 
@@ -246,7 +246,7 @@ public class TransportUndeployModelAction extends
         }
 
         Map<String, String> modelUndeployStatus = mlModelManager.undeployModel(modelIds);
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).decrement();
+        mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
         return new MLUndeployModelNodeResponse(clusterService.localNode(), modelUndeployStatus, modelWorkerNodesMap);
     }
 }

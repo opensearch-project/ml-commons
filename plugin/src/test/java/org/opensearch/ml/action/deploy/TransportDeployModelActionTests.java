@@ -175,7 +175,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
 
         MLStat mlStat = mock(MLStat.class);
-        when(mlStats.getStat(eq(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT))).thenReturn(mlStat);
+        when(mlStats.getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT))).thenReturn(mlStat);
         transportDeployModelAction = new TransportDeployModelAction(
             transportService,
             actionFilters,

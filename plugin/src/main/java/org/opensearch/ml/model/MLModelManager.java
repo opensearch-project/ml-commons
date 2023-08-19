@@ -212,7 +212,7 @@ public class MLModelManager {
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
         try {
             FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
             String modelGroupId = mlRegisterModelMetaInput.getModelGroupId();
             if (Strings.isBlank(modelGroupId)) {
@@ -322,8 +322,8 @@ public class MLModelManager {
 
         checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
         try {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
 
             String modelGroupId = registerModelInput.getModelGroupId();
@@ -384,7 +384,7 @@ public class MLModelManager {
         } catch (Exception e) {
             handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
         } finally {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         }
     }
 
@@ -392,9 +392,9 @@ public class MLModelManager {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
 
             String modelName = registerModelInput.getModelName();
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
@@ -444,7 +444,7 @@ public class MLModelManager {
             logException("Failed to upload model", e, log);
             handleException(functionName, taskId, e);
         } finally {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         }
     }
 
@@ -462,9 +462,9 @@ public class MLModelManager {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
             String modelName = registerModelInput.getModelName();
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             String modelGroupId = registerModelInput.getModelGroupId();
@@ -510,7 +510,7 @@ public class MLModelManager {
             logException("Failed to register model", e, log);
             handleException(functionName, taskId, e);
         } finally {
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         }
     }
 
@@ -693,7 +693,7 @@ public class MLModelManager {
             && !(e instanceof MLResourceNotFoundException)
             && !(e instanceof IllegalArgumentException)) {
             mlStats.createCounterStatIfAbsent(functionName, REGISTER, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         Map<String, Object> updated = ImmutableMap.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
@@ -718,7 +718,7 @@ public class MLModelManager {
         ActionListener<String> listener
     ) {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
             if (workerNodes != null && workerNodes.size() > 0) {
@@ -800,7 +800,7 @@ public class MLModelManager {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
-                            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+                            mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             listener.onResponse("successful");
                         } catch (Exception e) {
@@ -813,7 +813,7 @@ public class MLModelManager {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
                         try {
                             modelCacheHelper.setPredictor(modelId, predictable);
-                            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+                            mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
                             long contentSize = modelContentSizeInBytes == null
@@ -846,7 +846,7 @@ public class MLModelManager {
             && !(e instanceof MLResourceNotFoundException)
             && !(e instanceof IllegalArgumentException)) {
             mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         removeModel(modelId);
         listener.onFailure(e);
@@ -855,7 +855,7 @@ public class MLModelManager {
     private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = mlEngine.deploy(mlModel, params);
         modelCacheHelper.setPredictor(modelId, predictable);
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).increment();
         modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
     }
 
@@ -1056,8 +1056,8 @@ public class MLModelManager {
             for (String modelId : modelIds) {
                 if (modelCacheHelper.isModelDeployed(modelId)) {
                     modelUndeployStatus.put(modelId, UNDEPLOYED);
-                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
-                    mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+                    mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).decrement();
+                    mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
                     mlStats
                         .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT)
                         .increment();
@@ -1070,7 +1070,7 @@ public class MLModelManager {
             log.debug("undeploy all models {}", Arrays.toString(getLocalDeployedModels()));
             for (String modelId : getLocalDeployedModels()) {
                 modelUndeployStatus.put(modelId, UNDEPLOYED);
-                mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT).decrement();
+                mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).decrement();
                 mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 removeModel(modelId);
             }

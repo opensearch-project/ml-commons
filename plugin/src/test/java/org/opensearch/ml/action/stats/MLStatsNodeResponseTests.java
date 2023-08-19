@@ -39,14 +39,14 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     public void setup() {
         node = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
         Map<MLNodeLevelStat, Object> statsToValues = new HashMap<>();
-        statsToValues.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, 100);
+        statsToValues.put(MLNodeLevelStat.ML_REQUEST_COUNT, 100);
         response = new MLStatsNodeResponse(node, statsToValues);
     }
 
     public void testSerializationDeserialization() throws IOException {
         DiscoveryNode localNode = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
         Map<MLNodeLevelStat, Object> statsToValues = new HashMap<>();
-        statsToValues.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, 10l);
+        statsToValues.put(MLNodeLevelStat.ML_REQUEST_COUNT, 10l);
         MLStatsNodeResponse response = new MLStatsNodeResponse(localNode, statsToValues);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
@@ -60,7 +60,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"ml_node_total_request_count\":100}", taskContent);
+        assertEquals("{\"ML_REQUEST_COUNT\":100}", taskContent);
     }
 
     public void testToXContent_AlgorithmStats() throws IOException {
@@ -100,7 +100,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         builder.startObject();
         DiscoveryNode node = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
         Map<MLNodeLevelStat, Object> statsToValues = new HashMap<>();
-        statsToValues.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, 100);
+        statsToValues.put(MLNodeLevelStat.ML_REQUEST_COUNT, 100);
         Map<FunctionName, MLAlgoStats> algoStats = new HashMap<>();
         Map<ActionName, MLActionStats> algoActionStats = new HashMap<>();
         Map<MLActionLevelStat, Object> algoActionStatMap = new HashMap<>();
@@ -114,8 +114,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         String taskContent = TestHelper.xContentBuilderToString(builder);
         Set<String> validResult = ImmutableSet
             .of(
-                "{\"ml_node_total_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
-                "{\"ml_node_total_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
+                "{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
+                "{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
             );
         assertTrue(validResult.contains(taskContent));
     }
@@ -124,8 +124,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLStatsNodeResponse mlStatsNodeResponse = MLStatsNodeResponse.readStats(output.bytes().streamInput());
-        Integer expectedValue = (Integer) response.getNodeLevelStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT);
-        assertEquals(expectedValue, mlStatsNodeResponse.getNodeLevelStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT));
+        Integer expectedValue = (Integer) response.getNodeLevelStat(MLNodeLevelStat.ML_REQUEST_COUNT);
+        assertEquals(expectedValue, mlStatsNodeResponse.getNodeLevelStat(MLNodeLevelStat.ML_REQUEST_COUNT));
     }
 
     public void testIsEmpty_NullNodeStats() {
@@ -150,23 +150,23 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
 
     public void testIsEmpty_NonEmptyNodeAndAlgoStats() {
         MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(
-            ImmutableMap.of(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, totalRequestCount)
+            ImmutableMap.of(MLNodeLevelStat.ML_REQUEST_COUNT, totalRequestCount)
         );
         assertFalse(response.isEmpty());
     }
 
     public void testGetNodeLevelStat_NonExistingStat() {
-        assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
+        assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         assertEquals(1, response.getNodeLevelStatSize());
     }
 
     public void testGetNodeLevelStat_NullOrEmptyNodeStats() {
         MLStatsNodeResponse response = new MLStatsNodeResponse(node, null);
-        assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
+        assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         assertEquals(0, response.getNodeLevelStatSize());
 
         response = new MLStatsNodeResponse(node, ImmutableMap.of());
-        assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
+        assertNull(response.getNodeLevelStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         assertEquals(0, response.getNodeLevelStatSize());
     }
 

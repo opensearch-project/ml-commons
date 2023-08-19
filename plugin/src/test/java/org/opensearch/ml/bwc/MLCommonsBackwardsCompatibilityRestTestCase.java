@@ -14,8 +14,8 @@ import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
-import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT;
-import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_FAILURE_COUNT;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_REQUEST_COUNT;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestData.trainModelDataJson;
 
@@ -292,11 +292,11 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
         Map<String, Object> allNodeStats = (Map<String, Object>) map.get("nodes");
         for (String key : allNodeStats.keySet()) {
             Map<String, Object> nodeStatsMap = (Map<String, Object>) allNodeStats.get(key);
-            String statKey = ML_NODE_TOTAL_FAILURE_COUNT.name().toLowerCase(Locale.ROOT);
+            String statKey = ML_FAILURE_COUNT.name().toLowerCase(Locale.ROOT);
             if (nodeStatsMap.containsKey(statKey)) {
                 totalFailureCount += (Double) nodeStatsMap.get(statKey);
             }
-            statKey = ML_NODE_TOTAL_REQUEST_COUNT.name().toLowerCase(Locale.ROOT);
+            statKey = ML_REQUEST_COUNT.name().toLowerCase(Locale.ROOT);
             if (nodeStatsMap.containsKey(statKey)) {
                 totalRequestCount += (Double) nodeStatsMap.get(statKey);
             }

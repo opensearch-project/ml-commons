@@ -10,12 +10,12 @@ package org.opensearch.ml.stats;
  * This enum represents node level stats.
  */
 public enum MLNodeLevelStat {
-    ML_NODE_JVM_HEAP_USAGE,
-    ML_NODE_EXECUTING_TASK_COUNT,
-    ML_NODE_TOTAL_REQUEST_COUNT,
-    ML_NODE_TOTAL_FAILURE_COUNT,
-    ML_NODE_TOTAL_MODEL_COUNT,
-    ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT;
+    ML_JVM_HEAP_USAGE,
+    ML_EXECUTING_TASK_COUNT,
+    ML_REQUEST_COUNT,
+    ML_FAILURE_COUNT,
+    ML_TOTAL_MODEL_COUNT,
+    ML_CIRCUIT_BREAKER_TRIGGER_COUNT;
 
     public static MLNodeLevelStat from(String value) {
         try {

@@ -44,12 +44,12 @@ public class MLStatsNodesResponseTests extends OpenSearchTestCase {
 
         DiscoveryNode node1 = new DiscoveryNode("node1", buildNewFakeTransportAddress(), Version.CURRENT);
         Map<MLNodeLevelStat, Object> nodeLevelStats1 = new HashMap<>();
-        nodeLevelStats1.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, 100);
+        nodeLevelStats1.put(MLNodeLevelStat.ML_REQUEST_COUNT, 100);
         nodes.add(new MLStatsNodeResponse(node1, nodeLevelStats1));
 
         DiscoveryNode node2 = new DiscoveryNode("node2", buildNewFakeTransportAddress(), Version.CURRENT);
         Map<MLNodeLevelStat, Object> nodeLevelStats2 = new HashMap<>();
-        nodeLevelStats2.put(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT, 200);
+        nodeLevelStats2.put(MLNodeLevelStat.ML_REQUEST_COUNT, 200);
         nodes.add(new MLStatsNodeResponse(node2, nodeLevelStats2));
 
         List<FailedNodeException> failures = new ArrayList<>();
@@ -58,9 +58,6 @@ public class MLStatsNodesResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals(
-            "{\"nodes\":{\"node1\":{\"ml_node_total_request_count\":100},\"node2\":{\"ml_node_total_request_count\":200}}}",
-            taskContent
-        );
+        assertEquals("{\"nodes\":{\"node1\":{\"ML_REQUEST_COUNT\":100},\"node2\":{\"ML_REQUEST_COUNT\":200}}}", taskContent);
     }
 }

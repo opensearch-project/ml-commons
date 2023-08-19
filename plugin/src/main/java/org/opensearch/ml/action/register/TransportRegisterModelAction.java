@@ -234,8 +234,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 throw new IllegalArgumentException("URL can't match trusted url regex");
             }
         }
-        // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+        // mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
         // //TODO: track executing task; track register failures
         // mlStats.createCounterStatIfAbsent(FunctionName.TEXT_EMBEDDING,
         // ActionName.REGISTER,
