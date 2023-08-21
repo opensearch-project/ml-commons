@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.opensearch.client.node.NodeClient;
@@ -148,6 +149,10 @@ public class RestMLStatsAction extends BaseRestHandler {
     }
 
     MLStatsInput createMlStatsInputFromRequestParams(RestRequest request) {
+
+        Set<String> mlNodeStatNames = EnumSet.allOf(MLNodeLevelStat.class).stream()
+                .map(stat -> stat.name())
+                .collect(Collectors.toSet());
         MLStatsInput mlStatsInput = new MLStatsInput();
         Optional<String[]> nodeIds = splitCommaSeparatedParam(request, "nodeId");
         if (nodeIds.isPresent()) {
@@ -158,7 +163,7 @@ public class RestMLStatsAction extends BaseRestHandler {
             for (String state : stats.get()) {
                 state = state.toUpperCase(Locale.ROOT);
                 // only support cluster and node level stats for bwc
-                if (state.startsWith("ML_NODE")) {
+                if (mlNodeStatNames.contains(state)) {
                     mlStatsInput.getNodeLevelStats().add(MLNodeLevelStat.from(state));
                 } else {
                     mlStatsInput.getClusterLevelStats().add(MLClusterLevelStat.from(state));
