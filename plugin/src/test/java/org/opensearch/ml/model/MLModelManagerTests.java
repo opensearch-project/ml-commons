@@ -216,7 +216,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         stats.put(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_REQUEST_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_FAILURE_COUNT, new MLStat<>(false, new CounterSupplier()));
-        stats.put(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
+        stats.put(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = spy(new MLStats(stats));
 

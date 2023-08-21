@@ -309,7 +309,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
 
         RestRequest request = getStatsRestRequest(
             node.getId(),
-            MLClusterLevelStat.ML_MODEL_COUNT + "," + MLNodeLevelStat.ML_TOTAL_MODEL_COUNT
+            MLClusterLevelStat.ML_MODEL_COUNT + "," + MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT
         );
         restAction.handleRequest(request, channel, client);
 
@@ -321,7 +321,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertTrue(input.getTargetStatLevels().contains(MLStatLevel.NODE));
         assertEquals(1, input.getClusterLevelStats().size());
         assertTrue(input.getClusterLevelStats().contains(MLClusterLevelStat.ML_MODEL_COUNT));
-        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT));
+        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT));
 
         ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
         verify(channel, times(1)).sendResponse(argumentCaptor.capture());
@@ -342,7 +342,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
     public void testPrepareRequest_ClusterAndNodeLevelStates_RequestParams_NodeLevelStat() throws Exception {
         prepareResponse();
 
-        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_TOTAL_MODEL_COUNT.name());
+        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT.name());
         restAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLStatsNodesRequest> inputArgumentCaptor = ArgumentCaptor.forClass(MLStatsNodesRequest.class);
@@ -352,7 +352,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertTrue(input.getTargetStatLevels().contains(MLStatLevel.NODE));
         assertEquals(0, input.getClusterLevelStats().size());
         assertEquals(1, input.getNodeLevelStats().size());
-        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT));
+        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT));
 
         ArgumentCaptor<BytesRestResponse> argumentCaptor = ArgumentCaptor.forClass(BytesRestResponse.class);
         verify(channel, times(1)).sendResponse(argumentCaptor.capture());
@@ -366,11 +366,11 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
     }
 
     public void testCreateMlStatsInputFromRequestParams_NodeStat() {
-        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_TOTAL_MODEL_COUNT.name().toLowerCase(Locale.ROOT));
+        RestRequest request = getStatsRestRequest(node.getId(), MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT.name().toLowerCase(Locale.ROOT));
         MLStatsInput input = restAction.createMlStatsInputFromRequestParams(request);
         assertEquals(1, input.getTargetStatLevels().size());
         assertTrue(input.getTargetStatLevels().contains(MLStatLevel.NODE));
-        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT));
+        assertTrue(input.getNodeLevelStats().contains(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT));
         assertEquals(0, input.getClusterLevelStats().size());
     }
 

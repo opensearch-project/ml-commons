@@ -14,7 +14,7 @@ public enum MLNodeLevelStat {
     ML_EXECUTING_TASK_COUNT,
     ML_REQUEST_COUNT,
     ML_FAILURE_COUNT,
-    ML_TOTAL_MODEL_COUNT,
+    ML_DEPLOYED_MODEL_COUNT,
     ML_CIRCUIT_BREAKER_TRIGGER_COUNT;
 
     public static MLNodeLevelStat from(String value) {

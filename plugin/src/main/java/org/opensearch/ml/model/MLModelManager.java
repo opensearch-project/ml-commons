@@ -800,7 +800,7 @@ public class MLModelManager {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
-                            mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).increment();
+                            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             listener.onResponse("successful");
                         } catch (Exception e) {
@@ -813,7 +813,7 @@ public class MLModelManager {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
                         try {
                             modelCacheHelper.setPredictor(modelId, predictable);
-                            mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).increment();
+                            mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
                             long contentSize = modelContentSizeInBytes == null
@@ -855,7 +855,7 @@ public class MLModelManager {
     private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = mlEngine.deploy(mlModel, params);
         modelCacheHelper.setPredictor(modelId, predictable);
-        mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
         modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
     }
 
@@ -1056,7 +1056,7 @@ public class MLModelManager {
             for (String modelId : modelIds) {
                 if (modelCacheHelper.isModelDeployed(modelId)) {
                     modelUndeployStatus.put(modelId, UNDEPLOYED);
-                    mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).decrement();
+                    mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).decrement();
                     mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
                     mlStats
                         .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT)
@@ -1070,7 +1070,7 @@ public class MLModelManager {
             log.debug("undeploy all models {}", Arrays.toString(getLocalDeployedModels()));
             for (String modelId : getLocalDeployedModels()) {
                 modelUndeployStatus.put(modelId, UNDEPLOYED);
-                mlStats.getStat(MLNodeLevelStat.ML_TOTAL_MODEL_COUNT).decrement();
+                mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).decrement();
                 mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 removeModel(modelId);
             }
