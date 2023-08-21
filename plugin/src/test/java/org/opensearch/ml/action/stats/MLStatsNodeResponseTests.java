@@ -60,7 +60,7 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"ML_REQUEST_COUNT\":100}", taskContent);
+        assertEquals("{\"ml_request_count\":100}", taskContent);
     }
 
     public void testToXContent_AlgorithmStats() throws IOException {
@@ -114,8 +114,8 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         String taskContent = TestHelper.xContentBuilderToString(builder);
         Set<String> validResult = ImmutableSet
             .of(
-                "{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
-                "{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
             );
         assertTrue(validResult.contains(taskContent));
     }
