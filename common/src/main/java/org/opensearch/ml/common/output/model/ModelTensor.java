@@ -14,6 +14,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.utils.GsonUtil;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Data
 public class ModelTensor implements Writeable, ToXContentObject {
@@ -225,7 +225,7 @@ public class ModelTensor implements Writeable, ToXContentObject {
         this.result = in.readOptionalString();
         if (in.readBoolean()) {
             String mapStr = in.readString();
-            this.dataAsMap = gson.fromJson(mapStr, Map.class);
+            this.dataAsMap = GsonUtil.fromJson(mapStr, Map.class);
         }
     }
 
@@ -271,7 +271,7 @@ public class ModelTensor implements Writeable, ToXContentObject {
             out.writeBoolean(true);
             try {
                 AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    out.writeString(gson.toJson(dataAsMap));
+                    out.writeString(GsonUtil.toJson(dataAsMap));
                     return null;
                 });
             } catch (PrivilegedActionException e) {
