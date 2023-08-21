@@ -58,6 +58,6 @@ public class MLStatsNodesResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"nodes\":{\"node1\":{\"ML_REQUEST_COUNT\":100},\"node2\":{\"ML_REQUEST_COUNT\":200}}}", taskContent);
+        assertEquals("{\"nodes\":{\"node1\":{\"ml_request_count\":100},\"node2\":{\"ml_request_count\":200}}}", taskContent);
     }
 }

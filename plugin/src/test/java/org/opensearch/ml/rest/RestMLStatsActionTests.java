@@ -209,7 +209,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
                 )
         );
     }
@@ -299,7 +299,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
                 )
         );
     }
@@ -334,7 +334,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
                 )
         );
     }
@@ -360,7 +360,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
         assertEquals(
-            "{\"nodes\":{\"node\":{\"ML_REQUEST_COUNT\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
+            "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
             content.utf8ToString()
         );
     }
