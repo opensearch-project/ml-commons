@@ -17,490 +17,573 @@
  */
 package org.opensearch.ml.conversational.index;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.Stack;
-import java.util.concurrent.CountDownLatch;
-import java.util.function.Consumer;
+import java.util.Map;
 
 import org.junit.Before;
-import org.opensearch.OpenSearchSecurityException;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.StepListener;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.opensearch.OpenSearchWrapperException;
+import org.opensearch.ResourceAlreadyExistsException;
+import org.opensearch.action.admin.indices.create.CreateIndexResponse;
+import org.opensearch.action.admin.indices.refresh.RefreshResponse;
+import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
-import org.opensearch.client.Requests;
+import org.opensearch.client.IndicesAdminClient;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.opensearch.commons.ConfigConstants;
-import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversational.ConversationMeta;
-import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
+import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.SendRequestTransportException;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
+public class ConversationMetaIndexTests extends OpenSearchTestCase {
+    @Mock
+    Client client;
 
-import lombok.extern.log4j.Log4j2;
+    @Mock
+    ClusterService clusterService;
 
-@Log4j2
-@ThreadLeakScope(ThreadLeakScope.Scope.NONE)
-@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST, numDataNodes = 2)
-public class ConversationMetaIndexTests extends OpenSearchIntegTestCase {
+    @Mock
+    ClusterState clusterState;
 
-    private ClusterService clusterService;
-    private Client client;
-    private ConversationMetaIndex index;
+    @Mock
+    Metadata metadata;
 
-    private void refreshIndex() {
-        client.admin().indices().refresh(Requests.refreshRequest(ConversationalIndexConstants.META_INDEX_NAME));
-    }
+    @Mock
+    AdminClient adminClient;
 
-    private StoredContext setUser(String username) {
-        StoredContext stored = client.threadPool().getThreadContext().newStoredContext(true, List.of(
-            ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT
-        ));
-        ThreadContext context = client.threadPool().getThreadContext();
-        context.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, username + "||");
-        return stored;
-    }
+    @Mock
+    IndicesAdminClient indicesAdminClient;
+
+    @Mock
+    ThreadPool threadPool;
+
+    ConversationMetaIndex conversationMetaIndex;
 
     @Before
     public void setup() {
-        log.info("Setting up test");
-        this.client = client();
-        this.clusterService = clusterService();
-        this.index = new ConversationMetaIndex(client, clusterService);
+        this.client = mock(Client.class);
+        this.clusterService = mock(ClusterService.class);
+        this.clusterState = mock(ClusterState.class);
+        this.metadata = mock(Metadata.class);
+        this.adminClient = mock(AdminClient.class);
+        this.indicesAdminClient = mock(IndicesAdminClient.class);
+        this.threadPool = mock(ThreadPool.class);
+
+        doReturn(clusterState).when(clusterService).state();
+        doReturn(metadata).when(clusterState).metadata();
+        doReturn(adminClient).when(client).admin();
+        doReturn(indicesAdminClient).when(adminClient).indices();
+        doReturn(threadPool).when(client).threadPool();
+        doReturn(new ThreadContext(Settings.EMPTY)).when(threadPool).getThreadContext();
+        conversationMetaIndex = spy(new ConversationMetaIndex(client, clusterService));
     }
 
-    /**
-     * Can the index be initialized?
-     */
-    public void testConversationMetaIndexCanBeInitialized() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>( ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
-            log.error(e);
-            assert(false);
-        }), cdl));
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    private void setupDoesNotMakeIndex() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> al = invocation.getArgument(1);
+            al.onResponse(new CreateIndexResponse(false, false, "some-other-index-entirely"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
     }
 
-    /**
-     * If the index tries to be initialized more than once does it break something
-     * Also make sure that only one initialization happens
-     */
-    public void testConversationMetaIndexCanBeInitializedTwice() {
-        CountDownLatch cdl = new CountDownLatch(2);
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
-            log.error(e);
-            assert(false);
-        }), cdl));
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
-            log.error(e);
-            assert(false);
-        }), cdl));
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    private void setupRefreshSuccess() {
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onResponse(mock(RefreshResponse.class));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
     }
 
-    /**
-     * If the index tries to be initialized by different objects does it break anything
-     * Also make sure that only one initialization happens
-     */
-    public void testConversationMetaIndexCanBeInitializedByDifferentObjects() {
-        CountDownLatch cdl = new CountDownLatch(2);
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
-            log.error(e);
-            assert(false);
-        }), cdl));
-        ConversationMetaIndex otherIndex = new ConversationMetaIndex(client, clusterService);
-        otherIndex.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
-            log.error(e);
-            assert(false);
-        }), cdl));
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    private void blanketGrantAccess() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> al = invocation.getArgument(1);
+            al.onResponse(true);
+            return null;
+        }).when(conversationMetaIndex).checkAccess(any(), any());
     }
 
-    /**
-     * Can I add a new conversation to the index without crashong?
-     */
-    public void testCanAddNewConversation() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        index.createConversation(new LatchedActionListener<String>(ActionListener.wrap(r->{
-            assert(r != null && r.length() > 0);
-        }, e->{
-            log.error(e);
-            assert(false);
-        }), cdl));
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    private void setupUser() {
+        doAnswer(invocation -> {
+            ThreadContext tc = new ThreadContext(Settings.EMPTY);
+            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "user||");
+            return tc;
+        }).when(threadPool).getThreadContext();
     }
 
-    /**
-     * Are conversation ids unique?
-     */
-    public void testConversationIDsAreUnique() {
-        int numTries = 100;
-        CountDownLatch cdl = new CountDownLatch(numTries);
-        Set<String> seenIds = Collections.synchronizedSet(new HashSet<String>(numTries));
-        for(int i = 0; i < numTries; i++){
-            index.createConversation(new LatchedActionListener<String>(ActionListener.wrap(r-> {
-                assert(!seenIds.contains(r));
-                seenIds.add(r);
-            }, e-> {
-                log.error(e);
-                assert(false);
-            }), cdl));
-        }
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    public void testInit_DoesNotCreateIndex() {
+        setupDoesNotMakeIndex();
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(createIndexListener, times(1)).onResponse(argCaptor.capture());
+        assert (!argCaptor.getValue());
     }
 
-    /**
-     * If I add a conversation, that id shows up in the list of conversations
-     */
-    public void testConversationsCanBeListed() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        StepListener<String> addConversationListener = new StepListener<>();
-        index.createConversation(addConversationListener);
-
-        StepListener<List<ConversationMeta>> listConversationListener = new StepListener<>();
-        addConversationListener.whenComplete(cid -> {
-            refreshIndex();
-            refreshIndex();
-            index.getConversations(10, listConversationListener);
-        }, e -> {
-            cdl.countDown();
-            log.error(e);
-        });
-
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(
-            conversations -> {
-                boolean foundConversation = false;
-                log.info("FINDME");
-                log.info(addConversationListener.result());
-                log.info(conversations);
-                for(ConversationMeta c: conversations) {
-                    if(c.getId().equals(addConversationListener.result())) {
-                        foundConversation = true;
-                    }
-                }
-                assert(foundConversation);
-            }, e -> {
-                log.error(e);
-            }
-        ), cdl);
-        listConversationListener.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    public void testInit_CreateIndexFails_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Test Error"));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Error"));
     }
 
-    /**
-     * When I touch a conversation, it should update the metadata
-     */
-    public void testConversationsCanGetHitStepped() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        StepListener<String> addConversationListener = new StepListener<>();
-        index.createConversation(addConversationListener);
-        
-        Instant pit = Instant.now().plus(423, ChronoUnit.MINUTES);
-
-        StepListener<Boolean> hitConversationListener = new StepListener<>();
-        addConversationListener.whenComplete(cid -> {
-            refreshIndex();
-            index.hitConversation(cid, pit, hitConversationListener);
-        }, e -> {
-            cdl.countDown();
-            log.error(e);
-        });
-
-        StepListener<List<ConversationMeta>> listConversationListener = new StepListener<>();
-        hitConversationListener.whenComplete(b -> {
-            refreshIndex();
-            index.getConversations(1, listConversationListener);
-        }, e -> {
-            cdl.countDown();
-            log.error(e);
-        });
-
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(
-            conversations -> {
-                ConversationMeta conversation = conversations.get(0);
-                assert(conversation.getId().equals(addConversationListener.result()));
-                assert(conversation.getLastHitTime().equals(pit));
-                assert(conversation.getNumInteractions() == 1);
-            }, e -> {
-                log.error(e);
-            }
-        ), cdl);
-        listConversationListener.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    public void testInit_CreateIndexFails_WithWrapped_OtherException_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> al = invocation.getArgument(1);
+            al.onFailure(new SendRequestTransportException(null, "action", new Exception("some other exception")));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue() instanceof OpenSearchWrapperException);
+        assert (argCaptor.getValue().getCause().getMessage().equals("some other exception"));
     }
 
-    public void testConversationsCanBeListedPaginated() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        StepListener<String> addConversationListener1 = new StepListener<>();
-        index.createConversation(addConversationListener1);
-
-        StepListener<String> addConversationListener2 = new StepListener<>();
-        addConversationListener1.whenComplete( cid -> {
-            index.createConversation(addConversationListener2);
-        }, e -> {cdl.countDown(); assert(false);});
-
-        StepListener<List<ConversationMeta>> listConversationListener1 = new StepListener<>();
-        addConversationListener2.whenComplete(cid2 -> {
-            index.getConversations(1, listConversationListener1);
-        }, e -> { cdl.countDown(); assert(false); });
-
-        StepListener<List<ConversationMeta>> listConversationListener2 = new StepListener<>();
-        listConversationListener1.whenComplete(conversations1 -> {
-            index.getConversations(1, 1,listConversationListener2);
-        }, e -> {
-            cdl.countDown();
-            assert(false);
-        });
-
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>( ActionListener.wrap(
-            conversations2 -> {
-                List<ConversationMeta> conversations1 = listConversationListener1.result();
-                String cid1 = addConversationListener1.result();
-                String cid2 = addConversationListener2.result();
-                if(!conversations1.get(0).getLastHitTime().equals(conversations2.get(0).getLastHitTime())) {
-                    assert(conversations1.get(0).getId().equals(cid2));
-                    assert(conversations2.get(0).getId().equals(cid1));
-                }
-            }, e -> { 
-                assert(false); 
-            }
-        ), cdl);
-        listConversationListener2.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
-
+    public void testInit_ClientFails_WithResourceExists_ThenOK() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doThrow(new ResourceAlreadyExistsException("Test index exists")).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(createIndexListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
     }
 
-    public void testConversationsCanBeDeleted() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        StepListener<String> addConversationListener = new StepListener<>();
-        index.createConversation(addConversationListener);
-
-        StepListener<Boolean> deleteConversationListener = new StepListener<>();
-        addConversationListener.whenComplete(cid -> {
-            index.deleteConversation(cid, deleteConversationListener);
-        }, e -> {
-            cdl.countDown();
-            assert(false);
-        });
-
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(
-            conversations -> {
-                assert(conversations.size() == 0);
-            }, e -> {
-                cdl.countDown();
-                assert(false);
-            }
-        ), cdl);
-        deleteConversationListener.whenComplete(success -> {
-            if(success) {
-                index.getConversations(10, finishAndAssert);
-            } else {
-                cdl.countDown();
-                assert(false);
-            }
-        }, e -> {
-            cdl.countDown();
-            assert(false); 
-        });
-
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
+    public void testInit_ClientFails_WithWrappedResourceExists_ThenOK() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doThrow(new SendRequestTransportException(null, "action", new ResourceAlreadyExistsException("Test index exists"))).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(createIndexListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
     }
 
-    public void testConversationsForDifferentUsersAreDifferent() {
-        try(ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-            CountDownLatch cdl = new CountDownLatch(1);
-            Stack<StoredContext> contextStack = new Stack<>();
-            Consumer<Exception> onFail = e -> {
-                while(!contextStack.empty()) {
-                    contextStack.pop().close();
-                }
-                cdl.countDown(); 
-                log.error(e); 
-                threadContext.restore(); 
-                assert(false);
-            };
-
-            final String user1 = "test-user1";
-            final String user2 = "test-user2";
-
-            StepListener<String> cid1 = new StepListener<>();
-            contextStack.push(setUser(user1));
-            index.createConversation(cid1);
-
-            StepListener<String> cid2 = new StepListener<>();
-            cid1.whenComplete(cid -> {
-                index.createConversation(cid2);
-            }, onFail);
-
-            StepListener<String> cid3 = new StepListener<>();
-            cid2.whenComplete(cid -> {
-                contextStack.push(setUser(user2));
-                index.createConversation(cid3);
-            }, onFail);
-
-            StepListener<List<ConversationMeta>> conversationsListener = new StepListener<>();
-            cid3.whenComplete(cid -> {
-                index.getConversations(10, conversationsListener);
-            }, onFail);
-
-            StepListener<List<ConversationMeta>> originalConversationsListener = new StepListener<>();
-            conversationsListener.whenComplete(conversations -> {
-                assert(conversations.size() == 1);
-                assert(conversations.get(0).getId().equals(cid3.result()));
-                assert(conversations.get(0).getUser().equals(user2));
-                contextStack.pop().restore();
-                index.getConversations(10, originalConversationsListener);
-            }, onFail);
-
-            originalConversationsListener.whenComplete(conversations -> {
-                assert(conversations.size() == 2);
-                if(!conversations.get(0).getLastHitTime().equals(conversations.get(1).getLastHitTime())) {
-                    assert(conversations.get(0).getId().equals(cid2.result()));
-                    assert(conversations.get(1).getId().equals(cid1.result()));
-                }
-                assert(conversations.get(0).getUser().equals(user1));
-                assert(conversations.get(1).getUser().equals(user1));
-                contextStack.pop().restore();
-                cdl.countDown();
-            }, onFail);
-
-            try {
-                cdl.await();
-                threadContext.restore();
-            } catch(InterruptedException e) {
-                log.error(e);
-            }
-        } catch (Exception e) {
-            log.error(e);
-            throw e;
-        }
+    public void testInit_ClientFails_WithWrappedOtherException_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doThrow(new SendRequestTransportException(null, "action", new Exception("Some other exception"))).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue() instanceof OpenSearchWrapperException);
+        assert (argCaptor.getValue().getCause().getMessage().equals("Some other exception"));
     }
 
-    public void testDifferentUsersCannotTouchOthersConversations() {
-        try(ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-            CountDownLatch cdl = new CountDownLatch(1);
-            Stack<StoredContext> contextStack = new Stack<>();
-            Consumer<Exception> onFail = e -> {
-                while(!contextStack.empty()) {
-                    contextStack.pop().close();
-                }
-                cdl.countDown(); 
-                log.error(e); 
-                threadContext.restore(); 
-                assert(false);
-            };
-
-            final String user1 = "user-1";
-            final String user2 = "user-2";
-            contextStack.push(setUser(user1));
-
-            StepListener<String> cid1 = new StepListener<>();
-            index.createConversation(cid1);
-
-            StepListener<Boolean> hitListener = new StepListener<>();
-            cid1.whenComplete(cid -> {
-                contextStack.push(setUser(user2));
-                index.hitConversation(cid, Instant.now(), hitListener);
-            }, onFail);
-
-            StepListener<Boolean> delListener = new StepListener<>();
-            hitListener.whenComplete(updated -> {
-                Exception e = new OpenSearchSecurityException("Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result());
-                while(!contextStack.empty()) {
-                    contextStack.pop().close();
-                }
-                cdl.countDown(); 
-                log.error(e); 
-                assert(false);
-            }, e -> {
-                if(e instanceof OpenSearchSecurityException && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
-                    index.deleteConversation(cid1.result(), delListener);
-                } else {
-                    onFail.accept(e);
-                }
-            });
-
-            delListener.whenComplete(success -> {
-                Exception e = new OpenSearchSecurityException("Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result());
-                while(!contextStack.empty()) {
-                    contextStack.pop().close();
-                }
-                cdl.countDown(); 
-                log.error(e); 
-                assert(false);
-            }, e -> {
-                if(e instanceof OpenSearchSecurityException && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
-                    contextStack.pop().restore();
-                    contextStack.pop().restore();
-                    cdl.countDown();
-                } else {
-                    onFail.accept(e);
-                }
-            });
-            
-            try {
-                cdl.await();
-                threadContext.restore();
-            } catch(InterruptedException e) {
-                log.error(e);
-            }
-        } catch (Exception e) {
-            log.error(e);
-            throw e;
-        }
+    public void testInit_ClientFails_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Test Client Failure")).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
+        conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createIndexListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Client Failure"));
     }
 
+    public void testCreate_DoesntMakeIndex_ThenFail() {
+        setupDoesNotMakeIndex();
+        @SuppressWarnings("unchecked")
+        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.createConversation(createConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("no index to add conversation to"));
+    }
+
+    public void testCreate_BadRestStatus_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        IndexResponse response = mock(IndexResponse.class);
+        doReturn(RestStatus.GONE).when(response).status();
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).index(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.createConversation(createConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("failed to create conversation"));
+    }
+
+    public void testCreate_InternalFailure_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Test Failure"));
+            return null;
+        }).when(client).index(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.createConversation(createConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Failure"));
+    }
+
+    public void testCreate_ClientFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Test Failure")).when(client).index(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.createConversation(createConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Failure"));
+    }
+
+    public void testCreate_InitFails_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Test Init Client Failure")).when(indicesAdminClient).create(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<String> createConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.createConversation(createConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Init Client Failure"));
+    }
+
+    public void testGet_NoIndex_ThenEmpty() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversations(10, getConversationsListener);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ConversationMeta>> argCaptor = ArgumentCaptor.forClass(List.class);
+        verify(getConversationsListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue().size() == 0);
+    }
+
+    public void testGet_SearchFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Test Exception"));
+            return null;
+        }).when(client).search(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversations(10, getConversationsListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Exception"));
+    }
+
+    public void testGet_RefreshFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Refresh Exception"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversations(10, getConversationsListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Exception"));
+    }
+
+    public void testGet_ClientFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Refresh Client Failure")).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<List<ConversationMeta>> getConversationsListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversations(10, getConversationsListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Client Failure"));
+    }
+
+    public void testHit_DoesNotExist_ThenReturnFalse() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        GetResponse response = mock(GetResponse.class);
+        doReturn(false).when(response).isExists();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(hitConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (!argCaptor.getValue());
+    }
+
+    public void testHit_WrongId_ThenReturnFalse() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        GetResponse response = mock(GetResponse.class);
+        doReturn(true).when(response).isExists();
+        doReturn("wrong id").when(response).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(hitConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (!argCaptor.getValue());
+    }
+
+    public void testHit_UpdateFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        setupRefreshSuccess();
+        GetResponse response = mock(GetResponse.class);
+        doReturn(true).when(response).isExists();
+        doReturn("test id").when(response).getId();
+        doReturn(Map.of(
+            ConversationalIndexConstants.META_CREATED_FIELD,
+            Instant.now().toString(),
+            ConversationalIndexConstants.META_ENDED_FIELD,
+            Instant.now().toString(),
+            ConversationalIndexConstants.META_LENGTH_FIELD,
+            2,
+            ConversationalIndexConstants.META_NAME_FIELD,
+            "test"
+        )).when(response).getSourceAsMap();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> al = invocation.getArgument(1);
+            al.onFailure(new RuntimeException("Update Failure"));
+            return null;
+        }).when(client).update(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Update Failure"));
+    }
+
+    public void testHit_RefreshFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Refresh Exception"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Exception"));
+    }
+
+    public void testHit_ClientFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Refresh Client Failure")).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Client Failure"));
+    }
+
+    public void testDelete_NoIndex_ThenReturnTrue() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
+
+    public void testDelete_RestNotFoundStatus_ThenReturnTrue() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        blanketGrantAccess();
+        DeleteResponse response = mock(DeleteResponse.class);
+        doReturn(RestStatus.NOT_FOUND).when(response).status();
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).delete(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
+
+    public void testDelete_BadResponse_ThenReturnFalse() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        blanketGrantAccess();
+        DeleteResponse response = mock(DeleteResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).delete(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(deleteConversationListener, times(1)).onResponse(argCaptor.capture());
+        assert (!argCaptor.getValue());
+    }
+
+    public void testDelete_DeleteFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        blanketGrantAccess();
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Test Fail in Delete"));
+            return null;
+        }).when(client).delete(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Fail in Delete"));
+    }
+
+    public void testDelete_HighLevelFailure_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Check Fail")).when(conversationMetaIndex).checkAccess(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Check Fail"));
+    }
+
+    public void testCheckAccess_DoesNotExist_ThenReturnTrue() {
+        setupUser();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        GetResponse response = mock(GetResponse.class);
+        doReturn(false).when(response).isExists();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.checkAccess("test id", accessListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(accessListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
+
+    public void testCheckAccess_WrongId_ThenReturnTrue() {
+        setupUser();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        GetResponse response = mock(GetResponse.class);
+        doReturn(true).when(response).isExists();
+        doReturn("wrong id").when(response).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.checkAccess("test id", accessListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(accessListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
+
+    public void testCheckAccess_GetFails_ThenFail() {
+        setupUser();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Test Fail"));
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.checkAccess("test id", accessListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(accessListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Test Fail"));
+    }
+
+    public void testCheckAccess_ClientFails_ThenFail() {
+        setupUser();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Client Test Fail")).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.checkAccess("test id", accessListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(accessListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Client Test Fail"));
+    }
+
+    public void testCheckAccess_EmptyStringUser_ThenReturnTrue() {
+        doAnswer(invocation -> {
+            ThreadContext tc = new ThreadContext(Settings.EMPTY);
+            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "");
+            return tc;
+        }).when(threadPool).getThreadContext();
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.checkAccess("test id", accessListener);
+        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(accessListener, times(1)).onResponse(argCaptor.capture());
+        assert (argCaptor.getValue());
+    }
 }

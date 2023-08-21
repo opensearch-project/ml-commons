@@ -232,6 +232,7 @@ public class ConversationMetaIndex {
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 if(!(getResponse.isExists() && getResponse.getId().equals(id))){
                     internalListener.onResponse(false);
+                    return;
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(id, getResponse.getSourceAsMap());
                 if(userstr != null) {
@@ -256,6 +257,7 @@ public class ConversationMetaIndex {
             // Refresh the index first in case of race condition updates
             client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(
                 r -> {
+                    log.info("SENDING GET");
                     client.get(getRequest, al);
                 }, e -> {
                     log.error("failed during refresh", e);
@@ -299,10 +301,8 @@ public class ConversationMetaIndex {
                     client.delete(delRequest, al);
                 } else {
                     String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    if(userstr != null) {
-                        String user = User.parse(userstr).getName();
-                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
-                    }
+                    String user = User.parse(userstr).getName();
+                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
             }, e -> {
                 internalListener.onFailure(e);

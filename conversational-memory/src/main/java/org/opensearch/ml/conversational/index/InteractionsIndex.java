@@ -47,6 +47,8 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.SortOrder;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
@@ -260,7 +262,8 @@ public class InteractionsIndex {
      * @param maxResults how many interactions to get per search query
      * @param listener receives the list of all interactions in the conversation
      */
-    private void getAllInteractions(String conversationId, int maxResults, ActionListener<List<Interaction>> listener) {
+    @VisibleForTesting
+    void getAllInteractions(String conversationId, int maxResults, ActionListener<List<Interaction>> listener) {
         ActionListener<List<Interaction>> al = nextGetListener(conversationId, 0, maxResults, listener, new LinkedList<>());
         getInteractions(conversationId, 0, maxResults, al);
     }
@@ -275,7 +278,8 @@ public class InteractionsIndex {
      * @param result partially built list of interactions
      * @return an ActionListener to handle the next search query
      */
-    private ActionListener<List<Interaction>> nextGetListener(
+    @VisibleForTesting
+    ActionListener<List<Interaction>> nextGetListener(
         String conversationId, int from, int maxResults, 
         ActionListener<List<Interaction>> mainListener, List<Interaction> result
     ) {
@@ -307,6 +311,7 @@ public class InteractionsIndex {
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
             listener.onResponse(true);
+            return;
         }
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
