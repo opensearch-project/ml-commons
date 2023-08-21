@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.common.connector;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -32,6 +30,8 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.utils.GsonUtil;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
  * Connector defines how to connect to a remote service.
@@ -108,7 +108,7 @@ public interface Connector extends ToXContentObject, Writeable {
         Map<String, Object> connectorMap = parser.map();
         String jsonStr;
         try {
-            jsonStr = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(connectorMap));
+            jsonStr = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> GsonUtil.toJson(connectorMap));
         } catch (PrivilegedActionException e) {
             throw new IllegalArgumentException("wrong connector");
         }

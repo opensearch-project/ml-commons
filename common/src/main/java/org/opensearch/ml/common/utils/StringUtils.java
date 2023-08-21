@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.common.utils;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import org.json.JSONArray;
@@ -24,11 +23,6 @@ import java.util.List;
 import java.util.Map;
 
 public class StringUtils {
-
-    public static final Gson gson;
-    static {
-        gson = new Gson();
-    }
 
     public static boolean isJson(String Json) {
         try {
@@ -54,9 +48,9 @@ public class StringUtils {
         Map<String, Object> result;
         JsonElement jsonElement = JsonParser.parseString(jsonStr);
         if (jsonElement.isJsonObject()) {
-            result = gson.fromJson(jsonElement, Map.class);
+            result = GsonUtil.fromJson(jsonElement, Map.class);
         } else if (jsonElement.isJsonArray()) {
-            List<Object> list = gson.fromJson(jsonElement, List.class);
+            List<Object> list = GsonUtil.fromJson(jsonElement, List.class);
             result = new HashMap<>();
             result.put(defaultKey, list);
         } else {
@@ -74,7 +68,7 @@ public class StringUtils {
                     if (value instanceof String) {
                         parameters.put(key, (String)value);
                     } else {
-                        parameters.put(key, gson.toJson(value));
+                        parameters.put(key, GsonUtil.toJson(value));
                     }
                     return null;
                 });

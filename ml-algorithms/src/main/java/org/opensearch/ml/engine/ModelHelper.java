@@ -7,7 +7,6 @@ package org.opensearch.ml.engine;
 
 import ai.djl.training.util.DownloadUtils;
 import ai.djl.training.util.ProgressBar;
-import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.core.action.ActionListener;
@@ -16,6 +15,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.utils.GsonUtil;
 
 import java.io.File;
 import java.io.FileReader;
@@ -48,11 +48,9 @@ public class ModelHelper {
     public static final String PYTORCH_ENGINE = "PyTorch";
     public static final String ONNX_ENGINE = "OnnxRuntime";
     private final MLEngine mlEngine;
-    private Gson gson;
 
     public ModelHelper(MLEngine mlEngine) {
         this.mlEngine = mlEngine;
-        gson = new Gson();
     }
 
     public void downloadPrebuiltModelConfig(String taskId, MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelInput> listener) {
@@ -74,7 +72,7 @@ public class ModelHelper {
 
                 Map<?, ?> config = null;
                 try (JsonReader reader = new JsonReader(new FileReader(configCacheFilePath))) {
-                    config = gson.fromJson(reader, Map.class);
+                    config = GsonUtil.fromJson(reader, Map.class);
                 }
 
                 if (config == null) {
@@ -172,7 +170,7 @@ public class ModelHelper {
 
                 List<?> config = null;
                 try (JsonReader reader = new JsonReader(new FileReader(cacheFilePath))) {
-                    config = gson.fromJson(reader, List.class);
+                    config = GsonUtil.fromJson(reader, List.class);
                 }
 
                 return config;
