@@ -5,61 +5,64 @@
 
 package org.opensearch.ml.common.connector;
 
+import org.opensearch.ml.common.output.model.MLResultDataType;
+import org.opensearch.ml.common.output.model.ModelTensor;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 public class MLPostProcessFunction {
 
-    private static Map<String, String> POST_PROCESS_FUNCTIONS;
     public static final String COHERE_EMBEDDING = "connector.post_process.cohere.embedding";
     public static final String OPENAI_EMBEDDING = "connector.post_process.openai.embedding";
 
+    public static final String NEURAL_SEARCH_EMBEDDING = "connector.post_process.neural_search.text_embedding";
+
+    private static final Map<String, String> JSON_PATH_EXPRESSION = new HashMap<>();
+
+    private static final Map<String, Function<List<List<Float>>, List<ModelTensor>>> POST_PROCESS_FUNCTIONS = new HashMap<>();
+
+
     static {
-        POST_PROCESS_FUNCTIONS = new HashMap<>();
-        POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, "\n      def name = \"sentence_embedding\";\n" +
-                "      def dataType = \"FLOAT32\";\n" +
-                "      if (params.embeddings == null || params.embeddings.length == 0) {\n" +
-                "          return null;\n" +
-                "      }\n" +
-                "      def embeddings = params.embeddings;\n" +
-                "      StringBuilder builder = new StringBuilder(\"[\");\n" +
-                "      for (int i=0; i<embeddings.length; i++) {\n" +
-                "        def shape = [embeddings[i].length];\n" +
-                "        def json = \"{\" +\n" +
-                "                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n" +
-                "                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n" +
-                "                 \"\\\"shape\\\":\" + shape + \",\" +\n" +
-                "                 \"\\\"data\\\":\" + embeddings[i] +\n" +
-                "                 \"}\";\n" +
-                "        builder.append(json);\n" +
-                "        if (i < embeddings.length - 1) {\n" +
-                "          builder.append(\",\");\n" +
-                "        }\n" +
-                "      }\n" +
-                "      builder.append(\"]\");\n" +
-                "      \n" +
-                "      return builder.toString();\n    ");
-
-        POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, "\n      def name = \"sentence_embedding\";\n" +
-                "      def dataType = \"FLOAT32\";\n" +
-                "      if (params.data == null || params.data.length == 0) {\n" +
-                "          return null;\n" +
-                "      }\n" +
-                "      def shape = [params.data[0].embedding.length];\n" +
-                "      def json = \"{\" +\n" +
-                "                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n" +
-                "                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n" +
-                "                 \"\\\"shape\\\":\" + shape + \",\" +\n" +
-                "                 \"\\\"data\\\":\" + params.data[0].embedding +\n" +
-                "                 \"}\";\n" +
-                "      return json;\n    ");
+        JSON_PATH_EXPRESSION.put(OPENAI_EMBEDDING, "$.data[*].embedding");
+        JSON_PATH_EXPRESSION.put(COHERE_EMBEDDING, "$.embeddings");
+        JSON_PATH_EXPRESSION.put(NEURAL_SEARCH_EMBEDDING, "$[*]");
+        POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, buildModelTensorList());
+        POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, buildModelTensorList());
+        POST_PROCESS_FUNCTIONS.put(NEURAL_SEARCH_EMBEDDING, buildModelTensorList());
     }
 
-    public static boolean contains(String functionName) {
-        return POST_PROCESS_FUNCTIONS.containsKey(functionName);
+    public static Function<List<List<Float>>, List<ModelTensor>> buildModelTensorList() {
+        return numbersList -> {
+            List<ModelTensor> modelTensors = new ArrayList<>();
+            if (numbersList == null) {
+                throw new IllegalArgumentException("NumbersList is null when applying build-in post process function!");
+            }
+            numbersList.forEach(numbers -> modelTensors.add(
+                ModelTensor
+                    .builder()
+                    .name("sentence_embedding")
+                    .dataType(MLResultDataType.FLOAT32)
+                    .shape(new long[]{numbers.size()})
+                    .data(numbers.toArray(new Number[0]))
+                    .build()
+            ));
+            return modelTensors;
+        };
     }
 
-    public static String get(String postProcessFunction) {
+    public static String getResponseFilter(String postProcessFunction) {
+        return JSON_PATH_EXPRESSION.get(postProcessFunction);
+    }
+
+    public static Function<List<List<Float>>, List<ModelTensor>> get(String postProcessFunction) {
         return POST_PROCESS_FUNCTIONS.get(postProcessFunction);
+    }
+
+    public static boolean contains(String postProcessFunction) {
+        return POST_PROCESS_FUNCTIONS.containsKey(postProcessFunction);
     }
 }
