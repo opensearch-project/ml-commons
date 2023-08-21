@@ -61,8 +61,11 @@ public class RestMLStatsAction extends BaseRestHandler {
     private static final String QUERY_ALL_MODEL_META_DOC =
         "{\"query\":{\"bool\":{\"must_not\":{\"exists\":{\"field\":\"chunk_number\"}}}}}";
 
-    private static final Set<String> ML_NODE_STAT_NAMES = EnumSet.allOf(MLNodeLevelStat.class).stream().
-            map(stat -> stat.name()).collect(Collectors.toSet());
+    private static final Set<String> ML_NODE_STAT_NAMES = EnumSet
+        .allOf(MLNodeLevelStat.class)
+        .stream()
+        .map(stat -> stat.name())
+        .collect(Collectors.toSet());
 
     /**
      * Constructor
