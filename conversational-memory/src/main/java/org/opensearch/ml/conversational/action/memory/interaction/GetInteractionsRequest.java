@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.conversational.action.memory.interaction;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.IOException;
 
 import org.opensearch.action.ActionRequest;
@@ -27,8 +29,6 @@ import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
 import lombok.Getter;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * ActionRequest for get interactions
@@ -94,13 +94,13 @@ public class GetInteractionsRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if(conversationId == null) {
+        if (conversationId == null) {
             exception = addValidationError("must get interactions from a conversation", exception);
         }
-        if(maxResults <= 0) {
+        if (maxResults <= 0) {
             exception = addValidationError("must retrieve positive interactions", exception);
         }
-        if(from < 0) {
+        if (from < 0) {
             exception = addValidationError("must start at nonnegative position", exception);
         }
         return exception;
@@ -114,16 +114,16 @@ public class GetInteractionsRequest extends ActionRequest {
      */
     public static GetInteractionsRequest fromRestRequest(RestRequest request) throws IOException {
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
-        if(request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
+        if (request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
             int from = Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD));
-            if(request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
+            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
                 int maxResults = Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD));
                 return new GetInteractionsRequest(cid, maxResults, from);
             } else {
                 return new GetInteractionsRequest(cid, ActionConstants.DEFAULT_MAX_RESULTS, from);
             }
         } else {
-            if(request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
+            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
                 int maxResults = Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD));
                 return new GetInteractionsRequest(cid, maxResults);
             } else {

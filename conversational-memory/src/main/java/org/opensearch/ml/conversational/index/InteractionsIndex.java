@@ -25,7 +25,6 @@ import java.util.List;
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.bulk.BulkRequest;
@@ -40,10 +39,11 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversational.Interaction;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.SortOrder;
 
@@ -69,22 +69,21 @@ public class InteractionsIndex {
      * @param listener gets whether the index needed to be initialized. Throws error if it fails to init
      */
     public void initInteractionsIndexIfAbsent(ActionListener<Boolean> listener) {
-        if(!clusterService.state().metadata().hasIndex(indexName)){
+        if (!clusterService.state().metadata().hasIndex(indexName)) {
             log.debug("No interactions index found. Adding it");
             CreateIndexRequest request = Requests.createIndexRequest(indexName).mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                 ActionListener<CreateIndexResponse> al = ActionListener.wrap(r -> {
-                    if(r.equals(new CreateIndexResponse(true, true, indexName))) {
+                    if (r.equals(new CreateIndexResponse(true, true, indexName))) {
                         log.info("created index [" + indexName + "]");
                         internalListener.onResponse(true);
                     } else {
                         internalListener.onResponse(false);
                     }
-                }, e-> {
-                    if(e instanceof ResourceAlreadyExistsException ||
-                        (e instanceof OpenSearchWrapperException &&
-                        e.getCause() instanceof ResourceAlreadyExistsException)) {
+                }, e -> {
+                    if (e instanceof ResourceAlreadyExistsException
+                        || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                         internalListener.onResponse(true);
                     } else {
                         log.error("failed to create index [" + indexName + "]");
@@ -93,9 +92,8 @@ public class InteractionsIndex {
                 });
                 client.admin().indices().create(request, al);
             } catch (Exception e) {
-                if(e instanceof ResourceAlreadyExistsException ||
-                    (e instanceof OpenSearchWrapperException &&
-                    e.getCause() instanceof ResourceAlreadyExistsException)) {
+                if (e instanceof ResourceAlreadyExistsException
+                    || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                     listener.onResponse(true);
                 } else {
                     log.error("failed to create index [" + indexName + "]");
@@ -117,61 +115,65 @@ public class InteractionsIndex {
      * @param metadata arbitrary JSON blob of extra info
      * @param timestamp when this interaction happened
      * @param listener gets the id of the newly created interaction record
-     */ 
+     */
     public void createInteraction(
-        String conversationId, 
-        String input, 
-        String prompt, 
-        String response, 
-        String agent, 
-        String metadata, 
+        String conversationId,
+        String input,
+        String prompt,
+        String response,
+        String agent,
+        String metadata,
         Instant timestamp,
-        ActionListener<String> listener) 
-    {
-        initInteractionsIndexIfAbsent(ActionListener.wrap(
-            b -> {
-                if(b) {
-                    this.conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
-                        if(access) {
-                            IndexRequest request = Requests.indexRequest(indexName).source(
-                                ConversationalIndexConstants.INTERACTIONS_AGENT_FIELD, agent,
-                                ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId,
-                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input,
-                                ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD, metadata,
-                                ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD, prompt,
-                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response,
-                                ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, timestamp
+        ActionListener<String> listener
+    ) {
+        initInteractionsIndexIfAbsent(ActionListener.wrap(b -> {
+            if (b) {
+                this.conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
+                    if (access) {
+                        IndexRequest request = Requests
+                            .indexRequest(indexName)
+                            .source(
+                                ConversationalIndexConstants.INTERACTIONS_AGENT_FIELD,
+                                agent,
+                                ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
+                                conversationId,
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                input,
+                                ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD,
+                                metadata,
+                                ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD,
+                                prompt,
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                response,
+                                ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD,
+                                timestamp
                             );
-                            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
-                                ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                                ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {
-                                    if(resp.status() == RestStatus.CREATED) {
-                                        internalListener.onResponse(resp.getId());
-                                    } else {
-                                        internalListener.onFailure(new IOException("failed to create conversation"));
-                                    }
-                                }, e -> {
-                                    internalListener.onFailure(e);
-                                });
-                                client.index(request, al);
-                            } catch (Exception e) {
-                                listener.onFailure(e);
-                            }
-                        } else {
-                            String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                            String user = User.parse(userstr)==null ? "NOUSER" : User.parse(userstr).getName();
-                            throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+                            ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+                            ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {
+                                if (resp.status() == RestStatus.CREATED) {
+                                    internalListener.onResponse(resp.getId());
+                                } else {
+                                    internalListener.onFailure(new IOException("failed to create conversation"));
+                                }
+                            }, e -> { internalListener.onFailure(e); });
+                            client.index(request, al);
+                        } catch (Exception e) {
+                            listener.onFailure(e);
                         }
-                    }, e -> {
-                        listener.onFailure(e);
-                    }));
-                } else {
-                    listener.onFailure(new IOException("no index to add conversation to"));
-                }
-            }, e -> {
-                listener.onFailure(e);
+                    } else {
+                        String userstr = client
+                            .threadPool()
+                            .getThreadContext()
+                            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                        String user = User.parse(userstr) == null ? "NOUSER" : User.parse(userstr).getName();
+                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                    }
+                }, e -> { listener.onFailure(e); }));
+            } else {
+                listener.onFailure(new IOException("no index to add conversation to"));
             }
-        ));
+        }, e -> { listener.onFailure(e); }));
     }
 
     /**
@@ -185,24 +187,15 @@ public class InteractionsIndex {
      * @param listener gets the id of the newly created interaction record
      */
     public void createInteraction(
-        String conversationId, 
-        String input, 
-        String prompt, 
-        String response, 
-        String agent, 
+        String conversationId,
+        String input,
+        String prompt,
+        String response,
+        String agent,
         String metadata,
         ActionListener<String> listener
     ) {
-        createInteraction(
-            conversationId,
-            input,
-            prompt,
-            response,
-            agent,
-            metadata,
-            Instant.now(),
-            listener
-        );
+        createInteraction(conversationId, input, prompt, response, agent, metadata, Instant.now(), listener);
     }
 
     /**
@@ -213,14 +206,17 @@ public class InteractionsIndex {
      * @param listener gets the list, sorted by recency, of interactions
      */
     public void getInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
-        if(! clusterService.state().metadata().hasIndex(indexName)) {
+        if (!clusterService.state().metadata().hasIndex(indexName)) {
             listener.onResponse(List.of());
             return;
         }
         ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
             if (access) {
                 SearchRequest request = Requests.searchRequest(indexName);
-                TermQueryBuilder builder = new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+                TermQueryBuilder builder = new TermQueryBuilder(
+                    ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
+                    conversationId
+                );
                 request.source().query(builder);
                 request.source().from(from).size(maxResults);
                 request.source().sort(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, SortOrder.DESC);
@@ -228,31 +224,29 @@ public class InteractionsIndex {
                     ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                     ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
                         List<Interaction> result = new LinkedList<Interaction>();
-                        for(SearchHit hit : response.getHits()) {
+                        for (SearchHit hit : response.getHits()) {
                             result.add(Interaction.fromSearchHit(hit));
                         }
                         internalListener.onResponse(result);
-                    }, e -> {
-                        internalListener.onFailure(e);
-                    });
-                    client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(
-                        r -> {
-                            client.search(request, al);
-                        }, e -> {
+                    }, e -> { internalListener.onFailure(e); });
+                    client
+                        .admin()
+                        .indices()
+                        .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
                             internalListener.onFailure(e);
-                        }
-                    ));
+                        }));
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }
             } else {
-                String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                String user = User.parse(userstr)==null ? "NOUSER" : User.parse(userstr).getName();
+                String userstr = client
+                    .threadPool()
+                    .getThreadContext()
+                    .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                String user = User.parse(userstr) == null ? "NOUSER" : User.parse(userstr).getName();
                 throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
             }
-        }, e -> {
-            listener.onFailure(e);
-        });
+        }, e -> { listener.onFailure(e); });
         conversationMetaIndex.checkAccess(conversationId, accessListener);
     }
 
@@ -280,26 +274,25 @@ public class InteractionsIndex {
      */
     @VisibleForTesting
     ActionListener<List<Interaction>> nextGetListener(
-        String conversationId, int from, int maxResults, 
-        ActionListener<List<Interaction>> mainListener, List<Interaction> result
+        String conversationId,
+        int from,
+        int maxResults,
+        ActionListener<List<Interaction>> mainListener,
+        List<Interaction> result
     ) {
-        if(maxResults < 1) {
+        if (maxResults < 1) {
             mainListener.onFailure(new IllegalArgumentException("maxResults must be positive"));
             return null;
         }
         return ActionListener.wrap(interactions -> {
             result.addAll(interactions);
-            if(interactions.size() < maxResults) {
+            if (interactions.size() < maxResults) {
                 mainListener.onResponse(result);
             } else {
-                ActionListener<List<Interaction>> al = nextGetListener(
-                    conversationId, from + maxResults, maxResults, mainListener, result
-                );
+                ActionListener<List<Interaction>> al = nextGetListener(conversationId, from + maxResults, maxResults, mainListener, result);
                 getInteractions(conversationId, from + maxResults, maxResults, al);
             }
-        }, e -> {
-            mainListener.onFailure(e);
-        });
+        }, e -> { mainListener.onFailure(e); });
     }
 
     /**
@@ -315,42 +308,35 @@ public class InteractionsIndex {
         }
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            ActionListener<List<Interaction>> searchListener = ActionListener.wrap(
-                interactions -> {
-                    BulkRequest request = Requests.bulkRequest();
-                    for(Interaction interaction: interactions) {
-                        DeleteRequest delRequest = Requests.deleteRequest(indexName).id(interaction.getId());
-                        request.add(delRequest);
-                    }
-                    client.bulk(request, ActionListener.wrap(
-                        bulkResponse -> {
-                            internalListener.onResponse(! bulkResponse.hasFailures());
-                        }, e -> {
-                            internalListener.onFailure(e);
-                        }
-                    ));
-                }, e -> {
-                    internalListener.onFailure(e);
+            ActionListener<List<Interaction>> searchListener = ActionListener.wrap(interactions -> {
+                BulkRequest request = Requests.bulkRequest();
+                for (Interaction interaction : interactions) {
+                    DeleteRequest delRequest = Requests.deleteRequest(indexName).id(interaction.getId());
+                    request.add(delRequest);
                 }
-            );
+                client
+                    .bulk(request, ActionListener.wrap(bulkResponse -> { internalListener.onResponse(!bulkResponse.hasFailures()); }, e -> {
+                        internalListener.onFailure(e);
+                    }));
+            }, e -> { internalListener.onFailure(e); });
             ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
-                if(access) {
+                if (access) {
                     final int resultsAtATime = 30;
                     getAllInteractions(conversationId, resultsAtATime, searchListener);
                 } else {
-                    String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr)==null ? "NOUSER" : User.parse(userstr).getName();
+                    String userstr = client
+                        .threadPool()
+                        .getThreadContext()
+                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+                    String user = User.parse(userstr) == null ? "NOUSER" : User.parse(userstr).getName();
                     throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
-            }, e -> {
-                listener.onFailure(e);
-            });
+            }, e -> { listener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
         } catch (Exception e) {
             log.error("Failure while deleting interactions associated with conversation id=" + conversationId, e);
             listener.onFailure(e);
         }
     }
-
 
 }

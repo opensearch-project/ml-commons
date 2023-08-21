@@ -30,8 +30,8 @@ import org.mockito.ArgumentCaptor;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.ActionConstants;
-import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestChannel;
+import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
@@ -39,10 +39,10 @@ import org.opensearch.test.rest.FakeRestRequest;
 public class CreateConversationRestActionTests extends OpenSearchTestCase {
     public void testBasics() {
         CreateConversationRestAction action = new CreateConversationRestAction();
-        assert(action.getName().equals("conversational_create_conversation"));
+        assert (action.getName().equals("conversational_create_conversation"));
         List<Route> routes = action.routes();
-        assert(routes.size() == 1);
-        assert(routes.get(0).equals(new Route(RestRequest.Method.POST, ActionConstants.CREATE_CONVERSATION_PATH)));
+        assert (routes.size() == 1);
+        assert (routes.get(0).equals(new Route(RestRequest.Method.POST, ActionConstants.CREATE_CONVERSATION_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {
@@ -57,6 +57,6 @@ public class CreateConversationRestActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<CreateConversationRequest> argumentCaptor = ArgumentCaptor.forClass(CreateConversationRequest.class);
         verify(client, times(1)).execute(eq(CreateConversationAction.INSTANCE), argumentCaptor.capture(), any());
-        assert(argumentCaptor.getValue().getName().equals("test-name"));
+        assert (argumentCaptor.getValue().getName().equals("test-name"));
     }
 }

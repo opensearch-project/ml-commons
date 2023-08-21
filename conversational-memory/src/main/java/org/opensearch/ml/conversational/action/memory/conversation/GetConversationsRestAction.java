@@ -34,9 +34,7 @@ public class GetConversationsRestAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return List.of(
-            new Route(RestRequest.Method.GET, ActionConstants.LIST_CONVERSATIONS_PATH)
-        );
+        return List.of(new Route(RestRequest.Method.GET, ActionConstants.LIST_CONVERSATIONS_PATH));
     }
 
     @Override

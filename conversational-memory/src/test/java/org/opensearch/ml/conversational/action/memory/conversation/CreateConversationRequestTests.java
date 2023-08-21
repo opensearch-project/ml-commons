@@ -33,35 +33,35 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 public class CreateConversationRequestTests extends OpenSearchTestCase {
-    
+
     public void testConstructorsAndStreaming_Named() throws IOException {
         CreateConversationRequest request = new CreateConversationRequest("test-name");
-        assert(request.validate() == null);
-        assert(request.getName().equals("test-name"));
+        assert (request.validate() == null);
+        assert (request.getName().equals("test-name"));
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         request.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         CreateConversationRequest newRequest = new CreateConversationRequest(in);
-        assert(newRequest.getName().equals(request.getName()));
+        assert (newRequest.getName().equals(request.getName()));
     }
 
     public void testConstructorsAndStreaming_Unnamed() throws IOException {
         CreateConversationRequest request = new CreateConversationRequest();
-        assert(request.validate() == null);
-        assert(request.getName() == null);
+        assert (request.validate() == null);
+        assert (request.getName() == null);
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         request.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         CreateConversationRequest newRequest = new CreateConversationRequest(in);
-        assert(newRequest.getName() == null);
+        assert (newRequest.getName() == null);
     }
 
     public void testEmptyRestRequest() throws IOException {
         RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).build();
         CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
-        assert(request.getName() == null);
+        assert (request.getName() == null);
     }
 
     public void testNamedRestRequest() throws IOException {
@@ -70,7 +70,7 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
             .withParams(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name))
             .build();
         CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
-        assert(request.getName().equals(name));
+        assert (request.getName().equals(name));
     }
 
 }

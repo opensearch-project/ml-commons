@@ -33,33 +33,34 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 public class DeleteConversationRequestTests extends OpenSearchTestCase {
-    
+
     public void testDeleteConversationRequestStreaming() throws IOException {
         DeleteConversationRequest request = new DeleteConversationRequest("test-id");
-        assert(request.validate() == null);
-        assert(request.getId().equals("test-id"));
+        assert (request.validate() == null);
+        assert (request.getId().equals("test-id"));
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         request.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         DeleteConversationRequest newReq = new DeleteConversationRequest(in);
-        assert(newReq.validate() == null);
-        assert(newReq.getId().equals("test-id"));
+        assert (newReq.validate() == null);
+        assert (newReq.getId().equals("test-id"));
     }
 
     public void testNullIdIsInvalid() {
         String nullId = null;
         DeleteConversationRequest request = new DeleteConversationRequest(nullId);
-        assert(request.validate() != null);
-        assert(request.validate().validationErrors().size() == 1);
-        assert(request.validate().validationErrors().get(0).equals("conversation id must not be null"));
+        assert (request.validate() != null);
+        assert (request.validate().validationErrors().size() == 1);
+        assert (request.validate().validationErrors().get(0).equals("conversation id must not be null"));
     }
 
     public void testFromRestRequest() throws IOException {
         RestRequest rreq = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "deleteme")).build();
+            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "deleteme"))
+            .build();
         DeleteConversationRequest req = DeleteConversationRequest.fromRestRequest(rreq);
-        assert(req.validate() == null);
-        assert(req.getId().equals("deleteme"));
+        assert (req.validate() == null);
+        assert (req.getId().equals("deleteme"));
     }
 }

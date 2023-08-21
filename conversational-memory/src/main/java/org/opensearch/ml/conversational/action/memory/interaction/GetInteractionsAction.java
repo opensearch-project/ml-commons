@@ -28,6 +28,8 @@ public class GetInteractionsAction extends ActionType<GetInteractionsResponse> {
     /** Name of this action */
     public static final String NAME = "cluster:admin/opensearch/ml/conversational/conversation/get";
 
-    private GetInteractionsAction() { super(NAME, GetInteractionsResponse::new);}
+    private GetInteractionsAction() {
+        super(NAME, GetInteractionsResponse::new);
+    }
 
 }

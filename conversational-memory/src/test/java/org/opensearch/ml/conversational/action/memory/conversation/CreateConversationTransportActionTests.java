@@ -30,14 +30,14 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -107,7 +107,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getId().equals("testID"));
+        assert (argCaptor.getValue().getId().equals("testID"));
     }
 
     public void testCreateConversationWithNullName() {
@@ -121,7 +121,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getId().equals("testID-2"));
+        assert (argCaptor.getValue().getId().equals("testID-2"));
     }
 
     public void testCreateConversationFails_thenFail() {
@@ -133,7 +133,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Testing Error"));
+        assert (argCaptor.getValue().getMessage().equals("Testing Error"));
     }
 
     public void testDoExecuteFails_thenFail() {
@@ -141,7 +141,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Test doExecute Error"));
+        assert (argCaptor.getValue().getMessage().equals("Test doExecute Error"));
     }
 
 }

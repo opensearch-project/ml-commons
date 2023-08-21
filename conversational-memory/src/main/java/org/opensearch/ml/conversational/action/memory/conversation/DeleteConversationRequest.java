@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.conversational.action.memory.conversation;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.IOException;
 
 import org.opensearch.action.ActionRequest;
@@ -27,8 +29,6 @@ import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
 import lombok.AllArgsConstructor;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * Action Request for Delete Conversation

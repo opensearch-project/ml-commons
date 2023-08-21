@@ -66,5 +66,4 @@ public class DeleteConversationResponse extends ActionResponse implements ToXCon
         return builder;
     }
 
-
 }

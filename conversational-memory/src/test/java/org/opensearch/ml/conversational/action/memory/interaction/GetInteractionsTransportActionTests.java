@@ -33,15 +33,15 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -103,8 +103,16 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
 
     public void testGetInteractions_noMorePages() {
         log.info("test get interactions transport");
-        Interaction testInteraction = new Interaction("test-iid", Instant.now(), "test-cid", "test-input", "test-prompt", 
-                "test-response", "test-agent", "{\"test\":\"metadata\"}");
+        Interaction testInteraction = new Interaction(
+            "test-iid",
+            Instant.now(),
+            "test-cid",
+            "test-input",
+            "test-prompt",
+            "test-response",
+            "test-agent",
+            "{\"test\":\"metadata\"}"
+        );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(3);
             listener.onResponse(List.of(testInteraction));
@@ -114,16 +122,24 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<GetInteractionsResponse> argCaptor = ArgumentCaptor.forClass(GetInteractionsResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         List<Interaction> interactions = argCaptor.getValue().getInteractions();
-        assert(interactions.size() == 1);
+        assert (interactions.size() == 1);
         Interaction interaction = interactions.get(0);
-        assert(interaction.equals(testInteraction));
-        assert(!argCaptor.getValue().hasMorePages());
+        assert (interaction.equals(testInteraction));
+        assert (!argCaptor.getValue().hasMorePages());
     }
 
     public void testGetInteractions_MorePages() {
         log.info("test get interactions transport");
-        Interaction testInteraction = new Interaction("test-iid", Instant.now(), "test-cid", "test-input", "test-prompt", 
-                "test-response", "test-agent", "{\"test\":\"metadata\"}");
+        Interaction testInteraction = new Interaction(
+            "test-iid",
+            Instant.now(),
+            "test-cid",
+            "test-input",
+            "test-prompt",
+            "test-response",
+            "test-agent",
+            "{\"test\":\"metadata\"}"
+        );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(3);
             listener.onResponse(List.of(testInteraction));
@@ -134,10 +150,10 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<GetInteractionsResponse> argCaptor = ArgumentCaptor.forClass(GetInteractionsResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
         List<Interaction> interactions = argCaptor.getValue().getInteractions();
-        assert(interactions.size() == 1);
+        assert (interactions.size() == 1);
         Interaction interaction = interactions.get(0);
-        assert(interaction.equals(testInteraction));
-        assert(argCaptor.getValue().hasMorePages());
+        assert (interaction.equals(testInteraction));
+        assert (argCaptor.getValue().hasMorePages());
     }
 
     public void testGetInteractionsFails_thenFail() {
@@ -149,7 +165,7 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Testing Failure"));
+        assert (argCaptor.getValue().getMessage().equals("Testing Failure"));
     }
 
     public void testDoExecuteFails_thenFail() {
@@ -157,7 +173,7 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Failure in doExecute"));
+        assert (argCaptor.getValue().getMessage().equals("Failure in doExecute"));
     }
 
 }

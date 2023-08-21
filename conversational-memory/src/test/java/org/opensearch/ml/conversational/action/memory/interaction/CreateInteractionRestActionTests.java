@@ -37,24 +37,31 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 public class CreateInteractionRestActionTests extends OpenSearchTestCase {
-    
+
     public void testBasics() {
         CreateInteractionRestAction action = new CreateInteractionRestAction();
-        assert(action.getName().equals("conversational_create_interaction"));
+        assert (action.getName().equals("conversational_create_interaction"));
         List<Route> routes = action.routes();
-        assert(routes.size() == 1);
-        assert(routes.get(0).equals(new Route(RestRequest.Method.POST, ActionConstants.CREATE_INTERACTION_PATH)));
+        assert (routes.size() == 1);
+        assert (routes.get(0).equals(new Route(RestRequest.Method.POST, ActionConstants.CREATE_INTERACTION_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {
-        Map<String, String> params = Map.of(
-            ActionConstants.CONVERSATION_ID_FIELD, "cid", 
-            ActionConstants.INPUT_FIELD, "input", 
-            ActionConstants.PROMPT_FIELD, "prompt", 
-            ActionConstants.AI_RESPONSE_FIELD, "response", 
-            ActionConstants.AI_AGENT_FIELD, "agent", 
-            ActionConstants.INTER_ATTRIBUTES_FIELD, "attributes"
-        );
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.CONVERSATION_ID_FIELD,
+                "cid",
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_FIELD,
+                "prompt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.AI_AGENT_FIELD,
+                "agent",
+                ActionConstants.INTER_ATTRIBUTES_FIELD,
+                "attributes"
+            );
         CreateInteractionRestAction action = new CreateInteractionRestAction();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
 
@@ -65,11 +72,11 @@ public class CreateInteractionRestActionTests extends OpenSearchTestCase {
         ArgumentCaptor<CreateInteractionRequest> argCaptor = ArgumentCaptor.forClass(CreateInteractionRequest.class);
         verify(client, times(1)).execute(eq(CreateInteractionAction.INSTANCE), argCaptor.capture(), any());
         CreateInteractionRequest req = argCaptor.getValue();
-        assert(req.getConversationId().equals("cid"));
-        assert(req.getInput().equals("input"));
-        assert(req.getPrompt().equals("prompt"));
-        assert(req.getResponse().equals("response"));
-        assert(req.getAgent().equals("agent"));
-        assert(req.getAttributes().equals("attributes"));
+        assert (req.getConversationId().equals("cid"));
+        assert (req.getInput().equals("input"));
+        assert (req.getPrompt().equals("prompt"));
+        assert (req.getResponse().equals("response"));
+        assert (req.getAgent().equals("agent"));
+        assert (req.getAttributes().equals("attributes"));
     }
 }

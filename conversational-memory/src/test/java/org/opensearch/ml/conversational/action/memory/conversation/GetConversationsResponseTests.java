@@ -39,31 +39,32 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class GetConversationsResponseTests extends OpenSearchTestCase {
-    
+
     List<ConversationMeta> conversations;
 
     @Before
     public void setup() {
-        conversations = List.of(
-            new ConversationMeta("0", Instant.now(), Instant.now(), 0, "name0", "user0"),
-            new ConversationMeta("1", Instant.now(), Instant.now(), 1, "name1", "user0"),
-            new ConversationMeta("2", Instant.now(), Instant.now(), 2, "name2", "user2")
-        );
+        conversations = List
+            .of(
+                new ConversationMeta("0", Instant.now(), Instant.now(), 0, "name0", "user0"),
+                new ConversationMeta("1", Instant.now(), Instant.now(), 1, "name1", "user0"),
+                new ConversationMeta("2", Instant.now(), Instant.now(), 2, "name2", "user2")
+            );
     }
 
-    public void testGetConversationsResponseStreaming() throws IOException{
+    public void testGetConversationsResponseStreaming() throws IOException {
         GetConversationsResponse response = new GetConversationsResponse(conversations, 2, true);
-        assert(response.hasMorePages());
-        assert(response.getConversations().equals(conversations));
-        assert(response.getNextToken() == 2);
+        assert (response.hasMorePages());
+        assert (response.getConversations().equals(conversations));
+        assert (response.getNextToken() == 2);
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         response.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         GetConversationsResponse newResp = new GetConversationsResponse(in);
-        assert(newResp.hasMorePages());
-        assert(newResp.getConversations().equals(conversations));
-        assert(newResp.getNextToken() == 2);
+        assert (newResp.hasMorePages());
+        assert (newResp.getConversations().equals(conversations));
+        assert (newResp.getNextToken() == 2);
     }
 
     public void testToXContent_MoreTokens() throws IOException {
@@ -72,14 +73,18 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\"" + conversation.getCreatedTime() + "\",\"last_interaction_time\":\"" + conversation.getLastHitTime() + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
+        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
+            + conversation.getCreatedTime()
+            + "\",\"last_interaction_time\":\""
+            + conversation.getLastHitTime()
+            + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         log.info(ld.getDistance(result, expected));
-        assert(ld.getDistance(result, expected) > 0.95);
+        assert (ld.getDistance(result, expected) > 0.95);
     }
 
     public void testToXContent_NoMoreTokens() throws IOException {
@@ -88,14 +93,18 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\"" + conversation.getCreatedTime() + "\",\"last_interaction_time\":\"" + conversation.getLastHitTime() + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}]}";
+        String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
+            + conversation.getCreatedTime()
+            + "\",\"last_interaction_time\":\""
+            + conversation.getLastHitTime()
+            + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}]}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         log.info(ld.getDistance(result, expected));
-        assert(ld.getDistance(result, expected) > 0.95);
+        assert (ld.getDistance(result, expected) > 0.95);
     }
 
 }

@@ -17,12 +17,12 @@
  */
 package org.opensearch.ml.conversational.action.memory.interaction;
 
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.conversational.ConversationalMemoryHandler;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -50,7 +50,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
     public CreateInteractionTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        OpenSearchConversationalMemoryHandler cmHandler, 
+        OpenSearchConversationalMemoryHandler cmHandler,
         Client client
     ) {
         super(CreateInteractionAction.NAME, transportService, actionFilters, CreateInteractionRequest::new);
@@ -68,17 +68,15 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String att = request.getAttributes();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            ActionListener<String> al = ActionListener.wrap(iid -> {
-                internalListener.onResponse(new CreateInteractionResponse(iid));
-            }, e -> {
-                internalListener.onFailure(e);
-            });
+            ActionListener<String> al = ActionListener
+                .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
+                    internalListener.onFailure(e);
+                });
             cmHandler.createInteraction(cid, inp, prp, rsp, agt, att, al);
         } catch (Exception e) {
             log.error(e.toString());
             actionListener.onFailure(e);
         }
     }
-
 
 }

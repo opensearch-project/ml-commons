@@ -27,6 +27,6 @@ public class ConversationalTests extends OpenSearchTestCase {
     // Add unit tests for your plugin
     public void testNothing() {
         log.info("testing nothing");
-        assert(true);
+        assert (true);
     }
 }

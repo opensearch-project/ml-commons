@@ -23,15 +23,14 @@ import java.util.List;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.common.conversational.ConversationMeta;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
 
 /**
  * Action Response for CreateConversation
@@ -75,11 +74,11 @@ public class GetConversationsResponse extends ActionResponse implements ToXConte
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
         builder.startArray(ActionConstants.RESPONSE_CONVERSATION_LIST_FIELD);
-        for(ConversationMeta conversation : conversations) {
+        for (ConversationMeta conversation : conversations) {
             conversation.toXContent(builder, params);
         }
         builder.endArray();
-        if(hasMoreTokens) {
+        if (hasMoreTokens) {
             builder.field(ActionConstants.NEXT_TOKEN_FIELD, nextToken);
         }
         builder.endObject();

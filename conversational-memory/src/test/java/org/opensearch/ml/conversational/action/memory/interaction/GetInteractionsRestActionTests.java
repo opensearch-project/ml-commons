@@ -37,20 +37,26 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 public class GetInteractionsRestActionTests extends OpenSearchTestCase {
-    
+
     public void testBasics() {
         GetInteractionsRestAction action = new GetInteractionsRestAction();
-        assert(action.getName().equals("conversational_get_interactions"));
+        assert (action.getName().equals("conversational_get_interactions"));
         List<Route> routes = action.routes();
-        assert(routes.size() == 1);
-        assert(routes.get(0).equals(new Route(RestRequest.Method.GET, ActionConstants.GET_INTERACTIONS_PATH)));
+        assert (routes.size() == 1);
+        assert (routes.get(0).equals(new Route(RestRequest.Method.GET, ActionConstants.GET_INTERACTIONS_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {
         GetInteractionsRestAction action = new GetInteractionsRestAction();
-        Map<String, String> params = Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid",
-                                            ActionConstants.REQUEST_MAX_RESULTS_FIELD, "2",
-                                            ActionConstants.NEXT_TOKEN_FIELD, "7");
+        Map<String, String> params = Map
+            .of(
+                ActionConstants.CONVERSATION_ID_FIELD,
+                "cid",
+                ActionConstants.REQUEST_MAX_RESULTS_FIELD,
+                "2",
+                ActionConstants.NEXT_TOKEN_FIELD,
+                "7"
+            );
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
 
         NodeClient client = mock(NodeClient.class);
@@ -60,8 +66,8 @@ public class GetInteractionsRestActionTests extends OpenSearchTestCase {
         ArgumentCaptor<GetInteractionsRequest> argCaptor = ArgumentCaptor.forClass(GetInteractionsRequest.class);
         verify(client, times(1)).execute(eq(GetInteractionsAction.INSTANCE), argCaptor.capture(), any());
         GetInteractionsRequest req = argCaptor.getValue();
-        assert(req.getConversationId().equals("cid"));
-        assert(req.getFrom() == 7);
-        assert(req.getMaxResults() == 2);
+        assert (req.getConversationId().equals("cid"));
+        assert (req.getFrom() == 7);
+        assert (req.getMaxResults() == 2);
     }
 }

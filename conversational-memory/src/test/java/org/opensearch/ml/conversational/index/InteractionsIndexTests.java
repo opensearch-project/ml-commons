@@ -198,7 +198,9 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
 
     public void testInit_ClientFails_WithWrappedResourceExists_ThenOK() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        doThrow(new SendRequestTransportException(null, "action", new ResourceAlreadyExistsException("Test index exists"))).when(indicesAdminClient).create(any(), any());
+        doThrow(new SendRequestTransportException(null, "action", new ResourceAlreadyExistsException("Test index exists")))
+            .when(indicesAdminClient)
+            .create(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
         interactionsIndex.initInteractionsIndexIfAbsent(createIndexListener);
@@ -209,7 +211,9 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
 
     public void testInit_ClientFails_WithWrappedOtherException_ThenFail() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        doThrow(new SendRequestTransportException(null, "action", new Exception("Some other exception"))).when(indicesAdminClient).create(any(), any());
+        doThrow(new SendRequestTransportException(null, "action", new Exception("Some other exception")))
+            .when(indicesAdminClient)
+            .create(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
         interactionsIndex.initInteractionsIndexIfAbsent(createIndexListener);
@@ -401,12 +405,13 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
     }
 
     public void testGetAll_Recursion() {
-        List<Interaction> interactions = List.of(
-            new Interaction("iid1", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
-            new Interaction("iid2", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
-            new Interaction("iid3", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
-            new Interaction("iid4", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att")
-        );
+        List<Interaction> interactions = List
+            .of(
+                new Interaction("iid1", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
+                new Interaction("iid2", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
+                new Interaction("iid3", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
+                new Interaction("iid4", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att")
+            );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);
             al.onResponse(interactions.subList(0, 2));

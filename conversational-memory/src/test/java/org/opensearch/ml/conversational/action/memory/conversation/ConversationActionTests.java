@@ -21,8 +21,8 @@ import org.opensearch.test.OpenSearchTestCase;
 
 public class ConversationActionTests extends OpenSearchTestCase {
     public void testActions() {
-        assert(CreateConversationAction.INSTANCE instanceof CreateConversationAction);
-        assert(DeleteConversationAction.INSTANCE instanceof DeleteConversationAction);
-        assert(GetConversationsAction.INSTANCE instanceof GetConversationsAction);
+        assert (CreateConversationAction.INSTANCE instanceof CreateConversationAction);
+        assert (DeleteConversationAction.INSTANCE instanceof DeleteConversationAction);
+        assert (GetConversationsAction.INSTANCE instanceof GetConversationsAction);
     }
 }

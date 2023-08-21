@@ -19,12 +19,12 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 
 import java.util.List;
 
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.ml.conversational.ConversationalMemoryHandler;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
@@ -53,7 +53,7 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
     public GetInteractionsTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        OpenSearchConversationalMemoryHandler cmHandler, 
+        OpenSearchConversationalMemoryHandler cmHandler,
         Client client
     ) {
         super(GetInteractionsAction.NAME, transportService, actionFilters, GetInteractionsRequest::new);
@@ -68,12 +68,11 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<GetInteractionsResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<List<Interaction>> al = ActionListener.wrap(interactions -> {
-                internalListener.onResponse(new GetInteractionsResponse(interactions, from + maxResults, interactions.size() == maxResults));
-            }, e -> {
-                internalListener.onFailure(e);
-            });
+                internalListener
+                    .onResponse(new GetInteractionsResponse(interactions, from + maxResults, interactions.size() == maxResults));
+            }, e -> { internalListener.onFailure(e); });
             cmHandler.getInteractions(request.getConversationId(), from, maxResults, al);
-        } catch(Exception e) {
+        } catch (Exception e) {
             log.error(e.toString());
             actionListener.onFailure(e);
         }

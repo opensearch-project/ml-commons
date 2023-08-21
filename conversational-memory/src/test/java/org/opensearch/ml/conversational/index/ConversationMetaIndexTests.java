@@ -128,10 +128,11 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         }).when(conversationMetaIndex).checkAccess(any(), any());
     }
 
-    private void setupUser() {
+    private void setupUser(String user) {
+        String userstr = user == null ? "" : user + "||";
         doAnswer(invocation -> {
             ThreadContext tc = new ThreadContext(Settings.EMPTY);
-            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "user||");
+            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userstr);
             return tc;
         }).when(threadPool).getThreadContext();
     }
@@ -190,7 +191,9 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testInit_ClientFails_WithWrappedResourceExists_ThenOK() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        doThrow(new SendRequestTransportException(null, "action", new ResourceAlreadyExistsException("Test index exists"))).when(indicesAdminClient).create(any(), any());
+        doThrow(new SendRequestTransportException(null, "action", new ResourceAlreadyExistsException("Test index exists")))
+            .when(indicesAdminClient)
+            .create(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
@@ -201,7 +204,9 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testInit_ClientFails_WithWrappedOtherException_ThenFail() {
         doReturn(false).when(metadata).hasIndex(anyString());
-        doThrow(new SendRequestTransportException(null, "action", new Exception("Some other exception"))).when(indicesAdminClient).create(any(), any());
+        doThrow(new SendRequestTransportException(null, "action", new Exception("Some other exception")))
+            .when(indicesAdminClient)
+            .create(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> createIndexListener = mock(ActionListener.class);
         conversationMetaIndex.initConversationMetaIndexIfAbsent(createIndexListener);
@@ -382,16 +387,19 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         GetResponse response = mock(GetResponse.class);
         doReturn(true).when(response).isExists();
         doReturn("test id").when(response).getId();
-        doReturn(Map.of(
-            ConversationalIndexConstants.META_CREATED_FIELD,
-            Instant.now().toString(),
-            ConversationalIndexConstants.META_ENDED_FIELD,
-            Instant.now().toString(),
-            ConversationalIndexConstants.META_LENGTH_FIELD,
-            2,
-            ConversationalIndexConstants.META_NAME_FIELD,
-            "test"
-        )).when(response).getSourceAsMap();
+        doReturn(
+            Map
+                .of(
+                    ConversationalIndexConstants.META_CREATED_FIELD,
+                    Instant.now().toString(),
+                    ConversationalIndexConstants.META_ENDED_FIELD,
+                    Instant.now().toString(),
+                    ConversationalIndexConstants.META_LENGTH_FIELD,
+                    2,
+                    ConversationalIndexConstants.META_NAME_FIELD,
+                    "test"
+                )
+        ).when(response).getSourceAsMap();
         doAnswer(invocation -> {
             ActionListener<GetResponse> al = invocation.getArgument(1);
             al.onResponse(response);
@@ -509,7 +517,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     public void testCheckAccess_DoesNotExist_ThenReturnTrue() {
-        setupUser();
+        setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
         GetResponse response = mock(GetResponse.class);
         doReturn(false).when(response).isExists();
@@ -527,7 +535,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     public void testCheckAccess_WrongId_ThenReturnTrue() {
-        setupUser();
+        setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
         GetResponse response = mock(GetResponse.class);
         doReturn(true).when(response).isExists();
@@ -546,7 +554,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     public void testCheckAccess_GetFails_ThenFail() {
-        setupUser();
+        setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
         doAnswer(invocation -> {
             ActionListener<GetResponse> al = invocation.getArgument(1);
@@ -562,7 +570,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     public void testCheckAccess_ClientFails_ThenFail() {
-        setupUser();
+        setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Test Fail")).when(client).get(any(), any());
         @SuppressWarnings("unchecked")
@@ -574,11 +582,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     public void testCheckAccess_EmptyStringUser_ThenReturnTrue() {
-        doAnswer(invocation -> {
-            ThreadContext tc = new ThreadContext(Settings.EMPTY);
-            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "");
-            return tc;
-        }).when(threadPool).getThreadContext();
+        setupUser(null);
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> accessListener = mock(ActionListener.class);
         conversationMetaIndex.checkAccess("test id", accessListener);

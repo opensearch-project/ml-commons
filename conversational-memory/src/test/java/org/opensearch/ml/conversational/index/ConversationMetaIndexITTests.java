@@ -29,7 +29,6 @@ import java.util.function.Consumer;
 
 import org.junit.Before;
 import org.opensearch.OpenSearchSecurityException;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.client.Client;
@@ -38,8 +37,9 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.util.concurrent.ThreadContext.StoredContext;
 import org.opensearch.commons.ConfigConstants;
-import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversational.ConversationMeta;
+import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
@@ -60,9 +60,10 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
     }
 
     private StoredContext setUser(String username) {
-        StoredContext stored = client.threadPool().getThreadContext().newStoredContext(true, List.of(
-            ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT
-        ));
+        StoredContext stored = client
+            .threadPool()
+            .getThreadContext()
+            .newStoredContext(true, List.of(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT));
         ThreadContext context = client.threadPool().getThreadContext();
         context.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, username + "||");
         return stored;
@@ -81,11 +82,9 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
      */
     public void testConversationMetaIndexCanBeInitialized() {
         CountDownLatch cdl = new CountDownLatch(1);
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>( ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
+        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r -> { assert (r); }, e -> {
             log.error(e);
-            assert(false);
+            assert (false);
         }), cdl));
         try {
             cdl.await();
@@ -100,17 +99,13 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
      */
     public void testConversationMetaIndexCanBeInitializedTwice() {
         CountDownLatch cdl = new CountDownLatch(2);
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
+        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r -> { assert (r); }, e -> {
             log.error(e);
-            assert(false);
+            assert (false);
         }), cdl));
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
+        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r -> { assert (r); }, e -> {
             log.error(e);
-            assert(false);
+            assert (false);
         }), cdl));
         try {
             cdl.await();
@@ -125,18 +120,14 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
      */
     public void testConversationMetaIndexCanBeInitializedByDifferentObjects() {
         CountDownLatch cdl = new CountDownLatch(2);
-        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
+        index.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r -> { assert (r); }, e -> {
             log.error(e);
-            assert(false);
+            assert (false);
         }), cdl));
         ConversationMetaIndex otherIndex = new ConversationMetaIndex(client, clusterService);
-        otherIndex.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r->{
-            assert(r);
-        }, e -> {
+        otherIndex.initConversationMetaIndexIfAbsent(new LatchedActionListener<Boolean>(ActionListener.wrap(r -> { assert (r); }, e -> {
             log.error(e);
-            assert(false);
+            assert (false);
         }), cdl));
         try {
             cdl.await();
@@ -150,12 +141,11 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
      */
     public void testCanAddNewConversation() {
         CountDownLatch cdl = new CountDownLatch(1);
-        index.createConversation(new LatchedActionListener<String>(ActionListener.wrap(r->{
-            assert(r != null && r.length() > 0);
-        }, e->{
-            log.error(e);
-            assert(false);
-        }), cdl));
+        index
+            .createConversation(new LatchedActionListener<String>(ActionListener.wrap(r -> { assert (r != null && r.length() > 0); }, e -> {
+                log.error(e);
+                assert (false);
+            }), cdl));
         try {
             cdl.await();
         } catch (InterruptedException e) {
@@ -170,13 +160,13 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         int numTries = 100;
         CountDownLatch cdl = new CountDownLatch(numTries);
         Set<String> seenIds = Collections.synchronizedSet(new HashSet<String>(numTries));
-        for(int i = 0; i < numTries; i++){
-            index.createConversation(new LatchedActionListener<String>(ActionListener.wrap(r-> {
-                assert(!seenIds.contains(r));
+        for (int i = 0; i < numTries; i++) {
+            index.createConversation(new LatchedActionListener<String>(ActionListener.wrap(r -> {
+                assert (!seenIds.contains(r));
                 seenIds.add(r);
-            }, e-> {
+            }, e -> {
                 log.error(e);
-                assert(false);
+                assert (false);
             }), cdl));
         }
         try {
@@ -204,22 +194,18 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             log.error(e);
         });
 
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(
-            conversations -> {
-                boolean foundConversation = false;
-                log.info("FINDME");
-                log.info(addConversationListener.result());
-                log.info(conversations);
-                for(ConversationMeta c: conversations) {
-                    if(c.getId().equals(addConversationListener.result())) {
-                        foundConversation = true;
-                    }
+        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(conversations -> {
+            boolean foundConversation = false;
+            log.info("FINDME");
+            log.info(addConversationListener.result());
+            log.info(conversations);
+            for (ConversationMeta c : conversations) {
+                if (c.getId().equals(addConversationListener.result())) {
+                    foundConversation = true;
                 }
-                assert(foundConversation);
-            }, e -> {
-                log.error(e);
             }
-        ), cdl);
+            assert (foundConversation);
+        }, e -> { log.error(e); }), cdl);
         listConversationListener.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
         try {
             cdl.await();
@@ -235,7 +221,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> addConversationListener = new StepListener<>();
         index.createConversation(addConversationListener);
-        
+
         Instant pit = Instant.now().plus(423, ChronoUnit.MINUTES);
 
         StepListener<Boolean> hitConversationListener = new StepListener<>();
@@ -256,16 +242,12 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             log.error(e);
         });
 
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(
-            conversations -> {
-                ConversationMeta conversation = conversations.get(0);
-                assert(conversation.getId().equals(addConversationListener.result()));
-                assert(conversation.getLastHitTime().equals(pit));
-                assert(conversation.getNumInteractions() == 1);
-            }, e -> {
-                log.error(e);
-            }
-        ), cdl);
+        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(conversations -> {
+            ConversationMeta conversation = conversations.get(0);
+            assert (conversation.getId().equals(addConversationListener.result()));
+            assert (conversation.getLastHitTime().equals(pit));
+            assert (conversation.getNumInteractions() == 1);
+        }, e -> { log.error(e); }), cdl);
         listConversationListener.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
         try {
             cdl.await();
@@ -280,36 +262,32 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         index.createConversation(addConversationListener1);
 
         StepListener<String> addConversationListener2 = new StepListener<>();
-        addConversationListener1.whenComplete( cid -> {
-            index.createConversation(addConversationListener2);
-        }, e -> {cdl.countDown(); assert(false);});
-
-        StepListener<List<ConversationMeta>> listConversationListener1 = new StepListener<>();
-        addConversationListener2.whenComplete(cid2 -> {
-            index.getConversations(1, listConversationListener1);
-        }, e -> { cdl.countDown(); assert(false); });
-
-        StepListener<List<ConversationMeta>> listConversationListener2 = new StepListener<>();
-        listConversationListener1.whenComplete(conversations1 -> {
-            index.getConversations(1, 1,listConversationListener2);
-        }, e -> {
+        addConversationListener1.whenComplete(cid -> { index.createConversation(addConversationListener2); }, e -> {
             cdl.countDown();
-            assert(false);
+            assert (false);
         });
 
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>( ActionListener.wrap(
-            conversations2 -> {
-                List<ConversationMeta> conversations1 = listConversationListener1.result();
-                String cid1 = addConversationListener1.result();
-                String cid2 = addConversationListener2.result();
-                if(!conversations1.get(0).getLastHitTime().equals(conversations2.get(0).getLastHitTime())) {
-                    assert(conversations1.get(0).getId().equals(cid2));
-                    assert(conversations2.get(0).getId().equals(cid1));
-                }
-            }, e -> { 
-                assert(false); 
+        StepListener<List<ConversationMeta>> listConversationListener1 = new StepListener<>();
+        addConversationListener2.whenComplete(cid2 -> { index.getConversations(1, listConversationListener1); }, e -> {
+            cdl.countDown();
+            assert (false);
+        });
+
+        StepListener<List<ConversationMeta>> listConversationListener2 = new StepListener<>();
+        listConversationListener1.whenComplete(conversations1 -> { index.getConversations(1, 1, listConversationListener2); }, e -> {
+            cdl.countDown();
+            assert (false);
+        });
+
+        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(conversations2 -> {
+            List<ConversationMeta> conversations1 = listConversationListener1.result();
+            String cid1 = addConversationListener1.result();
+            String cid2 = addConversationListener2.result();
+            if (!conversations1.get(0).getLastHitTime().equals(conversations2.get(0).getLastHitTime())) {
+                assert (conversations1.get(0).getId().equals(cid2));
+                assert (conversations2.get(0).getId().equals(cid1));
             }
-        ), cdl);
+        }, e -> { assert (false); }), cdl);
         listConversationListener2.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
         try {
             cdl.await();
@@ -325,31 +303,27 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         index.createConversation(addConversationListener);
 
         StepListener<Boolean> deleteConversationListener = new StepListener<>();
-        addConversationListener.whenComplete(cid -> {
-            index.deleteConversation(cid, deleteConversationListener);
-        }, e -> {
+        addConversationListener.whenComplete(cid -> { index.deleteConversation(cid, deleteConversationListener); }, e -> {
             cdl.countDown();
-            assert(false);
+            assert (false);
         });
 
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(
-            conversations -> {
-                assert(conversations.size() == 0);
-            }, e -> {
-                cdl.countDown();
-                assert(false);
-            }
-        ), cdl);
+        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(conversations -> {
+            assert (conversations.size() == 0);
+        }, e -> {
+            cdl.countDown();
+            assert (false);
+        }), cdl);
         deleteConversationListener.whenComplete(success -> {
-            if(success) {
+            if (success) {
                 index.getConversations(10, finishAndAssert);
             } else {
                 cdl.countDown();
-                assert(false);
+                assert (false);
             }
         }, e -> {
             cdl.countDown();
-            assert(false); 
+            assert (false);
         });
 
         try {
@@ -360,17 +334,17 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
     }
 
     public void testConversationsForDifferentUsersAreDifferent() {
-        try(ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             CountDownLatch cdl = new CountDownLatch(1);
             Stack<StoredContext> contextStack = new Stack<>();
             Consumer<Exception> onFail = e -> {
-                while(!contextStack.empty()) {
+                while (!contextStack.empty()) {
                     contextStack.pop().close();
                 }
-                cdl.countDown(); 
-                log.error(e); 
-                threadContext.restore(); 
-                assert(false);
+                cdl.countDown();
+                log.error(e);
+                threadContext.restore();
+                assert (false);
             };
 
             final String user1 = "test-user1";
@@ -381,9 +355,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             index.createConversation(cid1);
 
             StepListener<String> cid2 = new StepListener<>();
-            cid1.whenComplete(cid -> {
-                index.createConversation(cid2);
-            }, onFail);
+            cid1.whenComplete(cid -> { index.createConversation(cid2); }, onFail);
 
             StepListener<String> cid3 = new StepListener<>();
             cid2.whenComplete(cid -> {
@@ -392,27 +364,25 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             }, onFail);
 
             StepListener<List<ConversationMeta>> conversationsListener = new StepListener<>();
-            cid3.whenComplete(cid -> {
-                index.getConversations(10, conversationsListener);
-            }, onFail);
+            cid3.whenComplete(cid -> { index.getConversations(10, conversationsListener); }, onFail);
 
             StepListener<List<ConversationMeta>> originalConversationsListener = new StepListener<>();
             conversationsListener.whenComplete(conversations -> {
-                assert(conversations.size() == 1);
-                assert(conversations.get(0).getId().equals(cid3.result()));
-                assert(conversations.get(0).getUser().equals(user2));
+                assert (conversations.size() == 1);
+                assert (conversations.get(0).getId().equals(cid3.result()));
+                assert (conversations.get(0).getUser().equals(user2));
                 contextStack.pop().restore();
                 index.getConversations(10, originalConversationsListener);
             }, onFail);
 
             originalConversationsListener.whenComplete(conversations -> {
-                assert(conversations.size() == 2);
-                if(!conversations.get(0).getLastHitTime().equals(conversations.get(1).getLastHitTime())) {
-                    assert(conversations.get(0).getId().equals(cid2.result()));
-                    assert(conversations.get(1).getId().equals(cid1.result()));
+                assert (conversations.size() == 2);
+                if (!conversations.get(0).getLastHitTime().equals(conversations.get(1).getLastHitTime())) {
+                    assert (conversations.get(0).getId().equals(cid2.result()));
+                    assert (conversations.get(1).getId().equals(cid1.result()));
                 }
-                assert(conversations.get(0).getUser().equals(user1));
-                assert(conversations.get(1).getUser().equals(user1));
+                assert (conversations.get(0).getUser().equals(user1));
+                assert (conversations.get(1).getUser().equals(user1));
                 contextStack.pop().restore();
                 cdl.countDown();
             }, onFail);
@@ -420,7 +390,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             try {
                 cdl.await();
                 threadContext.restore();
-            } catch(InterruptedException e) {
+            } catch (InterruptedException e) {
                 log.error(e);
             }
         } catch (Exception e) {
@@ -430,17 +400,17 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
     }
 
     public void testDifferentUsersCannotTouchOthersConversations() {
-        try(ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             CountDownLatch cdl = new CountDownLatch(1);
             Stack<StoredContext> contextStack = new Stack<>();
             Consumer<Exception> onFail = e -> {
-                while(!contextStack.empty()) {
+                while (!contextStack.empty()) {
                     contextStack.pop().close();
                 }
-                cdl.countDown(); 
-                log.error(e); 
-                threadContext.restore(); 
-                assert(false);
+                cdl.countDown();
+                log.error(e);
+                threadContext.restore();
+                assert (false);
             };
 
             final String user1 = "user-1";
@@ -458,15 +428,18 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
 
             StepListener<Boolean> delListener = new StepListener<>();
             hitListener.whenComplete(updated -> {
-                Exception e = new OpenSearchSecurityException("Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result());
-                while(!contextStack.empty()) {
+                Exception e = new OpenSearchSecurityException(
+                    "Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result()
+                );
+                while (!contextStack.empty()) {
                     contextStack.pop().close();
                 }
-                cdl.countDown(); 
-                log.error(e); 
-                assert(false);
+                cdl.countDown();
+                log.error(e);
+                assert (false);
             }, e -> {
-                if(e instanceof OpenSearchSecurityException && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                if (e instanceof OpenSearchSecurityException
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
                     index.deleteConversation(cid1.result(), delListener);
                 } else {
                     onFail.accept(e);
@@ -474,15 +447,18 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             });
 
             delListener.whenComplete(success -> {
-                Exception e = new OpenSearchSecurityException("Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result());
-                while(!contextStack.empty()) {
+                Exception e = new OpenSearchSecurityException(
+                    "Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result()
+                );
+                while (!contextStack.empty()) {
                     contextStack.pop().close();
                 }
-                cdl.countDown(); 
-                log.error(e); 
-                assert(false);
+                cdl.countDown();
+                log.error(e);
+                assert (false);
             }, e -> {
-                if(e instanceof OpenSearchSecurityException && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
+                if (e instanceof OpenSearchSecurityException
+                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
                     contextStack.pop().restore();
                     contextStack.pop().restore();
                     cdl.countDown();
@@ -490,11 +466,11 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
                     onFail.accept(e);
                 }
             });
-            
+
             try {
                 cdl.await();
                 threadContext.restore();
-            } catch(InterruptedException e) {
+            } catch (InterruptedException e) {
                 log.error(e);
             }
         } catch (Exception e) {

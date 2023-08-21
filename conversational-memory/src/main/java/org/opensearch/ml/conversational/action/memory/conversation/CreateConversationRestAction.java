@@ -34,9 +34,7 @@ public class CreateConversationRestAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return List.of(
-            new Route(RestRequest.Method.POST, ActionConstants.CREATE_CONVERSATION_PATH)
-        );
+        return List.of(new Route(RestRequest.Method.POST, ActionConstants.CREATE_CONVERSATION_PATH));
     }
 
     @Override

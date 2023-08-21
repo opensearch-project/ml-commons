@@ -31,25 +31,25 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class DeleteConversationResponseTests extends OpenSearchTestCase {
-    
+
     public void testDeleteConversationResponseStreaming() throws IOException {
         DeleteConversationResponse response = new DeleteConversationResponse(true);
-        assert(response.wasSuccessful());
+        assert (response.wasSuccessful());
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         response.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         DeleteConversationResponse newResp = new DeleteConversationResponse(in);
-        assert(newResp.wasSuccessful());
+        assert (newResp.wasSuccessful());
     }
 
     public void testToXContent() throws IOException {
         DeleteConversationResponse response = new DeleteConversationResponse(false);
-        assert(!response.wasSuccessful());
+        assert (!response.wasSuccessful());
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         String expected = "{\"success\":false}";
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        assert(result.equals(expected));
+        assert (result.equals(expected));
     }
 }

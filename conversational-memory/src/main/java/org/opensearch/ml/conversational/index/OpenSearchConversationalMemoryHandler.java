@@ -20,23 +20,25 @@ package org.opensearch.ml.conversational.index;
 import java.time.Instant;
 import java.util.List;
 
-import org.opensearch.common.action.ActionFuture;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversational.ConversationMeta;
 import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.ml.common.conversational.Interaction.InteractionBuilder;
 import org.opensearch.ml.conversational.ConversationalMemoryHandler;
 
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Class for handling all Conversational Memory operactions
  */
 public class OpenSearchConversationalMemoryHandler implements ConversationalMemoryHandler {
-    //private final static org.apache.logging.log4j.Logger log = org.apache.logging.log4j.LogManager.getLogger(ConversationalMemoryHandler.class);
+    // private final static org.apache.logging.log4j.Logger log =
+    // org.apache.logging.log4j.LogManager.getLogger(ConversationalMemoryHandler.class);
 
     private ConversationMetaIndex conversationMetaIndex;
     private InteractionsIndex interactionsIndex;
@@ -49,6 +51,12 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     public OpenSearchConversationalMemoryHandler(Client client, ClusterService clusterService) {
         this.conversationMetaIndex = new ConversationMetaIndex(client, clusterService);
         this.interactionsIndex = new InteractionsIndex(client, clusterService, this.conversationMetaIndex);
+    }
+
+    @VisibleForTesting
+    OpenSearchConversationalMemoryHandler(ConversationMetaIndex conversationMetaIndex, InteractionsIndex interactionsIndex) {
+        this.conversationMetaIndex = conversationMetaIndex;
+        this.interactionsIndex = interactionsIndex;
     }
 
     /**
@@ -100,7 +108,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param listener gets the ID of the new interaction
      */
     public void createInteraction(
-        String conversationId, 
+        String conversationId,
         String input,
         String prompt,
         String response,
@@ -109,14 +117,9 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         ActionListener<String> listener
     ) {
         Instant time = Instant.now();
-        conversationMetaIndex.hitConversation(conversationId, time, ActionListener.wrap(r->{
-            interactionsIndex.createInteraction(
-                conversationId, input, prompt, 
-                response, agent, metadata, time, listener
-            );
-        }, e->{
-            listener.onFailure(e);
-        }));
+        conversationMetaIndex.hitConversation(conversationId, time, ActionListener.wrap(r -> {
+            interactionsIndex.createInteraction(conversationId, input, prompt, response, agent, metadata, time, listener);
+        }, e -> { listener.onFailure(e); }));
     }
 
     /**
@@ -130,7 +133,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @return ActionFuture for the interactionId of the new interaction
      */
     public ActionFuture<String> createInteraction(
-        String conversationId, 
+        String conversationId,
         String input,
         String prompt,
         String response,
@@ -150,11 +153,20 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     public void createInteraction(InteractionBuilder builder, ActionListener<String> listener) {
         builder.timestamp(Instant.now());
         Interaction interaction = builder.build();
-        conversationMetaIndex.hitConversation(interaction.getConversationId(), interaction.getTimestamp(), ActionListener.wrap(r->{},e->{}));
-        interactionsIndex.createInteraction(
-            interaction.getConversationId(), interaction.getInput(), interaction.getPrompt(), 
-            interaction.getResponse(), interaction.getAgent(), interaction.getMetadata(), listener
-        );
+        conversationMetaIndex.hitConversation(interaction.getConversationId(), interaction.getTimestamp(), ActionListener.wrap(r -> {
+            interactionsIndex
+                .createInteraction(
+                    interaction.getConversationId(),
+                    interaction.getInput(),
+                    interaction.getPrompt(),
+                    interaction.getResponse(),
+                    interaction.getAgent(),
+                    interaction.getMetadata(),
+                    interaction.getTimestamp(),
+                    listener
+                );
+        }, e -> { listener.onFailure(e); }));
+
     }
 
     /**
@@ -244,7 +256,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         conversationMetaIndex.checkAccess(conversationId, accessListener);
 
         accessListener.whenComplete(access -> {
-            if(access) {
+            if (access) {
                 StepListener<Boolean> metaDeleteListener = new StepListener<>();
                 StepListener<Boolean> interactionsListener = new StepListener<>();
 
@@ -252,9 +264,8 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
                 interactionsIndex.deleteConversation(conversationId, interactionsListener);
 
                 metaDeleteListener.whenComplete(metaResult -> {
-                    interactionsListener.whenComplete(interactionResult -> {
-                        listener.onResponse(metaResult && interactionResult);
-                    }, listener::onFailure);
+                    interactionsListener
+                        .whenComplete(interactionResult -> { listener.onResponse(metaResult && interactionResult); }, listener::onFailure);
                 }, listener::onFailure);
             } else {
                 listener.onResponse(false);

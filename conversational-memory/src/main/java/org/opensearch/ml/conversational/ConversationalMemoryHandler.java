@@ -67,7 +67,7 @@ public interface ConversationalMemoryHandler {
      * @param listener gets the ID of the new interaction
      */
     public void createInteraction(
-        String conversationId, 
+        String conversationId,
         String input,
         String prompt,
         String response,
@@ -87,7 +87,7 @@ public interface ConversationalMemoryHandler {
      * @return ActionFuture for the interactionId of the new interaction
      */
     public ActionFuture<String> createInteraction(
-        String conversationId, 
+        String conversationId,
         String input,
         String prompt,
         String response,

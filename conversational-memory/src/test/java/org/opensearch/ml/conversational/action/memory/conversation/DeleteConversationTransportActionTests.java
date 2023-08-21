@@ -30,14 +30,14 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -107,7 +107,7 @@ public class DeleteConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<DeleteConversationResponse> argCaptor = ArgumentCaptor.forClass(DeleteConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().wasSuccessful());
+        assert (argCaptor.getValue().wasSuccessful());
     }
 
     public void testDeleteFails_thenFail() {
@@ -119,7 +119,7 @@ public class DeleteConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Test Fail Case"));
+        assert (argCaptor.getValue().getMessage().equals("Test Fail Case"));
     }
 
     public void testdoExecuteFails_thenFail() {
@@ -127,7 +127,7 @@ public class DeleteConversationTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Test doExecute Error"));
+        assert (argCaptor.getValue().getMessage().equals("Test doExecute Error"));
     }
 
 }

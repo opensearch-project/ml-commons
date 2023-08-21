@@ -39,10 +39,10 @@ import org.opensearch.test.rest.FakeRestRequest;
 public class DeleteConversationRestActionTests extends OpenSearchTestCase {
     public void testBasics() {
         DeleteConversationRestAction action = new DeleteConversationRestAction();
-        assert(action.getName().equals("conversational_delete_conversation"));
+        assert (action.getName().equals("conversational_delete_conversation"));
         List<Route> routes = action.routes();
-        assert(routes.size() == 1);
-        assert(routes.get(0).equals(new Route(RestRequest.Method.DELETE, ActionConstants.DELETE_CONVERSATION_PATH)));
+        assert (routes.size() == 1);
+        assert (routes.get(0).equals(new Route(RestRequest.Method.DELETE, ActionConstants.DELETE_CONVERSATION_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {
@@ -50,13 +50,13 @@ public class DeleteConversationRestActionTests extends OpenSearchTestCase {
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "deleteme"))
             .build();
-        
+
         NodeClient client = mock(NodeClient.class);
         RestChannel channel = mock(RestChannel.class);
         action.handleRequest(request, channel, client);
 
         ArgumentCaptor<DeleteConversationRequest> argCaptor = ArgumentCaptor.forClass(DeleteConversationRequest.class);
         verify(client, times(1)).execute(eq(DeleteConversationAction.INSTANCE), argCaptor.capture(), any());
-        assert(argCaptor.getValue().getId().equals("deleteme"));
+        assert (argCaptor.getValue().getId().equals("deleteme"));
     }
 }

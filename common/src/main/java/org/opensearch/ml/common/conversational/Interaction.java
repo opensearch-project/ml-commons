@@ -153,6 +153,10 @@ public class Interaction implements Writeable, ToXContentObject {
             + ",cid=" + conversationId
             + ",timestamp=" + timestamp
             + ",agent=" + agent
+            + ",prompt=" + prompt
+            + ",input=" + input
+            + ",response=" + response
+            + ",metadata=" + metadata
             + "}";
     }
     

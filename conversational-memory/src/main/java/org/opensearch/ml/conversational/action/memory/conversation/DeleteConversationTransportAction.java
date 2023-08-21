@@ -17,12 +17,12 @@
  */
 package org.opensearch.ml.conversational.action.memory.conversation;
 
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.conversational.ConversationalMemoryHandler;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -50,7 +50,7 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
     public DeleteConversationTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        OpenSearchConversationalMemoryHandler cmHandler, 
+        OpenSearchConversationalMemoryHandler cmHandler,
         Client client
     ) {
         super(DeleteConversationAction.NAME, transportService, actionFilters, DeleteConversationRequest::new);
@@ -61,14 +61,12 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
     @Override
     public void doExecute(Task task, DeleteConversationRequest request, ActionListener<DeleteConversationResponse> listener) {
         String conversationId = request.getId();
-        try(ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<DeleteConversationResponse> internalListener = ActionListener.runBefore(listener, () -> context.restore());
             ActionListener<Boolean> al = ActionListener.wrap(success -> {
                 DeleteConversationResponse response = new DeleteConversationResponse(success);
                 internalListener.onResponse(response);
-            }, e -> {
-                internalListener.onFailure(e);
-            });
+            }, e -> { internalListener.onFailure(e); });
             cmHandler.deleteConversation(conversationId, al);
         } catch (Exception e) {
             log.error(e.toString());

@@ -28,5 +28,7 @@ public class CreateConversationAction extends ActionType<CreateConversationRespo
     /** Name of this action */
     public static final String NAME = "cluster:admin/opensearch/ml/conversational/conversation/create";
 
-    private CreateConversationAction() { super(NAME, CreateConversationResponse::new); }
+    private CreateConversationAction() {
+        super(NAME, CreateConversationResponse::new);
+    }
 }

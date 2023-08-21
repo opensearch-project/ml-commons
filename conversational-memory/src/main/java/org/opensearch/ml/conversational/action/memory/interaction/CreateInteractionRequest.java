@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.conversational.action.memory.interaction;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.IOException;
 
 import org.opensearch.action.ActionRequest;
@@ -28,8 +30,6 @@ import org.opensearch.rest.RestRequest;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * Action Request for create interaction
@@ -74,11 +74,11 @@ public class CreateInteractionRequest extends ActionRequest {
         out.writeOptionalString(agent);
         out.writeOptionalString(attributes);
     }
-    
+
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if(this.conversationId == null) {
+        if (this.conversationId == null) {
             exception = addValidationError("Interaction MUST belong to a conversation ID", exception);
         }
         return exception;

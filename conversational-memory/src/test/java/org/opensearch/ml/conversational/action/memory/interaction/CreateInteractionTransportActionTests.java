@@ -30,14 +30,14 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -88,8 +88,7 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
-        this.request = new CreateInteractionRequest("test-cid", "input", "prompt", "response", 
-                    "agent", "{\"attributes\": \"test\"}");
+        this.request = new CreateInteractionRequest("test-cid", "input", "prompt", "response", "agent", "{\"attributes\": \"test\"}");
         this.action = spy(new CreateInteractionTransportAction(transportService, actionFilters, cmHandler, client));
 
         Settings settings = Settings.builder().build();
@@ -108,7 +107,7 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getId().equals("testID"));
+        assert (argCaptor.getValue().getId().equals("testID"));
     }
 
     public void testCreateInteractionFails_thenFail() {
@@ -121,16 +120,18 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Testing Failure"));
+        assert (argCaptor.getValue().getMessage().equals("Testing Failure"));
     }
 
     public void testDoExecuteFails_thenFail() {
         log.info("testing create interaction transport");
-        doThrow(new RuntimeException("Failure in doExecute")).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        doThrow(new RuntimeException("Failure in doExecute"))
+            .when(cmHandler)
+            .createInteraction(any(), any(), any(), any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Failure in doExecute"));
+        assert (argCaptor.getValue().getMessage().equals("Failure in doExecute"));
     }
 
 }

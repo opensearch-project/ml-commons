@@ -19,12 +19,12 @@ package org.opensearch.ml.conversational.action.memory.conversation;
 
 import java.util.List;
 
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversational.ConversationMeta;
 import org.opensearch.ml.conversational.ConversationalMemoryHandler;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
@@ -53,7 +53,7 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
     public GetConversationsTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        OpenSearchConversationalMemoryHandler cmHandler, 
+        OpenSearchConversationalMemoryHandler cmHandler,
         Client client
     ) {
         super(GetConversationsAction.NAME, transportService, actionFilters, GetConversationsRequest::new);
@@ -68,7 +68,8 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<GetConversationsResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<List<ConversationMeta>> al = ActionListener.wrap(conversations -> {
-                internalListener.onResponse(new GetConversationsResponse(conversations, from + maxResults, conversations.size() == maxResults));
+                internalListener
+                    .onResponse(new GetConversationsResponse(conversations, from + maxResults, conversations.size() == maxResults));
             }, e -> {
                 log.error(e.toString());
                 internalListener.onFailure(e);

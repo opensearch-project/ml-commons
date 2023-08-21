@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.conversational.action.memory.conversation;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.IOException;
 
 import org.opensearch.action.ActionRequest;
@@ -27,8 +29,6 @@ import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 
 import lombok.Getter;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 /**
  * ActionRequest for list conversations action
@@ -87,7 +87,7 @@ public class GetConversationsRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if(this.maxResults <= 0) {
+        if (this.maxResults <= 0) {
             exception = addValidationError("Can't list 0 or negative conversations", exception);
         }
         return exception;
@@ -100,16 +100,20 @@ public class GetConversationsRequest extends ActionRequest {
      * @throws IOException if something breaks
      */
     public static GetConversationsRequest fromRestRequest(RestRequest request) throws IOException {
-        if(request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
-            if(request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
-                return new GetConversationsRequest(Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD)),
-                                                    Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD)));
+        if (request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
+            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
+                return new GetConversationsRequest(
+                    Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD)),
+                    Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD))
+                );
             } else {
-                return new GetConversationsRequest(ActionConstants.DEFAULT_MAX_RESULTS,
-                                                    Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD)));
+                return new GetConversationsRequest(
+                    ActionConstants.DEFAULT_MAX_RESULTS,
+                    Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD))
+                );
             }
         } else {
-            if(request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
+            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
                 return new GetConversationsRequest(Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD)));
             } else {
                 return new GetConversationsRequest();

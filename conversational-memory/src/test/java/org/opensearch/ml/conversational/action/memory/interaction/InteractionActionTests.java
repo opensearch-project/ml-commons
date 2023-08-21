@@ -19,7 +19,7 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 
 public class InteractionActionTests {
     public void testActions() {
-        assert(CreateInteractionAction.INSTANCE instanceof CreateInteractionAction);
-        assert(GetInteractionsAction.INSTANCE instanceof GetInteractionsAction);
+        assert (CreateInteractionAction.INSTANCE instanceof CreateInteractionAction);
+        assert (GetInteractionsAction.INSTANCE instanceof GetInteractionsAction);
     }
 }

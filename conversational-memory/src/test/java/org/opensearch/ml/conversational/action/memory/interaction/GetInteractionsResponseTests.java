@@ -43,26 +43,27 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        interactions = List.of(
-            new Interaction("id0", Instant.now(), "cid", "input", "prompt", "response", "agent", "attribute"),
-            new Interaction("id1", Instant.now(), "cid", "input", "prompt", "response", "agent", "attribute"),
-            new Interaction("id2", Instant.now(), "cid", "input", "prompt", "response", "agent", "attribute")
-        );
+        interactions = List
+            .of(
+                new Interaction("id0", Instant.now(), "cid", "input", "prompt", "response", "agent", "attribute"),
+                new Interaction("id1", Instant.now(), "cid", "input", "prompt", "response", "agent", "attribute"),
+                new Interaction("id2", Instant.now(), "cid", "input", "prompt", "response", "agent", "attribute")
+            );
     }
 
     public void testGetInteractionsResponseStreaming() throws IOException {
         GetInteractionsResponse response = new GetInteractionsResponse(interactions, 4, true);
-        assert(response.getInteractions().equals(interactions));
-        assert(response.getNextToken() == 4);
-        assert(response.hasMorePages());
+        assert (response.getInteractions().equals(interactions));
+        assert (response.getNextToken() == 4);
+        assert (response.hasMorePages());
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         response.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         GetInteractionsResponse newResp = new GetInteractionsResponse(in);
-        assert(newResp.getInteractions().equals(interactions));
-        assert(newResp.getNextToken() == 4);
-        assert(newResp.hasMorePages());
+        assert (newResp.getInteractions().equals(interactions));
+        assert (newResp.getNextToken() == 4);
+        assert (newResp.hasMorePages());
     }
 
     public void testToXContent_MoreTokens() throws IOException {
@@ -71,13 +72,15 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\"" + interaction.getTimestamp() + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}],\"next_token\":2}";
+        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\""
+            + interaction.getTimestamp()
+            + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}],\"next_token\":2}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         log.info(ld.getDistance(result, expected));
-        assert(ld.getDistance(result, expected) > 0.95);
+        assert (ld.getDistance(result, expected) > 0.95);
     }
 
     public void testToXContent_NoMoreTokens() throws IOException {
@@ -86,13 +89,15 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\"" + interaction.getTimestamp() + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}]}";
+        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\""
+            + interaction.getTimestamp()
+            + "\",\"input\":\"input\",\"prompt\":\"prompt\",\"response\":\"response\",\"agent\":\"agent\",\"attributes\":\"attribute\"}]}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         log.info(ld.getDistance(result, expected));
-        assert(ld.getDistance(result, expected) > 0.95);
+        assert (ld.getDistance(result, expected) > 0.95);
     }
-    
+
 }

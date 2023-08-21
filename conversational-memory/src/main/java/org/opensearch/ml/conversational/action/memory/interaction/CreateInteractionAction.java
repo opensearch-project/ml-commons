@@ -28,5 +28,7 @@ public class CreateInteractionAction extends ActionType<CreateInteractionRespons
     /** Name of this action */
     public static final String NAME = "cluster:admin/opensearch/ml/conversational/interaction/create";
 
-    private CreateInteractionAction() { super(NAME, CreateInteractionResponse::new); }
+    private CreateInteractionAction() {
+        super(NAME, CreateInteractionResponse::new);
+    }
 }

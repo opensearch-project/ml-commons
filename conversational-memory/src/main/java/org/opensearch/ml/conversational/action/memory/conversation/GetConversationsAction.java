@@ -28,5 +28,7 @@ public class GetConversationsAction extends ActionType<GetConversationsResponse>
     /** Name of this action */
     public static final String NAME = "cluster:admin/opensearch/ml/conversational/conversation/list";
 
-    private GetConversationsAction() { super(NAME, GetConversationsResponse::new); }
+    private GetConversationsAction() {
+        super(NAME, GetConversationsResponse::new);
+    }
 }

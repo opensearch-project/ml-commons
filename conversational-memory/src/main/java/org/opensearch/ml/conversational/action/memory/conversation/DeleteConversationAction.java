@@ -28,5 +28,7 @@ public class DeleteConversationAction extends ActionType<DeleteConversationRespo
     /** Name of this action */
     public static final String NAME = "cluster:admin/opensearch/ml/conversational/conversation/delete";
 
-    private DeleteConversationAction() {super(NAME, DeleteConversationResponse::new);}
+    private DeleteConversationAction() {
+        super(NAME, DeleteConversationResponse::new);
+    }
 }

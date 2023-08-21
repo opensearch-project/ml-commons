@@ -31,16 +31,16 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class CreateConversationResponseTests extends OpenSearchTestCase {
-    
+
     public void testCreateConversationResponseStreaming() throws IOException {
         CreateConversationResponse response = new CreateConversationResponse("test-id");
-        assert(response.getId().equals("test-id"));
+        assert (response.getId().equals("test-id"));
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         response.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         CreateConversationResponse newResp = new CreateConversationResponse(in);
-        assert(newResp.getId().equals("test-id"));
+        assert (newResp.getId().equals("test-id"));
     }
 
     public void testToXContent() throws IOException {
@@ -49,6 +49,6 @@ public class CreateConversationResponseTests extends OpenSearchTestCase {
         String expected = "{\"conversation_id\":\"createme\"}";
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        assert(result.equals(expected));
+        assert (result.equals(expected));
     }
 }

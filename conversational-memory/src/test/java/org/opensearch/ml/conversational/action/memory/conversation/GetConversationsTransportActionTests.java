@@ -34,15 +34,15 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.ConversationMeta;
 import org.opensearch.ml.conversational.index.OpenSearchConversationalMemoryHandler;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -104,10 +104,11 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
 
     public void testGetConversations() {
         log.info("testing get conversations transport");
-        List<ConversationMeta> testResult = List.of(
-            new ConversationMeta("testcid1", Instant.now(), Instant.now(), 0, "", null),
-            new ConversationMeta("testcid2", Instant.now(), Instant.now().minus(2, ChronoUnit.MINUTES), 4, "testname", null)
-        );
+        List<ConversationMeta> testResult = List
+            .of(
+                new ConversationMeta("testcid1", Instant.now(), Instant.now(), 0, "", null),
+                new ConversationMeta("testcid2", Instant.now(), Instant.now().minus(2, ChronoUnit.MINUTES), 4, "testname", null)
+            );
         doAnswer(invocation -> {
             ActionListener<List<ConversationMeta>> listener = invocation.getArgument(2);
             listener.onResponse(testResult);
@@ -116,20 +117,21 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<GetConversationsResponse> argCaptor = ArgumentCaptor.forClass(GetConversationsResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getConversations().equals(testResult));
-        assert(!argCaptor.getValue().hasMorePages());
+        assert (argCaptor.getValue().getConversations().equals(testResult));
+        assert (!argCaptor.getValue().hasMorePages());
     }
 
     public void testPagination() {
-        List<ConversationMeta> testResult = List.of(
-            new ConversationMeta("testcid1", Instant.now(), Instant.now(), 0, "", null),
-            new ConversationMeta("testcid2", Instant.now(), Instant.now().minus(2, ChronoUnit.MINUTES), 4, "testname", null),
-            new ConversationMeta("testcid3", Instant.now(), Instant.now().minus(3, ChronoUnit.MINUTES), 4, "testname", null)
-        );
+        List<ConversationMeta> testResult = List
+            .of(
+                new ConversationMeta("testcid1", Instant.now(), Instant.now(), 0, "", null),
+                new ConversationMeta("testcid2", Instant.now(), Instant.now().minus(2, ChronoUnit.MINUTES), 4, "testname", null),
+                new ConversationMeta("testcid3", Instant.now(), Instant.now().minus(3, ChronoUnit.MINUTES), 4, "testname", null)
+            );
         doAnswer(invocation -> {
             ActionListener<List<ConversationMeta>> listener = invocation.getArgument(2);
             int maxResults = invocation.getArgument(1);
-            if(maxResults <= 3) {
+            if (maxResults <= 3) {
                 listener.onResponse(testResult.subList(0, maxResults));
             } else {
                 listener.onResponse(testResult);
@@ -140,9 +142,9 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, r0, actionListener);
         ArgumentCaptor<GetConversationsResponse> argCaptor = ArgumentCaptor.forClass(GetConversationsResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getConversations().equals(testResult.subList(0, 2)));
-        assert(argCaptor.getValue().hasMorePages());
-        assert(argCaptor.getValue().getNextToken() == 2);
+        assert (argCaptor.getValue().getConversations().equals(testResult.subList(0, 2)));
+        assert (argCaptor.getValue().hasMorePages());
+        assert (argCaptor.getValue().getNextToken() == 2);
 
         @SuppressWarnings("unchecked")
         ActionListener<GetConversationsResponse> al1 = (ActionListener<GetConversationsResponse>) Mockito.mock(ActionListener.class);
@@ -150,9 +152,9 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, r1, al1);
         argCaptor = ArgumentCaptor.forClass(GetConversationsResponse.class);
         verify(al1).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getConversations().equals(testResult.subList(0,2)));
-        assert(argCaptor.getValue().hasMorePages());
-        assert(argCaptor.getValue().getNextToken() == 4);
+        assert (argCaptor.getValue().getConversations().equals(testResult.subList(0, 2)));
+        assert (argCaptor.getValue().hasMorePages());
+        assert (argCaptor.getValue().getNextToken() == 4);
 
         @SuppressWarnings("unchecked")
         ActionListener<GetConversationsResponse> al2 = (ActionListener<GetConversationsResponse>) Mockito.mock(ActionListener.class);
@@ -160,8 +162,8 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, r2, al2);
         argCaptor = ArgumentCaptor.forClass(GetConversationsResponse.class);
         verify(al2).onResponse(argCaptor.capture());
-        assert(argCaptor.getValue().getConversations().equals(testResult));
-        assert(!argCaptor.getValue().hasMorePages());
+        assert (argCaptor.getValue().getConversations().equals(testResult));
+        assert (!argCaptor.getValue().hasMorePages());
     }
 
     public void testGetFails_thenFail() {
@@ -173,7 +175,7 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Test Fail Case"));
+        assert (argCaptor.getValue().getMessage().equals("Test Fail Case"));
     }
 
     public void testdoExecuteFails_thenFail() {
@@ -181,6 +183,6 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assert(argCaptor.getValue().getMessage().equals("Test doExecute Error"));
+        assert (argCaptor.getValue().getMessage().equals("Test doExecute Error"));
     }
 }

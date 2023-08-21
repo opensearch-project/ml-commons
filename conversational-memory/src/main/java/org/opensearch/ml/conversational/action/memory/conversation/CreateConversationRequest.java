@@ -53,6 +53,7 @@ public class CreateConversationRequest extends ActionRequest {
         super();
         this.name = name;
     }
+
     /**
      * Constructor
      * name will be null
@@ -79,7 +80,7 @@ public class CreateConversationRequest extends ActionRequest {
      * @throws IOException if something breaks
      */
     public static CreateConversationRequest fromRestRequest(RestRequest restRequest) throws IOException {
-        if(restRequest.hasParam(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
+        if (restRequest.hasParam(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
             return new CreateConversationRequest(restRequest.param(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD));
         } else {
             return new CreateConversationRequest();

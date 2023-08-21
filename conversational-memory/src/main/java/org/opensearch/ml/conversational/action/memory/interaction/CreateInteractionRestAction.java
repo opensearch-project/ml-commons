@@ -34,9 +34,7 @@ public class CreateInteractionRestAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return List.of(
-            new Route(RestRequest.Method.POST, ActionConstants.CREATE_INTERACTION_PATH)
-        );
+        return List.of(new Route(RestRequest.Method.POST, ActionConstants.CREATE_INTERACTION_PATH));
     }
 
     @Override
@@ -45,11 +43,9 @@ public class CreateInteractionRestAction extends BaseRestHandler {
     }
 
     @Override
-    public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client)  throws IOException {
+    public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         CreateInteractionRequest piRequest = CreateInteractionRequest.fromRestRequest(request);
         return channel -> client.execute(CreateInteractionAction.INSTANCE, piRequest, new RestToXContentListener<>(channel));
     }
-
-
 
 }

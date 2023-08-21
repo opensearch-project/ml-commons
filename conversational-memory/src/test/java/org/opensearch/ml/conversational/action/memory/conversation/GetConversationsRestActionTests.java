@@ -35,13 +35,13 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
-public class GetConversationsRestActionTests extends OpenSearchTestCase{
+public class GetConversationsRestActionTests extends OpenSearchTestCase {
     public void testBasics() {
         GetConversationsRestAction action = new GetConversationsRestAction();
-        assert(action.getName().equals("conversational_get_conversations"));
+        assert (action.getName().equals("conversational_get_conversations"));
         List<Route> routes = action.routes();
-        assert(routes.size() == 1);
-        assert(routes.get(0).equals(new Route(RestRequest.Method.GET, ActionConstants.LIST_CONVERSATIONS_PATH)));
+        assert (routes.size() == 1);
+        assert (routes.get(0).equals(new Route(RestRequest.Method.GET, ActionConstants.LIST_CONVERSATIONS_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {
@@ -55,7 +55,7 @@ public class GetConversationsRestActionTests extends OpenSearchTestCase{
         ArgumentCaptor<GetConversationsRequest> argCaptor = ArgumentCaptor.forClass(GetConversationsRequest.class);
         verify(client, times(1)).execute(eq(GetConversationsAction.INSTANCE), argCaptor.capture(), any());
         GetConversationsRequest gcreq = argCaptor.getValue();
-        assert(gcreq.getFrom() == 0);
-        assert(gcreq.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS);
+        assert (gcreq.getFrom() == 0);
+        assert (gcreq.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS);
     }
 }

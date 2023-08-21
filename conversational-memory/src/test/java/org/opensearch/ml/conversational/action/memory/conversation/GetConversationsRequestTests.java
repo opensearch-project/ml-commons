@@ -33,41 +33,40 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 public class GetConversationsRequestTests extends OpenSearchTestCase {
-    
+
     public void testGetConversationsRequestAndStreaming() throws IOException {
         GetConversationsRequest request = new GetConversationsRequest();
-        assert(request.validate() == null);
-        assert(request.getFrom() == 0 && request.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS);
+        assert (request.validate() == null);
+        assert (request.getFrom() == 0 && request.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS);
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         request.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         GetConversationsRequest newRequest = new GetConversationsRequest(in);
-        assert(newRequest.validate() == null);
-        assert(newRequest.getFrom() == request.getFrom() && newRequest.getMaxResults() == request.getMaxResults());
+        assert (newRequest.validate() == null);
+        assert (newRequest.getFrom() == request.getFrom() && newRequest.getMaxResults() == request.getMaxResults());
     }
 
     public void testVariousConstructors() {
         GetConversationsRequest req1 = new GetConversationsRequest(2);
-        assert(req1.validate() == null);
-        assert(req1.getFrom() == 0 && req1.getMaxResults() == 2);
+        assert (req1.validate() == null);
+        assert (req1.getFrom() == 0 && req1.getMaxResults() == 2);
         GetConversationsRequest req2 = new GetConversationsRequest(5, 2);
-        assert(req2.validate() == null);
-        assert(req2.getFrom() == 2 && req2.getMaxResults() == 5);
+        assert (req2.validate() == null);
+        assert (req2.getFrom() == 2 && req2.getMaxResults() == 5);
     }
 
     public void testNegativeOrZeroMaxResults_thenFail() {
         GetConversationsRequest req = new GetConversationsRequest(-3);
-        assert(req.validate() != null);
-        assert(req.validate().validationErrors().size() == 1);
-        assert(req.validate().validationErrors().get(0).equals("Can't list 0 or negative conversations"));
+        assert (req.validate() != null);
+        assert (req.validate().validationErrors().size() == 1);
+        assert (req.validate().validationErrors().get(0).equals("Can't list 0 or negative conversations"));
     }
 
     public void testFromRestRequest() throws IOException {
         Map<String, String> maxResOnly = Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "4");
         Map<String, String> nextTokOnly = Map.of(ActionConstants.NEXT_TOKEN_FIELD, "6");
-        Map<String, String> bothFields = Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "2",
-                                                ActionConstants.NEXT_TOKEN_FIELD, "7");
+        Map<String, String> bothFields = Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "2", ActionConstants.NEXT_TOKEN_FIELD, "7");
         RestRequest req1 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).build();
         RestRequest req2 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(maxResOnly).build();
         RestRequest req3 = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(nextTokOnly).build();
@@ -76,10 +75,10 @@ public class GetConversationsRequestTests extends OpenSearchTestCase {
         GetConversationsRequest gcr2 = GetConversationsRequest.fromRestRequest(req2);
         GetConversationsRequest gcr3 = GetConversationsRequest.fromRestRequest(req3);
         GetConversationsRequest gcr4 = GetConversationsRequest.fromRestRequest(req4);
-        
-        assert(gcr1.validate() == null && gcr2.validate() == null && gcr3.validate() == null && gcr4.validate() == null);
-        assert(gcr1.getFrom() == 0 && gcr2.getFrom() == 0 && gcr3.getFrom() == 6 && gcr4.getFrom() == 7);
-        assert(gcr1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr2.getMaxResults() == 4);
-        assert(gcr3.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr4.getMaxResults() == 2);
+
+        assert (gcr1.validate() == null && gcr2.validate() == null && gcr3.validate() == null && gcr4.validate() == null);
+        assert (gcr1.getFrom() == 0 && gcr2.getFrom() == 0 && gcr3.getFrom() == 6 && gcr4.getFrom() == 7);
+        assert (gcr1.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr2.getMaxResults() == 4);
+        assert (gcr3.getMaxResults() == ActionConstants.DEFAULT_MAX_RESULTS && gcr4.getMaxResults() == 2);
     }
 }
