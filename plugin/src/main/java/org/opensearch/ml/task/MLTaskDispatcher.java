@@ -106,8 +106,7 @@ public class MLTaskDispatcher {
 
     private void dispatchTaskWithLeastLoad(DiscoveryNode[] nodes, ActionListener<DiscoveryNode> listener) {
         MLStatsNodesRequest MLStatsNodesRequest = new MLStatsNodesRequest(nodes);
-        MLStatsNodesRequest
-            .addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, MLNodeLevelStat.ML_JVM_HEAP_USAGE));
+        MLStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, MLNodeLevelStat.ML_JVM_HEAP_USAGE));
 
         client.execute(MLStatsNodesAction.INSTANCE, MLStatsNodesRequest, ActionListener.wrap(mlStatsResponse -> {
             // Check JVM pressure

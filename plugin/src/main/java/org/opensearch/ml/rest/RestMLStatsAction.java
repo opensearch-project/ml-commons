@@ -61,6 +61,9 @@ public class RestMLStatsAction extends BaseRestHandler {
     private static final String QUERY_ALL_MODEL_META_DOC =
         "{\"query\":{\"bool\":{\"must_not\":{\"exists\":{\"field\":\"chunk_number\"}}}}}";
 
+    private static final Set<String> ML_NODE_STAT_NAMES = EnumSet.allOf(MLNodeLevelStat.class).stream().
+            map(stat -> stat.name()).collect(Collectors.toSet());
+
     /**
      * Constructor
      * @param mlStats MLStats object
@@ -150,9 +153,6 @@ public class RestMLStatsAction extends BaseRestHandler {
 
     MLStatsInput createMlStatsInputFromRequestParams(RestRequest request) {
 
-        Set<String> mlNodeStatNames = EnumSet.allOf(MLNodeLevelStat.class).stream()
-                .map(stat -> stat.name())
-                .collect(Collectors.toSet());
         MLStatsInput mlStatsInput = new MLStatsInput();
         Optional<String[]> nodeIds = splitCommaSeparatedParam(request, "nodeId");
         if (nodeIds.isPresent()) {
@@ -163,7 +163,7 @@ public class RestMLStatsAction extends BaseRestHandler {
             for (String state : stats.get()) {
                 state = state.toUpperCase(Locale.ROOT);
                 // only support cluster and node level stats for bwc
-                if (mlNodeStatNames.contains(state)) {
+                if (ML_NODE_STAT_NAMES.contains(state)) {
                     mlStatsInput.getNodeLevelStats().add(MLNodeLevelStat.from(state));
                 } else {
                     mlStatsInput.getClusterLevelStats().add(MLClusterLevelStat.from(state));
