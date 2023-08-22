@@ -54,7 +54,6 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -234,12 +233,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 throw new IllegalArgumentException("URL can't match trusted url regex");
             }
         }
-        // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
-        // //TODO: track executing task; track register failures
-        // mlStats.createCounterStatIfAbsent(FunctionName.TEXT_EMBEDDING,
-        // ActionName.REGISTER,
-        // MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         boolean isAsync = registerModelInput.getFunctionName() != FunctionName.REMOTE;
         MLTask mlTask = MLTask
             .builder()

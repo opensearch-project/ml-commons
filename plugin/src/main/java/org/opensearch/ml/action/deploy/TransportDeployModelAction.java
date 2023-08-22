@@ -54,7 +54,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -148,8 +147,6 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         if (!allowCustomDeploymentPlan && !deployToAllNodes) {
                             throw new IllegalArgumentException("Don't allow custom deployment plan");
                         }
-                        // mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-                        mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
                         DiscoveryNode[] allEligibleNodes = nodeFilter.getEligibleNodes(functionName);
                         Map<String, DiscoveryNode> nodeMapping = new HashMap<>();
                         for (DiscoveryNode node : allEligibleNodes) {

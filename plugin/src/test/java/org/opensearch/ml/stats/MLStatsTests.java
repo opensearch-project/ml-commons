@@ -33,7 +33,7 @@ public class MLStatsTests extends OpenSearchTestCase {
     public void setup() {
         clusterStatName1 = MLClusterLevelStat.ML_MODEL_COUNT;
 
-        nodeStatName1 = MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT;
+        nodeStatName1 = MLNodeLevelStat.ML_EXECUTING_TASK_COUNT;
 
         statsMap = new HashMap<Enum, MLStat<?>>() {
             {
@@ -70,14 +70,14 @@ public class MLStatsTests extends OpenSearchTestCase {
     }
 
     public void testGetStatNoExisting() {
-        MLNodeLevelStat wrongStat = MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE;
+        MLNodeLevelStat wrongStat = MLNodeLevelStat.ML_JVM_HEAP_USAGE;
         expectedEx.expect(IllegalArgumentException.class);
         expectedEx.expectMessage("Stat \"" + wrongStat + "\" does not exist");
         mlStats.getStat(wrongStat);
     }
 
     public void testCreateCounterStatIfAbsent() {
-        MLStat<?> stat = mlStats.createCounterStatIfAbsent(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT);
+        MLStat<?> stat = mlStats.createCounterStatIfAbsent(MLNodeLevelStat.ML_FAILURE_COUNT);
         stat.increment();
         assertEquals(1L, stat.getValue());
     }
