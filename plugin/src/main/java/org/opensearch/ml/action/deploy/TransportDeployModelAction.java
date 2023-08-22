@@ -54,7 +54,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
