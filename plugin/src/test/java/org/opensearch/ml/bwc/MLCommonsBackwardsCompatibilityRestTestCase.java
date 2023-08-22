@@ -3,10 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.rest;
+package org.opensearch.ml.bwc;
 
-import static org.opensearch.client.RestClientBuilder.DEFAULT_MAX_CONN_PER_ROUTE;
-import static org.opensearch.client.RestClientBuilder.DEFAULT_MAX_CONN_TOTAL;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_ENABLED;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_FILEPATH;
 import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_SSL_HTTP_KEYSTORE_KEYPASSWORD;
@@ -25,6 +23,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -37,21 +36,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import org.apache.hc.client5.http.auth.AuthScope;
-import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
-import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
-import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
-import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
-import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
-import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.core5.http.*;
-import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.http.message.BasicHeader;
-import org.apache.hc.core5.http.nio.ssl.TlsStrategy;
-import org.apache.hc.core5.ssl.SSLContextBuilder;
-import org.apache.hc.core5.util.Timeout;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpHost;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.ssl.SSLContextBuilder;
+import org.apache.http.util.EntityUtils;
 import org.junit.After;
-import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.RestClient;
@@ -66,7 +63,6 @@ import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -78,8 +74,6 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
-import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -93,7 +87,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 
-public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
+// TODO: Need to refactor this code in the future because the whole part of it is a copy of MLCommonsRestTestCase.java
+
+public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
     public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
 
@@ -107,51 +103,6 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
 
         return isHttps;
-    }
-
-    @Before
-    public void setupSettings() throws IOException {
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.only_run_on_ml_node\":false}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
-
-        response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.allow_registering_model_via_url\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
-
-        response = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.allow_registering_model_via_local_file\":true}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
-
-        String jsonEntity = "{\n"
-            + "  \"persistent\" : {\n"
-            + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
-            + "  }\n"
-            + "}";
-        response = TestHelper
-            .makeRequest(client(), "PUT", "_cluster/settings", ImmutableMap.of(), TestHelper.toHttpEntity(jsonEntity), null);
-        assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
     @Override
@@ -222,9 +173,9 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     @After
     protected void wipeAllODFEIndices() throws IOException {
         Response response = adminClient().performRequest(new Request("GET", "/_cat/indices?format=json&expand_wildcards=all"));
-        MediaType xContentType = MediaType.fromMediaType(response.getEntity().getContentType());
+        MediaType mediaType = MediaType.fromMediaType(response.getEntity().getContentType().getValue());
         try (
-            XContentParser parser = xContentType
+            XContentParser parser = mediaType
                 .xContent()
                 .createParser(
                     NamedXContentRegistry.EMPTY,
@@ -264,21 +215,14 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             String password = Optional
                 .ofNullable(System.getProperty("password"))
                 .orElseThrow(() -> new RuntimeException("password is missing"));
-            BasicCredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-            credentialsProvider.setCredentials(new AuthScope(null, -1), new UsernamePasswordCredentials(userName, password.toCharArray()));
+            CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+            credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(userName, password));
             try {
-                final TlsStrategy tlsStrategy = ClientTlsStrategyBuilder
-                    .create()
-                    .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-                    .setSslContext(SSLContextBuilder.create().loadTrustMaterial(null, (chains, authType) -> true).build())
-                    .build();
-                final PoolingAsyncClientConnectionManager connectionManager = PoolingAsyncClientConnectionManagerBuilder
-                    .create()
-                    .setMaxConnPerRoute(DEFAULT_MAX_CONN_PER_ROUTE)
-                    .setMaxConnTotal(DEFAULT_MAX_CONN_TOTAL)
-                    .setTlsStrategy(tlsStrategy)
-                    .build();
-                return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider).setConnectionManager(connectionManager);
+                return httpClientBuilder
+                    .setDefaultCredentialsProvider(credentialsProvider)
+                    // disable the certificate since our testing cluster just uses the default security configuration
+                    .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                    .setSSLContext(SSLContextBuilder.create().loadTrustMaterial(null, (chains, authType) -> true).build());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -287,8 +231,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         final String socketTimeoutString = settings.get(CLIENT_SOCKET_TIMEOUT);
         final TimeValue socketTimeout = TimeValue
             .parseTimeValue(socketTimeoutString == null ? "60s" : socketTimeoutString, CLIENT_SOCKET_TIMEOUT);
-        builder
-            .setRequestConfigCallback(conf -> conf.setResponseTimeout(Timeout.ofMilliseconds(Math.toIntExact(socketTimeout.getMillis()))));
+        builder.setRequestConfigCallback(conf -> conf.setSocketTimeout(Math.toIntExact(socketTimeout.getMillis())));
         if (settings.hasValue(CLIENT_PATH_PREFIX)) {
             builder.setPathPrefix(settings.get(CLIENT_PATH_PREFIX));
         }
@@ -302,7 +245,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return true;
     }
 
-    protected Response ingestIrisData(String indexName) throws IOException, ParseException {
+    protected Response ingestIrisData(String indexName) throws IOException {
         String irisDataIndexMapping = "";
         TestHelper
             .makeRequest(
@@ -468,7 +411,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             );
     }
 
-    public Response createUser(String name, String password, List<String> backendRoles) throws IOException {
+    public Response createUser(String name, String password, ArrayList<String> backendRoles) throws IOException {
         JsonArray backendRolesString = new JsonArray();
         for (int i = 0; i < backendRoles.size(); i++) {
             backendRolesString.add(backendRoles.get(i));
@@ -507,7 +450,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             );
     }
 
-    public Response createRoleMapping(String role, List<String> users) throws IOException {
+    public Response createRoleMapping(String role, ArrayList<String> users) throws IOException {
         JsonArray usersString = new JsonArray();
         for (int i = 0; i < users.size(); i++) {
             usersString.add(users.get(i));
@@ -646,7 +589,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
     }
 
-    public MLRegisterModelInput createRegisterModelInput(String modelGroupID) {
+    public MLRegisterModelInput createRegisterModelInput() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
@@ -657,70 +600,12 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .builder()
             .modelName("test_model_name")
             .version("1.0.0")
-            .modelGroupId(modelGroupID)
             .functionName(FunctionName.TEXT_EMBEDDING)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
             .url(SENTENCE_TRANSFORMER_MODEL_URL)
             .deployModel(false)
-            .hashValue("e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021")
             .build();
-    }
-
-    public MLRegisterModelGroupInput createRegisterModelGroupInput(
-        String name,
-        List<String> backendRoles,
-        AccessMode modelAccessMode,
-        Boolean isAddAllBackendRoles
-    ) {
-        return MLRegisterModelGroupInput
-            .builder()
-            .name(name)
-            .description("This is a test model group")
-            .backendRoles(backendRoles)
-            .modelAccessMode(modelAccessMode)
-            .isAddAllBackendRoles(isAddAllBackendRoles)
-            .build();
-    }
-
-    public MLUpdateModelGroupInput createUpdateModelGroupInput(
-        String modelGroupId,
-        String name,
-        String description,
-        List<String> backendRoles,
-        AccessMode modelAccessMode,
-        Boolean isAddAllBackendRoles
-    ) {
-        return MLUpdateModelGroupInput
-            .builder()
-            .modelGroupID(modelGroupId)
-            .name(name)
-            .description(description)
-            .backendRoles(backendRoles)
-            .modelAccessMode(modelAccessMode)
-            .isAddAllBackendRoles(isAddAllBackendRoles)
-            .build();
-    }
-
-    public void registerModelGroup(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
-        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/model_groups/_register", null, input, null);
-        verifyResponse(function, response);
-    }
-
-    public void updateModelGroup(RestClient client, String modelGroupId, String input, Consumer<Map<String, Object>> function)
-        throws IOException {
-        Response response = TestHelper.makeRequest(client, "PUT", "/_plugins/_ml/model_groups/" + modelGroupId, null, input, null);
-        verifyResponse(function, response);
-    }
-
-    public void deleteModelGroup(RestClient client, String modelGroupId, Consumer<Map<String, Object>> function) throws IOException {
-        Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/model_groups/" + modelGroupId, null, "", null);
-        verifyResponse(function, response);
-    }
-
-    public void searchModelGroups(RestClient client, String query, Consumer<Map<String, Object>> function) throws IOException {
-        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/model_groups/_search", null, query, null);
-        verifyResponse(function, response);
     }
 
     public void registerModel(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {

@@ -84,27 +84,27 @@ public class MLStatsInputTests extends OpenSearchTestCase {
 
     public void testShouldRetrieveStat() {
         assertTrue(mlStatsInput.retrieveStat(MLClusterLevelStat.ML_MODEL_COUNT));
-        assertTrue(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT));
+        assertTrue(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_REQUEST_COUNT));
         assertTrue(mlStatsInput.retrieveStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
 
         MLStatsInput mlStatsInput = MLStatsInput.builder().build();
         assertTrue(mlStatsInput.retrieveStat(MLClusterLevelStat.ML_MODEL_COUNT));
-        assertTrue(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT));
+        assertTrue(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_REQUEST_COUNT));
         assertTrue(mlStatsInput.retrieveStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
 
         mlStatsInput = new MLStatsInput();
         assertTrue(mlStatsInput.retrieveStat(MLClusterLevelStat.ML_MODEL_COUNT));
-        assertTrue(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT));
+        assertTrue(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_REQUEST_COUNT));
         assertTrue(mlStatsInput.retrieveStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
 
         mlStatsInput = MLStatsInput
             .builder()
             .clusterLevelStats(EnumSet.of(MLClusterLevelStat.ML_TASK_INDEX_STATUS))
-            .nodeLevelStats(EnumSet.of(MLNodeLevelStat.ML_NODE_TOTAL_FAILURE_COUNT))
+            .nodeLevelStats(EnumSet.of(MLNodeLevelStat.ML_FAILURE_COUNT))
             .actionLevelStats(EnumSet.of(MLActionLevelStat.ML_ACTION_FAILURE_COUNT))
             .build();
         assertFalse(mlStatsInput.retrieveStat(MLClusterLevelStat.ML_MODEL_COUNT));
-        assertFalse(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT));
+        assertFalse(mlStatsInput.retrieveStat(MLNodeLevelStat.ML_REQUEST_COUNT));
         assertFalse(mlStatsInput.retrieveStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
     }
 

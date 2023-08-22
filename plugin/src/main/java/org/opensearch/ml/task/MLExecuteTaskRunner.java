@@ -88,8 +88,8 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     protected void executeTask(MLExecuteTaskRequest request, ActionListener<MLExecuteTaskResponse> listener) {
         threadPool.executor(EXECUTE_THREAD_POOL).execute(() -> {
             try {
-                mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).increment();
-                mlStats.getStat(MLNodeLevelStat.ML_NODE_TOTAL_REQUEST_COUNT).increment();
+                mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
+                mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
                 mlStats
                     .createCounterStatIfAbsent(request.getFunctionName(), ActionName.EXECUTE, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
                     .increment();
@@ -113,7 +113,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                     .increment();
                 listener.onFailure(e);
             } finally {
-                mlStats.getStat(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT).decrement();
+                mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
             }
         });
     }

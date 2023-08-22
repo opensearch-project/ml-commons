@@ -20,7 +20,7 @@ public class MLStatsNodesRequestTests extends OpenSearchTestCase {
     public void testSerializationDeserialization() throws IOException {
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { "testNodeId" }, new MLStatsInput());
 
-        mlStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT));
+        mlStatsNodesRequest.addNodeLevelStats(ImmutableSet.of(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT));
         BytesStreamOutput output = new BytesStreamOutput();
         MLStatsNodeRequest request = new MLStatsNodeRequest(mlStatsNodesRequest);
         request.writeTo(output);

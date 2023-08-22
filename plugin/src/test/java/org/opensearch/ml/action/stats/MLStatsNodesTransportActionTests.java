@@ -7,7 +7,7 @@ package org.opensearch.ml.action.stats;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_JVM_HEAP_USAGE;
 
 import java.io.IOException;
 import java.util.EnumSet;
@@ -56,13 +56,13 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         super.setUp();
 
         clusterStatName1 = MLClusterLevelStat.ML_MODEL_COUNT;
-        nodeStatName1 = MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT;
+        nodeStatName1 = MLNodeLevelStat.ML_EXECUTING_TASK_COUNT;
 
         statsMap = new HashMap<>() {
             {
                 put(nodeStatName1, new MLStat<>(false, new CounterSupplier()));
                 put(clusterStatName1, new MLStat<>(true, new CounterSupplier()));
-                put(ML_NODE_JVM_HEAP_USAGE, new MLStat<>(true, new SettableSupplier()));
+                put(ML_JVM_HEAP_USAGE, new MLStat<>(true, new SettableSupplier()));
             }
         };
 
@@ -119,14 +119,14 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         String nodeId = clusterService().localNode().getId();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, new MLStatsInput());
 
-        Set<MLNodeLevelStat> statsToBeRetrieved = ImmutableSet.of(ML_NODE_JVM_HEAP_USAGE);
+        Set<MLNodeLevelStat> statsToBeRetrieved = ImmutableSet.of(ML_JVM_HEAP_USAGE);
 
         mlStatsNodesRequest.addNodeLevelStats(statsToBeRetrieved);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
         Assert.assertEquals(statsToBeRetrieved.size(), response.getNodeLevelStatSize());
-        assertNotNull(response.getNodeLevelStat(ML_NODE_JVM_HEAP_USAGE));
+        assertNotNull(response.getNodeLevelStat(ML_JVM_HEAP_USAGE));
     }
 
     public void testNodeOperation_NoNodeLevelStat() {
