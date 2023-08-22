@@ -324,6 +324,7 @@ public class MLModelManager {
         try {
             mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
 
             String modelGroupId = registerModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
@@ -383,7 +384,7 @@ public class MLModelManager {
         } catch (Exception e) {
             handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
         } finally {
-            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
         }
     }
 
@@ -827,6 +828,8 @@ public class MLModelManager {
             })));
         } catch (Exception e) {
             handleDeployModelException(modelId, functionName, listener, e);
+        } finally {
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
         }
     }
 

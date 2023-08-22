@@ -245,6 +245,7 @@ public class TransportUndeployModelAction extends
         }
 
         Map<String, String> modelUndeployStatus = mlModelManager.undeployModel(modelIds);
+        mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
         return new MLUndeployModelNodeResponse(clusterService.localNode(), modelUndeployStatus, modelWorkerNodesMap);
     }
 }
