@@ -175,9 +175,9 @@ public class ConnectorUtilsTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> parameters = new HashMap<>();
-        parameters.put("key1", "value1");
+        parameters.put("input", "value1");
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        ModelTensors tensors = ConnectorUtils.processOutput("test response", connector, scriptService, ImmutableMap.of());
+        ModelTensors tensors = ConnectorUtils.processOutput("test response", connector, scriptService, parameters);
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
