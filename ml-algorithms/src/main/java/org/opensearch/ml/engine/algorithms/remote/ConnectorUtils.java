@@ -67,7 +67,9 @@ public class ConnectorUtils {
         if (inputData.getParameters() != null) {
             Map<String, String> newParameters = new HashMap<>();
             inputData.getParameters().forEach((key, value) -> {
-                if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
+                if (value == null) {
+                    newParameters.put(key, null);
+                } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
                     // no need to escape if it's already valid json
                     newParameters.put(key, value);
                 } else {

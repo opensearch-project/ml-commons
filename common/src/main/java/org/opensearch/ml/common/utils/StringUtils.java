@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +45,12 @@ public class StringUtils {
         return utf8EncodedString;
     }
 
-    public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
+    public static Map<String, Object> fromJson(String input, String defaultKey) {
+        if (!isJson(input)) {
+            return Collections.singletonMap(defaultKey, input);
+        }
         Map<String, Object> result;
-        JsonElement jsonElement = JsonParser.parseString(jsonStr);
+        JsonElement jsonElement = JsonParser.parseString(input);
         if (jsonElement.isJsonObject()) {
             result = GsonUtil.fromJson(jsonElement, Map.class);
         } else if (jsonElement.isJsonArray()) {
