@@ -97,9 +97,9 @@ public class MLStatsNodesTransportAction extends
         MLStatsInput mlStatsInput = mlStatsNodesRequest.getMlStatsInput();
         // return node level stats
         if (mlStatsInput.getTargetStatLevels().contains(MLStatLevel.NODE)) {
-            if (mlStatsInput.retrieveStat(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE)) {
+            if (mlStatsInput.retrieveStat(MLNodeLevelStat.ML_JVM_HEAP_USAGE)) {
                 long heapUsedPercent = jvmService.stats().getMem().getHeapUsedPercent();
-                statValues.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, heapUsedPercent);
+                statValues.put(MLNodeLevelStat.ML_JVM_HEAP_USAGE, heapUsedPercent);
             }
 
             for (Enum statName : mlStats.getNodeStats().keySet()) {
