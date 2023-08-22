@@ -323,7 +323,6 @@ public class MLModelManager {
         checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
         try {
             mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
             mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
 
             String modelGroupId = registerModelInput.getModelGroupId();
@@ -392,9 +391,6 @@ public class MLModelManager {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
-            mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
 
             String modelName = registerModelInput.getModelName();
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
@@ -443,8 +439,6 @@ public class MLModelManager {
         } catch (Exception e) {
             logException("Failed to upload model", e, log);
             handleException(functionName, taskId, e);
-        } finally {
-            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         }
     }
 
@@ -462,9 +456,6 @@ public class MLModelManager {
         String taskId = mlTask.getTaskId();
         FunctionName functionName = mlTask.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
-            mlStats.createCounterStatIfAbsent(functionName, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
-            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
             String modelName = registerModelInput.getModelName();
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             String modelGroupId = registerModelInput.getModelGroupId();
@@ -509,8 +500,6 @@ public class MLModelManager {
         } catch (Exception e) {
             logException("Failed to register model", e, log);
             handleException(functionName, taskId, e);
-        } finally {
-            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         }
     }
 
@@ -718,6 +707,7 @@ public class MLModelManager {
         ActionListener<String> listener
     ) {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
+        mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
