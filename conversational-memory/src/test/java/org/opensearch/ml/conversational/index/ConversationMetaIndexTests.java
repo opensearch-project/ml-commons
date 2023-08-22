@@ -36,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.refresh.RefreshResponse;
 import org.opensearch.action.delete.DeleteResponse;
@@ -357,12 +358,12 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
         conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
-        verify(hitConversationListener, times(1)).onResponse(argCaptor.capture());
-        assert (!argCaptor.getValue());
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
     }
 
-    public void testHit_WrongId_ThenReturnFalse() {
+    public void testHit_WrongId_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
         setupRefreshSuccess();
         GetResponse response = mock(GetResponse.class);
@@ -376,9 +377,9 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
         conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
-        verify(hitConversationListener, times(1)).onResponse(argCaptor.capture());
-        assert (!argCaptor.getValue());
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
     }
 
     public void testHit_UpdateFails_ThenFail() {
@@ -516,7 +517,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getMessage().equals("Check Fail"));
     }
 
-    public void testCheckAccess_DoesNotExist_ThenReturnTrue() {
+    public void testCheckAccess_DoesNotExist_ThenFail() {
         setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
         GetResponse response = mock(GetResponse.class);
@@ -529,12 +530,13 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> accessListener = mock(ActionListener.class);
         conversationMetaIndex.checkAccess("test id", accessListener);
-        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
-        verify(accessListener, times(1)).onResponse(argCaptor.capture());
-        assert (argCaptor.getValue());
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(accessListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue() instanceof ResourceNotFoundException);
+        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
     }
 
-    public void testCheckAccess_WrongId_ThenReturnTrue() {
+    public void testCheckAccess_WrongId_ThenFail() {
         setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
         GetResponse response = mock(GetResponse.class);
@@ -548,9 +550,10 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> accessListener = mock(ActionListener.class);
         conversationMetaIndex.checkAccess("test id", accessListener);
-        ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
-        verify(accessListener, times(1)).onResponse(argCaptor.capture());
-        assert (argCaptor.getValue());
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(accessListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue() instanceof ResourceNotFoundException);
+        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
     }
 
     public void testCheckAccess_GetFails_ThenFail() {

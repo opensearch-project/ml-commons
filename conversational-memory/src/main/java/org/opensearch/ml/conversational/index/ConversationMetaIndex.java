@@ -26,6 +26,7 @@ import java.util.List;
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.OpenSearchWrapperException;
 import org.opensearch.ResourceAlreadyExistsException;
+import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.DocWriteResponse.Result;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
@@ -234,8 +235,7 @@ public class ConversationMetaIndex {
             // First get the conversation. Check for access controls. Update.
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 if (!(getResponse.isExists() && getResponse.getId().equals(id))) {
-                    internalListener.onResponse(false);
-                    return;
+                    throw new ResourceNotFoundException("Conversation [" + id + "] not found");
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(id, getResponse.getSourceAsMap());
                 if (userstr != null) {
@@ -336,10 +336,9 @@ public class ConversationMetaIndex {
             }
             GetRequest getRequest = Requests.getRequest(indexName).id(conversationId);
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
-                // If the conversation doesn't exist, you have permission
+                // If the conversation doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
-                    internalListener.onResponse(true);
-                    return;
+                    throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(conversationId, getResponse.getSourceAsMap());
                 String user = User.parse(userstr).getName();

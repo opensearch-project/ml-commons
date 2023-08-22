@@ -212,32 +212,7 @@ public class InteractionsIndex {
         }
         ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
             if (access) {
-                SearchRequest request = Requests.searchRequest(indexName);
-                TermQueryBuilder builder = new TermQueryBuilder(
-                    ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
-                    conversationId
-                );
-                request.source().query(builder);
-                request.source().from(from).size(maxResults);
-                request.source().sort(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, SortOrder.DESC);
-                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                    ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                    ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
-                        List<Interaction> result = new LinkedList<Interaction>();
-                        for (SearchHit hit : response.getHits()) {
-                            result.add(Interaction.fromSearchHit(hit));
-                        }
-                        internalListener.onResponse(result);
-                    }, e -> { internalListener.onFailure(e); });
-                    client
-                        .admin()
-                        .indices()
-                        .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
-                            internalListener.onFailure(e);
-                        }));
-                } catch (Exception e) {
-                    listener.onFailure(e);
-                }
+                innerGetInteractions(conversationId, from, maxResults, listener);
             } else {
                 String userstr = client
                     .threadPool()
@@ -250,6 +225,33 @@ public class InteractionsIndex {
         conversationMetaIndex.checkAccess(conversationId, accessListener);
     }
 
+    @VisibleForTesting
+    void innerGetInteractions(String conversationId, int from, int maxResults, ActionListener<List<Interaction>> listener) {
+        SearchRequest request = Requests.searchRequest(indexName);
+        TermQueryBuilder builder = new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+        request.source().query(builder);
+        request.source().from(from).size(maxResults);
+        request.source().sort(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, SortOrder.DESC);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+            ActionListener<SearchResponse> al = ActionListener.wrap(response -> {
+                List<Interaction> result = new LinkedList<Interaction>();
+                for (SearchHit hit : response.getHits()) {
+                    result.add(Interaction.fromSearchHit(hit));
+                }
+                internalListener.onResponse(result);
+            }, e -> { internalListener.onFailure(e); });
+            client
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
+                    internalListener.onFailure(e);
+                }));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
     /**
      * Gets all of the interactions in a conversation, regardless of conversation size
      * @param conversationId conversation to get all interactions of
@@ -259,7 +261,7 @@ public class InteractionsIndex {
     @VisibleForTesting
     void getAllInteractions(String conversationId, int maxResults, ActionListener<List<Interaction>> listener) {
         ActionListener<List<Interaction>> al = nextGetListener(conversationId, 0, maxResults, listener, new LinkedList<>());
-        getInteractions(conversationId, 0, maxResults, al);
+        innerGetInteractions(conversationId, 0, maxResults, al);
     }
 
     /**
@@ -290,7 +292,7 @@ public class InteractionsIndex {
                 mainListener.onResponse(result);
             } else {
                 ActionListener<List<Interaction>> al = nextGetListener(conversationId, from + maxResults, maxResults, mainListener, result);
-                getInteractions(conversationId, from + maxResults, maxResults, al);
+                innerGetInteractions(conversationId, from + maxResults, maxResults, al);
             }
         }, e -> { mainListener.onFailure(e); });
     }

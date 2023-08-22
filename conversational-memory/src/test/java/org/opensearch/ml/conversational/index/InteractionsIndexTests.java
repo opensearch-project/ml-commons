@@ -416,17 +416,17 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);
             al.onResponse(interactions.subList(0, 2));
             return null;
-        }).when(interactionsIndex).getInteractions(anyString(), eq(0), anyInt(), any());
+        }).when(interactionsIndex).innerGetInteractions(anyString(), eq(0), anyInt(), any());
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);
             al.onResponse(interactions.subList(2, 4));
             return null;
-        }).when(interactionsIndex).getInteractions(anyString(), eq(2), anyInt(), any());
+        }).when(interactionsIndex).innerGetInteractions(anyString(), eq(2), anyInt(), any());
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);
             al.onResponse(List.of());
             return null;
-        }).when(interactionsIndex).getInteractions(anyString(), eq(4), anyInt(), any());
+        }).when(interactionsIndex).innerGetInteractions(anyString(), eq(4), anyInt(), any());
         @SuppressWarnings("unchecked")
         ActionListener<List<Interaction>> getInteractionsListener = mock(ActionListener.class);
         interactionsIndex.getAllInteractions("cid", 2, getInteractionsListener);
@@ -446,7 +446,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);
             al.onFailure(new Exception("Failure in Get"));
             return null;
-        }).when(interactionsIndex).getInteractions(anyString(), anyInt(), anyInt(), any());
+        }).when(interactionsIndex).innerGetInteractions(anyString(), anyInt(), anyInt(), any());
         @SuppressWarnings("unchecked")
         ActionListener<List<Interaction>> getInteractionsListener = mock(ActionListener.class);
         interactionsIndex.getAllInteractions("cid", 2, getInteractionsListener);
