@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.apache.logging.log4j.util.Strings;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -66,13 +65,10 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
         }
 
         if (!request.hasContent()) {
-            throw new IOException("Update Connector request has empty body");
+            throw new IOException("Failed to update connector: Request body is empty");
         }
 
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
-        if (Strings.isBlank(connectorId)) {
-            throw new IOException("Update Connector request has no connector Id");
-        }
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
