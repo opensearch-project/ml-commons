@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.opensearch.client.node.NodeClient;
@@ -59,6 +60,12 @@ public class RestMLStatsAction extends BaseRestHandler {
     private NamedXContentRegistry xContentRegistry;
     private static final String QUERY_ALL_MODEL_META_DOC =
         "{\"query\":{\"bool\":{\"must_not\":{\"exists\":{\"field\":\"chunk_number\"}}}}}";
+
+    private static final Set<String> ML_NODE_STAT_NAMES = EnumSet
+        .allOf(MLNodeLevelStat.class)
+        .stream()
+        .map(stat -> stat.name())
+        .collect(Collectors.toSet());
 
     /**
      * Constructor
@@ -148,6 +155,7 @@ public class RestMLStatsAction extends BaseRestHandler {
     }
 
     MLStatsInput createMlStatsInputFromRequestParams(RestRequest request) {
+
         MLStatsInput mlStatsInput = new MLStatsInput();
         Optional<String[]> nodeIds = splitCommaSeparatedParam(request, "nodeId");
         if (nodeIds.isPresent()) {
@@ -158,7 +166,7 @@ public class RestMLStatsAction extends BaseRestHandler {
             for (String state : stats.get()) {
                 state = state.toUpperCase(Locale.ROOT);
                 // only support cluster and node level stats for bwc
-                if (state.startsWith("ML_NODE")) {
+                if (ML_NODE_STAT_NAMES.contains(state)) {
                     mlStatsInput.getNodeLevelStats().add(MLNodeLevelStat.from(state));
                 } else {
                     mlStatsInput.getClusterLevelStats().add(MLClusterLevelStat.from(state));
