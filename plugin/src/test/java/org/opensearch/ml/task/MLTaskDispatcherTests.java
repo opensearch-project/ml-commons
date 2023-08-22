@@ -160,8 +160,8 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     private MLStatsNodesResponse getMlStatsNodesResponse() {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
-        nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 50l);
-        nodeStats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, 5l);
+        nodeStats.put(MLNodeLevelStat.ML_JVM_HEAP_USAGE, 50l);
+        nodeStats.put(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, 5l);
         MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
         MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
@@ -173,7 +173,7 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     private MLStatsNodesResponse getNodesResponse_NoTaskCounts() {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
-        nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 50l);
+        nodeStats.put(MLNodeLevelStat.ML_JVM_HEAP_USAGE, 50l);
         MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
         MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
@@ -185,8 +185,8 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     private MLStatsNodesResponse getNodesResponse_MemoryExceedLimits() {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
-        nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 90l);
-        nodeStats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, 5l);
+        nodeStats.put(MLNodeLevelStat.ML_JVM_HEAP_USAGE, 90l);
+        nodeStats.put(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, 5l);
         MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
         MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(
@@ -198,8 +198,8 @@ public class MLTaskDispatcherTests extends OpenSearchTestCase {
 
     private MLStatsNodesResponse getNodesResponse_TaskCountExceedLimits() {
         Map<MLNodeLevelStat, Object> nodeStats = new HashMap<>();
-        nodeStats.put(MLNodeLevelStat.ML_NODE_JVM_HEAP_USAGE, 50l);
-        nodeStats.put(MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT, 15l);
+        nodeStats.put(MLNodeLevelStat.ML_JVM_HEAP_USAGE, 50l);
+        nodeStats.put(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT, 15l);
         MLStatsNodeResponse mlStatsNodeResponse1 = new MLStatsNodeResponse(dataNode1, nodeStats);
         MLStatsNodeResponse mlStatsNodeResponse2 = new MLStatsNodeResponse(dataNode1, nodeStats);
         return new MLStatsNodesResponse(

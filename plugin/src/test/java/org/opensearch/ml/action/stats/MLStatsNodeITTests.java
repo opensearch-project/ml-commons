@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.stats;
 
-import static org.opensearch.ml.stats.MLNodeLevelStat.ML_NODE_EXECUTING_TASK_COUNT;
+import static org.opensearch.ml.stats.MLNodeLevelStat.ML_EXECUTING_TASK_COUNT;
 import static org.opensearch.ml.utils.IntegTestUtils.TESTING_DATA;
 import static org.opensearch.ml.utils.IntegTestUtils.generateMLTestingData;
 import static org.opensearch.ml.utils.IntegTestUtils.verifyGeneratedTestingData;
@@ -45,7 +45,7 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
 
     public void testNormalCase() throws ExecutionException, InterruptedException {
         MLStatsNodesRequest request = new MLStatsNodesRequest(new String[0], new MLStatsInput());
-        request.addNodeLevelStats(ImmutableSet.of(ML_NODE_EXECUTING_TASK_COUNT));
+        request.addNodeLevelStats(ImmutableSet.of(ML_EXECUTING_TASK_COUNT));
 
         ActionFuture<MLStatsNodesResponse> future = client().execute(MLStatsNodesAction.INSTANCE, request);
         MLStatsNodesResponse response = future.get();
@@ -58,6 +58,6 @@ public class MLStatsNodeITTests extends OpenSearchIntegTestCase {
 
         MLStatsNodeResponse nodeResponse = responseList.get(0);
         assertEquals(1, nodeResponse.getNodeLevelStatSize());
-        assertEquals(0l, nodeResponse.getNodeLevelStat(ML_NODE_EXECUTING_TASK_COUNT));
+        assertEquals(0l, nodeResponse.getNodeLevelStat(ML_EXECUTING_TASK_COUNT));
     }
 }
