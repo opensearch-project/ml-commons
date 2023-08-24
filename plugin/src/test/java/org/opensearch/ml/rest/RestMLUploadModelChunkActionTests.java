@@ -8,6 +8,8 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,9 +17,14 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Ignore;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -43,10 +50,21 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
 
     @Mock
     RestChannel channel;
+    @Mock
+    private ClusterService clusterService;
+
+    private Settings settings;
+
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
 
     @Before
     public void setup() {
-        restChunkUploadAction = new RestMLUploadModelChunkAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD.getKey(), true).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restChunkUploadAction = new RestMLUploadModelChunkAction(clusterService, settings);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -63,7 +81,7 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUploadModelChunkAction mlUploadChunk = new RestMLUploadModelChunkAction();
+        RestMLUploadModelChunkAction mlUploadChunk = new RestMLUploadModelChunkAction(clusterService, settings);
         assertNotNull(mlUploadChunk);
     }
 
@@ -100,6 +118,20 @@ public class RestMLUploadModelChunkActionTests extends OpenSearchTestCase {
         MLUploadModelChunkInput chunkRequest = argumentCaptor.getValue().getUploadModelChunkInput();
         assertNotNull(chunkRequest.getContent());
         assertEquals(Integer.valueOf(0), chunkRequest.getChunkNumber());
+    }
+
+    public void testRegisterModelFileUploadNotAllowed() throws Exception {
+        settings = Settings.builder().put(ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD.getKey(), false).build();
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        restChunkUploadAction = new RestMLUploadModelChunkAction(clusterService, settings);
+        expectedException.expect(IllegalArgumentException.class);
+        expectedException
+            .expectMessage(
+                "To upload custom model from local file, user needs to enable allow_registering_model_via_local_file settings. Otherwise please use opensearch pre-trained models"
+            );
+        RestRequest request = getRestRequest();
+        restChunkUploadAction.handleRequest(request, channel, client);
     }
 
     private RestRequest getRestRequest() {
