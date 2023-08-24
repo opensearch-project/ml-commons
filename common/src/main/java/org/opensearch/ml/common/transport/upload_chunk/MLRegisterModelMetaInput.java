@@ -29,7 +29,6 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
 
     public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String MODEL_NAME_FIELD = "name"; //mandatory
-    public static final String MODEL_VERSION_FIELD = "version"; //mandatory
     public static final String DESCRIPTION_FIELD = "description";
     public static final String MODEL_FORMAT_FIELD = "model_format"; //mandatory
     public static final String MODEL_STATE_FIELD = "model_state";
@@ -37,10 +36,12 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value"; //mandatory
     public static final String MODEL_CONFIG_FIELD = "model_config"; //mandatory
     public static final String TOTAL_CHUNKS_FIELD = "total_chunks"; //mandatory
+    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //mandatory
 
     private FunctionName functionName;
     private String name;
-    private String version;
+
+    private String modelGroupId;
     private String description;
 
     private MLModelFormat modelFormat;
@@ -53,7 +54,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private Integer totalChunks;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelMetaInput(String name, FunctionName functionName, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks) {
+    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -62,8 +63,8 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         } else {
             this.functionName = functionName;
         }
-        if (version == null) {
-            throw new IllegalArgumentException("model version is null");
+        if (modelGroupId == null) {
+            throw new IllegalArgumentException("model group id is null");
         }
         if (modelFormat == null) {
             throw new IllegalArgumentException("model format is null");
@@ -78,7 +79,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
             throw new IllegalArgumentException("total chunks field is null");
         }
         this.name = name;
-        this.version = version;
+        this.modelGroupId = modelGroupId;
         this.description = description;
         this.modelFormat = modelFormat;
         this.modelState = modelState;
@@ -91,7 +92,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public MLRegisterModelMetaInput(StreamInput in) throws IOException{
         this.name = in.readString();
         this.functionName = in.readEnum(FunctionName.class);
-        this.version = in.readString();
+        this.modelGroupId = in.readString();
         this.description = in.readOptionalString();
         if (in.readBoolean()) {
             modelFormat = in.readEnum(MLModelFormat.class);
@@ -111,7 +112,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(name);
         out.writeEnum(functionName);
-        out.writeString(version);
+        out.writeString(modelGroupId);
         out.writeOptionalString(description);
         if (modelFormat != null) {
             out.writeBoolean(true);
@@ -141,7 +142,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         builder.startObject();
         builder.field(MODEL_NAME_FIELD, name);
         builder.field(FUNCTION_NAME_FIELD, functionName);
-        builder.field(MODEL_VERSION_FIELD, version);
+        builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
@@ -182,7 +183,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                 case FUNCTION_NAME_FIELD:
                     functionName = FunctionName.from(parser.text());
                     break;
-                case MODEL_VERSION_FIELD:
+                case MODEL_GROUP_ID_FIELD:
                     version = parser.text();
                     break;
                 case DESCRIPTION_FIELD:

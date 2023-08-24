@@ -69,6 +69,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -78,6 +79,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
@@ -644,7 +646,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         }
     }
 
-    public MLRegisterModelInput createRegisterModelInput() {
+    public MLRegisterModelInput createRegisterModelInput(String modelGroupID) {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
             .builder()
             .modelType("bert")
@@ -655,6 +657,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .builder()
             .modelName("test_model_name")
             .version("1.0.0")
+            .modelGroupId(modelGroupID)
             .functionName(FunctionName.TEXT_EMBEDDING)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .modelConfig(modelConfig)
@@ -662,6 +665,42 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             .deployModel(false)
             .hashValue("e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021")
             .build();
+    }
+
+    public MLRegisterModelGroupInput createRegisterModelGroupInput(
+        List<String> backendRoles,
+        ModelAccessMode modelAccessMode,
+        Boolean isAddAllBackendRoles
+    ) {
+        return MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .backendRoles(backendRoles)
+            .modelAccessMode(modelAccessMode)
+            .isAddAllBackendRoles(isAddAllBackendRoles)
+            .build();
+    }
+
+    public void registerModelGroup(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "POST", "/_plugins/_ml/model_groups/_register", null, input, null);
+        verifyResponse(function, response);
+    }
+
+    public void updateModelGroup(RestClient client, String modelGroupId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper
+            .makeRequest(client, "POST", "/_plugins/_ml/model_groups/" + modelGroupId + "/_update", null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void deleteModelGroup(RestClient client, String modelGroupId, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "DELETE", "/_plugins/_ml/model_groups/" + modelGroupId, null, "", null);
+        verifyResponse(function, response);
+    }
+
+    public void searchModelGroups(RestClient client, String query, Consumer<Map<String, Object>> function) throws IOException {
+        Response response = TestHelper.makeRequest(client, "GET", "/_plugins/_ml/model_groups/_search", null, query, null);
+        verifyResponse(function, response);
     }
 
     public void registerModel(RestClient client, String input, Consumer<Map<String, Object>> function) throws IOException {

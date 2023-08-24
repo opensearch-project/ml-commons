@@ -15,9 +15,14 @@ import java.util.Locale;
 import java.util.Optional;
 
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
+import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.rest.BytesRestResponse;
@@ -28,24 +33,25 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import lombok.extern.log4j.Log4j2;
-
-@Log4j2
 public class RestActionUtils {
+
+    private static final Logger logger = LogManager.getLogger(RestActionUtils.class);
 
     public static final String PARAMETER_ALGORITHM = "algorithm";
     public static final String PARAMETER_ASYNC = "async";
     public static final String PARAMETER_RETURN_CONTENT = "return_content";
+    public static final String PARAMETER_MODEL_GROUP_NAME = "model_group_name";
     public static final String PARAMETER_MODEL_ID = "model_id";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String PARAMETER_DEPLOY_MODEL = "deploy";
     public static final String PARAMETER_VERSION = "version";
+    public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
-        if (isNullOrEmpty(algorithm)) {
+        if (Strings.isNullOrEmpty(algorithm)) {
             throw new IllegalArgumentException("Request should contain algorithm!");
         }
         return algorithm.toUpperCase(Locale.ROOT);
@@ -68,23 +74,19 @@ public class RestActionUtils {
      */
     public static String getParameterId(RestRequest request, String idName) {
         String id = request.param(idName);
-        if (isNullOrEmpty(id)) {
+        if (Strings.isNullOrEmpty(id)) {
             throw new IllegalArgumentException("Request should contain " + idName);
         }
         return id;
     }
 
     /**
-     * Checks to see if the request came from OpenSearch Dashboards, if so we want
-     * to return the UI Metadata from the document.
-     * If the request came from the client then we exclude the UI Metadata from the
-     * search result.
+     * Checks to see if the request came from OpenSearch Dashboards, if so we want to return the UI Metadata from the document.
+     * If the request came from the client then we exclude the UI Metadata from the search result.
      *
-     * @param request             rest request
-     * @param searchSourceBuilder instance of searchSourceBuilder to fetch includes
-     *                            and excludes
-     * @return instance of
-     *         {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
+     * @param request rest request
+     * @param searchSourceBuilder instance of searchSourceBuilder to fetch includes and excludes
+     * @return instance of {@link org.opensearch.search.fetch.subphase.FetchSourceContext}
      */
     public static FetchSourceContext getSourceContext(RestRequest request, SearchSourceBuilder searchSourceBuilder) {
         String userAgent = coalesceToEmpty(request.header("User-Agent"));
@@ -110,8 +112,7 @@ public class RestActionUtils {
                 return new FetchSourceContext(true, includes, excludes);
             }
         } else {
-            // When user does not set the _source field in search model api request,
-            // searchSourceBuilder.fetchSource becomes null
+            // When user does not set the _source field in search model api request, searchSourceBuilder.fetchSource becomes null
             String[] excludes = new String[] { OLD_MODEL_CONTENT_FIELD, MODEL_CONTENT_FIELD };
             if (!userAgent.contains(OPENSEARCH_DASHBOARDS_USER_AGENT)) {
                 return new FetchSourceContext(true, Strings.EMPTY_ARRAY, ArrayUtils.add(excludes, "ui_metadata"));
@@ -123,7 +124,6 @@ public class RestActionUtils {
 
     /**
      * Return FetchSourceContext
-     * 
      * @param returnModelContent if the model content should be returned
      */
     public static FetchSourceContext getFetchSourceContext(boolean returnModelContent) {
@@ -135,7 +135,6 @@ public class RestActionUtils {
 
     /**
      * Return all nodes in the cluster
-     * 
      * @param clusterService the cluster service
      */
     public static String[] getAllNodes(ClusterService clusterService) {
@@ -149,10 +148,10 @@ public class RestActionUtils {
 
     /**
      *
-     * @param channel      RestChannel
-     * @param status       RestStatus enums
+     * @param channel RestChannel
+     * @param status RestStatus enums
      * @param errorMessage Error messages
-     * @param exception    Reported Exception
+     * @param exception Reported Exception
      */
     public static void onFailure(RestChannel channel, RestStatus status, String errorMessage, Exception exception) {
         BytesRestResponse bytesRestResponse;
@@ -179,6 +178,20 @@ public class RestActionUtils {
 
     public static Optional<String> getStringParam(RestRequest request, String paramName) {
         return Optional.ofNullable(request.param(paramName));
+    }
+
+    /**
+     * Generates a user string formed by the username, backend roles, roles and requested tenants separated by '|'
+     * (e.g., john||own_index,testrole|__user__, no backend role so you see two verticle line after john.).
+     * This is the user string format used internally in the OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT and may be
+     * parsed using User.parse(string).
+     * @param client Client containing user info. A public API request will fill in the user info in the thread context.
+     * @return parsed user object
+     */
+    public static User getUserContext(Client client) {
+        String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        logger.debug("Filtering result by " + userStr);
+        return User.parse(userStr);
     }
 
 }

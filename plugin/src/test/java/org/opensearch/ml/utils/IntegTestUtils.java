@@ -188,7 +188,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     // Predict with the model generated, and verify the prediction result.
     public static void predictAndVerifyResult(String taskId, MLInputDataset inputDataset) throws IOException {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);

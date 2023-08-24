@@ -328,6 +328,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .functionName(FunctionName.BATCH_RCF)
             .deployModel(true)
             .version("1.0")
+            .modelGroupId("model group id")
             .modelName("Test Model")
             .modelConfig(
                 new TextEmbeddingModelConfig(

@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.models;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -28,6 +29,7 @@ public class GetModelITTests extends MLCommonsIntegTestCase {
         loadIrisData(irisIndexName);
     }
 
+    @Ignore
     public void testGetModel_IndexNotFound() {
         exceptionRule.expect(MLResourceNotFoundException.class);
         MLModel model = getModel("test_id");

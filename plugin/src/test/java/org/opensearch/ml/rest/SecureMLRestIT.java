@@ -98,7 +98,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.size(1000);
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
-        mlRegisterModelInput = createRegisterModelInput();
+        mlRegisterModelInput = createRegisterModelInput("testModelGroupID");
     }
 
     @After

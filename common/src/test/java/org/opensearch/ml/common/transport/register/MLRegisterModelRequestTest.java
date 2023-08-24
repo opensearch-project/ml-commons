@@ -35,6 +35,7 @@ public class MLRegisterModelRequestTest {
                 .functionName(FunctionName.KMEANS)
                 .modelName("modelName")
                 .version("version")
+                .modelGroupId("modelGroupId")
                 .url("url")
                 .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)

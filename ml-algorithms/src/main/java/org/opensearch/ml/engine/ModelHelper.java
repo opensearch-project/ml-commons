@@ -61,6 +61,7 @@ public class ModelHelper {
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
         boolean deployModel = registerModelInput.isDeployModel();
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
+        String modelGroupId = registerModelInput.getModelGroupId();
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
 
@@ -83,7 +84,12 @@ public class ModelHelper {
 
                 MLRegisterModelInput.MLRegisterModelInputBuilder builder = MLRegisterModelInput.builder();
 
-                builder.modelName(modelName).version(version).url(modelZipFileUrl).deployModel(deployModel).modelNodeIds(modelNodeIds);
+                builder.modelName(modelName)
+                        .version(version)
+                        .url(modelZipFileUrl)
+                        .deployModel(deployModel)
+                        .modelNodeIds(modelNodeIds)
+                        .modelGroupId(modelGroupId);
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
                         case MLRegisterModelInput.MODEL_FORMAT_FIELD:

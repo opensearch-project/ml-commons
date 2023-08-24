@@ -12,6 +12,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -30,6 +31,7 @@ public class SearchModelTransportAction extends HandledTransportAction<SearchReq
 
     @Override
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
+        request.indices(CommonValue.ML_MODEL_INDEX);
         mlSearchHandler.search(request, actionListener);
     }
 }

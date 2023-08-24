@@ -20,7 +20,11 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.settings.*;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.IndexScopedSettings;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.settings.SettingsFilter;
 import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
@@ -32,6 +36,10 @@ import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction;
+import org.opensearch.ml.action.model_group.SearchModelGroupTransportAction;
+import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
+import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
@@ -48,6 +56,7 @@ import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
+import org.opensearch.ml.action.undeploy.TransportUndeployModelsAction;
 import org.opensearch.ml.action.upload_chunk.MLModelChunkUploader;
 import org.opensearch.ml.action.upload_chunk.TransportRegisterModelMetaAction;
 import org.opensearch.ml.action.upload_chunk.TransportUploadModelChunkAction;
@@ -76,6 +85,10 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
+import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
+import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
@@ -85,6 +98,7 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.engine.MLEngine;
@@ -93,11 +107,32 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.rest.*;
+import org.opensearch.ml.rest.RestMLDeleteModelAction;
+import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
+import org.opensearch.ml.rest.RestMLDeleteTaskAction;
+import org.opensearch.ml.rest.RestMLDeployModelAction;
+import org.opensearch.ml.rest.RestMLExecuteAction;
+import org.opensearch.ml.rest.RestMLGetModelAction;
+import org.opensearch.ml.rest.RestMLGetTaskAction;
+import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLProfileAction;
+import org.opensearch.ml.rest.RestMLRegisterModelAction;
+import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
+import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
+import org.opensearch.ml.rest.RestMLSearchModelAction;
+import org.opensearch.ml.rest.RestMLSearchModelGroupAction;
+import org.opensearch.ml.rest.RestMLSearchTaskAction;
+import org.opensearch.ml.rest.RestMLStatsAction;
+import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
+import org.opensearch.ml.rest.RestMLTrainingAction;
+import org.opensearch.ml.rest.RestMLUndeployModelAction;
+import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
+import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -105,7 +140,12 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.IndexStatusSupplier;
-import org.opensearch.ml.task.*;
+import org.opensearch.ml.task.MLExecuteTaskRunner;
+import org.opensearch.ml.task.MLPredictTaskRunner;
+import org.opensearch.ml.task.MLTaskDispatcher;
+import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.task.MLTrainAndPredictTaskRunner;
+import org.opensearch.ml.task.MLTrainingTaskRunner;
 import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
@@ -159,6 +199,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
     public static final String ML_ROLE_NAME = "ml";
     private NamedXContentRegistry xContentRegistry;
 
+    private ModelAccessControlHelper modelAccessControlHelper;
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -179,10 +221,15 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLDeployModelAction.INSTANCE, TransportDeployModelAction.class),
                 new ActionHandler<>(MLDeployModelOnNodeAction.INSTANCE, TransportDeployModelOnNodeAction.class),
                 new ActionHandler<>(MLUndeployModelAction.INSTANCE, TransportUndeployModelAction.class),
+                new ActionHandler<>(MLUndeployModelsAction.INSTANCE, TransportUndeployModelsAction.class),
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
-                new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class)
+                new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
+                new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),
+                new ActionHandler<>(MLUpdateModelGroupAction.INSTANCE, TransportUpdateModelGroupAction.class),
+                new ActionHandler<>(MLModelGroupSearchAction.INSTANCE, SearchModelGroupTransportAction.class),
+                new ActionHandler<>(MLModelGroupDeleteAction.INSTANCE, DeleteModelGroupTransportAction.class)
             );
     }
 
@@ -248,8 +295,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             nodeHelper
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
-
-        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry);
+        modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
+        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
         mlTrainingTaskRunner = new MLTrainingTaskRunner(
@@ -311,10 +358,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
 
-        MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings);
+        MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
-
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry);
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
             client,
@@ -352,6 +398,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlPredictTaskRunner,
                 mlTrainAndPredictTaskRunner,
                 mlExecuteTaskRunner,
+                modelAccessControlHelper,
                 mlSearchHandler,
                 mlTaskDispatcher,
                 mlModelChunkUploader,
@@ -390,7 +437,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
-
+        RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
+        RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
+        RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -409,7 +459,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLDeployModelAction,
                 restMLUndeployModelAction,
                 restMLRegisterModelMetaAction,
-                restMLUploadModelChunkAction
+                restMLUploadModelChunkAction,
+                restMLCreateModelGroupAction,
+                restMLUpdateModelGroupAction,
+                restMLSearchModelGroupAction,
+                restMLDeleteModelGroupAction
             );
     }
 
@@ -508,7 +562,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES,
                 MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL,
-                MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD
+                MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
+                MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED
             );
         return settings;
     }

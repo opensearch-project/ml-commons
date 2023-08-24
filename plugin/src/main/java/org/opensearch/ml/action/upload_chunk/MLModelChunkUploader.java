@@ -7,6 +7,7 @@ package org.opensearch.ml.action.upload_chunk;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.Base64;
@@ -20,6 +21,7 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
@@ -32,7 +34,9 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.utils.RestActionUtils;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -42,17 +46,27 @@ public class MLModelChunkUploader {
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final NamedXContentRegistry xContentRegistry;
+    ModelAccessControlHelper modelAccessControlHelper;
 
     @Inject
-    public MLModelChunkUploader(MLIndicesHandler mlIndicesHandler, Client client, final NamedXContentRegistry xContentRegistry) {
+    public MLModelChunkUploader(
+        MLIndicesHandler mlIndicesHandler,
+        Client client,
+        final NamedXContentRegistry xContentRegistry,
+        ModelAccessControlHelper modelAccessControlHelper
+    ) {
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
     public void uploadModelChunk(MLUploadModelChunkInput uploadModelChunkInput, ActionListener<MLUploadModelChunkResponse> listener) {
         final String modelId = uploadModelChunkInput.getModelId();
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
+
+        User user = RestActionUtils.getUserContext(client);
+
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
@@ -63,86 +77,115 @@ public class MLModelChunkUploader {
                         String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
 
                         MLModel existingModel = MLModel.parse(parser, algorithmName);
-                        existingModel.setModelId(r.getId());
-                        if (existingModel.getTotalChunks() <= uploadModelChunkInput.getChunkNumber()) {
-                            throw new Exception("Chunk number exceeds total chunks");
-                        }
-                        byte[] bytes = uploadModelChunkInput.getContent();
-                        // Check the size of the content not to exceed 10 mb
-                        if (bytes == null || bytes.length == 0) {
-                            throw new Exception("Chunk size either 0 or null");
-                        }
-                        if (validateChunkSize(bytes.length)) {
-                            throw new Exception("Chunk size exceeds 10MB");
-                        }
-                        mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
-                            int chunkNum = uploadModelChunkInput.getChunkNumber();
-                            MLModel mlModel = MLModel
-                                .builder()
-                                .algorithm(existingModel.getAlgorithm())
-                                .modelId(existingModel.getModelId())
-                                .modelFormat(existingModel.getModelFormat())
-                                .totalChunks(existingModel.getTotalChunks())
-                                .algorithm(existingModel.getAlgorithm())
-                                .chunkNumber(chunkNum)
-                                .content(Base64.getEncoder().encodeToString(bytes))
-                                .build();
-                            IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                            indexRequest.id(uploadModelChunkInput.getModelId() + "_" + uploadModelChunkInput.getChunkNumber());
-                            indexRequest
-                                .source(mlModel.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
-                            indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                            client.index(indexRequest, ActionListener.wrap(response -> {
-                                log
-                                    .info(
-                                        "Index model successful for {} for chunk number {}",
-                                        uploadModelChunkInput.getModelId(),
-                                        chunkNum + 1
-                                    );
-                                if (existingModel.getTotalChunks() == (uploadModelChunkInput.getChunkNumber() + 1)) {
-                                    Semaphore semaphore = new Semaphore(1);
-                                    semaphore.acquire();
-                                    MLModel mlModelMeta = MLModel
-                                        .builder()
-                                        .name(existingModel.getName())
-                                        .algorithm(existingModel.getAlgorithm())
-                                        .version(existingModel.getVersion())
-                                        .modelFormat(existingModel.getModelFormat())
-                                        .modelState(MLModelState.REGISTERED)
-                                        .modelConfig(existingModel.getModelConfig())
-                                        .totalChunks(existingModel.getTotalChunks())
-                                        .modelContentHash(existingModel.getModelContentHash())
-                                        .modelContentSizeInBytes(existingModel.getModelContentSizeInBytes())
-                                        .createdTime(existingModel.getCreatedTime())
-                                        .build();
-                                    IndexRequest indexReq = new IndexRequest(ML_MODEL_INDEX);
-                                    indexReq.id(modelId);
-                                    indexReq
-                                        .source(
-                                            mlModelMeta
-                                                .toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS)
+
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, existingModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                                if (!access) {
+                                    log.error("User doesn't have valid privilege to perform this operation on this model");
+                                    listener
+                                        .onFailure(
+                                            new IllegalArgumentException(
+                                                "User doesn't have valid privilege to perform this operation on this model"
+                                            )
                                         );
-                                    indexReq.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                                    client.index(indexReq, ActionListener.wrap(re -> {
-                                        log.debug("Index model successful", existingModel.getName());
-                                        semaphore.release();
-                                    }, e -> {
-                                        log.error("Failed to update model state", e);
-                                        semaphore.release();
-                                        listener.onFailure(e);
+                                } else {
+                                    existingModel.setModelId(r.getId());
+                                    if (existingModel.getTotalChunks() <= uploadModelChunkInput.getChunkNumber()) {
+                                        throw new Exception("Chunk number exceeds total chunks");
+                                    }
+                                    byte[] bytes = uploadModelChunkInput.getContent();
+                                    // Check the size of the content not to exceed 10 mb
+                                    if (bytes == null || bytes.length == 0) {
+                                        throw new Exception("Chunk size either 0 or null");
+                                    }
+                                    if (validateChunkSize(bytes.length)) {
+                                        throw new Exception("Chunk size exceeds 10MB");
+                                    }
+                                    mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                                        int chunkNum = uploadModelChunkInput.getChunkNumber();
+                                        MLModel mlModel = MLModel
+                                            .builder()
+                                            .algorithm(existingModel.getAlgorithm())
+                                            .modelGroupId(existingModel.getModelGroupId())
+                                            .version(existingModel.getVersion())
+                                            .modelId(existingModel.getModelId())
+                                            .modelFormat(existingModel.getModelFormat())
+                                            .totalChunks(existingModel.getTotalChunks())
+                                            .algorithm(existingModel.getAlgorithm())
+                                            .chunkNumber(chunkNum)
+                                            .content(Base64.getEncoder().encodeToString(bytes))
+                                            .build();
+                                        IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                                        indexRequest.id(uploadModelChunkInput.getModelId() + "_" + uploadModelChunkInput.getChunkNumber());
+                                        indexRequest
+                                            .source(
+                                                mlModel
+                                                    .toXContent(
+                                                        XContentBuilder.builder(XContentType.JSON.xContent()),
+                                                        ToXContent.EMPTY_PARAMS
+                                                    )
+                                            );
+                                        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                                        client.index(indexRequest, ActionListener.wrap(response -> {
+                                            log
+                                                .info(
+                                                    "Index model successful for {} for chunk number {}",
+                                                    uploadModelChunkInput.getModelId(),
+                                                    chunkNum + 1
+                                                );
+                                            if (existingModel.getTotalChunks() == (uploadModelChunkInput.getChunkNumber() + 1)) {
+                                                Semaphore semaphore = new Semaphore(1);
+                                                semaphore.acquire();
+                                                MLModel mlModelMeta = MLModel
+                                                    .builder()
+                                                    .name(existingModel.getName())
+                                                    .algorithm(existingModel.getAlgorithm())
+                                                    .version(existingModel.getVersion())
+                                                    .modelGroupId((existingModel.getModelGroupId()))
+                                                    .modelFormat(existingModel.getModelFormat())
+                                                    .modelState(MLModelState.REGISTERED)
+                                                    .modelConfig(existingModel.getModelConfig())
+                                                    .totalChunks(existingModel.getTotalChunks())
+                                                    .modelContentHash(existingModel.getModelContentHash())
+                                                    .modelContentSizeInBytes(existingModel.getModelContentSizeInBytes())
+                                                    .createdTime(existingModel.getCreatedTime())
+                                                    .build();
+                                                IndexRequest indexReq = new IndexRequest(ML_MODEL_INDEX);
+                                                indexReq.id(modelId);
+                                                indexReq
+                                                    .source(
+                                                        mlModelMeta
+                                                            .toXContent(
+                                                                XContentBuilder.builder(XContentType.JSON.xContent()),
+                                                                ToXContent.EMPTY_PARAMS
+                                                            )
+                                                    );
+                                                indexReq.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                                                client.index(indexReq, ActionListener.wrap(re -> {
+                                                    log.debug("Index model successful", existingModel.getName());
+                                                    semaphore.release();
+                                                }, e -> {
+                                                    log.error("Failed to update model state", e);
+                                                    semaphore.release();
+                                                    listener.onFailure(e);
+                                                }));
+                                            }
+                                            listener.onResponse(new MLUploadModelChunkResponse("Uploaded"));
+                                        }, e -> {
+                                            log.error("Failed to upload chunk model", e);
+                                            listener.onFailure(e);
+                                        }));
+                                    }, ex -> {
+                                        log.error("Failed to init model index", ex);
+                                        listener.onFailure(ex);
                                     }));
                                 }
-                                listener.onResponse(new MLUploadModelChunkResponse("Uploaded"));
                             }, e -> {
-                                log.error("Failed to upload chunk model", e);
+                                logException("Failed to validate model access", e, log);
                                 listener.onFailure(e);
                             }));
-                        }, ex -> {
-                            log.error("Failed to init model index", ex);
-                            listener.onFailure(ex);
-                        }));
                     } catch (Exception e) {
-                        log.error("Failed to parse ml model" + r.getId(), e);
+                        log.error("Failed to parse ml model " + r.getId(), e);
                         listener.onFailure(e);
                     }
                 } else {

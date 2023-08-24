@@ -120,7 +120,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm);
-        return new MLPredictionTaskRequest(modelId, mlInput);
+        return new MLPredictionTaskRequest(modelId, mlInput, null);
     }
 
 }
