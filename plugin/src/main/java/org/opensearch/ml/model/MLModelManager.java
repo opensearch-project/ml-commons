@@ -411,15 +411,12 @@ public class MLModelManager {
         if (!modelHelper.isModelAllowed(registerModelInput, modelMetaList)) {
             throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
         }
-        modelHelper
-            .downloadPrebuiltModelConfig(
-                taskId,
-                registerModelInput,
-                ActionListener.wrap(mlRegisterModelInput -> { registerModelFromUrl(mlRegisterModelInput, mlTask); }, e -> {
-                    log.error("Failed to register prebuilt model", e);
-                    handleException(registerModelInput.getFunctionName(), taskId, e);
-                })
-            );
+        modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
+            registerModelFromUrl(mlRegisterModelInput, mlTask);
+        }, e -> {
+            log.error("Failed to register prebuilt model", e);
+            handleException(registerModelInput.getFunctionName(), taskId, e);
+        }));
     }
 
     private <T> ThreadedActionListener<T> threadedActionListener(String threadPoolName, ActionListener<T> listener) {
