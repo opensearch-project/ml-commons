@@ -76,6 +76,7 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MCORR_ML_VERSION;
+import static org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation.MODEL_CONTENT_HASH;
 
 
 public class MetricsCorrelationTest {
@@ -477,6 +478,7 @@ public class MetricsCorrelationTest {
             assert mlRegisterModelInput.getModelFormat() == MLModelFormat.TORCH_SCRIPT;
             assert FunctionName.METRICS_CORRELATION.name().equals(mlRegisterModelInput.getModelName());
             assert MCORR_ML_VERSION.equals(mlRegisterModelInput.getVersion());
+            assert MODEL_CONTENT_HASH.equals(mlRegisterModelInput.getHashValue());
             MLModelConfig modelConfig = mlRegisterModelInput.getModelConfig();
             assert MetricsCorrelation.MODEL_TYPE.equals(modelConfig.getModelType());
             assertNull(modelConfig.getAllConfig());
