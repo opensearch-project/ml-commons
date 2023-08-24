@@ -79,7 +79,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         actionListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find model"));
+                    actionListener.onFailure(new IllegalArgumentException("Failed to find model with the provided model id: " + modelId));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {

@@ -6,7 +6,7 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ENABLE_MCORR;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
 
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.client.Client;
@@ -42,7 +42,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     private final MLInputDatasetHandler mlInputDatasetHandler;
     protected final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
-    private volatile Boolean isMcorrEnabled;
+    private volatile Boolean isPythonModelEnabled;
 
     public MLExecuteTaskRunner(
         ThreadPool threadPool,
@@ -63,8 +63,10 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         this.mlInputDatasetHandler = mlInputDatasetHandler;
         this.nodeHelper = nodeHelper;
         this.mlEngine = mlEngine;
-        isMcorrEnabled = ML_COMMONS_ENABLE_MCORR.get(this.clusterService.getSettings());
-        this.clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ENABLE_MCORR, it -> isMcorrEnabled = it);
+        isPythonModelEnabled = ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL.get(this.clusterService.getSettings());
+        this.clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL, it -> isPythonModelEnabled = it);
     }
 
     @Override
@@ -96,7 +98,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                 Input input = request.getInput();
                 FunctionName functionName = request.getFunctionName();
                 if (FunctionName.METRICS_CORRELATION.equals(functionName)) {
-                    if (!isMcorrEnabled) {
+                    if (!isPythonModelEnabled) {
                         Exception exception = new IllegalArgumentException("This algorithm is not enabled from settings");
                         listener.onFailure(exception);
                         return;

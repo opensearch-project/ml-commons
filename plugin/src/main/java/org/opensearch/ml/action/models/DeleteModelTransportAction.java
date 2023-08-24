@@ -125,6 +125,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         log.error("Failed to parse ml model" + r.getId(), e);
                         actionListener.onFailure(e);
                     }
+                } else {
+                    actionListener
+                        .onFailure(new IllegalArgumentException("Failed to find model to delete with the provided model id: " + modelId));
                 }
             }, e -> { actionListener.onFailure(new MLResourceNotFoundException("Fail to find model")); }));
         } catch (Exception e) {
