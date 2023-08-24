@@ -158,20 +158,20 @@ public class ModelHelper {
                 DownloadUtils.download(url, modelPath, new ProgressBar());
                 verifyModelZipFile(modelFormat, modelPath, modelName);
                 String hash = calculateFileHash(modelZipFile);
-                if (modelContentHash != null && !modelContentHash.equals(hash)) {
+                if (hash.equals(modelContentHash)) {
+                    List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
+                    Map<String, Object> result = new HashMap<>();
+                    result.put(CHUNK_FILES, chunkFiles);
+                    result.put(MODEL_SIZE_IN_BYTES, modelZipFile.length());
+
+                    result.put(MODEL_FILE_HASH, calculateFileHash(modelZipFile));
+                    deleteFileQuietly(modelZipFile);
+                    listener.onResponse(result);
+                    return null;
+                } else {
                     log.error("Model content hash can't match original hash value when registering");
                     throw (new IllegalArgumentException("model content changed"));
                 }
-
-                List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
-                Map<String, Object> result = new HashMap<>();
-                result.put(CHUNK_FILES, chunkFiles);
-                result.put(MODEL_SIZE_IN_BYTES, modelZipFile.length());
-
-                result.put(MODEL_FILE_HASH, calculateFileHash(modelZipFile));
-                deleteFileQuietly(modelZipFile);
-                listener.onResponse(result);
-                return null;
             });
         } catch (Exception e) {
             listener.onFailure(e);
