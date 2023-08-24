@@ -37,6 +37,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String VERSION_FIELD = "version";
     public static final String URL_FIELD = "url";
+    public static final String HASH_VALUE_FIELD = "model_content_hash_value";
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String DEPLOY_MODEL_FIELD = "deploy_model";
@@ -47,6 +48,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private String version;
     private String description;
     private String url;
+    private String hashValue;
     private MLModelFormat modelFormat;
     private MLModelConfig modelConfig;
 
@@ -59,6 +61,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 String version,
                                 String description,
                                 String url,
+                                String hashValue,
                                 MLModelFormat modelFormat,
                                 MLModelConfig modelConfig,
                                 boolean deployModel,
@@ -84,6 +87,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.version = version;
         this.description = description;
         this.url = url;
+        this.hashValue = hashValue;
         this.modelFormat = modelFormat;
         this.modelConfig = modelConfig;
         this.deployModel = deployModel;
@@ -97,6 +101,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.version = in.readString();
         this.description = in.readOptionalString();
         this.url = in.readOptionalString();
+        this.hashValue = in.readOptionalString();
         if (in.readBoolean()) {
             this.modelFormat = in.readEnum(MLModelFormat.class);
         }
@@ -114,6 +119,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeString(version);
         out.writeOptionalString(description);
         out.writeOptionalString(url);
+        out.writeOptionalString(hashValue);
         if (modelFormat != null) {
             out.writeBoolean(true);
             out.writeEnum(modelFormat);
@@ -142,6 +148,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (url != null) {
             builder.field(URL_FIELD, url);
         }
+        if (hashValue != null) {
+            builder.field(HASH_VALUE_FIELD, hashValue);
+        }
         if (modelFormat != null) {
             builder.field(MODEL_FORMAT_FIELD, modelFormat);
         }
@@ -159,6 +168,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel) throws IOException {
         FunctionName functionName = null;
         String url = null;
+        String hashValue = null;
         String description = null;
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
@@ -174,6 +184,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
                 case URL_FIELD:
                     url = parser.text();
+                    break;
+                case HASH_VALUE_FIELD:
+                    hashValue = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
@@ -195,7 +208,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
+        return new MLRegisterModelInput(functionName, modelName, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -203,6 +216,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String name = null;
         String version = null;
         String url = null;
+        String hashValue = null;
         String description = null;
         MLModelFormat modelFormat = null;
         MLModelConfig modelConfig = null;
@@ -229,6 +243,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case URL_FIELD:
                     url = parser.text();
                     break;
+                case HASH_VALUE_FIELD:
+                    hashValue = parser.text();
+                    break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
@@ -246,6 +263,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, version, description, url, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
+        return new MLRegisterModelInput(functionName, name, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]));
     }
 }

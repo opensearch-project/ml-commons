@@ -39,6 +39,7 @@ public class ModelHelperTest {
     private MLModelFormat modelFormat;
     private String modelId;
     private MLEngine mlEngine;
+    private String hashValue = "e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021";
 
     @Mock
     ActionListener<Map<String, Object>> actionListener;
@@ -57,7 +58,8 @@ public class ModelHelperTest {
 
     @Test
     public void testDownloadAndSplit_UrlFailure() {
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", actionListener);
+        modelId = "url_failure_model_id";
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
@@ -66,7 +68,26 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, null, actionListener);
+        ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertNotEquals(0, argumentCaptor.getValue().size());
+    }
+
+    @Test
+    public void testDownloadAndSplit_HashFailure() throws URISyntaxException {
+        String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, "wrong_hash_value", actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(IllegalArgumentException.class, argumentCaptor.getValue().getClass());
+    }
+
+    @Test
+    public void testDownloadAndSplit_Hash() throws URISyntaxException {
+        String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
