@@ -48,7 +48,7 @@ public class SparseEncodingModel extends DLModel {
             Input input = new Input();
             input.add(doc);
             output = getPredictor().predict(input);
-            tensorOutputs.add(parseModelTensorOutput(output, null));
+            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
         }
         return new ModelTensorOutput(tensorOutputs);
     }
