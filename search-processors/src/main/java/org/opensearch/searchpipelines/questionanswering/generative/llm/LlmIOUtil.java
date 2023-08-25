@@ -28,6 +28,6 @@ public class LlmIOUtil {
 
         // TODO pick the right subclass based on the modelId.
 
-        return new OpenSearchChatCompletionInput(llmModel, question, chatHistory, contexts);
+        return new ChatCompletionInput(llmModel, question, chatHistory, contexts);
     }
 }

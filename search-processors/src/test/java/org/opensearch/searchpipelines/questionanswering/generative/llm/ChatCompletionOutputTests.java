@@ -17,24 +17,20 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import org.opensearch.test.OpenSearchTestCase;
 
 import java.util.List;
 
-/**
- * Input for LLMs via HttpConnector
- */
-@Log4j2
-@Getter
-@Setter
-@AllArgsConstructor
-public class OpenSearchChatCompletionInput implements  ChatCompletionInput {
+public class ChatCompletionOutputTests extends OpenSearchTestCase {
 
-    private String model;
-    private String question;
-    private List<String> chatHistory;
-    private List<String> contexts;
+    public void testCtor() {
+        ChatCompletionOutput output = new ChatCompletionOutput(List.of("answer"));
+        assertNotNull(output);
+    }
+
+    public void testGettersSetters() {
+        String answer = "answer";
+        ChatCompletionOutput output = new ChatCompletionOutput(List.of(answer));
+        assertEquals(answer, (String) output.getAnswers().get(0));
+    }
 }

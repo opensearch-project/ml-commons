@@ -32,6 +32,7 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 import org.opensearch.test.OpenSearchTestCase;
 
 import java.util.ArrayList;
@@ -42,13 +43,13 @@ import java.util.Map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-public class OpenSearchChatConnectorTests extends OpenSearchTestCase {
+public class DefaultLlmImplTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
 
     public void testBuildMessageParameter() {
-        OpenSearchChatConnector connector = new OpenSearchChatConnector("model_id", client);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         String question = "Who am I";
         List<String> contexts = new ArrayList<>();
         List<String> chatHistory = new ArrayList<>();
@@ -56,7 +57,7 @@ public class OpenSearchChatConnectorTests extends OpenSearchTestCase {
         contexts.add("context 2");
         chatHistory.add("message 1");
         chatHistory.add("message 2");
-        String parameter = connector.buildMessageParameter(question, chatHistory, contexts);
+        String parameter = PromptUtil.getChatCompletionPrompt(question, chatHistory, contexts);
         //System.out.println(parameter);
         Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
         assertTrue(isJson(parameter));
@@ -65,7 +66,7 @@ public class OpenSearchChatConnectorTests extends OpenSearchTestCase {
     public void testChatCompletionApi() throws Exception {
         MachineLearningClient mlClient = mock(MachineLearningClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
-        OpenSearchChatConnector connector = new OpenSearchChatConnector("model_id", client);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         connector.setMlClient(mlClient);
 
         Map<String, String> messageMap = Map.of("role", "agent", "content", "answer");
@@ -75,12 +76,12 @@ public class OpenSearchChatConnectorTests extends OpenSearchTestCase {
         ActionFuture<MLOutput> future = mock(ActionFuture.class);
         when(future.actionGet()).thenReturn(mlOutput);
         when(mlClient.predict(any(), any())).thenReturn(future);
-        ChatCompletionInput input = new OpenSearchChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList());
-        ChatCompletionOutput output = connector.createChatCompletion(input);
+        ChatCompletionInput input = new ChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList());
+        ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
         MLInput mlInput = captor.getValue();
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
-        assertEquals("answer", output.getAnswer());
+        assertEquals("answer", (String) output.getAnswers().get(0));
     }
 
     private boolean isJson(String Json) {

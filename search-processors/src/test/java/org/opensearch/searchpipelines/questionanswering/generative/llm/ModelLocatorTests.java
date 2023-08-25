@@ -26,7 +26,7 @@ public class ModelLocatorTests extends OpenSearchTestCase {
 
     public void testGetRemoteLlm() {
         Client client = mock(Client.class);
-        Llm llm = ModelLocator.getRemoteLlm("xyz", client);
-        assertTrue(llm instanceof OpenSearchChatConnector);
+        Llm llm = ModelLocator.getLlm("xyz", client);
+        assertTrue(llm instanceof DefaultLlmImpl);
     }
 }

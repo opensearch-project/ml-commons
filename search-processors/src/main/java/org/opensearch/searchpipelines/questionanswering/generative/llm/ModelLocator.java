@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.opensearch.client.Client;
 
 /**
@@ -24,23 +26,11 @@ import org.opensearch.client.Client;
  *
  * TODO Should we extend this use case beyond HttpConnectors/Remote Inference?
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ModelLocator {
 
-    public static Llm getRemoteLlm(String openSearchModelId, Client client) {
-        return new OpenSearchChatConnector(openSearchModelId, client);
+    public static Llm getLlm(String modelId, Client client) {
+        return new DefaultLlmImpl(modelId, client);
     }
 
-    // For testing locally
-    static class LocalLlm implements Llm {
-
-        @Override
-        public ChatCompletionOutput createChatCompletion(ChatCompletionInput input) {
-            return new ChatCompletionOutput() {
-                @Override
-                public String getAnswer() {
-                    return "dummy";
-                }
-            };
-        }
-    }
 }

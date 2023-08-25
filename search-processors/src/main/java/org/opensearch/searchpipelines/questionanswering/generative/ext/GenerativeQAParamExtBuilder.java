@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.searchpipelines.questionanswering.generative;
+package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,7 +35,8 @@ import java.util.Objects;
 @NoArgsConstructor
 public class GenerativeQAParamExtBuilder extends SearchExtBuilder {
 
-    public static final String NAME = "generative_qa_parameters";
+    // The name of the "ext" section containing Generative QA parameters.
+    public static final String PARAMETER_NAME = "generative_qa_parameters";
 
     @Setter
     @Getter
@@ -65,7 +66,7 @@ public class GenerativeQAParamExtBuilder extends SearchExtBuilder {
 
     @Override
     public String getWriteableName() {
-        return NAME;
+        return PARAMETER_NAME;
     }
 
     @Override

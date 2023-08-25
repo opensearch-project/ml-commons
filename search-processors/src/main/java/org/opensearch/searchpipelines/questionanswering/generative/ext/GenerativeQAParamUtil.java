@@ -15,8 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.searchpipelines.questionanswering.generative;
+package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.SearchExtBuilder;
 
@@ -25,12 +27,13 @@ import java.util.Optional;
 /**
  * Utility class for extracting generative QA search pipeline parameters from search requests.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class GenerativeQAParamUtil {
 
     public static GenerativeQAParameters getGenerativeQAParameters(SearchRequest request) {
         GenerativeQAParamExtBuilder builder = null;
         if (request.source() != null && request.source().ext() != null && !request.source().ext().isEmpty()) {
-            Optional<SearchExtBuilder> b = request.source().ext().stream().filter(bldr -> GenerativeQAParamExtBuilder.NAME.equals(bldr.getWriteableName())).findFirst();
+            Optional<SearchExtBuilder> b = request.source().ext().stream().filter(bldr -> GenerativeQAParamExtBuilder.PARAMETER_NAME.equals(bldr.getWriteableName())).findFirst();
             if (b.isPresent()) {
                 builder = (GenerativeQAParamExtBuilder) b.get();
             }

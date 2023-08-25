@@ -18,12 +18,10 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.client.Client;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
-import org.opensearch.search.pipeline.SearchResponseProcessor;
 
 import java.util.Map;
 

@@ -17,9 +17,21 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
+
+import java.util.List;
+
 /**
- * Outputs from chat completion API.
+ * Output from LLMs via HttpConnector
  */
-public interface ChatCompletionOutput {
-    String getAnswer();
+@Log4j2
+@Getter
+@Setter
+@AllArgsConstructor
+public class ChatCompletionOutput {
+
+    private List<Object> answers;
 }

@@ -17,19 +17,45 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.opensearch.test.OpenSearchTestCase;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public class PromptUtilTests extends OpenSearchTestCase {
 
     public void testPromptUtilStaticMethods() {
-        assertNull(PromptUtil.getChatCompletionPrompt("question", Collections.emptyList(), Collections.emptyList()));
         assertNull(PromptUtil.getQuestionRephrasingPrompt("question", Collections.emptyList()));
     }
 
-    public void testCtor() {
-        PromptUtil util = new PromptUtil();
-        assertNotNull(util);
+    public void testBuildMessageParameter() {
+        String question = "Who am I";
+        List<String> contexts = new ArrayList<>();
+        List<String> chatHistory = new ArrayList<>();
+        contexts.add("context 1");
+        contexts.add("context 2");
+        chatHistory.add("message 1");
+        chatHistory.add("message 2");
+        String parameter = PromptUtil.buildMessageParameter(question, chatHistory, contexts);
+        Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
+        assertTrue(isJson(parameter));
+    }
+
+    private boolean isJson(String Json) {
+        try {
+            new JSONObject(Json);
+        } catch (JSONException ex) {
+            try {
+                new JSONArray(Json);
+            } catch (JSONException ex1) {
+                return false;
+            }
+        }
+        return true;
     }
 }

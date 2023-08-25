@@ -16,7 +16,7 @@ PUT /_search/pipeline/<search pipeline name>
         "generative_qa": {
             "tag": <tag>,
             "description": <description>,
-            "opensearch_model_id": "<model_id>",
+            "model_id": "<model_id>",
             "context_field": <field> (e.g. "text")
         }
     }
@@ -24,7 +24,7 @@ PUT /_search/pipeline/<search pipeline name>
 }
 ```
 
-The 'opensearch_model_id' parameter here needs to refer to a model of type REMOTE that has an HttpConnector instance associated with it.
+The 'model_id' parameter here needs to refer to a model of type REMOTE that has an HttpConnector instance associated with it.
 
 ## Making a search request against an index using the above processor
 ```
@@ -82,12 +82,14 @@ GET /<index>/_search\?search_pipeline\=<search pipeline name>
       ...
       {
       ...
-      },
-      "ext": {
-        "generative_qa": {
-          "answer": "..."
+      }
+    ]
+  }, // end of hits
+  "ext": {
+    "generative_qa": {
+      "answer": "..."
     }
   }
-} 
+}
 ```
 The RAG answer is returned as an "ext" to SearchResponse following the "hits" array.

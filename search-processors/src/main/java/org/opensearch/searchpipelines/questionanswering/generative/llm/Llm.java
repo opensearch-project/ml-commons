@@ -22,5 +22,5 @@ package org.opensearch.searchpipelines.questionanswering.generative.llm;
  */
 public interface Llm {
 
-    ChatCompletionOutput createChatCompletion(ChatCompletionInput input);
+    ChatCompletionOutput doChatCompletion(ChatCompletionInput input);
 }

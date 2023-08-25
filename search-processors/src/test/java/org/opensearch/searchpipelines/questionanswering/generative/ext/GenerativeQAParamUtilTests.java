@@ -15,10 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.searchpipelines.questionanswering.generative;
+package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamUtil;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
 import org.opensearch.test.OpenSearchTestCase;
 
 import java.util.List;

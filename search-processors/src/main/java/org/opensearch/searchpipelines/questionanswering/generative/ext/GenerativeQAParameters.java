@@ -15,8 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.searchpipelines.questionanswering.generative;
+package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
+import com.google.common.base.Preconditions;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -82,14 +83,14 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         if (conversationId != null) {
-            out.writeString(conversationId);
+            out.writeOptionalString(conversationId);
         }
         if (llmModel != null) {
-            out.writeString(llmModel);
+            out.writeOptionalString(llmModel);
         }
-        if (llmQuestion != null) {
-            out.writeString(llmQuestion);
-        }
+
+        Preconditions.checkNotNull(llmQuestion, "llm_question must not be null.");
+        out.writeString(llmQuestion);
     }
 
     public static GenerativeQAParameters parse(XContentParser parser) throws IOException {

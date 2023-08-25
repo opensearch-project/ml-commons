@@ -15,9 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.opensearch.searchpipelines.questionanswering.generative;
+package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
 import org.opensearch.test.OpenSearchTestCase;
 
 import java.io.EOFException;

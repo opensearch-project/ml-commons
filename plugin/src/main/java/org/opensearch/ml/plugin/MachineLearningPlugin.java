@@ -176,7 +176,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
-import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAParamExtBuilder;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQARequestProcessor;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAResponseProcessor;
 import org.opensearch.threadpool.ExecutorBuilder;
@@ -624,7 +624,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         return List
             .of(
                 new SearchPlugin.SearchExtSpec<>(
-                    GenerativeQAParamExtBuilder.NAME,
+                    GenerativeQAParamExtBuilder.PARAMETER_NAME,
                     input -> new GenerativeQAParamExtBuilder(input),
                     parser -> GenerativeQAParamExtBuilder.parse(parser)
                 )
@@ -638,6 +638,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
-        return Map.of(GenerativeQAResponseProcessor.TYPE, new GenerativeQAResponseProcessor.Factory(this.client));
+        return Map.of(GenerativeQAResponseProcessor.SEARCH_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client));
     }
 }
