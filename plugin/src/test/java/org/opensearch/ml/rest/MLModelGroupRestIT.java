@@ -10,9 +10,9 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.http.HttpHeaders;
-import org.apache.http.HttpHost;
-import org.apache.http.message.BasicHeader;
+import org.apache.hc.core5.http.HttpHeaders;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
