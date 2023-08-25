@@ -38,6 +38,7 @@ import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
 public class TokenizerModel extends DLModel {
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
+        log.info("now go predict here\n");
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
