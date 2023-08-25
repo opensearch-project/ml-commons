@@ -35,7 +35,7 @@ public enum FunctionName {
      * @return true for deep learning model.
      */
     public static boolean isDLModel(FunctionName functionName) {
-        if (functionName == TEXT_EMBEDDING) {
+        if (functionName == TEXT_EMBEDDING || functionName == SPARSE_ENCODING || functionName == TOKENIZE) {
             return true;
         }
         return false;
