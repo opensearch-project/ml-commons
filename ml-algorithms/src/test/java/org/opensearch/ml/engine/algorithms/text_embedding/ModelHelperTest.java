@@ -189,7 +189,7 @@ public class ModelHelperTest {
                 .modelNodeIds(new String[]{"node_id1"})
                 .build();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
-        assertEquals("huggingface/sentence-transformers/all-distilroberta-v1", ((Map<String, String>)modelMetaList.get(0)).get("name"));
+        assertEquals("huggingface/sentence-transformers/all-MiniLM-L12-v2", ((Map<String, String>)modelMetaList.get(0)).get("name"));
     }
 
     @Test
