@@ -22,12 +22,15 @@ import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.ModelAccessMode;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";
@@ -45,6 +48,8 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String opensearchBackendRole = "opensearch";
     private SearchSourceBuilder searchSourceBuilder;
     private MLRegisterModelInput mlRegisterModelInput;
+
+    private MLRegisterModelGroupInput mlRegisterModelGroupInput;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -99,6 +104,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         searchSourceBuilder.fetchSource(new String[] { "petal_length_in_cm", "petal_width_in_cm" }, null);
 
         mlRegisterModelInput = createRegisterModelInput("testModelGroupID");
+        mlRegisterModelGroupInput = createRegisterModelGroupInput(ImmutableList.of("role-1"), ModelAccessMode.RESTRICTED, false);
     }
 
     @After
@@ -152,19 +158,27 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     }
 
     public void testRegisterModelWithFullAccess() throws IOException {
-        registerModel(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelInput), registerModelResult -> {
-            assertFalse(registerModelResult.containsKey("model_id"));
-            String taskId = (String) registerModelResult.get("task_id");
-            assertNotNull(taskId);
-            String status = (String) registerModelResult.get("status");
-            assertEquals(MLTaskState.CREATED.name(), status);
+        registerModelGroup(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             try {
-                getTask(mlFullAccessClient, taskId, task -> {
-                    String algorithm = (String) task.get("function_name");
-                    assertEquals(FunctionName.TEXT_EMBEDDING.name(), algorithm);
+                String modelGroupId = (String) registerModelGroupResult.get("model_group_id");
+                MLRegisterModelInput mlRegisterModelInput = createRegisterModelInput(modelGroupId);
+                registerModel(mlFullAccessClient, TestHelper.toJsonString(mlRegisterModelInput), registerModelResult -> {
+                    assertFalse(registerModelResult.containsKey("model_id"));
+                    String taskId = (String) registerModelResult.get("task_id");
+                    assertNotNull(taskId);
+                    String status = (String) registerModelResult.get("status");
+                    assertEquals(MLTaskState.CREATED.name(), status);
+                    try {
+                        getTask(mlFullAccessClient, taskId, task -> {
+                            String algorithm = (String) task.get("function_name");
+                            assertEquals(FunctionName.TEXT_EMBEDDING.name(), algorithm);
+                        });
+                    } catch (IOException e) {
+                        assertNull(e);
+                    }
                 });
             } catch (IOException e) {
-                assertNull(e);
+                throw new RuntimeException(e);
             }
         });
     }
