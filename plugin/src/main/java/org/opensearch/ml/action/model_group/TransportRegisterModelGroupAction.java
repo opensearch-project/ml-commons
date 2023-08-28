@@ -150,33 +150,36 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         Boolean isAddAllBackendRoles = input.getIsAddAllBackendRoles();
         if (modelAccessMode == null) {
             if (!Boolean.TRUE.equals(isAddAllBackendRoles) && CollectionUtils.isEmpty(input.getBackendRoles())) {
-                throw new IllegalArgumentException("User must specify at least one backend role or make the model public/private");
+                throw new IllegalArgumentException(
+                    "You must specify at least one backend role or make the model group public/private for registering it."
+                );
             } else {
                 input.setModelAccessMode(ModelAccessMode.RESTRICTED);
+                modelAccessMode = ModelAccessMode.RESTRICTED;
             }
         }
         if ((ModelAccessMode.PUBLIC == modelAccessMode || ModelAccessMode.PRIVATE == modelAccessMode)
             && (!CollectionUtils.isEmpty(input.getBackendRoles()) || Boolean.TRUE.equals(isAddAllBackendRoles))) {
-            throw new IllegalArgumentException("User cannot specify backend roles to a public/private model group");
+            throw new IllegalArgumentException("You can specify backend roles only for a model group with the restricted access mode.");
         } else if (ModelAccessMode.RESTRICTED == modelAccessMode) {
             if (modelAccessControlHelper.isAdmin(user) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                throw new IllegalArgumentException("Admin user cannot specify add all backend roles to a model group");
+                throw new IllegalArgumentException("Admin users cannot add all backend roles to a model group.");
             }
             if (CollectionUtils.isEmpty(user.getBackendRoles())) {
-                throw new IllegalArgumentException("Current user has no backend roles to specify the model group as restricted");
+                throw new IllegalArgumentException("You must have at least one backend role to register a restricted model group.");
             }
             if (CollectionUtils.isEmpty(input.getBackendRoles()) && !Boolean.TRUE.equals(isAddAllBackendRoles)) {
                 throw new IllegalArgumentException(
-                    "User have to specify backend roles or set add all backend roles to true for a restricted model group"
+                    "You must specify one or more backend roles or add all backend roles to register a restricted model group."
                 );
             }
             if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                throw new IllegalArgumentException("User cannot specify add all backed roles to true and backend roles not empty");
+                throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
             }
             if (!modelAccessControlHelper.isAdmin(user)
                 && !Boolean.TRUE.equals(isAddAllBackendRoles)
                 && !new HashSet<>(user.getBackendRoles()).containsAll(input.getBackendRoles())) {
-                throw new IllegalArgumentException("User cannot specify backend roles that doesn't belong to the current user");
+                throw new IllegalArgumentException("You don't have the backend roles specified.");
             }
         }
     }
@@ -184,7 +187,7 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {
         if (input.getModelAccessMode() != null || input.getIsAddAllBackendRoles() != null || input.getBackendRoles() != null) {
             throw new IllegalArgumentException(
-                "Cluster security plugin not enabled or model access control no enabled, can't pass access control data in request body"
+                "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
             );
         }
     }

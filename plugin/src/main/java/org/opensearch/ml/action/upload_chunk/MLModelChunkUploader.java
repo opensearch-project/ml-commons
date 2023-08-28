@@ -81,11 +81,11 @@ public class MLModelChunkUploader {
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, existingModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                                 if (!access) {
-                                    log.error("User doesn't have valid privilege to perform this operation on this model");
+                                    log.error("You don't have permissions to perform this operation on this model.");
                                     listener
                                         .onFailure(
                                             new IllegalArgumentException(
-                                                "User doesn't have valid privilege to perform this operation on this model"
+                                                "You don't have permissions to perform this operation on this model."
                                             )
                                         );
                                 } else {

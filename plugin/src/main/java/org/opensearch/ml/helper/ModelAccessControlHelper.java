@@ -188,7 +188,8 @@ public class ModelAccessControlHelper {
             if (CollectionUtils.isEmpty(mlModelGroup.getBackendRoles())) {
                 throw new IllegalStateException("Backend roles should not be null");
             }
-            return user.getBackendRoles() != null && new HashSet<>(mlModelGroup.getBackendRoles()).containsAll(user.getBackendRoles());
+            return user.getBackendRoles() != null
+                && new HashSet<>(mlModelGroup.getBackendRoles()).stream().anyMatch(x -> user.getBackendRoles().contains(x));
         }
         throw new IllegalStateException("Access shouldn't be null");
     }
