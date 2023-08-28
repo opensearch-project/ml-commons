@@ -72,7 +72,7 @@ public class TokenizerTranslator implements ServingTranslator {
             long[] ids = ndArray.toLongArray();
             String[] tokens = Arrays.stream(ids)
                     .mapToObj(value -> new long[]{value})
-                    .map(this.tokenizer::decode)
+                    .map(value -> this.tokenizer.decode(value, true))
                     .toArray(String[]::new);
             Map<String, String[]> map = new HashMap<>();
             map.put("tokens", tokens);
