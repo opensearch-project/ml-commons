@@ -256,12 +256,15 @@ public abstract class DLModel implements Predictable {
                         }
                         else
                         {
-                            ZooModel<Input, Output> model = EmptyModel.newInstance();
+                            Translator translator = getTranslator(engine, modelConfig);
+                            ZooModel<Input, Output> model = EmptyModel.newInstance(translator);
+
                             Predictor<Input, Output> predictor = model.newPredictor();
                             predictorList.add(predictor);
                             modelList.add(model);
 
                             // First request takes longer time. Predict once to warm up model.
+                            warmUp(predictor, modelId, modelConfig);
                         }
 
                     }

@@ -59,7 +59,7 @@ public class TokenizerModel extends DLModel {
 
     @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
-        return new TokenizerTranslator();
+        return new TokenizerTranslator(null);
     }
 
 
