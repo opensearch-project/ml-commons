@@ -19,7 +19,6 @@ package org.opensearch.ml.conversational.index;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -38,7 +37,6 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
@@ -67,7 +65,7 @@ public class ConversationMetaIndex {
 
     private Client client;
     private ClusterService clusterService;
-    private final String indexName = ConversationalIndexConstants.META_INDEX_NAME;
+    private static final String indexName = ConversationalIndexConstants.META_INDEX_NAME;
 
     /**
      * Creates the conversational meta index if it doesn't already exist
@@ -79,8 +77,8 @@ public class ConversationMetaIndex {
             CreateIndexRequest request = Requests.createIndexRequest(indexName).mapping(ConversationalIndexConstants.META_MAPPING);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-                ActionListener<CreateIndexResponse> al = ActionListener.wrap(r -> {
-                    if (r.equals(new CreateIndexResponse(true, true, indexName))) {
+                ActionListener<CreateIndexResponse> al = ActionListener.wrap(createIndexResponse -> {
+                    if (createIndexResponse.equals(new CreateIndexResponse(true, true, indexName))) {
                         log.info("created index [" + indexName + "]");
                         internalListener.onResponse(true);
                     } else {
@@ -116,8 +114,8 @@ public class ConversationMetaIndex {
      * @param listener listener to wait for this to finish
      */
     public void createConversation(String name, ActionListener<String> listener) {
-        initConversationMetaIndexIfAbsent(ActionListener.wrap(r -> {
-            if (r) {
+        initConversationMetaIndexIfAbsent(ActionListener.wrap(indexExists -> {
+            if (indexExists) {
                 String userstr = client
                     .threadPool()
                     .getThreadContext()
@@ -127,10 +125,6 @@ public class ConversationMetaIndex {
                     .source(
                         ConversationalIndexConstants.META_CREATED_FIELD,
                         Instant.now(),
-                        ConversationalIndexConstants.META_ENDED_FIELD,
-                        Instant.now(),
-                        ConversationalIndexConstants.META_LENGTH_FIELD,
-                        0,
                         ConversationalIndexConstants.META_NAME_FIELD,
                         name,
                         ConversationalIndexConstants.USER_FIELD,
@@ -154,7 +148,7 @@ public class ConversationMetaIndex {
                     listener.onFailure(e);
                 }
             } else {
-                listener.onFailure(new IOException("no index to add conversation to"));
+                listener.onFailure(new IOException("Failed to add conversation due to missing index"));
             }
         }, e -> { listener.onFailure(e); }));
     }
@@ -186,12 +180,12 @@ public class ConversationMetaIndex {
             queryBuilder = new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
         request.source().query(queryBuilder);
         request.source().from(from).size(maxResults);
-        request.source().sort(ConversationalIndexConstants.META_ENDED_FIELD, SortOrder.DESC);
+        request.source().sort(ConversationalIndexConstants.META_CREATED_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<List<ConversationMeta>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            ActionListener<SearchResponse> al = ActionListener.wrap(r -> {
+            ActionListener<SearchResponse> al = ActionListener.wrap(searchResponse -> {
                 List<ConversationMeta> result = new LinkedList<ConversationMeta>();
-                for (SearchHit hit : r.getHits()) {
+                for (SearchHit hit : searchResponse.getHits()) {
                     result.add(ConversationMeta.fromSearchHit(hit));
                 }
                 internalListener.onResponse(result);
@@ -202,7 +196,7 @@ public class ConversationMetaIndex {
             client
                 .admin()
                 .indices()
-                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> { client.search(request, al); }, e -> {
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> { client.search(request, al); }, e -> {
                     log.error("failed during refresh", e);
                     internalListener.onFailure(e);
                 }));
@@ -219,53 +213,6 @@ public class ConversationMetaIndex {
      */
     public void getConversations(int maxResults, ActionListener<List<ConversationMeta>> listener) {
         getConversations(0, maxResults, listener);
-    }
-
-    /**
-     * Update a conversation's metadata with a new hit
-     * @param id id of the conversation to touch
-     * @param hitTime when this conversation got toushed
-     * @param listener gets whether the operation was successful
-     */
-    public void hitConversation(String id, Instant hitTime, ActionListener<Boolean> listener) {
-        GetRequest getRequest = Requests.getRequest(indexName).id(id);
-        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
-            ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            // First get the conversation. Check for access controls. Update.
-            ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
-                if (!(getResponse.isExists() && getResponse.getId().equals(id))) {
-                    throw new ResourceNotFoundException("Conversation [" + id + "] not found");
-                }
-                ConversationMeta conversation = ConversationMeta.fromMap(id, getResponse.getSourceAsMap());
-                if (userstr != null) {
-                    String user = User.parse(userstr).getName();
-                    if (!user.equals(conversation.getUser())) {
-                        throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + id);
-                    }
-                }
-                UpdateRequest update = (new UpdateRequest(indexName, id))
-                    .doc(conversation.hit(Collections.max(List.of(hitTime, conversation.getLastHitTime()))).toIndexRequest(indexName));
-                client.update(update, ActionListener.wrap(response -> { internalListener.onResponse(true); }, e -> {
-                    log.error("failure touching conversation", e);
-                    internalListener.onFailure(e);
-                }));
-            }, e -> {
-                log.error("failure touching conversation", e);
-                internalListener.onFailure(e);
-            });
-            // Refresh the index first in case of race condition updates
-            client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(r -> {
-                log.info("SENDING GET");
-                client.get(getRequest, al);
-            }, e -> {
-                log.error("failed during refresh", e);
-                internalListener.onFailure(e);
-            }));
-        } catch (Exception e) {
-            log.error("failed during hit conversation", e);
-            listener.onFailure(e);
-        }
     }
 
     /**

@@ -95,13 +95,13 @@ public class GetInteractionsRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (conversationId == null) {
-            exception = addValidationError("must get interactions from a conversation", exception);
+            exception = addValidationError("Interactions must be retrieved from a conversation", exception);
         }
         if (maxResults <= 0) {
-            exception = addValidationError("must retrieve positive interactions", exception);
+            exception = addValidationError("The number of interactions to retrieve must be positive", exception);
         }
         if (from < 0) {
-            exception = addValidationError("must start at nonnegative position", exception);
+            exception = addValidationError("The starting position must be nonnegative", exception);
         }
         return exception;
     }

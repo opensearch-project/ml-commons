@@ -29,7 +29,7 @@ import org.opensearch.ml.utils.TestHelper;
 public class RestConversationalCreateInteractionActionIT extends MLCommonsRestTestCase {
 
     public void testCreateInteraction() throws IOException {
-        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
+        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse != null);
         assert (TestHelper.restStatus(ccresponse) == RestStatus.OK);
         HttpEntity cchttpEntity = ccresponse.getEntity();
@@ -42,16 +42,13 @@ public class RestConversationalCreateInteractionActionIT extends MLCommonsRestTe
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
-                ActionConstants.PROMPT_FIELD,
-                "prompt",
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
-                ActionConstants.AI_AGENT_FIELD,
-                "agent",
-                ActionConstants.INTER_ATTRIBUTES_FIELD,
-                "attributes"
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin"
             );
-        Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + id, params, "", null);
+        Response response = TestHelper
+            .makeRequest(client(), "POST", ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", id), params, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();

@@ -30,16 +30,16 @@ import org.opensearch.rest.action.RestToXContentListener;
  * Rest action for adding a new interaction to a conversation
  */
 public class CreateInteractionRestAction extends BaseRestHandler {
-    private final static String PUT_INTERACTION_NAME = "conversational_create_interaction";
+    private final static String CREATE_INTERACTION_NAME = "conversational_create_interaction";
 
     @Override
     public List<Route> routes() {
-        return List.of(new Route(RestRequest.Method.POST, ActionConstants.CREATE_INTERACTION_PATH));
+        return List.of(new Route(RestRequest.Method.POST, ActionConstants.CREATE_INTERACTION_REST_PATH));
     }
 
     @Override
     public String getName() {
-        return PUT_INTERACTION_NAME;
+        return CREATE_INTERACTION_NAME;
     }
 
     @Override

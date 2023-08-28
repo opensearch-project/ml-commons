@@ -62,17 +62,15 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
     protected void doExecute(Task task, CreateInteractionRequest request, ActionListener<CreateInteractionResponse> actionListener) {
         String cid = request.getConversationId();
         String inp = request.getInput();
-        String prp = request.getPrompt();
         String rsp = request.getResponse();
-        String agt = request.getAgent();
-        String att = request.getAttributes();
+        String ogn = request.getOrigin();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener
                 .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
                     internalListener.onFailure(e);
                 });
-            cmHandler.createInteraction(cid, inp, prp, rsp, agt, att, al);
+            cmHandler.createInteraction(cid, inp, rsp, ogn, al);
         } catch (Exception e) {
             log.error(e.toString());
             actionListener.onFailure(e);

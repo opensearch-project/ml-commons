@@ -34,7 +34,7 @@ public class GetInteractionsRestAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return List.of(new Route(RestRequest.Method.GET, ActionConstants.GET_INTERACTIONS_PATH));
+        return List.of(new Route(RestRequest.Method.GET, ActionConstants.GET_INTERACTIONS_REST_PATH));
     }
 
     @Override

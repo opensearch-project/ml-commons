@@ -27,7 +27,6 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.junit.Before;
@@ -106,8 +105,8 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         log.info("testing get conversations transport");
         List<ConversationMeta> testResult = List
             .of(
-                new ConversationMeta("testcid1", Instant.now(), Instant.now(), 0, "", null),
-                new ConversationMeta("testcid2", Instant.now(), Instant.now().minus(2, ChronoUnit.MINUTES), 4, "testname", null)
+                new ConversationMeta("testcid1", Instant.now(), "", null),
+                new ConversationMeta("testcid2", Instant.now(), "testname", null)
             );
         doAnswer(invocation -> {
             ActionListener<List<ConversationMeta>> listener = invocation.getArgument(2);
@@ -124,9 +123,9 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
     public void testPagination() {
         List<ConversationMeta> testResult = List
             .of(
-                new ConversationMeta("testcid1", Instant.now(), Instant.now(), 0, "", null),
-                new ConversationMeta("testcid2", Instant.now(), Instant.now().minus(2, ChronoUnit.MINUTES), 4, "testname", null),
-                new ConversationMeta("testcid3", Instant.now(), Instant.now().minus(3, ChronoUnit.MINUTES), 4, "testname", null)
+                new ConversationMeta("testcid1", Instant.now(), "", null),
+                new ConversationMeta("testcid2", Instant.now(), "testname", null),
+                new ConversationMeta("testcid3", Instant.now(), "testname", null)
             );
         doAnswer(invocation -> {
             ActionListener<List<ConversationMeta>> listener = invocation.getArgument(2);

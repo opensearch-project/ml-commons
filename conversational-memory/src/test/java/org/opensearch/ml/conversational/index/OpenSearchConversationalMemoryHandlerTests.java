@@ -76,42 +76,21 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
 
     public void testCreateInteraction_Future() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> al = invocation.getArgument(2);
-            al.onResponse(true);
-            return null;
-        }).when(conversationMetaIndex).hitConversation(any(), any(), any());
-        doAnswer(invocation -> {
-            ActionListener<String> al = invocation.getArgument(7);
+            ActionListener<String> al = invocation.getArgument(5);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
-        ActionFuture<String> result = cmHandler.createInteraction("cid", "inp", "prp", "rsp", "agt", "att");
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), any(), any());
+        ActionFuture<String> result = cmHandler.createInteraction("cid", "inp", "rsp", "ogn");
         assert (result.actionGet(200).equals("iid"));
     }
 
     public void testCreateInteraction_FromBuilder_Success() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> al = invocation.getArgument(2);
-            al.onResponse(true);
-            return null;
-        }).when(conversationMetaIndex).hitConversation(any(), any(), any());
-        doAnswer(invocation -> {
-            ActionListener<String> al = invocation.getArgument(7);
+            ActionListener<String> al = invocation.getArgument(5);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
-        InteractionBuilder builder = Interaction
-            .builder()
-            .agent("agt")
-            .conversationId("cid")
-            .input("inp")
-            .metadata("meta")
-            .prompt("prp")
-            .response("rsp");
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), any(), any());
+        InteractionBuilder builder = Interaction.builder().conversationId("cid").input("inp").origin("origin").response("rsp");
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
         cmHandler.createInteraction(builder, createInteractionListener);
@@ -120,49 +99,13 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         assert (argCaptor.getValue().equals("iid"));
     }
 
-    public void testCreatInteraction_FromBuilder_Failure() {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> al = invocation.getArgument(2);
-            al.onFailure(new Exception("Fail to touch conversation"));
-            return null;
-        }).when(conversationMetaIndex).hitConversation(any(), any(), any());
-        InteractionBuilder builder = Interaction
-            .builder()
-            .agent("agt")
-            .conversationId("cid")
-            .input("inp")
-            .metadata("meta")
-            .prompt("prp")
-            .response("rsp");
-        @SuppressWarnings("unchecked")
-        ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        cmHandler.createInteraction(builder, createInteractionListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Fail to touch conversation"));
-    }
-
     public void testCreateInteraction_FromBuilder_Future() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> al = invocation.getArgument(2);
-            al.onResponse(true);
-            return null;
-        }).when(conversationMetaIndex).hitConversation(any(), any(), any());
-        doAnswer(invocation -> {
-            ActionListener<String> al = invocation.getArgument(7);
+            ActionListener<String> al = invocation.getArgument(5);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
-        InteractionBuilder builder = Interaction
-            .builder()
-            .agent("agt")
-            .conversationId("cid")
-            .input("inp")
-            .metadata("meta")
-            .prompt("prp")
-            .response("rsp");
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), any(), any());
+        InteractionBuilder builder = Interaction.builder().origin("ogn").conversationId("cid").input("inp").response("rsp");
         ActionFuture<String> result = cmHandler.createInteraction(builder);
         assert (result.actionGet(200).equals("iid"));
     }

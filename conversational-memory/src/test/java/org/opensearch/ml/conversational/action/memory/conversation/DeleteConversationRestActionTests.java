@@ -42,7 +42,7 @@ public class DeleteConversationRestActionTests extends OpenSearchTestCase {
         assert (action.getName().equals("conversational_delete_conversation"));
         List<Route> routes = action.routes();
         assert (routes.size() == 1);
-        assert (routes.get(0).equals(new Route(RestRequest.Method.DELETE, ActionConstants.DELETE_CONVERSATION_PATH)));
+        assert (routes.get(0).equals(new Route(RestRequest.Method.DELETE, ActionConstants.DELETE_CONVERSATION_REST_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {

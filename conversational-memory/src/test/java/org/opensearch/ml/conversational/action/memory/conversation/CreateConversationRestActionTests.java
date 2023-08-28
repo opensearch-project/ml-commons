@@ -42,7 +42,7 @@ public class CreateConversationRestActionTests extends OpenSearchTestCase {
         assert (action.getName().equals("conversational_create_conversation"));
         List<Route> routes = action.routes();
         assert (routes.size() == 1);
-        assert (routes.get(0).equals(new Route(RestRequest.Method.POST, ActionConstants.CREATE_CONVERSATION_PATH)));
+        assert (routes.get(0).equals(new Route(RestRequest.Method.POST, ActionConstants.CREATE_CONVERSATION_REST_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {

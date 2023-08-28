@@ -67,40 +67,40 @@ public class GetInteractionsRequestTests extends OpenSearchTestCase {
     public void testBadValues_thenFail() {
         String nullstr = null;
         GetInteractionsRequest request = new GetInteractionsRequest(nullstr);
-        assert (request.validate().validationErrors().get(0).equals("must get interactions from a conversation"));
+        assert (request.validate().validationErrors().get(0).equals("Interactions must be retrieved from a conversation"));
         assert (request.validate().validationErrors().size() == 1);
 
         request = new GetInteractionsRequest("cid", -2);
         assert (request.validate().validationErrors().size() == 1);
-        assert (request.validate().validationErrors().get(0).equals("must retrieve positive interactions"));
+        assert (request.validate().validationErrors().get(0).equals("The number of interactions to retrieve must be positive"));
 
         request = new GetInteractionsRequest("cid", 2, -2);
         assert (request.validate().validationErrors().size() == 1);
-        assert (request.validate().validationErrors().get(0).equals("must start at nonnegative position"));
+        assert (request.validate().validationErrors().get(0).equals("The starting position must be nonnegative"));
     }
 
     public void testMultipleBadValues_thenFailMultipleWays() {
         String nullstr = null;
         GetInteractionsRequest request = new GetInteractionsRequest(nullstr, -2);
         assert (request.validate().validationErrors().size() == 2);
-        assert (request.validate().validationErrors().get(0).equals("must get interactions from a conversation"));
-        assert (request.validate().validationErrors().get(1).equals("must retrieve positive interactions"));
+        assert (request.validate().validationErrors().get(0).equals("Interactions must be retrieved from a conversation"));
+        assert (request.validate().validationErrors().get(1).equals("The number of interactions to retrieve must be positive"));
 
         request = new GetInteractionsRequest(nullstr, 3, -2);
         assert (request.validate().validationErrors().size() == 2);
-        assert (request.validate().validationErrors().get(0).equals("must get interactions from a conversation"));
-        assert (request.validate().validationErrors().get(1).equals("must start at nonnegative position"));
+        assert (request.validate().validationErrors().get(0).equals("Interactions must be retrieved from a conversation"));
+        assert (request.validate().validationErrors().get(1).equals("The starting position must be nonnegative"));
 
         request = new GetInteractionsRequest("cid", -2, -2);
         assert (request.validate().validationErrors().size() == 2);
-        assert (request.validate().validationErrors().get(0).equals("must retrieve positive interactions"));
-        assert (request.validate().validationErrors().get(1).equals("must start at nonnegative position"));
+        assert (request.validate().validationErrors().get(0).equals("The number of interactions to retrieve must be positive"));
+        assert (request.validate().validationErrors().get(1).equals("The starting position must be nonnegative"));
 
         request = new GetInteractionsRequest(nullstr, -3, -4);
         assert (request.validate().validationErrors().size() == 3);
-        assert (request.validate().validationErrors().get(0).equals("must get interactions from a conversation"));
-        assert (request.validate().validationErrors().get(1).equals("must retrieve positive interactions"));
-        assert (request.validate().validationErrors().get(2).equals("must start at nonnegative position"));
+        assert (request.validate().validationErrors().get(0).equals("Interactions must be retrieved from a conversation"));
+        assert (request.validate().validationErrors().get(1).equals("The number of interactions to retrieve must be positive"));
+        assert (request.validate().validationErrors().get(2).equals("The starting position must be nonnegative"));
     }
 
     public void testFromRestRequest() throws IOException {

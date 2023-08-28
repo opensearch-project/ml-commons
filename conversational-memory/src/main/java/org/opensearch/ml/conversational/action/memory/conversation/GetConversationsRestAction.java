@@ -30,16 +30,16 @@ import org.opensearch.rest.action.RestToXContentListener;
  * Rest Handler for list conversations
  */
 public class GetConversationsRestAction extends BaseRestHandler {
-    private final static String LIST_CONVERSATION_NAME = "conversational_get_conversations";
+    private final static String GET_CONVERSATIONS_NAME = "conversational_get_conversations";
 
     @Override
     public List<Route> routes() {
-        return List.of(new Route(RestRequest.Method.GET, ActionConstants.LIST_CONVERSATIONS_PATH));
+        return List.of(new Route(RestRequest.Method.GET, ActionConstants.GET_CONVERSATIONS_REST_PATH));
     }
 
     @Override
     public String getName() {
-        return LIST_CONVERSATION_NAME;
+        return GET_CONVERSATIONS_NAME;
     }
 
     @Override

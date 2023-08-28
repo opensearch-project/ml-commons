@@ -88,7 +88,7 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
         this.actionListener = al;
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
-        this.request = new CreateInteractionRequest("test-cid", "input", "prompt", "response", "agent", "{\"attributes\": \"test\"}");
+        this.request = new CreateInteractionRequest("test-cid", "input", "response", "origin");
         this.action = spy(new CreateInteractionTransportAction(transportService, actionFilters, cmHandler, client));
 
         Settings settings = Settings.builder().build();
@@ -100,10 +100,10 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
     public void testCreateInteraction() {
         log.info("testing create interaction transport");
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(6);
+            ActionListener<String> listener = invocation.getArgument(4);
             listener.onResponse("testID");
             return null;
-        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateInteractionResponse> argCaptor = ArgumentCaptor.forClass(CreateInteractionResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
@@ -113,10 +113,10 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
     public void testCreateInteractionFails_thenFail() {
         log.info("testing create interaction transport");
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(6);
+            ActionListener<String> listener = invocation.getArgument(4);
             listener.onFailure(new Exception("Testing Failure"));
             return null;
-        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any(), any(), any());
+        }).when(cmHandler).createInteraction(any(), any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
@@ -125,9 +125,7 @@ public class CreateInteractionTransportActionTests extends OpenSearchTestCase {
 
     public void testDoExecuteFails_thenFail() {
         log.info("testing create interaction transport");
-        doThrow(new RuntimeException("Failure in doExecute"))
-            .when(cmHandler)
-            .createInteraction(any(), any(), any(), any(), any(), any(), any());
+        doThrow(new RuntimeException("Failure in doExecute")).when(cmHandler).createInteraction(any(), any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());

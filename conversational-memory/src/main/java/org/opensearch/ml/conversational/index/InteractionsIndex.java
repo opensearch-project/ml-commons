@@ -42,6 +42,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.search.SearchHit;
@@ -63,6 +64,8 @@ public class InteractionsIndex {
     private ClusterService clusterService;
     private ConversationMetaIndex conversationMetaIndex;
     private final String indexName = ConversationalIndexConstants.INTERACTIONS_INDEX_NAME;
+    // How big the steps should be when gathering *ALL* interactions in a conversation
+    private final int resultsAtATime = 300;
 
     /**
      * 'PUT's the index in opensearch if it's not there already
@@ -109,40 +112,32 @@ public class InteractionsIndex {
      * Add an interaction to this index. Return the ID of the newly created interaction
      * @param conversationId The id of the conversation this interaction belongs to
      * @param input the user (human) input into this interaction
-     * @param prompt the prompt template used for this interaction
      * @param response the GenAI response for this interaction
-     * @param agent the name of the GenAI agent this interaction belongs to
-     * @param metadata arbitrary JSON blob of extra info
+     * @param origin the origin of the response for this interaction
      * @param timestamp when this interaction happened
      * @param listener gets the id of the newly created interaction record
      */
     public void createInteraction(
         String conversationId,
         String input,
-        String prompt,
         String response,
-        String agent,
-        String metadata,
+        String origin,
         Instant timestamp,
         ActionListener<String> listener
     ) {
-        initInteractionsIndexIfAbsent(ActionListener.wrap(b -> {
-            if (b) {
+        initInteractionsIndexIfAbsent(ActionListener.wrap(indexExists -> {
+            if (indexExists) {
                 this.conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
                     if (access) {
                         IndexRequest request = Requests
                             .indexRequest(indexName)
                             .source(
-                                ConversationalIndexConstants.INTERACTIONS_AGENT_FIELD,
-                                agent,
+                                ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD,
+                                origin,
                                 ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
                                 conversationId,
                                 ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
                                 input,
-                                ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD,
-                                metadata,
-                                ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD,
-                                prompt,
                                 ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
                                 response,
                                 ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD,
@@ -166,7 +161,9 @@ public class InteractionsIndex {
                             .threadPool()
                             .getThreadContext()
                             .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                        String user = User.parse(userstr) == null ? "NOUSER" : User.parse(userstr).getName();
+                        String user = User.parse(userstr) == null
+                            ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
+                            : User.parse(userstr).getName();
                         throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                     }
                 }, e -> { listener.onFailure(e); }));
@@ -180,22 +177,12 @@ public class InteractionsIndex {
      * Add an interaction to this index, timestamped now. Return the id of the newly created interaction
      * @param conversationId The id of the converation this interaction belongs to
      * @param input the user (human) input into this interaction
-     * @param prompt the prompt template usd for this interaction
      * @param response the GenAI response for this interaction
-     * @param agent the name of the GenAI agent this interaction belongs to
-     * @param metadata arbitrary JSON blob of extra info
+     * @param origin the name of the GenAI agent this interaction belongs to
      * @param listener gets the id of the newly created interaction record
      */
-    public void createInteraction(
-        String conversationId,
-        String input,
-        String prompt,
-        String response,
-        String agent,
-        String metadata,
-        ActionListener<String> listener
-    ) {
-        createInteraction(conversationId, input, prompt, response, agent, metadata, Instant.now(), listener);
+    public void createInteraction(String conversationId, String input, String response, String origin, ActionListener<String> listener) {
+        createInteraction(conversationId, input, response, origin, Instant.now(), listener);
     }
 
     /**
@@ -218,7 +205,7 @@ public class InteractionsIndex {
                     .threadPool()
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                String user = User.parse(userstr) == null ? "NOUSER" : User.parse(userstr).getName();
+                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                 throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
             }
         }, e -> { listener.onFailure(e); });
@@ -323,14 +310,13 @@ public class InteractionsIndex {
             }, e -> { internalListener.onFailure(e); });
             ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
                 if (access) {
-                    final int resultsAtATime = 30;
                     getAllInteractions(conversationId, resultsAtATime, searchListener);
                 } else {
                     String userstr = client
                         .threadPool()
                         .getThreadContext()
                         .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr) == null ? "NOUSER" : User.parse(userstr).getName();
+                    String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                     throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
             }, e -> { listener.onFailure(e); });

@@ -34,7 +34,7 @@ public class DeleteConversationRestAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return List.of(new Route(RestRequest.Method.DELETE, ActionConstants.DELETE_CONVERSATION_PATH));
+        return List.of(new Route(RestRequest.Method.DELETE, ActionConstants.DELETE_CONVERSATION_REST_PATH));
     }
 
     @Override

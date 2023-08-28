@@ -91,38 +91,22 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         CountDownLatch cdl = new CountDownLatch(2);
         String[] ids = new String[2];
         index
-            .createInteraction(
-                "test",
-                "test input",
-                "test prompt",
-                "test response",
-                "test agent",
-                "{\"test\":\"metadata\"}",
-                new LatchedActionListener<>(ActionListener.wrap(id -> {
-                    ids[0] = id;
-                }, e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }), cdl)
-            );
+            .createInteraction("test", "test input", "test response", "test origin", new LatchedActionListener<>(ActionListener.wrap(id -> {
+                ids[0] = id;
+            }, e -> {
+                cdl.countDown();
+                log.error(e);
+                assert (false);
+            }), cdl));
 
         index
-            .createInteraction(
-                "test",
-                "test input",
-                "test prompt",
-                "test response",
-                "test agent",
-                "{\"test\":\"metadata\"}",
-                new LatchedActionListener<>(ActionListener.wrap(id -> {
-                    ids[1] = id;
-                }, e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }), cdl)
-            );
+            .createInteraction("test", "test input", "test response", "test origin", new LatchedActionListener<>(ActionListener.wrap(id -> {
+                ids[1] = id;
+            }, e -> {
+                cdl.countDown();
+                log.error(e);
+                assert (false);
+            }), cdl));
         try {
             cdl.await();
         } catch (InterruptedException e) {
@@ -138,16 +122,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> id1Listener = new StepListener<>();
-        index
-            .createInteraction(
-                conversation,
-                "test input",
-                "test prompt",
-                "test response",
-                "test agent",
-                "{\"test\":\"metadata\"}",
-                id1Listener
-            );
+        index.createInteraction(conversation, "test input", "test response", "test origin", id1Listener);
 
         StepListener<String> id2Listener = new StepListener<>();
         id1Listener.whenComplete(id -> {
@@ -155,10 +130,8 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 .createInteraction(
                     conversation,
                     "test input",
-                    "test prompt",
                     "test response",
-                    "test agent",
-                    "{\"test\":\"metadata\"}",
+                    "test origin",
                     Instant.now().plus(3, ChronoUnit.MINUTES),
                     id2Listener
                 );
@@ -196,16 +169,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> id1Listener = new StepListener<>();
-        index
-            .createInteraction(
-                conversation,
-                "test input",
-                "test prompt",
-                "test response",
-                "test agent",
-                "{\"test\":\"metadata\"}",
-                id1Listener
-            );
+        index.createInteraction(conversation, "test input", "test response", "test origin", id1Listener);
 
         StepListener<String> id2Listener = new StepListener<>();
         id1Listener.whenComplete(id -> {
@@ -213,10 +177,8 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 .createInteraction(
                     conversation,
                     "test input1",
-                    "test prompt",
                     "test response",
-                    "test agent",
-                    "{\"test\":\"metadata\"}",
+                    "test origin",
                     Instant.now().plus(3, ChronoUnit.MINUTES),
                     id2Listener
                 );
@@ -232,10 +194,8 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 .createInteraction(
                     conversation,
                     "test input2",
-                    "test prompt",
                     "test response",
-                    "test agent",
-                    "{\"test\":\"metadata\"}",
+                    "test origin",
                     Instant.now().plus(4, ChronoUnit.MINUTES),
                     id3Listener
                 );
@@ -287,57 +247,24 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation2 = "conversation2";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> iid1 = new StepListener<>();
-        index.createInteraction(conversation1, "test input", "test prompt", "test response", "test agent", "{\"test\":\"metadata\"}", iid1);
+        index.createInteraction(conversation1, "test input", "test response", "test origin", iid1);
 
         StepListener<String> iid2 = new StepListener<>();
-        iid1.whenComplete(r -> {
-            index
-                .createInteraction(
-                    conversation1,
-                    "test input",
-                    "test prompt",
-                    "test response",
-                    "test agent",
-                    "{\"test\":\"metadata\"}",
-                    iid2
-                );
-        }, e -> {
+        iid1.whenComplete(r -> { index.createInteraction(conversation1, "test input", "test response", "test origin", iid2); }, e -> {
             cdl.countDown();
             log.error(e);
             assert (false);
         });
 
         StepListener<String> iid3 = new StepListener<>();
-        iid2.whenComplete(r -> {
-            index
-                .createInteraction(
-                    conversation2,
-                    "test input",
-                    "test prompt",
-                    "test response",
-                    "test agent",
-                    "{\"test\":\"metadata\"}",
-                    iid3
-                );
-        }, e -> {
+        iid2.whenComplete(r -> { index.createInteraction(conversation2, "test input", "test response", "test origin", iid3); }, e -> {
             cdl.countDown();
             log.error(e);
             assert (false);
         });
 
         StepListener<String> iid4 = new StepListener<>();
-        iid3.whenComplete(r -> {
-            index
-                .createInteraction(
-                    conversation1,
-                    "test input",
-                    "test prompt",
-                    "test response",
-                    "test agent",
-                    "{\"test\":\"metadata\"}",
-                    iid4
-                );
-        }, e -> {
+        iid3.whenComplete(r -> { index.createInteraction(conversation1, "test input", "test response", "test origin", iid4); }, e -> {
             cdl.countDown();
             log.error(e);
             assert (false);
@@ -372,8 +299,6 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         });
 
         LatchedActionListener<List<Interaction>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(interactions -> {
-            log.info("FINDME");
-            log.info(interactions.toString());
             assert (interactions.size() == 1);
             assert (interactions.get(0).getId().equals(iid3.result()));
             assert (interactions1.result().size() == 0);

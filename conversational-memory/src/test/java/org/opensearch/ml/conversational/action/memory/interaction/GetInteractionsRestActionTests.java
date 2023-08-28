@@ -43,7 +43,7 @@ public class GetInteractionsRestActionTests extends OpenSearchTestCase {
         assert (action.getName().equals("conversational_get_interactions"));
         List<Route> routes = action.routes();
         assert (routes.size() == 1);
-        assert (routes.get(0).equals(new Route(RestRequest.Method.GET, ActionConstants.GET_INTERACTIONS_PATH)));
+        assert (routes.get(0).equals(new Route(RestRequest.Method.GET, ActionConstants.GET_INTERACTIONS_REST_PATH)));
     }
 
     public void testPrepareRequest() throws Exception {

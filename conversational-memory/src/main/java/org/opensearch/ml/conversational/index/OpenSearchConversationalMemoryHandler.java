@@ -37,8 +37,6 @@ import com.google.common.annotations.VisibleForTesting;
  * Class for handling all Conversational Memory operactions
  */
 public class OpenSearchConversationalMemoryHandler implements ConversationalMemoryHandler {
-    // private final static org.apache.logging.log4j.Logger log =
-    // org.apache.logging.log4j.LogManager.getLogger(ConversationalMemoryHandler.class);
 
     private ConversationMetaIndex conversationMetaIndex;
     private InteractionsIndex interactionsIndex;
@@ -101,25 +99,13 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction
-     * @param prompt the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
-     * @param agent the name of the GenAI agent in this interaction
-     * @param metadata arbitrary JSON string of extra stuff
+     * @param origin the name of the GenAI agent in this interaction
      * @param listener gets the ID of the new interaction
      */
-    public void createInteraction(
-        String conversationId,
-        String input,
-        String prompt,
-        String response,
-        String agent,
-        String metadata,
-        ActionListener<String> listener
-    ) {
+    public void createInteraction(String conversationId, String input, String response, String origin, ActionListener<String> listener) {
         Instant time = Instant.now();
-        conversationMetaIndex.hitConversation(conversationId, time, ActionListener.wrap(r -> {
-            interactionsIndex.createInteraction(conversationId, input, prompt, response, agent, metadata, time, listener);
-        }, e -> { listener.onFailure(e); }));
+        interactionsIndex.createInteraction(conversationId, input, response, origin, time, listener);
     }
 
     /**
@@ -132,16 +118,9 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param metadata arbitrary JSON string of extra stuff
      * @return ActionFuture for the interactionId of the new interaction
      */
-    public ActionFuture<String> createInteraction(
-        String conversationId,
-        String input,
-        String prompt,
-        String response,
-        String agent,
-        String metadata
-    ) {
+    public ActionFuture<String> createInteraction(String conversationId, String input, String response, String origin) {
         PlainActionFuture<String> fut = PlainActionFuture.newFuture();
-        createInteraction(conversationId, input, prompt, response, agent, metadata, fut);
+        createInteraction(conversationId, input, response, origin, fut);
         return fut;
     }
 
@@ -153,20 +132,15 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     public void createInteraction(InteractionBuilder builder, ActionListener<String> listener) {
         builder.timestamp(Instant.now());
         Interaction interaction = builder.build();
-        conversationMetaIndex.hitConversation(interaction.getConversationId(), interaction.getTimestamp(), ActionListener.wrap(r -> {
-            interactionsIndex
-                .createInteraction(
-                    interaction.getConversationId(),
-                    interaction.getInput(),
-                    interaction.getPrompt(),
-                    interaction.getResponse(),
-                    interaction.getAgent(),
-                    interaction.getMetadata(),
-                    interaction.getTimestamp(),
-                    listener
-                );
-        }, e -> { listener.onFailure(e); }));
-
+        interactionsIndex
+            .createInteraction(
+                interaction.getConversationId(),
+                interaction.getInput(),
+                interaction.getResponse(),
+                interaction.getOrigin(),
+                interaction.getTimestamp(),
+                listener
+            );
     }
 
     /**

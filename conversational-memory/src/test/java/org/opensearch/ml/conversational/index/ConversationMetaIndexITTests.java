@@ -17,8 +17,6 @@
  */
 package org.opensearch.ml.conversational.index;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -214,48 +212,6 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         }
     }
 
-    /**
-     * When I touch a conversation, it should update the metadata
-     */
-    public void testConversationsCanGetHitStepped() {
-        CountDownLatch cdl = new CountDownLatch(1);
-        StepListener<String> addConversationListener = new StepListener<>();
-        index.createConversation(addConversationListener);
-
-        Instant pit = Instant.now().plus(423, ChronoUnit.MINUTES);
-
-        StepListener<Boolean> hitConversationListener = new StepListener<>();
-        addConversationListener.whenComplete(cid -> {
-            refreshIndex();
-            index.hitConversation(cid, pit, hitConversationListener);
-        }, e -> {
-            cdl.countDown();
-            log.error(e);
-        });
-
-        StepListener<List<ConversationMeta>> listConversationListener = new StepListener<>();
-        hitConversationListener.whenComplete(b -> {
-            refreshIndex();
-            index.getConversations(1, listConversationListener);
-        }, e -> {
-            cdl.countDown();
-            log.error(e);
-        });
-
-        LatchedActionListener<List<ConversationMeta>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(conversations -> {
-            ConversationMeta conversation = conversations.get(0);
-            assert (conversation.getId().equals(addConversationListener.result()));
-            assert (conversation.getLastHitTime().equals(pit));
-            assert (conversation.getNumInteractions() == 1);
-        }, e -> { log.error(e); }), cdl);
-        listConversationListener.whenComplete(finishAndAssert::onResponse, finishAndAssert::onFailure);
-        try {
-            cdl.await();
-        } catch (InterruptedException e) {
-            log.error(e);
-        }
-    }
-
     public void testConversationsCanBeListedPaginated() {
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> addConversationListener1 = new StepListener<>();
@@ -283,7 +239,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             List<ConversationMeta> conversations1 = listConversationListener1.result();
             String cid1 = addConversationListener1.result();
             String cid2 = addConversationListener2.result();
-            if (!conversations1.get(0).getLastHitTime().equals(conversations2.get(0).getLastHitTime())) {
+            if (!conversations1.get(0).getCreatedTime().equals(conversations2.get(0).getCreatedTime())) {
                 assert (conversations1.get(0).getId().equals(cid2));
                 assert (conversations2.get(0).getId().equals(cid1));
             }
@@ -377,7 +333,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
 
             originalConversationsListener.whenComplete(conversations -> {
                 assert (conversations.size() == 2);
-                if (!conversations.get(0).getLastHitTime().equals(conversations.get(1).getLastHitTime())) {
+                if (!conversations.get(0).getCreatedTime().equals(conversations.get(1).getCreatedTime())) {
                     assert (conversations.get(0).getId().equals(cid2.result()));
                     assert (conversations.get(1).getId().equals(cid1.result()));
                 }
@@ -420,31 +376,11 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             StepListener<String> cid1 = new StepListener<>();
             index.createConversation(cid1);
 
-            StepListener<Boolean> hitListener = new StepListener<>();
+            StepListener<Boolean> delListener = new StepListener<>();
             cid1.whenComplete(cid -> {
                 contextStack.push(setUser(user2));
-                index.hitConversation(cid, Instant.now(), hitListener);
+                index.deleteConversation(cid1.result(), delListener);
             }, onFail);
-
-            StepListener<Boolean> delListener = new StepListener<>();
-            hitListener.whenComplete(updated -> {
-                Exception e = new OpenSearchSecurityException(
-                    "Incorrect access was given to user [" + user2 + "] for conversation " + cid1.result()
-                );
-                while (!contextStack.empty()) {
-                    contextStack.pop().close();
-                }
-                cdl.countDown();
-                log.error(e);
-                assert (false);
-            }, e -> {
-                if (e instanceof OpenSearchSecurityException
-                    && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
-                    index.deleteConversation(cid1.result(), delListener);
-                } else {
-                    onFail.accept(e);
-                }
-            });
 
             delListener.whenComplete(success -> {
                 Exception e = new OpenSearchSecurityException(

@@ -41,13 +41,9 @@ public class CreateInteractionRequest extends ActionRequest {
     @Getter
     private String input;
     @Getter
-    private String prompt;
-    @Getter
     private String response;
     @Getter
-    private String agent;
-    @Getter
-    private String attributes;
+    private String origin;
 
     /**
      * Constructor
@@ -59,9 +55,7 @@ public class CreateInteractionRequest extends ActionRequest {
         this.conversationId = in.readString();
         this.input = in.readString();
         this.response = in.readString();
-        this.prompt = in.readOptionalString();
-        this.agent = in.readOptionalString();
-        this.attributes = in.readOptionalString();
+        this.origin = in.readOptionalString();
     }
 
     @Override
@@ -70,9 +64,7 @@ public class CreateInteractionRequest extends ActionRequest {
         out.writeString(conversationId);
         out.writeString(input);
         out.writeString(response);
-        out.writeOptionalString(prompt);
-        out.writeOptionalString(agent);
-        out.writeOptionalString(attributes);
+        out.writeOptionalString(origin);
     }
 
     @Override
@@ -93,11 +85,9 @@ public class CreateInteractionRequest extends ActionRequest {
     public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
         String inp = request.param(ActionConstants.INPUT_FIELD);
-        String prp = request.param(ActionConstants.PROMPT_FIELD);
         String rsp = request.param(ActionConstants.AI_RESPONSE_FIELD);
-        String agt = request.param(ActionConstants.AI_AGENT_FIELD);
-        String att = request.param(ActionConstants.INTER_ATTRIBUTES_FIELD);
-        return new CreateInteractionRequest(cid, inp, prp, rsp, agt, att);
+        String ogn = request.param(ActionConstants.RESPONSE_ORIGIN_FIELD);
+        return new CreateInteractionRequest(cid, inp, rsp, ogn);
     }
 
 }

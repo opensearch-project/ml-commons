@@ -26,7 +26,7 @@ import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.ml.common.conversational.Interaction.InteractionBuilder;
 
 /**
- * Class for handling all Conversational Memory operactions
+ * Interface for handling all Conversational Memory operations
  */
 public interface ConversationalMemoryHandler {
 
@@ -60,40 +60,21 @@ public interface ConversationalMemoryHandler {
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction
-     * @param prompt the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
-     * @param agent the name of the GenAI agent in this interaction
-     * @param metadata arbitrary JSON string of extra stuff
+     * @param origin the name of the GenAI agent in this interaction
      * @param listener gets the ID of the new interaction
      */
-    public void createInteraction(
-        String conversationId,
-        String input,
-        String prompt,
-        String response,
-        String agent,
-        String metadata,
-        ActionListener<String> listener
-    );
+    public void createInteraction(String conversationId, String input, String response, String origin, ActionListener<String> listener);
 
     /**
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction
-     * @param prompt the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
-     * @param agent the name of the GenAI agent in this interaction
-     * @param metadata arbitrary JSON string of extra stuff
+     * @param origin the name of the GenAI agent in this interaction
      * @return ActionFuture for the interactionId of the new interaction
      */
-    public ActionFuture<String> createInteraction(
-        String conversationId,
-        String input,
-        String prompt,
-        String response,
-        String agent,
-        String metadata
-    );
+    public ActionFuture<String> createInteraction(String conversationId, String input, String response, String origin);
 
     /**
      * Adds an interaction to the index, updating the associated Conversational Metadata
@@ -112,7 +93,7 @@ public interface ConversationalMemoryHandler {
     /**
      * Get the interactions associate with this conversation, sorted by recency
      * @param conversationId the conversation whose interactions to get
-     * @param from where to start listiing from
+     * @param from where to start listing from
      * @param maxResults how many interactions to get
      * @param listener gets the list of interactions in this conversation, sorted by recency
      */
@@ -121,7 +102,7 @@ public interface ConversationalMemoryHandler {
     /**
      * Get the interactions associate with this conversation, sorted by recency
      * @param conversationId the conversation whose interactions to get
-     * @param from where to start listiing from
+     * @param from where to start listing from
      * @param maxResults how many interactions to get
      * @return ActionFuture the list of interactions in this conversation, sorted by recency
      */
@@ -160,14 +141,14 @@ public interface ConversationalMemoryHandler {
     /**
      * Delete a conversation and all of its interactions
      * @param conversationId the id of the conversation to delete
-     * @param listener receives whether the conversationMeta object and all of its interactions were deleted. i.e. false => there's something still in an index somewhere
+     * @param listener receives whether the conversationMeta object and all of its interactions were deleted. i.e. false => the ConvoMeta or a subset of its Interactions were not deleted
      */
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener);
 
     /**
      * Delete a conversation and all of its interactions
      * @param conversationId the id of the conversation to delete
-     * @return ActionFuture for whether the conversationMeta object and all of its interactions were deleted. i.e. false => there's something still in an index somewhere
+     * @return ActionFuture for whether the conversationMeta object and all of its interactions were deleted. i.e. false => the ConvoMeta or a subset of its Interactions were not deleted
      */
     public ActionFuture<Boolean> deleteConversation(String conversationId);
 

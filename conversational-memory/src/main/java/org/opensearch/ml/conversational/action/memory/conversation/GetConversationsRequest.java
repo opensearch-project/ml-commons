@@ -101,23 +101,19 @@ public class GetConversationsRequest extends ActionRequest {
      */
     public static GetConversationsRequest fromRestRequest(RestRequest request) throws IOException {
         if (request.hasParam(ActionConstants.NEXT_TOKEN_FIELD)) {
-            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
-                return new GetConversationsRequest(
-                    Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD)),
-                    Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD))
-                );
-            } else {
-                return new GetConversationsRequest(
-                    ActionConstants.DEFAULT_MAX_RESULTS,
-                    Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD))
-                );
-            }
+            int maxResults = request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)
+                ? Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD))
+                : ActionConstants.DEFAULT_MAX_RESULTS;
+
+            int nextToken = Integer.parseInt(request.param(ActionConstants.NEXT_TOKEN_FIELD));
+
+            return new GetConversationsRequest(maxResults, nextToken);
         } else {
-            if (request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)) {
-                return new GetConversationsRequest(Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD)));
-            } else {
-                return new GetConversationsRequest();
-            }
+            int maxResults = request.hasParam(ActionConstants.REQUEST_MAX_RESULTS_FIELD)
+                ? Integer.parseInt(request.param(ActionConstants.REQUEST_MAX_RESULTS_FIELD))
+                : ActionConstants.DEFAULT_MAX_RESULTS;
+
+            return new GetConversationsRequest(maxResults);
         }
     }
 }

@@ -53,6 +53,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.ml.common.conversational.Interaction;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -238,7 +239,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         setupDoesNotMakeIndex();
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("no index to add conversation to"));
@@ -256,7 +257,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("failed to create conversation"));
@@ -272,7 +273,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Test Failure"));
@@ -284,7 +285,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doThrow(new RuntimeException("Test Client Failure")).when(client).index(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Test Client Failure"));
@@ -296,10 +297,13 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doThrow(new RuntimeException("Test Client Failure")).when(client).index(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [NOUSER] does not have access to conversation cid"));
+        assert (argCaptor
+            .getValue()
+            .getMessage()
+            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
     }
 
     public void testCreate_NoAccessWithUser_ThenFail() {
@@ -308,7 +312,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         doThrow(new RuntimeException("Test Client Failure")).when(client).index(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("User [user] does not have access to conversation cid"));
@@ -322,7 +326,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         }).when(interactionsIndex).initInteractionsIndexIfAbsent(any());
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
-        interactionsIndex.createInteraction("cid", "inp", "prt", "rsp", "agt", "att", createInteractionListener);
+        interactionsIndex.createInteraction("cid", "inp", "rsp", "ogn", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Fail in Index Creation"));
@@ -392,7 +396,10 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.getInteractions("cid", 0, 10, getInteractionsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getInteractionsListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [NOUSER] does not have access to conversation cid"));
+        assert (argCaptor
+            .getValue()
+            .getMessage()
+            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
     }
 
     public void testGetAll_BadMaxResults_ThenFail() {
@@ -407,10 +414,10 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
     public void testGetAll_Recursion() {
         List<Interaction> interactions = List
             .of(
-                new Interaction("iid1", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
-                new Interaction("iid2", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
-                new Interaction("iid3", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att"),
-                new Interaction("iid4", Instant.now(), "cid", "inp", "prp", "rsp", "agt", "att")
+                new Interaction("iid1", Instant.now(), "cid", "inp", "rsp", "ogn"),
+                new Interaction("iid2", Instant.now(), "cid", "inp", "rsp", "ogn"),
+                new Interaction("iid3", Instant.now(), "cid", "inp", "rsp", "ogn"),
+                new Interaction("iid4", Instant.now(), "cid", "inp", "rsp", "ogn")
             );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> al = invocation.getArgument(3);
@@ -533,7 +540,10 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.deleteConversation("cid", deleteConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("User [NOUSER] does not have access to conversation cid"));
+        assert (argCaptor
+            .getValue()
+            .getMessage()
+            .equals("User [" + ActionConstants.DEFAULT_USERNAME_FOR_ERRORS + "] does not have access to conversation cid"));
     }
 
     public void testDelete_NoAccessWithUser_ThenFail() {

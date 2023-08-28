@@ -48,13 +48,9 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private String input;
     @Getter
-    private String prompt;
-    @Getter
     private String response;
     @Getter
-    private String agent;
-    @Getter
-    private String metadata;
+    private String origin;
 
     /**
      * Creates an Interaction object from a map of fields in the OS index
@@ -66,11 +62,9 @@ public class Interaction implements Writeable, ToXContentObject {
         Instant timestamp = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD));
         String conversationId   = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD);
         String input     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD);
-        String prompt    = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD);
         String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
-        String agent     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_AGENT_FIELD);
-        String metadata  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD);
-        return new Interaction(id, timestamp, conversationId, input, prompt, response, agent, metadata);
+        String agent     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
+        return new Interaction(id, timestamp, conversationId, input, response, agent);
     }
 
     /**
@@ -84,7 +78,7 @@ public class Interaction implements Writeable, ToXContentObject {
     }
 
     /**
-     * Creates a new Interaction onject from a stream
+     * Creates a new Interaction object from a stream
      * @param in stream to read from; assumes Interactions.writeTo was called on it
      * @return a new Interaction
      * @throws IOException if can't read or the stream isn't pointing to an intraction or something
@@ -94,11 +88,9 @@ public class Interaction implements Writeable, ToXContentObject {
         Instant timestamp = in.readInstant();
         String conversationId = in.readString();
         String input = in.readString();
-        String prompt = in.readString();
         String response = in.readString();
-        String agent = in.readString();
-        String metadata = in.readOptionalString();
-        return new Interaction(id, timestamp, conversationId, input, prompt, response, agent, metadata);
+        String origin = in.readString();
+        return new Interaction(id, timestamp, conversationId, input, response, origin);
     }
 
 
@@ -108,10 +100,8 @@ public class Interaction implements Writeable, ToXContentObject {
         out.writeInstant(timestamp);
         out.writeString(conversationId);
         out.writeString(input);
-        out.writeString(prompt);
         out.writeString(response);
-        out.writeString(agent);
-        out.writeOptionalString(metadata);
+        out.writeString(origin);
     }
 
     @Override
@@ -121,12 +111,8 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, id);
         builder.field(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, timestamp);
         builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_FIELD, prompt);
         builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_AGENT_FIELD, agent);
-        if(metadata != null) {
-            builder.field(ActionConstants.INTER_ATTRIBUTES_FIELD, metadata);
-        }
+        builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
         builder.endObject();
         return builder;
     }
@@ -139,10 +125,8 @@ public class Interaction implements Writeable, ToXContentObject {
             ((Interaction) other).conversationId.equals(this.conversationId) &&
             ((Interaction) other).timestamp.equals(this.timestamp) &&
             ((Interaction) other).input.equals(this.input) &&
-            ((Interaction) other).prompt.equals(this.prompt) &&
             ((Interaction) other).response.equals(this.response) &&
-            ((Interaction) other).agent.equals(this.agent) && 
-            ((Interaction) other).metadata.equals(this.metadata)
+            ((Interaction) other).origin.equals(this.origin)
         );
     }
 
@@ -152,11 +136,9 @@ public class Interaction implements Writeable, ToXContentObject {
             + "id=" + id
             + ",cid=" + conversationId
             + ",timestamp=" + timestamp
-            + ",agent=" + agent
-            + ",prompt=" + prompt
+            + ",origin=" + origin
             + ",input=" + input
             + ",response=" + response
-            + ",metadata=" + metadata
             + "}";
     }
     

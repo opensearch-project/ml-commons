@@ -40,28 +40,27 @@ public class ActionConstants {
     public final static String NEXT_TOKEN_FIELD = "next_token";
     /** name of input field in all requests */
     public final static String INPUT_FIELD = "input";
-    /** name of prompt field in all requests */
-    public final static String PROMPT_FIELD = "prompt";
     /** name of AI response field in all respopnses */
     public final static String AI_RESPONSE_FIELD = "response";
-    /** name of agent field in all requests */
-    public final static String AI_AGENT_FIELD = "agent";
-    /** name of interaction attributes field in all requests */
-    public final static String INTER_ATTRIBUTES_FIELD = "attributes";
+    /** name of origin field in all requests */
+    public final static String RESPONSE_ORIGIN_FIELD = "origin";
     /** name of success field in all requests */
     public final static String SUCCESS_FIELD = "success";
 
     /** path for create conversation */
-    public final static String CREATE_CONVERSATION_PATH = "/_plugins/_ml/conversational/memory";
+    public final static String CREATE_CONVERSATION_REST_PATH = "/_plugins/_ml/memory/conversation";
     /** path for list conversations */
-    public final static String LIST_CONVERSATIONS_PATH  = "/_plugins/_ml/conversational/memory";
+    public final static String GET_CONVERSATIONS_REST_PATH  = "/_plugins/_ml/memory/conversation";
     /** path for put interaction */
-    public final static String CREATE_INTERACTION_PATH = "/_plugins/_ml/conversational/memory/{conversation_id}";
+    public final static String CREATE_INTERACTION_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
     /** path for get interactions */
-    public final static String GET_INTERACTIONS_PATH = "/_plugins/_ml/conversational/memory/{conversation_id}";
+    public final static String GET_INTERACTIONS_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
     /** path for delete conversation */
-    public final static String DELETE_CONVERSATION_PATH = "/_plugins/_ml/conversational/memory/{conversation_id}";
+    public final static String DELETE_CONVERSATION_REST_PATH = "/_plugins/_ml/memory/conversation/{conversation_id}";
 
     /** default max results returned by get operations */
     public final static int DEFAULT_MAX_RESULTS = 10;
+
+    /** default username for reporting security errors if no or malformed username */
+    public final static String DEFAULT_USERNAME_FOR_ERRORS = "BAD_USER";
 }

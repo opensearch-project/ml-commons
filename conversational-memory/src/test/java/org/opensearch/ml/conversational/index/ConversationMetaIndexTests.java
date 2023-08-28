@@ -27,9 +27,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -43,7 +41,6 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.IndicesAdminClient;
@@ -56,7 +53,6 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversational.ConversationMeta;
-import org.opensearch.ml.common.conversational.ConversationalIndexConstants;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.SendRequestTransportException;
@@ -235,7 +231,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.createConversation(createConversationListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("no index to add conversation to"));
+        assert (argCaptor.getValue().getMessage().equals("Failed to add conversation due to missing index"));
     }
 
     public void testCreate_BadRestStatus_ThenFail() {
@@ -342,106 +338,6 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         conversationMetaIndex.getConversations(10, getConversationsListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConversationsListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Refresh Client Failure"));
-    }
-
-    public void testHit_DoesNotExist_ThenReturnFalse() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        setupRefreshSuccess();
-        GetResponse response = mock(GetResponse.class);
-        doReturn(false).when(response).isExists();
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> al = invocation.getArgument(1);
-            al.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
-        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
-    }
-
-    public void testHit_WrongId_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        setupRefreshSuccess();
-        GetResponse response = mock(GetResponse.class);
-        doReturn(true).when(response).isExists();
-        doReturn("wrong id").when(response).getId();
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> al = invocation.getArgument(1);
-            al.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
-        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Conversation [test id] not found"));
-    }
-
-    public void testHit_UpdateFails_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        setupRefreshSuccess();
-        GetResponse response = mock(GetResponse.class);
-        doReturn(true).when(response).isExists();
-        doReturn("test id").when(response).getId();
-        doReturn(
-            Map
-                .of(
-                    ConversationalIndexConstants.META_CREATED_FIELD,
-                    Instant.now().toString(),
-                    ConversationalIndexConstants.META_ENDED_FIELD,
-                    Instant.now().toString(),
-                    ConversationalIndexConstants.META_LENGTH_FIELD,
-                    2,
-                    ConversationalIndexConstants.META_NAME_FIELD,
-                    "test"
-                )
-        ).when(response).getSourceAsMap();
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> al = invocation.getArgument(1);
-            al.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> al = invocation.getArgument(1);
-            al.onFailure(new RuntimeException("Update Failure"));
-            return null;
-        }).when(client).update(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
-        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Update Failure"));
-    }
-
-    public void testHit_RefreshFails_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        doAnswer(invocation -> {
-            ActionListener<RefreshResponse> al = invocation.getArgument(1);
-            al.onFailure(new Exception("Refresh Exception"));
-            return null;
-        }).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
-        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Refresh Exception"));
-    }
-
-    public void testHit_ClientFails_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        doThrow(new RuntimeException("Refresh Client Failure")).when(indicesAdminClient).refresh(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> hitConversationListener = mock(ActionListener.class);
-        conversationMetaIndex.hitConversation("test id", Instant.now(), hitConversationListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(hitConversationListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Refresh Client Failure"));
     }
 

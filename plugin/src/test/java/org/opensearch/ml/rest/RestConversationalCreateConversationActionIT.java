@@ -29,7 +29,7 @@ import org.opensearch.ml.utils.TestHelper;
 public class RestConversationalCreateConversationActionIT extends MLCommonsRestTestCase {
 
     public void testCreateConversation() throws IOException {
-        Response response = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
+        Response response = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -43,7 +43,7 @@ public class RestConversationalCreateConversationActionIT extends MLCommonsRestT
             .makeRequest(
                 client(),
                 "POST",
-                ActionConstants.CREATE_CONVERSATION_PATH,
+                ActionConstants.CREATE_CONVERSATION_REST_PATH,
                 Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "name"),
                 "",
                 null

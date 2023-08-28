@@ -44,7 +44,7 @@ public class GetConversationsResponse extends ActionResponse implements ToXConte
     private boolean hasMoreTokens;
 
     /**
-     * Convtructor
+     * Constructor
      * @param in input stream to create this from
      * @throws IOException if something breaks
      */

@@ -46,9 +46,9 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
     public void setup() {
         conversations = List
             .of(
-                new ConversationMeta("0", Instant.now(), Instant.now(), 0, "name0", "user0"),
-                new ConversationMeta("1", Instant.now(), Instant.now(), 1, "name1", "user0"),
-                new ConversationMeta("2", Instant.now(), Instant.now(), 2, "name2", "user2")
+                new ConversationMeta("0", Instant.now(), "name0", "user0"),
+                new ConversationMeta("1", Instant.now(), "name1", "user0"),
+                new ConversationMeta("2", Instant.now(), "name2", "user2")
             );
     }
 
@@ -75,9 +75,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
             + conversation.getCreatedTime()
-            + "\",\"last_interaction_time\":\""
-            + conversation.getLastHitTime()
-            + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
+            + "\",\"name\":\"name0\",\"user\":\"user0\"}],\"next_token\":2}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);
@@ -95,9 +93,7 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"conversations\":[{\"conversation_id\":\"0\",\"create_time\":\""
             + conversation.getCreatedTime()
-            + "\",\"last_interaction_time\":\""
-            + conversation.getLastHitTime()
-            + "\",\"num_interactions\":0,\"name\":\"name0\",\"user\":\"user0\"}]}";
+            + "\",\"name\":\"name0\",\"user\":\"user0\"}]}";
         log.info("FINDME");
         log.info(result);
         log.info(expected);

@@ -30,7 +30,15 @@ import org.opensearch.ml.utils.TestHelper;
 public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTestCase {
 
     public void testGetInteractions_NoConversation() throws IOException {
-        Response response = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/coffee", null, "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "GET",
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", "coffee"),
+                null,
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -42,7 +50,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
     }
 
     public void testGetInteractions_NoInteractions() throws IOException {
-        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
+        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse != null);
         assert (TestHelper.restStatus(ccresponse) == RestStatus.OK);
         HttpEntity cchttpEntity = ccresponse.getEntity();
@@ -51,7 +59,8 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (ccmap.containsKey("conversation_id"));
         String cid = (String) ccmap.get("conversation_id");
 
-        Response response = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/" + cid, null, "", null);
+        Response response = TestHelper
+            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -63,7 +72,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
     }
 
     public void testGetInteractions_LastPage() throws IOException {
-        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
+        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse != null);
         assert (TestHelper.restStatus(ccresponse) == RestStatus.OK);
         HttpEntity cchttpEntity = ccresponse.getEntity();
@@ -76,16 +85,20 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
-                ActionConstants.PROMPT_FIELD,
-                "prompt",
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
-                ActionConstants.AI_AGENT_FIELD,
-                "agent",
-                ActionConstants.INTER_ATTRIBUTES_FIELD,
-                "attributes"
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin"
             );
-        Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                params,
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -94,7 +107,8 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (map.containsKey("interaction_id"));
         String iid = (String) map.get("interaction_id");
 
-        Response response1 = TestHelper.makeRequest(client(), "GET", "_plugins/_ml/conversational/memory/" + cid, null, "", null);
+        Response response1 = TestHelper
+            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
         assert (response1 != null);
         assert (TestHelper.restStatus(response1) == RestStatus.OK);
         HttpEntity httpEntity1 = response1.getEntity();
@@ -109,7 +123,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
     }
 
     public void testGetInteractions_MorePages() throws IOException {
-        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
+        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse != null);
         assert (TestHelper.restStatus(ccresponse) == RestStatus.OK);
         HttpEntity cchttpEntity = ccresponse.getEntity();
@@ -122,16 +136,20 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
-                ActionConstants.PROMPT_FIELD,
-                "prompt",
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
-                ActionConstants.AI_AGENT_FIELD,
-                "agent",
-                ActionConstants.INTER_ATTRIBUTES_FIELD,
-                "attributes"
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin"
             );
-        Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                params,
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -144,7 +162,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
             .makeRequest(
                 client(),
                 "GET",
-                "_plugins/_ml/conversational/memory/" + cid,
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
                 Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
                 "",
                 null
@@ -164,7 +182,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
     }
 
     public void testGetInteractions_NextPage() throws IOException {
-        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_PATH, null, "", null);
+        Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);
         assert (ccresponse != null);
         assert (TestHelper.restStatus(ccresponse) == RestStatus.OK);
         HttpEntity cchttpEntity = ccresponse.getEntity();
@@ -177,16 +195,20 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
             .of(
                 ActionConstants.INPUT_FIELD,
                 "input",
-                ActionConstants.PROMPT_FIELD,
-                "prompt",
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
-                ActionConstants.AI_AGENT_FIELD,
-                "agent",
-                ActionConstants.INTER_ATTRIBUTES_FIELD,
-                "attributes"
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin"
             );
-        Response response = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                params,
+                "",
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();
@@ -195,7 +217,15 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
         assert (map.containsKey("interaction_id"));
         String iid = (String) map.get("interaction_id");
 
-        Response response2 = TestHelper.makeRequest(client(), "POST", "_plugins/_ml/conversational/memory/" + cid, params, "", null);
+        Response response2 = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
+                params,
+                "",
+                null
+            );
         assert (response2 != null);
         assert (TestHelper.restStatus(response2) == RestStatus.OK);
         HttpEntity httpEntity2 = response2.getEntity();
@@ -208,7 +238,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
             .makeRequest(
                 client(),
                 "GET",
-                "_plugins/_ml/conversational/memory/" + cid,
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
                 Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1"),
                 "",
                 null
@@ -230,7 +260,7 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
             .makeRequest(
                 client(),
                 "GET",
-                "_plugins/_ml/conversational/memory/" + cid,
+                ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid),
                 Map.of(ActionConstants.REQUEST_MAX_RESULTS_FIELD, "1", ActionConstants.NEXT_TOKEN_FIELD, "1"),
                 "",
                 null
