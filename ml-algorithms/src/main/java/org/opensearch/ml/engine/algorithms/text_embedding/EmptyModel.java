@@ -31,7 +31,7 @@ import java.util.function.Predicate;
 
 
 public class EmptyModel {
-    public static ZooModel<Input, Output> newInstance()
+    public static ZooModel<Input, Output> newInstance(Translator translator)
     {
         Block block = new Block() {
             @Override
@@ -120,7 +120,7 @@ public class EmptyModel {
             }
         };
         Model model = Model.newInstance("dummyModel");
-        ZooModel<Input, Output> dummyModel = new ZooModel<>(model, new TokenizerTranslator());
+        ZooModel<Input, Output> dummyModel = new ZooModel<>(model, translator);
         return dummyModel;
     }
 }

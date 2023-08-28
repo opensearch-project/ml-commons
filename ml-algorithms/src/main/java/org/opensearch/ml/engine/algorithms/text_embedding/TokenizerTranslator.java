@@ -29,6 +29,11 @@ import java.util.stream.*;
 
 public class TokenizerTranslator implements ServingTranslator {
     private HuggingFaceTokenizer tokenizer;
+    private Path modelPath;
+    public TokenizerTranslator(Path modelPath)
+    {
+        this.modelPath = modelPath;
+    }
 
     @Override
     public Batchifier getBatchifier() {
@@ -37,6 +42,9 @@ public class TokenizerTranslator implements ServingTranslator {
     @Override
     public void prepare(TranslatorContext ctx) throws IOException {
         Path path = ctx.getModel().getModelPath();
+        if (this.modelPath != null) {
+            path = this.modelPath;
+        }
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(path.resolve("tokenizer.json")).build();
     }
 
