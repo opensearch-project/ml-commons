@@ -144,22 +144,15 @@ public class ModelHelper {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public boolean isModelAllowed(MLRegisterModelInput registerModelInput, List modelMetaList) {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
         for (Object meta: modelMetaList) {
-            Map<String, Object> metaMap = (Map<String, Object>) meta;
-            String name = (String) metaMap.get("name");
-            Map<String, Object> versions = (Map<String, Object>) metaMap.get("versions");
-            Object versionObj = versions.get(version);
-            if (versionObj == null) return false;
-            Map<String, Object> versionMap = (Map<String, Object>) versionObj;
-            Object formatObj = versionMap.get("format");
-            if (formatObj == null) return false;
-            List<String> formats = (List<String>) formatObj;
-            if (name.equals(modelName) && versions.containsKey(version.toLowerCase(Locale.ROOT)) && formats.contains(modelFormat.toString().toLowerCase(Locale.ROOT))) {
+            String name = (String) ((Map<String, Object>)meta).get("name");
+            List<String> versions = (List) ((Map<String, Object>)meta).get("version");
+            List<String> formats = (List) ((Map<String, Object>)meta).get("format");
+            if (name.equals(modelName) && versions.contains(version.toLowerCase(Locale.ROOT)) && formats.contains(modelFormat.toString().toLowerCase(Locale.ROOT))) {
                 return true;
             }
         }
