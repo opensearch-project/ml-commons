@@ -39,6 +39,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException;
+
 /**
  * Defines the response processor for generative QA search pipelines.
  *
@@ -56,12 +58,12 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     public static final String CONFIG_NAME_LLM_MODEL = "llm_model";
 
     // The field in search results that contain the context to be sent to the LLM.
-    public static final String CONFIG_NAME_CONTEXT_FIELD = "context_field";
+    public static final String CONFIG_NAME_CONTEXT_FIELD_LIST = "context_field_list";
 
     // TODO Add "interaction_count".  This is how far back in chat history we want to go back when calling LLM.
 
     private final String llmModel;
-    private final String contextField;
+    private final List<String> contextFields;
 
     @Getter
     @Setter
@@ -69,10 +71,10 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     private Llm llm;
 
     protected GenerativeQAResponseProcessor(Client client, String tag, String description, boolean ignoreFailure,
-        Llm llm, String llmModel, String contextField) {
+        Llm llm, String llmModel, List<String> contextFields) {
         super(tag, description, ignoreFailure);
         this.llmModel = llmModel;
-        this.contextField = contextField;
+        this.contextFields = contextFields;
         this.llm = llm;
     }
 
@@ -112,13 +114,15 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         List<String> searchResults = new ArrayList<>();
         for (SearchHit hit : response.getHits().getHits()) {
             Map<String, Object> docSourceMap = hit.getSourceAsMap();
-            Object context = docSourceMap.get(contextField);
-            if (context == null) {
-                log.error("Context " + contextField + " not found in search hit " + hit);
-                // TODO throw a more meaningful error here?
-                throw new RuntimeException();
+            for (String contextField : contextFields) {
+                Object context = docSourceMap.get(contextField);
+                if (context == null) {
+                    log.error("Context " + contextField + " not found in search hit " + hit);
+                    // TODO throw a more meaningful error here?
+                    throw new RuntimeException();
+                }
+                searchResults.add(context.toString());
             }
-            searchResults.add(context.toString());
         }
         return searchResults;
     }
@@ -141,10 +145,13 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             PipelineContext pipelineContext
         ) throws Exception {
             String modelId = ConfigurationUtils.readOptionalStringProperty(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_MODEL_ID);
-            String llm_model = ConfigurationUtils.readOptionalStringProperty(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_LLM_MODEL);
-            String context_field = ConfigurationUtils.readStringProperty(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_CONTEXT_FIELD);
-            log.info("model_id {}, llm_model {}, context_field {}", modelId, llm_model, context_field);
-            return new GenerativeQAResponseProcessor(client, tag, description, ignoreFailure, ModelLocator.getLlm(modelId, client), llm_model, context_field);
+            String llmModel = ConfigurationUtils.readOptionalStringProperty(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_LLM_MODEL);
+            List<String> contextFields = ConfigurationUtils.readList(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_CONTEXT_FIELD_LIST);
+            if (contextFields.isEmpty()) {
+                throw newConfigurationException(SEARCH_PROCESSOR_TYPE, tag, CONFIG_NAME_CONTEXT_FIELD_LIST, "required property can't be empty.");
+            }
+            log.info("model_id {}, llm_model {}, context_field_list {}", modelId, llmModel, contextFields);
+            return new GenerativeQAResponseProcessor(client, tag, description, ignoreFailure, ModelLocator.getLlm(modelId, client), llmModel, contextFields);
         }
     }
 }

@@ -39,15 +39,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-public class GenerativeQAResponseProcessorTests  extends OpenSearchTestCase {
+public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
     public void testProcessorFactoryRemoteModel() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
-        config.put("model_id", "xyz");
-        config.put("context_field", "text");
+        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_MODEL_ID, "xyz");
+        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
             .create(null, "tag", "desc", true, config, null);
@@ -57,8 +60,8 @@ public class GenerativeQAResponseProcessorTests  extends OpenSearchTestCase {
     public void testProcessResponseNoSearchHits() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
-        config.put("model_id", "dummy-model");
-        config.put("context_field", "text");
+        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
             .create(null, "tag", "desc", true, config, null);
@@ -100,8 +103,8 @@ public class GenerativeQAResponseProcessorTests  extends OpenSearchTestCase {
     public void testProcessResponse() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
-        config.put("model_id", "dummy-model");
-        config.put("context_field", "text");
+        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
             .create(null, "tag", "desc", true, config, null);

@@ -82,12 +82,8 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        if (conversationId != null) {
-            out.writeOptionalString(conversationId);
-        }
-        if (llmModel != null) {
-            out.writeOptionalString(llmModel);
-        }
+        out.writeOptionalString(conversationId);
+        out.writeOptionalString(llmModel);
 
         Preconditions.checkNotNull(llmQuestion, "llm_question must not be null.");
         out.writeString(llmQuestion);
