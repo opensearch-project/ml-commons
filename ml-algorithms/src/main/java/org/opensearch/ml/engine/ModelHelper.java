@@ -238,6 +238,8 @@ public class ModelHelper {
             }
         }
         if (!hasPtFile && !hasOnnxFile && modelName != FunctionName.TOKENIZE.toString()) {
+            log.info(modelName);
+            log.info(FunctionName.TOKENIZE.toString());
             throw new IllegalArgumentException("Can't find model file");
         }
         if (!hasTokenizerFile) {
