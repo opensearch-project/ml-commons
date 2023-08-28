@@ -262,7 +262,6 @@ public abstract class DLModel implements Predictable {
                             modelList.add(model);
 
                             // First request takes longer time. Predict once to warm up model.
-                            warmUp(predictor, modelId, modelConfig);
                         }
 
                     }
