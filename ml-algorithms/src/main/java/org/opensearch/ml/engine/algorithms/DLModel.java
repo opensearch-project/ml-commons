@@ -30,6 +30,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
+import org.opensearch.ml.engine.algorithms.text_embedding.EmptyModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
@@ -138,7 +139,8 @@ public abstract class DLModel implements Predictable {
                 model.getName(),
                 model.getVersion(),
                 model.getModelConfig(),
-                engine
+                engine,
+                model.getAlgorithm()
         );
     }
 
@@ -177,7 +179,8 @@ public abstract class DLModel implements Predictable {
 
     protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
                              MLModelConfig modelConfig,
-                             String engine) {
+                             String engine,
+                             FunctionName modelAlgorithm) {
         try {
             if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
                 throw new IllegalArgumentException("unsupported engine");
@@ -220,35 +223,48 @@ public abstract class DLModel implements Predictable {
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
                         log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
-                        Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
-                                .setTypes(Input.class, Output.class)
-                                .optApplication(Application.UNDEFINED)
-                                .optEngine(engine)
-                                .optDevice(devices[i])
-                                .optModelPath(modelPath);
-                        Translator translator = getTranslator(engine, modelConfig);
-                        TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
-                        if (translatorFactory != null) {
-                            criteriaBuilder.optTranslatorFactory(translatorFactory);
-                        } else if (translator != null) {
-                            criteriaBuilder.optTranslator(translator);
-                        }
-
-                        Map<String, Object> arguments = getArguments(modelConfig);
-                        if (arguments != null && arguments.size() > 0) {
-                            for (Map.Entry<String,Object> entry : arguments.entrySet()) {
-                                criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
+                        if (modelAlgorithm != FunctionName.TOKENIZE) {
+                            Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
+                                    .setTypes(Input.class, Output.class)
+                                    .optApplication(Application.UNDEFINED)
+                                    .optEngine(engine)
+                                    .optDevice(devices[i])
+                                    .optModelPath(modelPath);
+                            Translator translator = getTranslator(engine, modelConfig);
+                            TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
+                            if (translatorFactory != null) {
+                                criteriaBuilder.optTranslatorFactory(translatorFactory);
+                            } else if (translator != null) {
+                                criteriaBuilder.optTranslator(translator);
                             }
+
+                            Map<String, Object> arguments = getArguments(modelConfig);
+                            if (arguments != null && arguments.size() > 0) {
+                                for (Map.Entry<String, Object> entry : arguments.entrySet()) {
+                                    criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
+                                }
+                            }
+
+                            Criteria<Input, Output> criteria = criteriaBuilder.build();
+                            ZooModel<Input, Output> model = criteria.loadModel();
+                            Predictor<Input, Output> predictor = model.newPredictor();
+                            predictorList.add(predictor);
+                            modelList.add(model);
+
+                            // First request takes longer time. Predict once to warm up model.
+                            warmUp(predictor, modelId, modelConfig);
+                        }
+                        else
+                        {
+                            ZooModel<Input, Output> model = EmptyModel.newInstance();
+                            Predictor<Input, Output> predictor = model.newPredictor();
+                            predictorList.add(predictor);
+                            modelList.add(model);
+
+                            // First request takes longer time. Predict once to warm up model.
+                            warmUp(predictor, modelId, modelConfig);
                         }
 
-                        Criteria<Input, Output> criteria = criteriaBuilder.build();
-                        ZooModel<Input, Output> model = criteria.loadModel();
-                        Predictor<Input, Output> predictor = model.newPredictor();
-                        predictorList.add(predictor);
-                        modelList.add(model);
-
-                        // First request takes longer time. Predict once to warm up model.
-                        warmUp(predictor, modelId, modelConfig);
                     }
                     if (predictorList.size() > 0) {
                         this.predictors = predictorList.toArray(new Predictor[0]);
