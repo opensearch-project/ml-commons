@@ -78,7 +78,7 @@ public class TokenizerTranslator implements ServingTranslator {
         while (iterator.hasNext()) {
             NDArray ndArray = iterator.next();
             String name = ndArray.getName();
-            log.info("-----------");
+            log.info("=============");
             log.info(name);
             log.info(ndArray);
 
@@ -90,7 +90,7 @@ public class TokenizerTranslator implements ServingTranslator {
                     .toArray(String[]::new);
             Map<String, String[]> map = new HashMap<>();
             log.info(map);
-            log.info("-----------");
+            log.info("=============");
             map.put("tokens", tokens);
             long[] shape = ndArray.getShape().getShape();
             DataType dataType = ndArray.getDataType();
