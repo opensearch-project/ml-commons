@@ -27,11 +27,12 @@ import ai.djl.util.PairList;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.function.Predicate;
 
 
 public class EmptyModel {
-    public static ZooModel<Input, Output> newInstance(Translator translator)
+    public static ZooModel<Input, Output> newInstance(Path modelPath)
     {
         Block block = new Block() {
             @Override
@@ -120,7 +121,8 @@ public class EmptyModel {
             }
         };
         Model model = Model.newInstance("dummyModel");
-        ZooModel<Input, Output> dummyModel = new ZooModel<>(model, translator);
+        model.setBlock(block);
+        ZooModel<Input, Output> dummyModel = new ZooModel<>(model, new TokenizerTranslator(modelPath));
         return dummyModel;
     }
 }

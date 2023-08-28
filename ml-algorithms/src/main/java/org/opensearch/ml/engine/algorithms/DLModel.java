@@ -256,8 +256,7 @@ public abstract class DLModel implements Predictable {
                         }
                         else
                         {
-                            Translator translator = getTranslator(engine, modelConfig);
-                            ZooModel<Input, Output> model = EmptyModel.newInstance(translator);
+                            ZooModel<Input, Output> model = EmptyModel.newInstance(modelPath);
 
                             Predictor<Input, Output> predictor = model.newPredictor();
                             predictorList.add(predictor);
