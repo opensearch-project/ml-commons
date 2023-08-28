@@ -81,7 +81,7 @@ public class TokenizerTranslator implements ServingTranslator {
             log.info("-----------");
             log.info(name);
             log.info(ndArray);
-            log.info("-----------");
+
             long[] ids = ndArray.toLongArray();
             String[] tokens = Arrays.stream(ids)
                     .mapToObj(value -> new long[]{value})
@@ -89,6 +89,8 @@ public class TokenizerTranslator implements ServingTranslator {
                     .filter(s -> !s.isEmpty())
                     .toArray(String[]::new);
             Map<String, String[]> map = new HashMap<>();
+            log.info(map);
+            log.info("-----------");
             map.put("tokens", tokens);
             long[] shape = ndArray.getShape().getShape();
             DataType dataType = ndArray.getDataType();
