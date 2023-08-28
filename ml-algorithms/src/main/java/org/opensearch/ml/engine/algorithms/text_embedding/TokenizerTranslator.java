@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import lombok.extern.log4j.Log4j2;
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.modality.Input;
@@ -26,7 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.*;
-
+@Log4j2
 public class TokenizerTranslator implements ServingTranslator {
     private HuggingFaceTokenizer tokenizer;
     private Path modelPath;
@@ -77,6 +78,10 @@ public class TokenizerTranslator implements ServingTranslator {
         while (iterator.hasNext()) {
             NDArray ndArray = iterator.next();
             String name = ndArray.getName();
+            log.info("-----------");
+            log.info(name);
+            log.info(ndArray);
+            log.info("-----------");
             long[] ids = ndArray.toLongArray();
             String[] tokens = Arrays.stream(ids)
                     .mapToObj(value -> new long[]{value})
