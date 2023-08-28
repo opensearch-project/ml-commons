@@ -63,7 +63,10 @@ public class SparseEncodingTranslator implements ServingTranslator {
         NDArray nonZeroIndices = array.nonzero().squeeze();
 
         for (long index : nonZeroIndices.toLongArray()) {
-            map.put(this.tokenizer.decode(new long[]{index}), array.getFloat(index));
+            String s = this.tokenizer.decode(new long[]{index});
+            if (!s.isEmpty()){
+                map.put(s, array.getFloat(index));
+            }
         }
         return map;
     }
