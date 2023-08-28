@@ -7,6 +7,7 @@ import ai.djl.engine.Engine;
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
+import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.DataType;
@@ -28,15 +29,31 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import lombok.extern.log4j.Log4j2;
+
+import java.util.Iterator;
 import java.util.function.Predicate;
 
+import static org.reflections.Reflections.log;
 
+@Log4j2
 public class EmptyModel {
     public static ZooModel<Input, Output> newInstance(Path modelPath)
     {
         Block block = new Block() {
             @Override
             public NDList forward(ParameterStore parameterStore, NDList inputs, boolean training, PairList<String, Object> params) {
+                Iterator<NDArray> iterator = inputs.iterator();
+                while (iterator.hasNext())
+                {
+                    NDArray ndArray = iterator.next();
+                    String name = ndArray.getName();
+                    log.info("-----------");
+                    log.info(name);
+                    log.info(ndArray);
+                    log.info("-----------");
+
+                }
                 return inputs;
             }
 
