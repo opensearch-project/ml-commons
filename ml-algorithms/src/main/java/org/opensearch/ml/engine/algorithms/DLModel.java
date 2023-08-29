@@ -223,6 +223,8 @@ public abstract class DLModel implements Predictable {
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
                         log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
+                        ZooModel<Input, Output> model;
+                        Predictor<Input, Output> predictor;
                         if (modelAlgorithm != FunctionName.TOKENIZE) {
                             Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
                                     .setTypes(Input.class, Output.class)
@@ -246,25 +248,19 @@ public abstract class DLModel implements Predictable {
                             }
 
                             Criteria<Input, Output> criteria = criteriaBuilder.build();
-                            ZooModel<Input, Output> model = criteria.loadModel();
-                            Predictor<Input, Output> predictor = model.newPredictor();
-                            predictorList.add(predictor);
-                            modelList.add(model);
-
-                            // First request takes longer time. Predict once to warm up model.
-                            warmUp(predictor, modelId, modelConfig);
+                            model = criteria.loadModel();
+                            predictor = model.newPredictor();
                         }
                         else
                         {
-                            ZooModel<Input, Output> model = EmptyModel.newInstance(modelPath);
-
-                            Predictor<Input, Output> predictor = model.newPredictor();
-                            predictorList.add(predictor);
-                            modelList.add(model);
-
-                            // First request takes longer time. Predict once to warm up model.
-                            warmUp(predictor, modelId, modelConfig);
+                            model = EmptyModel.newInstance(modelPath);
+                            predictor = model.newPredictor();
                         }
+                        predictorList.add(predictor);
+                        modelList.add(model);
+
+                        // First request takes longer time. Predict once to warm up model.
+                        warmUp(predictor, modelId, modelConfig);
 
                     }
                     if (predictorList.size() > 0) {
