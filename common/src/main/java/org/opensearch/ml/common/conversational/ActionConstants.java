@@ -44,6 +44,10 @@ public class ActionConstants {
     public final static String AI_RESPONSE_FIELD = "response";
     /** name of origin field in all requests */
     public final static String RESPONSE_ORIGIN_FIELD = "origin";
+    /** name of prompt template field in all requests */
+    public final static String PROMPT_TEMPLATE_FIELD = "prompt_template";
+    /** name of metadata field in all requests */
+    public final static String METADATA_FIELD = "metadata";
     /** name of success field in all requests */
     public final static String SUCCESS_FIELD = "success";
 

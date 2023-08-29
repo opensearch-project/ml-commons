@@ -76,21 +76,32 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
 
     public void testCreateInteraction_Future() {
         doAnswer(invocation -> {
-            ActionListener<String> al = invocation.getArgument(5);
+            ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), any(), any());
-        ActionFuture<String> result = cmHandler.createInteraction("cid", "inp", "rsp", "ogn");
+        })
+            .when(interactionsIndex)
+            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        ActionFuture<String> result = cmHandler.createInteraction("cid", "inp", "pt", "rsp", "ogn", "meta");
         assert (result.actionGet(200).equals("iid"));
     }
 
     public void testCreateInteraction_FromBuilder_Success() {
         doAnswer(invocation -> {
-            ActionListener<String> al = invocation.getArgument(5);
+            ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), any(), any());
-        InteractionBuilder builder = Interaction.builder().conversationId("cid").input("inp").origin("origin").response("rsp");
+        })
+            .when(interactionsIndex)
+            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        InteractionBuilder builder = Interaction
+            .builder()
+            .conversationId("cid")
+            .input("inp")
+            .origin("origin")
+            .response("rsp")
+            .promptTemplate("pt")
+            .metadata("meta");
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
         cmHandler.createInteraction(builder, createInteractionListener);
@@ -101,11 +112,20 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
 
     public void testCreateInteraction_FromBuilder_Future() {
         doAnswer(invocation -> {
-            ActionListener<String> al = invocation.getArgument(5);
+            ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), any(), any());
-        InteractionBuilder builder = Interaction.builder().origin("ogn").conversationId("cid").input("inp").response("rsp");
+        })
+            .when(interactionsIndex)
+            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        InteractionBuilder builder = Interaction
+            .builder()
+            .origin("ogn")
+            .conversationId("cid")
+            .input("inp")
+            .response("rsp")
+            .promptTemplate("pt")
+            .metadata("meta");
         ActionFuture<String> result = cmHandler.createInteraction(builder);
         assert (result.actionGet(200).equals("iid"));
     }

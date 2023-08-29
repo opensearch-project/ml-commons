@@ -93,7 +93,11 @@ public class RestConversationalDeleteConversationActionIT extends MLCommonsRestT
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin"
+                "origin",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "promtp template",
+                ActionConstants.METADATA_FIELD,
+                "some metadata"
             );
         Response ciresponse = TestHelper
             .makeRequest(

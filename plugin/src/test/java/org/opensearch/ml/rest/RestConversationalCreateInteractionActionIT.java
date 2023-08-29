@@ -45,7 +45,11 @@ public class RestConversationalCreateInteractionActionIT extends MLCommonsRestTe
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin"
+                "origin",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "promtp template",
+                ActionConstants.METADATA_FIELD,
+                "some metadata"
             );
         Response response = TestHelper
             .makeRequest(client(), "POST", ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", id), params, "", null);

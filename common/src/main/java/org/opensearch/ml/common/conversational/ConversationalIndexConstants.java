@@ -57,10 +57,14 @@ public class ConversationalIndexConstants {
     public final static String INTERACTIONS_CONVERSATION_ID_FIELD = "conversation_id";
     /** Name of the interaction field for the human input */
     public final static String INTERACTIONS_INPUT_FIELD = "input";
+    /** Name of the interaction field for the prompt template */
+    public final static String INTERACTIONS_PROMPT_TEMPLATE_FIELD = "prompt_template";
     /** Name of the interaction field for the AI response */
     public final static String INTERACTIONS_RESPONSE_FIELD = "response";
     /** Name of the interaction field for the response's origin */
     public final static String INTERACTIONS_ORIGIN_FIELD = "origin";
+    /** Name of the interaction field for additional metadata */
+    public final static String INTERACTIONS_METADATA_FIELD = "metadata";
     /** Name of the interaction field for the timestamp */
     public final static String INTERACTIONS_TIMESTAMP_FIELD = "timestamp";
     /** Mappings for the interactions index */
@@ -79,11 +83,17 @@ public class ConversationalIndexConstants {
         + INTERACTIONS_INPUT_FIELD
         + "\": {\"type\": \"text\"},\n"
         + "        \""
+        + INTERACTIONS_PROMPT_TEMPLATE_FIELD
+        + "\": {\"type\": \"text\"},\n"
+        + "        \""
         + INTERACTIONS_RESPONSE_FIELD
         + "\": {\"type\": \"text\"},\n"
         + "        \""
         + INTERACTIONS_ORIGIN_FIELD
         + "\": {\"type\": \"keyword\"},\n"
+        + "        \""
+        + INTERACTIONS_METADATA_FIELD
+        + "\": {\"type\": \"text\"},\n"
         + "        \""
         + USER_FIELD
         + "\": {\"type\": \"keyword\"}\n"

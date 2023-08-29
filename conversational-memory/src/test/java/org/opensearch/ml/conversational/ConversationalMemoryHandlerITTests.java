@@ -109,15 +109,16 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
         cmHandler.createConversation("test", cidListener);
 
         StepListener<String> iid1Listener = new StepListener<>();
-        cidListener
-            .whenComplete(cid -> { cmHandler.createInteraction(cid, "test input1", "test response", "test origin", iid1Listener); }, e -> {
-                cdl.countDown();
-                assert (false);
-            });
+        cidListener.whenComplete(cid -> {
+            cmHandler.createInteraction(cid, "test input1", "pt", "test response", "test origin", "meta", iid1Listener);
+        }, e -> {
+            cdl.countDown();
+            assert (false);
+        });
 
         StepListener<String> iid2Listener = new StepListener<>();
         iid1Listener.whenComplete(iid -> {
-            cmHandler.createInteraction(cidListener.result(), "test input1", "test response", "test origin", iid2Listener);
+            cmHandler.createInteraction(cidListener.result(), "test input1", "pt", "test response", "test origin", "meta", iid2Listener);
         }, e -> {
             cdl.countDown();
             assert (false);
@@ -142,15 +143,16 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
         cmHandler.createConversation("test", cidListener);
 
         StepListener<String> iid1Listener = new StepListener<>();
-        cidListener
-            .whenComplete(cid -> { cmHandler.createInteraction(cid, "test input1", "test response", "test origin", iid1Listener); }, e -> {
-                cdl.countDown();
-                assert (false);
-            });
+        cidListener.whenComplete(cid -> {
+            cmHandler.createInteraction(cid, "test input1", "pt", "test response", "test origin", "meta", iid1Listener);
+        }, e -> {
+            cdl.countDown();
+            assert (false);
+        });
 
         StepListener<String> iid2Listener = new StepListener<>();
         iid1Listener.whenComplete(iid -> {
-            cmHandler.createInteraction(cidListener.result(), "test input1", "test response", "test origin", iid2Listener);
+            cmHandler.createInteraction(cidListener.result(), "test input1", "pt", "test response", "test origin", "meta", iid2Listener);
         }, e -> {
             cdl.countDown();
             assert (false);
@@ -193,15 +195,19 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
         cmHandler.createConversation("test", cid1);
 
         StepListener<String> iid1 = new StepListener<>();
-        cid1.whenComplete(cid -> { cmHandler.createInteraction(cid, "test input1", "test response", "test origin", iid1); }, e -> {
-            cdl.countDown();
-            assert (false);
-        });
+        cid1
+            .whenComplete(
+                cid -> { cmHandler.createInteraction(cid, "test input1", "pt", "test response", "test origin", "meta", iid1); },
+                e -> {
+                    cdl.countDown();
+                    assert (false);
+                }
+            );
 
         StepListener<String> iid2 = new StepListener<>();
         iid1
             .whenComplete(
-                iid -> { cmHandler.createInteraction(cid1.result(), "test input1", "test response", "test origin", iid2); },
+                iid -> { cmHandler.createInteraction(cid1.result(), "test input1", "pt", "test response", "test origin", "meta", iid2); },
                 e -> {
                     cdl.countDown();
                     assert (false);
@@ -215,10 +221,14 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
         });
 
         StepListener<String> iid3 = new StepListener<>();
-        cid2.whenComplete(cid -> { cmHandler.createInteraction(cid, "test input1", "test response", "test origin", iid3); }, e -> {
-            cdl.countDown();
-            assert (false);
-        });
+        cid2
+            .whenComplete(
+                cid -> { cmHandler.createInteraction(cid, "test input1", "pt", "test response", "test origin", "meta", iid3); },
+                e -> {
+                    cdl.countDown();
+                    assert (false);
+                }
+            );
 
         StepListener<Boolean> del = new StepListener<>();
         iid3.whenComplete(iid -> { cmHandler.deleteConversation(cid1.result(), del); }, e -> {
@@ -318,19 +328,25 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             cid2
                 .whenComplete(
-                    cid -> { cmHandler.createInteraction(cid1.result(), "test input1", "test response", "test origin", iid1); },
+                    cid -> {
+                        cmHandler.createInteraction(cid1.result(), "test input1", "pt", "test response", "test origin", "meta", iid1);
+                    },
                     onFail
                 );
 
             iid1
                 .whenComplete(
-                    iid -> { cmHandler.createInteraction(cid1.result(), "test input2", "test response", "test origin", iid2); },
+                    iid -> {
+                        cmHandler.createInteraction(cid1.result(), "test input2", "pt", "test response", "test origin", "meta", iid2);
+                    },
                     onFail
                 );
 
             iid2
                 .whenComplete(
-                    iid -> { cmHandler.createInteraction(cid2.result(), "test input3", "test response", "test origin", iid3); },
+                    iid -> {
+                        cmHandler.createInteraction(cid2.result(), "test input3", "pt", "test response", "test origin", "meta", iid3);
+                    },
                     onFail
                 );
 
@@ -341,26 +357,28 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
 
             cid3
                 .whenComplete(
-                    cid -> { cmHandler.createInteraction(cid3.result(), "test input4", "test response", "test origin", iid4); },
+                    cid -> {
+                        cmHandler.createInteraction(cid3.result(), "test input4", "pt", "test response", "test origin", "meta", iid4);
+                    },
                     onFail
                 );
 
             iid4
                 .whenComplete(
-                    iid -> { cmHandler.createInteraction(cid3.result(), "test input5", "test response", "test origin", iid5); },
+                    iid -> {
+                        cmHandler.createInteraction(cid3.result(), "test input5", "pt", "test response", "test origin", "meta", iid5);
+                    },
                     onFail
                 );
 
-            iid5
-                .whenComplete(
-                    iid -> { cmHandler.createInteraction(cid1.result(), "test inputf1", "test response", "test origin", failiid1); },
-                    onFail
-                );
+            iid5.whenComplete(iid -> {
+                cmHandler.createInteraction(cid1.result(), "test inputf1", "pt", "test response", "test origin", "meta", failiid1);
+            }, onFail);
 
             failiid1.whenComplete(shouldHaveFailedAsString, e -> {
                 if (e instanceof OpenSearchSecurityException
                     && e.getMessage().startsWith("User [" + user2 + "] does not have access to conversation ")) {
-                    cmHandler.createInteraction(cid1.result(), "test inputf2", "test response", "test origin", failiid2);
+                    cmHandler.createInteraction(cid1.result(), "test inputf2", "pt", "test response", "test origin", "meta", failiid2);
                 } else {
                     onFail.accept(e);
                 }
@@ -430,7 +448,7 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
             failInter3.whenComplete(shouldHaveFailedAsInterList, e -> {
                 if (e instanceof OpenSearchSecurityException
                     && e.getMessage().startsWith("User [" + user1 + "] does not have access to conversation ")) {
-                    cmHandler.createInteraction(cid3.result(), "test inputf3", "test response", "test origin", failiid3);
+                    cmHandler.createInteraction(cid3.result(), "test inputf3", "pt", "test response", "test origin", "meta", failiid3);
                 } else {
                     onFail.accept(e);
                 }

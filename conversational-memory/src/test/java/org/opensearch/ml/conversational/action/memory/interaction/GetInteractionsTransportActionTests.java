@@ -103,7 +103,16 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
 
     public void testGetInteractions_noMorePages() {
         log.info("test get interactions transport");
-        Interaction testInteraction = new Interaction("test-iid", Instant.now(), "test-cid", "test-input", "test-response", "test-origin");
+        Interaction testInteraction = new Interaction(
+            "test-iid",
+            Instant.now(),
+            "test-cid",
+            "test-input",
+            "pt",
+            "test-response",
+            "test-origin",
+            "metadata"
+        );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(3);
             listener.onResponse(List.of(testInteraction));
@@ -121,7 +130,16 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
 
     public void testGetInteractions_MorePages() {
         log.info("test get interactions transport");
-        Interaction testInteraction = new Interaction("test-iid", Instant.now(), "test-cid", "test-input", "test-response", "test-origin");
+        Interaction testInteraction = new Interaction(
+            "test-iid",
+            Instant.now(),
+            "test-cid",
+            "test-input",
+            "pt",
+            "test-response",
+            "test-origin",
+            "metadata"
+        );
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(3);
             listener.onResponse(List.of(testInteraction));

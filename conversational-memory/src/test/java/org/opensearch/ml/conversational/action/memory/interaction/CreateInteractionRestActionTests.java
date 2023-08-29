@@ -53,10 +53,14 @@ public class CreateInteractionRestActionTests extends OpenSearchTestCase {
                 "cid",
                 ActionConstants.INPUT_FIELD,
                 "input",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "pt",
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin"
+                "origin",
+                ActionConstants.METADATA_FIELD,
+                "metadata"
             );
         CreateInteractionRestAction action = new CreateInteractionRestAction();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
@@ -70,7 +74,9 @@ public class CreateInteractionRestActionTests extends OpenSearchTestCase {
         CreateInteractionRequest req = argCaptor.getValue();
         assert (req.getConversationId().equals("cid"));
         assert (req.getInput().equals("input"));
+        assert (req.getPromptTemplate().equals("pt"));
         assert (req.getResponse().equals("response"));
         assert (req.getOrigin().equals("origin"));
+        assert (req.getMetadata().equals("metadata"));
     }
 }

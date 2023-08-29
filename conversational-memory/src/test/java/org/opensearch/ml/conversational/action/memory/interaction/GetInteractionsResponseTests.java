@@ -45,9 +45,9 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
     public void setup() {
         interactions = List
             .of(
-                new Interaction("id0", Instant.now(), "cid", "input", "response", "origin"),
-                new Interaction("id1", Instant.now(), "cid", "input", "response", "origin"),
-                new Interaction("id2", Instant.now(), "cid", "input", "response", "origin")
+                new Interaction("id0", Instant.now(), "cid", "input", "pt", "response", "origin", "metadata"),
+                new Interaction("id1", Instant.now(), "cid", "input", "pt", "response", "origin", "mteadata"),
+                new Interaction("id2", Instant.now(), "cid", "input", "pt", "response", "origin", "metadata")
             );
     }
 
@@ -74,7 +74,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\""
             + interaction.getTimestamp()
-            + "\",\"input\":\"input\",\"response\":\"response\",\"origin\":\"origin\"}],\"next_token\":2}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"metadata\":\"metadata\"}],\"next_token\":2}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
@@ -91,7 +91,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\""
             + interaction.getTimestamp()
-            + "\",\"input\":\"input\",\"response\":\"response\",\"origin\":\"origin\"}]}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"metadata\":\"metadata\"}]}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness

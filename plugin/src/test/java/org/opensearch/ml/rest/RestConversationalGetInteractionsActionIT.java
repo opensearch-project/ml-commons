@@ -88,7 +88,11 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin"
+                "origin",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "promtp template",
+                ActionConstants.METADATA_FIELD,
+                "some metadata"
             );
         Response response = TestHelper
             .makeRequest(
@@ -139,7 +143,11 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin"
+                "origin",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "promtp template",
+                ActionConstants.METADATA_FIELD,
+                "some metadata"
             );
         Response response = TestHelper
             .makeRequest(
@@ -198,7 +206,11 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 ActionConstants.AI_RESPONSE_FIELD,
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin"
+                "origin",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "promtp template",
+                ActionConstants.METADATA_FIELD,
+                "some metadata"
             );
         Response response = TestHelper
             .makeRequest(

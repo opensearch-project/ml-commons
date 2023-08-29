@@ -112,16 +112,20 @@ public class InteractionsIndex {
      * Add an interaction to this index. Return the ID of the newly created interaction
      * @param conversationId The id of the conversation this interaction belongs to
      * @param input the user (human) input into this interaction
+     * @param promptTemplate the prompt template used for this interaction
      * @param response the GenAI response for this interaction
      * @param origin the origin of the response for this interaction
+     * @param metadata additional information used for constructing the LLM prompt
      * @param timestamp when this interaction happened
      * @param listener gets the id of the newly created interaction record
      */
     public void createInteraction(
         String conversationId,
         String input,
+        String promptTemplate,
         String response,
         String origin,
+        String metadata,
         Instant timestamp,
         ActionListener<String> listener
     ) {
@@ -138,8 +142,12 @@ public class InteractionsIndex {
                                 conversationId,
                                 ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
                                 input,
+                                ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD,
+                                promptTemplate,
                                 ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
                                 response,
+                                ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD,
+                                metadata,
                                 ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD,
                                 timestamp
                             );
@@ -177,12 +185,22 @@ public class InteractionsIndex {
      * Add an interaction to this index, timestamped now. Return the id of the newly created interaction
      * @param conversationId The id of the converation this interaction belongs to
      * @param input the user (human) input into this interaction
+     * @param promptTemplate the prompt template used for this interaction
      * @param response the GenAI response for this interaction
      * @param origin the name of the GenAI agent this interaction belongs to
+     * @param metadata additional information used to construct the LLM prompt
      * @param listener gets the id of the newly created interaction record
      */
-    public void createInteraction(String conversationId, String input, String response, String origin, ActionListener<String> listener) {
-        createInteraction(conversationId, input, response, origin, Instant.now(), listener);
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        String metadata,
+        ActionListener<String> listener
+    ) {
+        createInteraction(conversationId, input, promptTemplate, response, origin, metadata, Instant.now(), listener);
     }
 
     /**

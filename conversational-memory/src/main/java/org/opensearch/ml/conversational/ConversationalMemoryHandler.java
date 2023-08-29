@@ -60,21 +60,40 @@ public interface ConversationalMemoryHandler {
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction
+     * @param promptTemplate the prompt template used for this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
+     * @param metadata additional inofrmation used in constructing the LLM prompt
      * @param listener gets the ID of the new interaction
      */
-    public void createInteraction(String conversationId, String input, String response, String origin, ActionListener<String> listener);
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        String metadata,
+        ActionListener<String> listener
+    );
 
     /**
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction
+     * @param promptTemplate the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
+     * @param metadata arbitrary JSON string of extra stuff
      * @return ActionFuture for the interactionId of the new interaction
      */
-    public ActionFuture<String> createInteraction(String conversationId, String input, String response, String origin);
+    public ActionFuture<String> createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        String metadata
+    );
 
     /**
      * Adds an interaction to the index, updating the associated Conversational Metadata

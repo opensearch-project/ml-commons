@@ -91,22 +91,38 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         CountDownLatch cdl = new CountDownLatch(2);
         String[] ids = new String[2];
         index
-            .createInteraction("test", "test input", "test response", "test origin", new LatchedActionListener<>(ActionListener.wrap(id -> {
-                ids[0] = id;
-            }, e -> {
-                cdl.countDown();
-                log.error(e);
-                assert (false);
-            }), cdl));
+            .createInteraction(
+                "test",
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                "metadata",
+                new LatchedActionListener<>(ActionListener.wrap(id -> {
+                    ids[0] = id;
+                }, e -> {
+                    cdl.countDown();
+                    log.error(e);
+                    assert (false);
+                }), cdl)
+            );
 
         index
-            .createInteraction("test", "test input", "test response", "test origin", new LatchedActionListener<>(ActionListener.wrap(id -> {
-                ids[1] = id;
-            }, e -> {
-                cdl.countDown();
-                log.error(e);
-                assert (false);
-            }), cdl));
+            .createInteraction(
+                "test",
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                "metadata",
+                new LatchedActionListener<>(ActionListener.wrap(id -> {
+                    ids[1] = id;
+                }, e -> {
+                    cdl.countDown();
+                    log.error(e);
+                    assert (false);
+                }), cdl)
+            );
         try {
             cdl.await();
         } catch (InterruptedException e) {
@@ -122,7 +138,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> id1Listener = new StepListener<>();
-        index.createInteraction(conversation, "test input", "test response", "test origin", id1Listener);
+        index.createInteraction(conversation, "test input", "pt", "test response", "test origin", "metadata", id1Listener);
 
         StepListener<String> id2Listener = new StepListener<>();
         id1Listener.whenComplete(id -> {
@@ -130,8 +146,10 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 .createInteraction(
                     conversation,
                     "test input",
+                    "pt",
                     "test response",
                     "test origin",
+                    "metadata",
                     Instant.now().plus(3, ChronoUnit.MINUTES),
                     id2Listener
                 );
@@ -169,7 +187,7 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation = "test-conversation";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> id1Listener = new StepListener<>();
-        index.createInteraction(conversation, "test input", "test response", "test origin", id1Listener);
+        index.createInteraction(conversation, "test input", "pt", "test response", "test origin", "metadata", id1Listener);
 
         StepListener<String> id2Listener = new StepListener<>();
         id1Listener.whenComplete(id -> {
@@ -177,8 +195,10 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 .createInteraction(
                     conversation,
                     "test input1",
+                    "pt",
                     "test response",
                     "test origin",
+                    "metadata",
                     Instant.now().plus(3, ChronoUnit.MINUTES),
                     id2Listener
                 );
@@ -194,8 +214,10 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                 .createInteraction(
                     conversation,
                     "test input2",
+                    "pt",
                     "test response",
                     "test origin",
+                    "metadata",
                     Instant.now().plus(4, ChronoUnit.MINUTES),
                     id3Listener
                 );
@@ -247,28 +269,40 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation2 = "conversation2";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> iid1 = new StepListener<>();
-        index.createInteraction(conversation1, "test input", "test response", "test origin", iid1);
+        index.createInteraction(conversation1, "test input", "pt", "test response", "test origin", "metadata", iid1);
 
         StepListener<String> iid2 = new StepListener<>();
-        iid1.whenComplete(r -> { index.createInteraction(conversation1, "test input", "test response", "test origin", iid2); }, e -> {
-            cdl.countDown();
-            log.error(e);
-            assert (false);
-        });
+        iid1
+            .whenComplete(
+                r -> { index.createInteraction(conversation1, "test input", "pt", "test response", "test origin", "metadata", iid2); },
+                e -> {
+                    cdl.countDown();
+                    log.error(e);
+                    assert (false);
+                }
+            );
 
         StepListener<String> iid3 = new StepListener<>();
-        iid2.whenComplete(r -> { index.createInteraction(conversation2, "test input", "test response", "test origin", iid3); }, e -> {
-            cdl.countDown();
-            log.error(e);
-            assert (false);
-        });
+        iid2
+            .whenComplete(
+                r -> { index.createInteraction(conversation2, "test input", "pt", "test response", "test origin", "metadata", iid3); },
+                e -> {
+                    cdl.countDown();
+                    log.error(e);
+                    assert (false);
+                }
+            );
 
         StepListener<String> iid4 = new StepListener<>();
-        iid3.whenComplete(r -> { index.createInteraction(conversation1, "test input", "test response", "test origin", iid4); }, e -> {
-            cdl.countDown();
-            log.error(e);
-            assert (false);
-        });
+        iid3
+            .whenComplete(
+                r -> { index.createInteraction(conversation1, "test input", "pt", "test response", "test origin", "metadata", iid4); },
+                e -> {
+                    cdl.countDown();
+                    log.error(e);
+                    assert (false);
+                }
+            );
 
         StepListener<Boolean> deleteListener = new StepListener<>();
         iid4.whenComplete(r -> { index.deleteConversation(conversation1, deleteListener); }, e -> {

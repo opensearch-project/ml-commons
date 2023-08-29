@@ -48,9 +48,13 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private String input;
     @Getter
+    private String promptTemplate;
+    @Getter
     private String response;
     @Getter
     private String origin;
+    @Getter
+    private String metadata;
 
     /**
      * Creates an Interaction object from a map of fields in the OS index
@@ -62,9 +66,11 @@ public class Interaction implements Writeable, ToXContentObject {
         Instant timestamp = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD));
         String conversationId   = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD);
         String input     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD);
+        String promptTemplate = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD);
         String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
         String agent     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
-        return new Interaction(id, timestamp, conversationId, input, response, agent);
+        String metadata  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD);
+        return new Interaction(id, timestamp, conversationId, input, promptTemplate, response, agent, metadata);
     }
 
     /**
@@ -88,9 +94,11 @@ public class Interaction implements Writeable, ToXContentObject {
         Instant timestamp = in.readInstant();
         String conversationId = in.readString();
         String input = in.readString();
+        String promptTemplate = in.readString();
         String response = in.readString();
         String origin = in.readString();
-        return new Interaction(id, timestamp, conversationId, input, response, origin);
+        String metadata = in.readOptionalString();
+        return new Interaction(id, timestamp, conversationId, input, promptTemplate, response, origin, metadata);
     }
 
 
@@ -100,8 +108,10 @@ public class Interaction implements Writeable, ToXContentObject {
         out.writeInstant(timestamp);
         out.writeString(conversationId);
         out.writeString(input);
+        out.writeString(promptTemplate);
         out.writeString(response);
         out.writeString(origin);
+        out.writeOptionalString(metadata);
     }
 
     @Override
@@ -111,8 +121,12 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, id);
         builder.field(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, timestamp);
         builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
+        builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD, promptTemplate);
         builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
         builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
+        if(metadata != null) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD, metadata);
+        }
         builder.endObject();
         return builder;
     }
@@ -125,8 +139,11 @@ public class Interaction implements Writeable, ToXContentObject {
             ((Interaction) other).conversationId.equals(this.conversationId) &&
             ((Interaction) other).timestamp.equals(this.timestamp) &&
             ((Interaction) other).input.equals(this.input) &&
+            ((Interaction) other).promptTemplate.equals(this.promptTemplate) &&
             ((Interaction) other).response.equals(this.response) &&
-            ((Interaction) other).origin.equals(this.origin)
+            ((Interaction) other).origin.equals(this.origin) && 
+            ( (((Interaction) other).metadata == null && this.metadata == null) ||
+              ((Interaction) other).metadata.equals(this.metadata))
         );
     }
 
@@ -138,7 +155,9 @@ public class Interaction implements Writeable, ToXContentObject {
             + ",timestamp=" + timestamp
             + ",origin=" + origin
             + ",input=" + input
+            + ",promt_template=" + promptTemplate
             + ",response=" + response
+            + ",metadata=" + metadata
             + "}";
     }
     

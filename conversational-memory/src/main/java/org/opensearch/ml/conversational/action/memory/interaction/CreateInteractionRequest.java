@@ -41,9 +41,13 @@ public class CreateInteractionRequest extends ActionRequest {
     @Getter
     private String input;
     @Getter
+    private String promptTemplate;
+    @Getter
     private String response;
     @Getter
     private String origin;
+    @Getter
+    private String metadata;
 
     /**
      * Constructor
@@ -54,8 +58,10 @@ public class CreateInteractionRequest extends ActionRequest {
         super(in);
         this.conversationId = in.readString();
         this.input = in.readString();
+        this.promptTemplate = in.readString();
         this.response = in.readString();
         this.origin = in.readOptionalString();
+        this.metadata = in.readOptionalString();
     }
 
     @Override
@@ -63,8 +69,10 @@ public class CreateInteractionRequest extends ActionRequest {
         super.writeTo(out);
         out.writeString(conversationId);
         out.writeString(input);
+        out.writeString(promptTemplate);
         out.writeString(response);
         out.writeOptionalString(origin);
+        out.writeOptionalString(metadata);
     }
 
     @Override
@@ -85,9 +93,11 @@ public class CreateInteractionRequest extends ActionRequest {
     public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
         String inp = request.param(ActionConstants.INPUT_FIELD);
+        String prmpt = request.param(ActionConstants.PROMPT_TEMPLATE_FIELD);
         String rsp = request.param(ActionConstants.AI_RESPONSE_FIELD);
         String ogn = request.param(ActionConstants.RESPONSE_ORIGIN_FIELD);
-        return new CreateInteractionRequest(cid, inp, rsp, ogn);
+        String metadata = request.param(ActionConstants.METADATA_FIELD);
+        return new CreateInteractionRequest(cid, inp, prmpt, rsp, ogn, metadata);
     }
 
 }
