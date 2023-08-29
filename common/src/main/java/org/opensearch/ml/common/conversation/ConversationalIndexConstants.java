@@ -64,9 +64,9 @@ public class ConversationalIndexConstants {
     /** Name of the interaction field for the response's origin */
     public final static String INTERACTIONS_ORIGIN_FIELD = "origin";
     /** Name of the interaction field for additional metadata */
-    public final static String INTERACTIONS_METADATA_FIELD = "metadata";
+    public final static String INTERACTIONS_METADATA_FIELD = "additional_info";
     /** Name of the interaction field for the timestamp */
-    public final static String INTERACTIONS_TIMESTAMP_FIELD = "timestamp";
+    public final static String INTERACTIONS_TIMESTAMP_FIELD = "create_time";
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"_meta\": {\n"
