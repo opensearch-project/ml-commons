@@ -19,8 +19,8 @@ If you want to run some testing models on data node, you can disable this cluste
 ```
 PUT /_cluster/settings
 {
-  "persistent" : {
-    "plugins.ml_commons.only_run_on_ml_node" : false 
+    "persistent" : {
+        "plugins.ml_commons.only_run_on_ml_node" : false 
   }
 }
 ```
@@ -32,8 +32,8 @@ For testing purpose, you can set `plugins.ml_commons.native_memory_threshold` as
 ```
 PUT _cluster/settings
 {
-  "persistent" : {
-    "plugins.ml_commons.native_memory_threshold" : 100 
+    "persistent" : {
+        "plugins.ml_commons.native_memory_threshold" : 100 
   }
 }
 ```
@@ -49,22 +49,40 @@ opensearch-py-ml code: [sentencetransformermodel.py#save_as_pt](https://github.c
 
 Sentence transformer model already includes post-processing logic. So no need to specify `pooling_mode`/`normalize_result` when upload model.
 
+From 2.6 release we are supporting to register pre-trained models. 
+And from 2.8, we need model group id to register model. More details about model group [here](../model_access_control.md)
+
+- create a model group:
+```
+POST /_plugins/_ml/model_groups/_register
+{
+    "name": "test_model_group_public",
+    "description": "This is a public model group"
+}
+```
+
+# Sample response
+
+```
+{
+    "model_group_id": "7IjOsYgBFp6IJxCceZ1-",
+    "status": "CREATED"
+}
+```
+
+Now we can use that model group id to register model.
+
 - Step 1: upload model. This step will save model to model index.
 ```
 # Sample request
-POST /_plugins/_ml/models/_upload
+POST /_plugins/_ml/models/_register
 {
-  "name": "sentence-transformers/all-MiniLM-L6-v2",
-  "version": "1.0.0",
-  "description": "test model",
-  "model_format": "TORCH_SCRIPT",
-  "model_config": {
-    "model_type": "bert",
-    "embedding_dimension": 384,
-    "framework_type": "sentence_transformers"
-  },
-  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_sentence-transformer.zip?raw=true"
+    "name": "huggingface/sentence-transformers/all-MiniLM-L12-v2",
+    "version": "1.0.1",
+    "model_format": "TORCH_SCRIPT"
+    "model_group_id": "7IjOsYgBFp6IJxCceZ1-"
 }
+
 
 # Sample response
 {
@@ -93,6 +111,40 @@ GET /_plugins/_ml/tasks/zgla5YUB1qmVrJFlwzW-
     "is_async": true
 }
 ```
+
+We can also register model from URL. To do that we need to update the following cluster settings:
+
+```
+PUT _cluster/settings
+{
+    "persistent" : {
+        "plugins.ml_commons.allow_registering_model_via_url" : true
+    }
+}
+```
+
+Now we can register model using URL upload:
+
+```
+POST /_plugins/_ml/models/_register
+{
+    "name": "sentence-transformers/all-MiniLM-L6-v2",
+	"version": "1.0.1",
+	"description": "This is a sentence-transformers model: It maps sentences & paragraphs to a 384 dimensional dense vector space and can be used for tasks like clustering or semantic search.",
+	"model_task_type": "TEXT_EMBEDDING",
+	"model_format": "TORCH_SCRIPT",
+	"model_content_hash_value": "c15f0d2e62d872be5b5bc6c84d2e0f4921541e29fefbef51d59cc10a8ae30e0f",
+	"model_config": {
+		"model_type": "bert",
+		"embedding_dimension": 384,
+		"framework_type": "sentence_transformers",
+		"all_config": "{\"_name_or_path\":\"nreimers/MiniLM-L6-H384-uncased\",\"architectures\":[\"BertModel\"],\"attention_probs_dropout_prob\":0.1,\"gradient_checkpointing\":false,\"hidden_act\":\"gelu\",\"hidden_dropout_prob\":0.1,\"hidden_size\":384,\"initializer_range\":0.02,\"intermediate_size\":1536,\"layer_norm_eps\":1e-12,\"max_position_embeddings\":512,\"model_type\":\"bert\",\"num_attention_heads\":12,\"num_hidden_layers\":6,\"pad_token_id\":0,\"position_embedding_type\":\"absolute\",\"transformers_version\":\"4.8.2\",\"type_vocab_size\":2,\"use_cache\":true,\"vocab_size\":30522}"
+	},
+    "model_group_id": "7IjOsYgBFp6IJxCceZ1-",
+    "url": "https://artifacts.opensearch.org/models/ml-models/huggingface/sentence-transformers/all-MiniLM-L6-v2/1.0.1/torch_script/sentence-transformers_all-MiniLM-L6-v2-1.0.1-torch_script.zip"
+}
+```
+
 - Step 2: deploy/load model. This step will read model content from index and deploy to node. 
 
 ```
