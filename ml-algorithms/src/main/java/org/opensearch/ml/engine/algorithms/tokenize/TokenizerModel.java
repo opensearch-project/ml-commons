@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.text_embedding;
+package org.opensearch.ml.engine.algorithms.tokenize;
 
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
@@ -29,14 +29,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
-import static org.opensearch.ml.engine.ModelHelper.ONNX_ENGINE;
-import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
-
 @Log4j2
-@Function(FunctionName.SPARSE_ENCODING)
-public class SparseEncodingModel extends DLModel {
-
+@Function(FunctionName.TOKENIZE)
+public class TokenizerModel extends DLModel {
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
@@ -54,20 +49,25 @@ public class SparseEncodingModel extends DLModel {
     }
 
     @Override
-    public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
-        return new SparseEncodingTranslator();
-    }
-
-    @Override
     public TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig) {
         return null;
     }
 
     @Override
+    public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
+        return new TokenizerTranslator(null);
+    }
+
+
+    @Override
     public Map<String, Object> getArguments(MLModelConfig modelConfig) {
+        Map<String, Object> arguments = new HashMap<>();
+        if (modelConfig == null){
+            return arguments;
+        }
         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
         Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-        Map<String, Object> arguments = new HashMap<>();
+
         if (modelMaxLength != null) {
             arguments.put("modelMaxLength", modelMaxLength);
         }
@@ -77,10 +77,12 @@ public class SparseEncodingModel extends DLModel {
     @Override
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
         String warmUpSentence = "warm up sentence";
-        if (modelMaxLength != null) {
-            warmUpSentence = "sentence ".repeat(modelMaxLength);
+        if (modelConfig  != null) {
+            Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
+            if (modelMaxLength != null) {
+                warmUpSentence = "sentence ".repeat(modelMaxLength);
+            }
         }
         // First request takes longer time. Predict once to warm up model.
         Input input = new Input();

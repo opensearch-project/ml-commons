@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.engine.algorithms.text_embedding;
+package org.opensearch.ml.engine.algorithms.tokenize;
 
 
 import ai.djl.huggingface.tokenizers.Encoding;
