@@ -26,8 +26,11 @@ import static org.mockito.Mockito.verify;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestChannel;
@@ -36,7 +39,17 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
+import com.google.gson.Gson;
+
 public class CreateConversationRestActionTests extends OpenSearchTestCase {
+
+    Gson gson;
+
+    @Before
+    public void setup() {
+        gson = new Gson();
+    }
+
     public void testBasics() {
         CreateConversationRestAction action = new CreateConversationRestAction();
         assert (action.getName().equals("conversational_create_conversation"));
@@ -48,7 +61,10 @@ public class CreateConversationRestActionTests extends OpenSearchTestCase {
     public void testPrepareRequest() throws Exception {
         CreateConversationRestAction action = new CreateConversationRestAction();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "test-name"))
+            .withContent(
+                new BytesArray(gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "test-name"))),
+                MediaTypeRegistry.JSON
+            )
             .build();
 
         NodeClient client = mock(NodeClient.class);

@@ -18,6 +18,7 @@
 package org.opensearch.ml.conversational.action.memory.conversation;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -80,8 +81,12 @@ public class CreateConversationRequest extends ActionRequest {
      * @throws IOException if something breaks
      */
     public static CreateConversationRequest fromRestRequest(RestRequest restRequest) throws IOException {
-        if (restRequest.hasParam(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
-            return new CreateConversationRequest(restRequest.param(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD));
+        if (!restRequest.hasContent()) {
+            return new CreateConversationRequest();
+        }
+        Map<String, String> body = restRequest.contentParser().mapStrings();
+        if (body.containsKey(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD)) {
+            return new CreateConversationRequest(body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD));
         } else {
             return new CreateConversationRequest();
         }

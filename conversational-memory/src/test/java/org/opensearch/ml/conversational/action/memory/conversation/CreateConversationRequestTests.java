@@ -20,19 +20,31 @@ package org.opensearch.ml.conversational.action.memory.conversation;
 import java.io.IOException;
 import java.util.Map;
 
+import org.junit.Before;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.BytesStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
+import com.google.gson.Gson;
+
 public class CreateConversationRequestTests extends OpenSearchTestCase {
+
+    Gson gson;
+
+    @Before
+    public void setup() {
+        gson = new Gson();
+    }
 
     public void testConstructorsAndStreaming_Named() throws IOException {
         CreateConversationRequest request = new CreateConversationRequest("test-name");
@@ -67,7 +79,7 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
     public void testNamedRestRequest() throws IOException {
         String name = "test-name";
         RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name))
+            .withContent(new BytesArray(gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name))), MediaTypeRegistry.JSON)
             .build();
         CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
         assert (request.getName().equals(name));

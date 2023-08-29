@@ -99,8 +99,8 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 client(),
                 "POST",
                 ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
-                params,
-                "",
+                null,
+                gson.toJson(params),
                 null
             );
         assert (response != null);
@@ -154,8 +154,8 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 client(),
                 "POST",
                 ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
-                params,
-                "",
+                null,
+                gson.toJson(params),
                 null
             );
         assert (response != null);
@@ -217,8 +217,8 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 client(),
                 "POST",
                 ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
-                params,
-                "",
+                null,
+                gson.toJson(params),
                 null
             );
         assert (response != null);
@@ -234,8 +234,8 @@ public class RestConversationalGetInteractionsActionIT extends MLCommonsRestTest
                 client(),
                 "POST",
                 ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
-                params,
-                "",
+                null,
+                gson.toJson(params),
                 null
             );
         assert (response2 != null);

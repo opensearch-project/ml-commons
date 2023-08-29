@@ -20,6 +20,7 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -91,12 +92,13 @@ public class CreateInteractionRequest extends ActionRequest {
      * @throws IOException if something goes wrong reading from request
      */
     public static CreateInteractionRequest fromRestRequest(RestRequest request) throws IOException {
+        Map<String, String> body = request.contentParser().mapStrings();
         String cid = request.param(ActionConstants.CONVERSATION_ID_FIELD);
-        String inp = request.param(ActionConstants.INPUT_FIELD);
-        String prmpt = request.param(ActionConstants.PROMPT_TEMPLATE_FIELD);
-        String rsp = request.param(ActionConstants.AI_RESPONSE_FIELD);
-        String ogn = request.param(ActionConstants.RESPONSE_ORIGIN_FIELD);
-        String metadata = request.param(ActionConstants.METADATA_FIELD);
+        String inp = body.get(ActionConstants.INPUT_FIELD);
+        String prmpt = body.get(ActionConstants.PROMPT_TEMPLATE_FIELD);
+        String rsp = body.get(ActionConstants.AI_RESPONSE_FIELD);
+        String ogn = body.get(ActionConstants.RESPONSE_ORIGIN_FIELD);
+        String metadata = body.get(ActionConstants.METADATA_FIELD);
         return new CreateInteractionRequest(cid, inp, prmpt, rsp, ogn, metadata);
     }
 

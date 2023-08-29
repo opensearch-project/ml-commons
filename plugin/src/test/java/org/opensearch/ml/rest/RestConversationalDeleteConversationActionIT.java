@@ -104,8 +104,8 @@ public class RestConversationalDeleteConversationActionIT extends MLCommonsRestT
                 client(),
                 "POST",
                 ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", cid),
-                params,
-                "",
+                null,
+                gson.toJson(params),
                 null
             );
         assert (ciresponse != null);

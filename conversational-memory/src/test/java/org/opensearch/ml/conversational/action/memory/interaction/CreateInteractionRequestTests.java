@@ -20,19 +20,31 @@ package org.opensearch.ml.conversational.action.memory.interaction;
 import java.io.IOException;
 import java.util.Map;
 
+import org.junit.Before;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.BytesStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
+import com.google.gson.Gson;
+
 public class CreateInteractionRequestTests extends OpenSearchTestCase {
+
+    Gson gson;
+
+    @Before
+    public void setup() {
+        gson = new Gson();
+    }
 
     public void testConstructorsAndStreaming() throws IOException {
         CreateInteractionRequest request = new CreateInteractionRequest("cid", "input", "pt", "response", "origin", "metadata");
@@ -64,8 +76,6 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
     public void testFromRestRequest() throws IOException {
         Map<String, String> params = Map
             .of(
-                ActionConstants.CONVERSATION_ID_FIELD,
-                "cid",
                 ActionConstants.INPUT_FIELD,
                 "input",
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
@@ -77,7 +87,10 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
                 ActionConstants.METADATA_FIELD,
                 "metadata"
             );
-        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
+        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
         CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
         assert (request.validate() == null);
         assert (request.getConversationId().equals("cid"));

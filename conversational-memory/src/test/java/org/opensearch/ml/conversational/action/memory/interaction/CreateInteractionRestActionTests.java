@@ -26,8 +26,11 @@ import static org.mockito.Mockito.verify;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversational.ActionConstants;
 import org.opensearch.rest.RestChannel;
@@ -36,7 +39,16 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
+import com.google.gson.Gson;
+
 public class CreateInteractionRestActionTests extends OpenSearchTestCase {
+
+    Gson gson;
+
+    @Before
+    public void setup() {
+        gson = new Gson();
+    }
 
     public void testBasics() {
         CreateInteractionRestAction action = new CreateInteractionRestAction();
@@ -49,8 +61,6 @@ public class CreateInteractionRestActionTests extends OpenSearchTestCase {
     public void testPrepareRequest() throws Exception {
         Map<String, String> params = Map
             .of(
-                ActionConstants.CONVERSATION_ID_FIELD,
-                "cid",
                 ActionConstants.INPUT_FIELD,
                 "input",
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
@@ -63,7 +73,10 @@ public class CreateInteractionRestActionTests extends OpenSearchTestCase {
                 "metadata"
             );
         CreateInteractionRestAction action = new CreateInteractionRestAction();
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.CONVERSATION_ID_FIELD, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
 
         NodeClient client = mock(NodeClient.class);
         RestChannel channel = mock(RestChannel.class);

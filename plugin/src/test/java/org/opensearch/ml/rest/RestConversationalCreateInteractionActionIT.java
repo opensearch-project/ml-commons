@@ -52,7 +52,14 @@ public class RestConversationalCreateInteractionActionIT extends MLCommonsRestTe
                 "some metadata"
             );
         Response response = TestHelper
-            .makeRequest(client(), "POST", ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", id), params, "", null);
+            .makeRequest(
+                client(),
+                "POST",
+                ActionConstants.CREATE_INTERACTION_REST_PATH.replace("{conversation_id}", id),
+                null,
+                gson.toJson(params),
+                null
+            );
         assert (response != null);
         assert (TestHelper.restStatus(response) == RestStatus.OK);
         HttpEntity httpEntity = response.getEntity();

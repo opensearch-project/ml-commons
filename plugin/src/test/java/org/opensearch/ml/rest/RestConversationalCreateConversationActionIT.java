@@ -44,8 +44,8 @@ public class RestConversationalCreateConversationActionIT extends MLCommonsRestT
                 client(),
                 "POST",
                 ActionConstants.CREATE_CONVERSATION_REST_PATH,
-                Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "name"),
-                "",
+                null,
+                gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, "name")),
                 null
             );
         assert (response != null);
