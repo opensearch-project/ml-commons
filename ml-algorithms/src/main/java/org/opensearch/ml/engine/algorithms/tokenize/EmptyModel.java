@@ -1,13 +1,8 @@
-package org.opensearch.ml.engine.algorithms.text_embedding;
-import ai.djl.Application;
-import ai.djl.Device;
+package org.opensearch.ml.engine.algorithms.tokenize;
 import ai.djl.MalformedModelException;
 import ai.djl.Model;
-import ai.djl.engine.Engine;
-import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
-import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.DataType;
@@ -16,14 +11,11 @@ import ai.djl.nn.Block;
 import ai.djl.nn.BlockList;
 import ai.djl.nn.Parameter;
 import ai.djl.nn.ParameterList;
-import ai.djl.repository.zoo.Criteria;
 import ai.djl.repository.zoo.ZooModel;
 import ai.djl.training.ParameterStore;
 import ai.djl.training.initializer.Initializer;
-import ai.djl.translate.TranslateException;
-import ai.djl.translate.Translator;
-import ai.djl.translate.TranslatorFactory;
 import ai.djl.util.PairList;
+import org.opensearch.ml.engine.algorithms.tokenize.TokenizerTranslator;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -31,10 +23,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 
-import java.util.Iterator;
 import java.util.function.Predicate;
-
-import static org.reflections.Reflections.log;
 
 
 public class EmptyModel {
