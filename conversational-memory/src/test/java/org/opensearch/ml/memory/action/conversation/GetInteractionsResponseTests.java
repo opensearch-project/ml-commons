@@ -72,9 +72,9 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\""
+        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":\""
             + interaction.getTimestamp()
-            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"metadata\":\"metadata\"}],\"next_token\":2}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":\"metadata\"}],\"next_token\":2}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
@@ -89,9 +89,9 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
-        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"timestamp\":\""
+        String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":\""
             + interaction.getTimestamp()
-            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"metadata\":\"metadata\"}]}";
+            + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":\"metadata\"}]}";
         log.info(result);
         log.info(expected);
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
