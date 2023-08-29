@@ -104,7 +104,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
             }
-            if (url != null && modelConfig == null) {
+            if (url != null && modelConfig == null && functionName != FunctionName.TOKENIZE) {
                 throw new IllegalArgumentException("model config is null");
             }
         }
