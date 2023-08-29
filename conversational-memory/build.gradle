@@ -42,7 +42,6 @@ dependencies {
 test {
     include "**/*Tests.class"
     jvmArgs '-Dtests.security.manager=false'
-    //testLogging.showStandardStreams = true
 }
 
 jacocoTestReport {
