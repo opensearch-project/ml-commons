@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.common.collect.ImmutableMap;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Rule;
@@ -437,17 +438,19 @@ public class AnomalyLocalizerImplTests {
                 new TransportAddress(TransportAddress.META_ADDRESS, portGenerator.incrementAndGet()),
                 new HashMap<>(), roleSet,
                 Version.CURRENT);
-        Settings.Builder indexSettings = Settings.builder()
-                .put("index.number_of_shards", 1)
-                .put("index.number_of_replicas", 1)
-                .put("index.version.created", Version.CURRENT.id);
-        IndexMetadata indexMetaData = IndexMetadata.builder("test").settings(indexSettings).build();
-        final Map<String, IndexMetadata> indices = Collections.unmodifiableMap(Map.of(indexName, indexMetaData));
-        Metadata metadata = new Metadata.Builder().indices(indices).build();
-
+        Metadata metadata = new Metadata.Builder()
+                .indices(ImmutableMap
+                        .<String, IndexMetadata>builder()
+                        .put(indexName, IndexMetadata.builder("test")
+                                .settings(Settings.builder()
+                                        .put("index.number_of_shards", 1)
+                                        .put("index.number_of_replicas", 1)
+                                        .put("index.version.created", Version.CURRENT.id))
+                                .build())
+                        .build()).build();
         return new ClusterState(new ClusterName(clusterName), 123l, "111111",
                 metadata, null, DiscoveryNodes.builder().add(node).build(),
-                null, new HashMap<>(), 0, false);
+                null, Map.of(), 0, false);
     }
 }
 

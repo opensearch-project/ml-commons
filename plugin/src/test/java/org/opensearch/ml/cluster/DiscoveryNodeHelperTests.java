@@ -16,8 +16,8 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -129,7 +129,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
             .add(mlNode1)
             .add(mlNode2)
             .build();
-        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, new HashMap<>(), 0, false);
+        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
 
         when(clusterService.state()).thenReturn(clusterState);
         discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -158,7 +158,7 @@ public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
         mockSettings(false, nonExistingNodeName);
         DiscoveryNodeHelper discoveryNodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(clusterManagerNode).add(dataNode1).add(dataNode2).add(warmDataNode1).build();
-        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, new HashMap<>(), 0, false);
+        clusterState = new ClusterState(new ClusterName(clusterName), 123l, "111111", null, null, nodes, null, Map.of(), 0, false);
         when(clusterService.state()).thenReturn(clusterState);
 
         DiscoveryNode[] eligibleNodes = discoveryNodeHelper.getEligibleNodes();

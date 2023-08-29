@@ -316,10 +316,10 @@ public class TestHelper {
             .build();
         final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
         IndexMetadata indexMetaData = IndexMetadata.builder(indexName).settings(existingSettings).putMapping(mapping).build();
-        final Map<String, IndexMetadata> indices = Collections.unmodifiableMap(Map.of(indexName, indexMetaData));
-        ClusterState clusterState = ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
 
-        return clusterState;
+        final Map<String, IndexMetadata> indices = Map.of(indexName, indexMetaData);
+
+        return ClusterState.builder(name).metadata(Metadata.builder().indices(indices).build()).build();
     }
 
     public static ClusterState state(int numDataNodes, String indexName, String mapping) throws IOException {
@@ -359,14 +359,26 @@ public class TestHelper {
             roleSet,
             Version.CURRENT
         );
-        final Settings.Builder indexSettings = Settings
-            .builder()
-            .put("index.number_of_shards", 1)
-            .put("index.number_of_replicas", 1)
-            .put("index.version.created", Version.CURRENT.id);
-        IndexMetadata indexMetaData = IndexMetadata.builder("test").settings(indexSettings).build();
-        final Map<String, IndexMetadata> indices = Map.of(ML_MODEL_INDEX, indexMetaData);
-        Metadata metadata = new Metadata.Builder().indices(indices).build();
+        Metadata metadata = new Metadata.Builder()
+            .indices(
+                ImmutableMap
+                    .<String, IndexMetadata>builder()
+                    .put(
+                        ML_MODEL_INDEX,
+                        IndexMetadata
+                            .builder("test")
+                            .settings(
+                                Settings
+                                    .builder()
+                                    .put("index.number_of_shards", 1)
+                                    .put("index.number_of_replicas", 1)
+                                    .put("index.version.created", Version.CURRENT.id)
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
         return new ClusterState(
             new ClusterName("test cluster"),
             123l,
@@ -375,7 +387,7 @@ public class TestHelper {
             null,
             DiscoveryNodes.builder().add(node).build(),
             null,
-            new HashMap<>(),
+            Map.of(),
             0,
             false
         );

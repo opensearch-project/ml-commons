@@ -16,7 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -103,18 +103,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         Metadata metadata = mock(Metadata.class);
         when(metadata.hasIndex(anyString())).thenReturn(true);
-        ClusterState testState = new ClusterState(
-            new ClusterName("mock"),
-            123l,
-            "111111",
-            metadata,
-            null,
-            null,
-            null,
-            Collections.singletonMap("key", null),
-            0,
-            false
-        );
+        ClusterState testState = new ClusterState(new ClusterName("mock"), 123l, "111111", metadata, null, null, null, Map.of(), 0, false);
         when(clusterService.state()).thenReturn(testState);
     }
 
