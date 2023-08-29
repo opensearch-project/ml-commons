@@ -17,7 +17,6 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Collections;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
