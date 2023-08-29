@@ -74,10 +74,12 @@ public class SparseEncodingModel extends DLModel {
     @Override
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
         String warmUpSentence = "warm up sentence";
-        if (modelMaxLength != null) {
-            warmUpSentence = "sentence ".repeat(modelMaxLength);
+        if (modelConfig  != null) {
+            Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
+            if (modelMaxLength != null) {
+                warmUpSentence = "sentence ".repeat(modelMaxLength);
+            }
         }
         // First request takes longer time. Predict once to warm up model.
         Input input = new Input();
