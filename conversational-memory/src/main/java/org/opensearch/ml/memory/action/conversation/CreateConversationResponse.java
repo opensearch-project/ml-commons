@@ -38,7 +38,7 @@ public class CreateConversationResponse extends ActionResponse implements ToXCon
     String conversationId;
 
     /**
-     * Convtructor
+     * Constructor
      * @param in input stream to create this from
      * @throws IOException if something breaks
      */
