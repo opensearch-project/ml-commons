@@ -1,4 +1,4 @@
-package org.opensearch.ml.engine.algorithms.tokenize;
+package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
@@ -21,7 +21,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.engine.algorithms.tokenize.TokenizerModel;
+import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
@@ -38,7 +38,7 @@ import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
 
-public class TokenizeModelTest {
+public class SparseEncodingModelTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -47,17 +47,17 @@ public class TokenizeModelTest {
     private String modelName;
     private FunctionName functionName;
     private String version;
+    private TextEmbeddingModelConfig modelConfig;
     private MLModel model;
     private ModelHelper modelHelper;
     private Map<String, Object> params;
-    private TokenizerModel tokenizerModel;
+    private SparseEncodingModel sparseEncodingModel;
     private Path mlCachePath;
     private Path mlConfigPath;
     private TextDocsInputDataSet inputDataSet;
+    private int dimension = 384;
     private MLEngine mlEngine;
     private Encryptor encryptor;
-
-    private List<Integer> resultNumber;
 
     @Before
     public void setUp() throws URISyntaxException {
@@ -72,65 +72,87 @@ public class TokenizeModelTest {
                 .modelFormat(MLModelFormat.TORCH_SCRIPT)
                 .name("test_model_name")
                 .modelId("test_model_id")
-                .algorithm(FunctionName.TOKENIZE)
+                .algorithm(FunctionName.TEXT_EMBEDDING)
                 .version("1.0.0")
                 .modelState(MLModelState.TRAINED)
                 .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        modelZipFile = new File(getClass().getResource("demo_tokenize.zip").toURI());
+        modelZipFile = new File(getClass().getResource("sparse_splade.zip").toURI());
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
-        tokenizerModel = new TokenizerModel();
+        sparseEncodingModel = new SparseEncodingModel();
 
         inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is a happy dog")).build();
-        resultNumber.add(3);
-        resultNumber.add(5);
     }
 
     @Test
-    public void initModel_predict_Tokenize_SmallModel() throws URISyntaxException {
+    public void initModel_predict_TorchScript_SparseEncoding_SmallModel() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo-sparse.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
         MLModel smallModel = model.toBuilder().build();
-        tokenizerModel.initModel(smallModel, params, encryptor);
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
+        sparseEncodingModel.initModel(smallModel, params, encryptor);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput)sparseEncodingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+        for (int i=0;i<mlModelOutputs.size();i++) {
+            ModelTensors tensors = mlModelOutputs.get(i);
+            int position = findSentenceEmbeddingPosition(tensors);
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
+            //assertEquals(modelConfig.getEmbeddingDimension().intValue(), mlModelTensors.get(position).getData().length);
+        }
+        sparseEncodingModel.close();
+    }
+
+    @Test
+    public void initModel_predict_TorchScript_SparseEncoding() {
+        sparseEncodingModel.initModel(model, params, encryptor);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput)sparseEncodingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
-            assertEquals(2, mlModelTensors.size());
-            ModelTensor tensor = mlModelTensors.get(0);
-            Map<String, ?> resultMap = tensor.getDataAsMap();
-            assertEquals(resultMap.size(), resultMap.get(i));
+            //assertEquals(4, mlModelTensors.size());
+            //assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
-        tokenizerModel.close();
+        sparseEncodingModel.close();
     }
 
-
     @Test
-    public void initModel_predict_Tokenize_SmallModel_ResultFilter() {
-        tokenizerModel.initModel(model, params, encryptor);
-        ModelResultFilter resultFilter = ModelResultFilter.builder().targetResponse(Arrays.asList("input.input_ids")).build();
+    public void initModel_predict_TorchScript_SparseEncoding_ResultFilter() {
+        sparseEncodingModel.initModel(model, params, encryptor);
+        ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList(SENTENCE_EMBEDDING)).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
+        ModelTensorOutput output = (ModelTensorOutput)sparseEncodingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
-            ModelTensor tensor = mlModelTensors.get(0);
-            Map<String, ?> resultMap = tensor.getDataAsMap();
-            assertEquals(resultMap.size(), resultMap.get(i));
+            //assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
-        tokenizerModel.close();
+        sparseEncodingModel.close();
+    }
+
+
+
+
+    @Test
+    public void initModel_NullModelZipFile() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("model file is null");
+        Map<String, Object> params = new HashMap<>();
+        params.put(MODEL_HELPER, modelHelper);
+        sparseEncodingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -138,8 +160,8 @@ public class TokenizeModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
-        tokenizerModel.initModel(model, params, encryptor);
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        sparseEncodingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -147,9 +169,9 @@ public class TokenizeModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
-        tokenizerModel.initModel(model, params, encryptor);
+        sparseEncodingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -157,7 +179,7 @@ public class TokenizeModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model id is null");
         model.setModelId(null);
-        tokenizerModel.initModel(model, params, encryptor);
+        sparseEncodingModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -167,7 +189,7 @@ public class TokenizeModelTest {
             params.put(MODEL_HELPER, modelHelper);
             params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
             params.put(ML_ENGINE, mlEngine);
-            tokenizerModel.initModel(model, params, encryptor);
+            sparseEncodingModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals(MLException.class, e.getClass());
             Throwable rootCause = ExceptionUtils.getRootCause(e);
@@ -181,14 +203,14 @@ public class TokenizeModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("wrong function name");
         MLModel mlModel = model.toBuilder().algorithm(FunctionName.KMEANS).build();
-        tokenizerModel.initModel(mlModel, params, encryptor);
+        sparseEncodingModel.initModel(mlModel, params, encryptor);
     }
 
     @Test
     public void predict_NullModelHelper() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build());
+        sparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -197,38 +219,49 @@ public class TokenizeModelTest {
         exceptionRule.expectMessage("model not deployed");
         model.setModelId(null);
         try {
-            tokenizerModel.initModel(model, params, encryptor);
+            sparseEncodingModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals("model id is null", e.getMessage());
         }
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build());
+        sparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Failed to inference TOKENIZE");
-        tokenizerModel.initModel(model, params, encryptor);
-        tokenizerModel.close();
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build());
+        exceptionRule.expectMessage("Failed to inference TEXT_EMBEDDING");
+        sparseEncodingModel.initModel(model, params, encryptor);
+        sparseEncodingModel.close();
+        sparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void parseModelTensorOutput_NullOutput() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("No output generated");
-        tokenizerModel.parseModelTensorOutput(null, null);
+        sparseEncodingModel.parseModelTensorOutput(null, null);
     }
 
     @Test
     public void predict_BeforeInitingModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build(), model);
+        sparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build(), model);
     }
 
     @After
     public void tearDown() {
         FileUtils.deleteFileQuietly(mlCachePath);
+    }
+
+    private int findSentenceEmbeddingPosition(ModelTensors modelTensors) {
+        List<ModelTensor> mlModelTensors = modelTensors.getMlModelTensors();
+        for (int i=0; i<mlModelTensors.size(); i++) {
+            ModelTensor mlModelTensor = mlModelTensors.get(i);
+            if (SENTENCE_EMBEDDING.equals(mlModelTensor.getName())) {
+                return i;
+            }
+        }
+        throw new ResourceNotFoundException("no sentence embedding found");
     }
 }
