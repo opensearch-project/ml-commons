@@ -194,8 +194,6 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
     public enum FrameworkType {
         HUGGINGFACE_TRANSFORMERS,
         SENTENCE_TRANSFORMERS,
-        TOKENIZER,
-        SPARSE_ENCODING,
         HUGGINGFACE_TRANSFORMERS_NEURON;
 
         public static FrameworkType from(String value) {
