@@ -14,7 +14,6 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -27,7 +26,9 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
 import java.io.File;
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -57,8 +58,6 @@ public class TokenizeModelTest {
     private MLEngine mlEngine;
     private Encryptor encryptor;
 
-    private List<Integer> resultNumber;
-
     @Before
     public void setUp() throws URISyntaxException {
         mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
@@ -66,7 +65,7 @@ public class TokenizeModelTest {
         mlEngine = new MLEngine(mlCachePath, encryptor);
         modelId = "test_model_id";
         modelName = "test_model_name";
-        functionName = FunctionName.TEXT_EMBEDDING;
+        functionName = FunctionName.TOKENIZE;
         version = "1";
         model = MLModel.builder()
                 .modelFormat(MLModelFormat.TORCH_SCRIPT)
@@ -78,22 +77,21 @@ public class TokenizeModelTest {
                 .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        modelZipFile = new File(getClass().getResource("demo_tokenize.zip").toURI());
+        //modelZipFile = new File(getClass().getResource("demo_tokenize.zip").toURI());
+        modelZipFile = new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip"));
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
         tokenizerModel = new TokenizerModel();
 
-        inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is a happy dog")).build();
-        resultNumber.add(3);
-        resultNumber.add(5);
+        inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is dog")).build();
     }
 
     @Test
     public void initModel_predict_Tokenize_SmallModel() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip")));
         params.put(ML_ENGINE, mlEngine);
         MLModel smallModel = model.toBuilder().build();
         tokenizerModel.initModel(smallModel, params, encryptor);
@@ -107,7 +105,9 @@ public class TokenizeModelTest {
             assertEquals(2, mlModelTensors.size());
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
-            assertEquals(resultMap.size(), resultMap.get(i));
+            assertEquals(resultMap.size(), 1);
+            List<String> result = (List<String>) resultMap.get("tokens");
+            assertEquals(result.size(), 3);
         }
         tokenizerModel.close();
     }
@@ -116,9 +116,9 @@ public class TokenizeModelTest {
     @Test
     public void initModel_predict_Tokenize_SmallModel_ResultFilter() {
         tokenizerModel.initModel(model, params, encryptor);
-        ModelResultFilter resultFilter = ModelResultFilter.builder().targetResponse(Arrays.asList("input.input_ids")).build();
+        ModelResultFilter resultFilter = ModelResultFilter.builder().targetResponse(Arrays.asList("input1.input_ids")).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(textDocsInputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
@@ -128,7 +128,9 @@ public class TokenizeModelTest {
             assertEquals(1, mlModelTensors.size());
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
-            assertEquals(resultMap.size(), resultMap.get(i));
+            assertEquals(resultMap.size(), 1);
+            List<String> result = (List<String>) resultMap.get("tokens");
+            assertEquals(result.size(), 3);
         }
         tokenizerModel.close();
     }
@@ -138,7 +140,8 @@ public class TokenizeModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip")));
+        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
         tokenizerModel.initModel(model, params, encryptor);
     }
 
@@ -147,7 +150,8 @@ public class TokenizeModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip")));
         params.put(MODEL_HELPER, modelHelper);
         tokenizerModel.initModel(model, params, encryptor);
     }
