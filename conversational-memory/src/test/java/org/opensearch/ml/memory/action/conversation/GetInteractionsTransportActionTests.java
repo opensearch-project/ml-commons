@@ -40,6 +40,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
@@ -95,12 +96,11 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         this.request = new GetInteractionsRequest("test-cid");
         this.action = spy(new GetInteractionsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
-        Settings settings = spy(Settings.builder().build());
+        Settings settings = Settings.builder().put(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, true).build();
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
-        when(settings.getAsBoolean(any(), any())).thenReturn(true);
     }
 
     public void testGetInteractions_noMorePages() {
@@ -176,6 +176,14 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Failure in doExecute"));
+    }
+
+    public void testFeatureDisabled_ThenFail() {
+        when(this.clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().startsWith("The experimental Conversation Memory feature is not enabled"));
     }
 
 }
