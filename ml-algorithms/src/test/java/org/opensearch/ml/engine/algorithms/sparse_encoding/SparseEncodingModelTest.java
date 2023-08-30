@@ -27,6 +27,7 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
 import java.io.File;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.*;
@@ -78,7 +79,8 @@ public class SparseEncodingModelTest {
                 .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        modelZipFile = new File(getClass().getResource("sparse_splade.zip").toURI());
+        //modelZipFile = new File(getClass().getResource("sparse_splade.zip").toURI());
+        modelZipFile = new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_splade.zip"));
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -91,7 +93,8 @@ public class SparseEncodingModelTest {
     public void initModel_predict_TorchScript_SparseEncoding_SmallModel() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo-sparse.zip").toURI()));
+        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo-sparse.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_three.zip")));
         params.put(ML_ENGINE, mlEngine);
         MLModel smallModel = model.toBuilder().build();
         sparseEncodingModel.initModel(smallModel, params, encryptor);
@@ -101,7 +104,6 @@ public class SparseEncodingModelTest {
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
-            int position = findSentenceEmbeddingPosition(tensors);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
             //assertEquals(modelConfig.getEmbeddingDimension().intValue(), mlModelTensors.get(position).getData().length);
@@ -119,6 +121,7 @@ public class SparseEncodingModelTest {
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            assertEquals(1, mlModelTensors.size());
             //assertEquals(4, mlModelTensors.size());
             //assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
@@ -128,7 +131,7 @@ public class SparseEncodingModelTest {
     @Test
     public void initModel_predict_TorchScript_SparseEncoding_ResultFilter() {
         sparseEncodingModel.initModel(model, params, encryptor);
-        ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList(SENTENCE_EMBEDDING)).build();
+        ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList("output")).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)sparseEncodingModel.predict(mlInput);
@@ -142,9 +145,6 @@ public class SparseEncodingModelTest {
         }
         sparseEncodingModel.close();
     }
-
-
-
 
     @Test
     public void initModel_NullModelZipFile() {
@@ -160,7 +160,8 @@ public class SparseEncodingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_three.zip")));
         sparseEncodingModel.initModel(model, params, encryptor);
     }
 
@@ -169,7 +170,8 @@ public class SparseEncodingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_three.zip")));
         params.put(MODEL_HELPER, modelHelper);
         sparseEncodingModel.initModel(model, params, encryptor);
     }
@@ -229,7 +231,7 @@ public class SparseEncodingModelTest {
     @Test
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Failed to inference TEXT_EMBEDDING");
+        exceptionRule.expectMessage("Failed to inference SPARSE_ENCODING");
         sparseEncodingModel.initModel(model, params, encryptor);
         sparseEncodingModel.close();
         sparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
@@ -252,16 +254,5 @@ public class SparseEncodingModelTest {
     @After
     public void tearDown() {
         FileUtils.deleteFileQuietly(mlCachePath);
-    }
-
-    private int findSentenceEmbeddingPosition(ModelTensors modelTensors) {
-        List<ModelTensor> mlModelTensors = modelTensors.getMlModelTensors();
-        for (int i=0; i<mlModelTensors.size(); i++) {
-            ModelTensor mlModelTensor = mlModelTensors.get(i);
-            if (SENTENCE_EMBEDDING.equals(mlModelTensor.getName())) {
-                return i;
-            }
-        }
-        throw new ResourceNotFoundException("no sentence embedding found");
     }
 }
