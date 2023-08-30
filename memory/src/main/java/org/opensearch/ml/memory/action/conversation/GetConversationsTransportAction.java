@@ -19,16 +19,13 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.util.List;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -44,7 +41,6 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
 
     private Client client;
     private ConversationalMemoryHandler cmHandler;
-    private ClusterService clusterService;
 
     /**
      * Constructor
@@ -58,27 +54,15 @@ public class GetConversationsTransportAction extends HandledTransportAction<GetC
         TransportService transportService,
         ActionFilters actionFilters,
         OpenSearchConversationalMemoryHandler cmHandler,
-        Client client,
-        ClusterService clusterService
+        Client client
     ) {
         super(GetConversationsAction.NAME, transportService, actionFilters, GetConversationsRequest::new);
         this.client = client;
         this.cmHandler = cmHandler;
-        this.clusterService = clusterService;
     }
 
     @Override
     public void doExecute(Task task, GetConversationsRequest request, ActionListener<GetConversationsResponse> actionListener) {
-        if (!clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, change the setting "
-                            + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME
-                    )
-                );
-            return;
-        }
         int maxResults = request.getMaxResults();
         int from = request.getFrom();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
