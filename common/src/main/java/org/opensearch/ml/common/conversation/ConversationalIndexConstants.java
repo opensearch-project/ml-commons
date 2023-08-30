@@ -97,4 +97,6 @@ public class ConversationalIndexConstants {
         + "    }\n"
         + "}";
 
+    /** Name of the feature flag for conversational memory */
+    public final static String MEMORY_FEATURE_FLAG_NAME = "plugins.ml_commons.memory_feature_enabled";
 }

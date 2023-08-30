@@ -93,12 +93,14 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
         this.request = new GetInteractionsRequest("test-cid");
-        this.action = spy(new GetInteractionsTransportAction(transportService, actionFilters, cmHandler, client));
+        this.action = spy(new GetInteractionsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
-        Settings settings = Settings.builder().build();
+        Settings settings = spy(Settings.builder().build());
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
+        when(this.clusterService.getSettings()).thenReturn(settings);
+        when(settings.getAsBoolean(any(), any())).thenReturn(true);
     }
 
     public void testGetInteractions_noMorePages() {

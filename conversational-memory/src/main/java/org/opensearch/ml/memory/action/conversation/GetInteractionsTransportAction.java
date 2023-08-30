@@ -19,12 +19,15 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.util.List;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
@@ -41,6 +44,7 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
 
     private Client client;
     private ConversationalMemoryHandler cmHandler;
+    private ClusterService clusterService;
 
     /**
      * Constructor
@@ -54,15 +58,21 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
         TransportService transportService,
         ActionFilters actionFilters,
         OpenSearchConversationalMemoryHandler cmHandler,
-        Client client
+        Client client,
+        ClusterService clusterService
     ) {
         super(GetInteractionsAction.NAME, transportService, actionFilters, GetInteractionsRequest::new);
         this.client = client;
         this.cmHandler = cmHandler;
+        this.clusterService = clusterService;
     }
 
     @Override
     public void doExecute(Task task, GetInteractionsRequest request, ActionListener<GetInteractionsResponse> actionListener) {
+        if(! clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
+            actionListener.onFailure(new OpenSearchException("The experimental Conversation Memory feature is not enabled. To enable, change the setting " + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME));
+            return;
+        }
         int maxResults = request.getMaxResults();
         int from = request.getFrom();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
