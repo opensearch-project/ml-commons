@@ -69,8 +69,14 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
 
     @Override
     public void doExecute(Task task, GetInteractionsRequest request, ActionListener<GetInteractionsResponse> actionListener) {
-        if(! clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
-            actionListener.onFailure(new OpenSearchException("The experimental Conversation Memory feature is not enabled. To enable, change the setting " + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME));
+        if (!clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
+            actionListener
+                .onFailure(
+                    new OpenSearchException(
+                        "The experimental Conversation Memory feature is not enabled. To enable, change the setting "
+                            + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME
+                    )
+                );
             return;
         }
         int maxResults = request.getMaxResults();

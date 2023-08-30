@@ -66,8 +66,14 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
 
     @Override
     protected void doExecute(Task task, CreateInteractionRequest request, ActionListener<CreateInteractionResponse> actionListener) {
-        if(! clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
-            actionListener.onFailure(new OpenSearchException("The experimental Conversation Memory feature is not enabled. To enable, change the setting " + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME));
+        if (!clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
+            actionListener
+                .onFailure(
+                    new OpenSearchException(
+                        "The experimental Conversation Memory feature is not enabled. To enable, change the setting "
+                            + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME
+                    )
+                );
             return;
         }
         String cid = request.getConversationId();

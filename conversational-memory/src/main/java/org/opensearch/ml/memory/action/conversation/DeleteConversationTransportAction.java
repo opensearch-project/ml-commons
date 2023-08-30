@@ -66,8 +66,14 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
 
     @Override
     public void doExecute(Task task, DeleteConversationRequest request, ActionListener<DeleteConversationResponse> listener) {
-        if(! clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
-            listener.onFailure(new OpenSearchException("The experimental Conversation Memory feature is not enabled. To enable, change the setting " + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME));
+        if (!clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
+            listener
+                .onFailure(
+                    new OpenSearchException(
+                        "The experimental Conversation Memory feature is not enabled. To enable, change the setting "
+                            + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME
+                    )
+                );
             return;
         }
         String conversationId = request.getId();
