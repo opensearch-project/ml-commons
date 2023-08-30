@@ -89,7 +89,7 @@ public class ConversationMetaIndex {
                         || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                         internalListener.onResponse(true);
                     } else {
-                        log.error("failed to create index [" + indexName + "]");
+                        log.error("failed to create index [" + indexName + "]", e);
                         internalListener.onFailure(e);
                     }
                 });
@@ -99,7 +99,7 @@ public class ConversationMetaIndex {
                     || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                     listener.onResponse(true);
                 } else {
-                    log.error("failed to create index [" + indexName + "]");
+                    log.error("failed to create index [" + indexName + "]", e);
                     listener.onFailure(e);
                 }
             }
@@ -139,12 +139,12 @@ public class ConversationMetaIndex {
                             internalListener.onFailure(new IOException("failed to create conversation"));
                         }
                     }, e -> {
-                        log.error("failed to create conversation", e);
+                        log.error("Failed to create conversation", e);
                         internalListener.onFailure(e);
                     });
                     client.index(request, al);
                 } catch (Exception e) {
-                    log.error(e.toString());
+                    log.error("Failed to create conversation", e);
                     listener.onFailure(e);
                 }
             } else {
@@ -190,18 +190,18 @@ public class ConversationMetaIndex {
                 }
                 internalListener.onResponse(result);
             }, e -> {
-                log.error("failed to list conversations", e);
+                log.error("Failed to retrieve conversations", e);
                 internalListener.onFailure(e);
             });
             client
                 .admin()
                 .indices()
                 .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> { client.search(request, al); }, e -> {
-                    log.error("failed during refresh", e);
+                    log.error("Failed to retrieve conversations during refresh", e);
                     internalListener.onFailure(e);
                 }));
         } catch (Exception e) {
-            log.error("failed during list conversations", e);
+            log.error("Failed to retrieve conversations", e);
             listener.onFailure(e);
         }
     }
@@ -237,7 +237,7 @@ public class ConversationMetaIndex {
                     internalListener.onResponse(false);
                 }
             }, e -> {
-                log.error("failure deleting conversation " + conversationId, e);
+                log.error("Failure deleting conversation " + conversationId, e);
                 internalListener.onFailure(e);
             });
             this.checkAccess(conversationId, ActionListener.wrap(access -> {
@@ -253,7 +253,7 @@ public class ConversationMetaIndex {
                 }
             }, e -> { internalListener.onFailure(e); }));
         } catch (Exception e) {
-            log.error("failed deleting conversation with id=" + conversationId, e);
+            log.error("Failed deleting conversation with id=" + conversationId, e);
             listener.onFailure(e);
         }
     }

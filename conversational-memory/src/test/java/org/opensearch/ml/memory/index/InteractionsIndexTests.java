@@ -260,7 +260,7 @@ public class InteractionsIndexTests extends OpenSearchTestCase {
         interactionsIndex.createInteraction("cid", "inp", "pt", "rsp", "ogn", "meta", createInteractionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(createInteractionListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("failed to create conversation"));
+        assert (argCaptor.getValue().getMessage().equals("Failed to create interaction"));
     }
 
     public void testCreate_InternalFailure_ThenFail() {

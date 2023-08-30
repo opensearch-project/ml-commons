@@ -42,7 +42,7 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
     /**
      * Constructor
      * @param transportService for inter-node communications
-     * @param actionFilters not sure what this is for tbh
+     * @param actionFilters for filtering actions
      * @param cmHandler Handler for conversational memory operations
      * @param client OS Client for dealing with OS
      */
@@ -69,7 +69,7 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
             }, e -> { internalListener.onFailure(e); });
             cmHandler.deleteConversation(conversationId, al);
         } catch (Exception e) {
-            log.error(e.toString());
+            log.error("Failed to delete conversation " + conversationId, e);
             listener.onFailure(e);
         }
     }

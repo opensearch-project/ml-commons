@@ -42,7 +42,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
     /**
      * Constructor
      * @param transportService for inter-node communications
-     * @param actionFilters not sure what this is for tbh
+     * @param actionFilters for filtering actions
      * @param cmHandler Handler for conversational memory operations
      * @param client OS Client for dealing with OS
      */

@@ -89,7 +89,7 @@ public class InteractionsIndex {
                         || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                         internalListener.onResponse(true);
                     } else {
-                        log.error("failed to create index [" + indexName + "]");
+                        log.error("Failed to create index [" + indexName + "]", e);
                         internalListener.onFailure(e);
                     }
                 });
@@ -99,7 +99,7 @@ public class InteractionsIndex {
                     || (e instanceof OpenSearchWrapperException && e.getCause() instanceof ResourceAlreadyExistsException)) {
                     listener.onResponse(true);
                 } else {
-                    log.error("failed to create index [" + indexName + "]");
+                    log.error("Failed to create index [" + indexName + "]", e);
                     listener.onFailure(e);
                 }
             }
@@ -115,7 +115,7 @@ public class InteractionsIndex {
      * @param promptTemplate the prompt template used for this interaction
      * @param response the GenAI response for this interaction
      * @param origin the origin of the response for this interaction
-     * @param metadata additional information used for constructing the LLM prompt
+     * @param additionalInfo additional information used for constructing the LLM prompt
      * @param timestamp when this interaction happened
      * @param listener gets the id of the newly created interaction record
      */
@@ -125,7 +125,7 @@ public class InteractionsIndex {
         String promptTemplate,
         String response,
         String origin,
-        String metadata,
+        String additionalInfo,
         Instant timestamp,
         ActionListener<String> listener
     ) {
@@ -147,7 +147,7 @@ public class InteractionsIndex {
                                 ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
                                 response,
                                 ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD,
-                                metadata,
+                                additionalInfo,
                                 ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
                                 timestamp
                             );
@@ -157,7 +157,7 @@ public class InteractionsIndex {
                                 if (resp.status() == RestStatus.CREATED) {
                                     internalListener.onResponse(resp.getId());
                                 } else {
-                                    internalListener.onFailure(new IOException("failed to create conversation"));
+                                    internalListener.onFailure(new IOException("Failed to create interaction"));
                                 }
                             }, e -> { internalListener.onFailure(e); });
                             client.index(request, al);
@@ -188,7 +188,7 @@ public class InteractionsIndex {
      * @param promptTemplate the prompt template used for this interaction
      * @param response the GenAI response for this interaction
      * @param origin the name of the GenAI agent this interaction belongs to
-     * @param metadata additional information used to construct the LLM prompt
+     * @param additionalInfo additional information used to construct the LLM prompt
      * @param listener gets the id of the newly created interaction record
      */
     public void createInteraction(
@@ -197,10 +197,10 @@ public class InteractionsIndex {
         String promptTemplate,
         String response,
         String origin,
-        String metadata,
+        String additionalInfo,
         ActionListener<String> listener
     ) {
-        createInteraction(conversationId, input, promptTemplate, response, origin, metadata, Instant.now(), listener);
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener);
     }
 
     /**

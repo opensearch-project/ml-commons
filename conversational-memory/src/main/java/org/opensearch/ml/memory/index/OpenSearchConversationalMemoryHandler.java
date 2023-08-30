@@ -102,7 +102,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param promptTemplate the prompt template used for this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
-     * @param additionalInfo additional inofrmation used in constructing the LLM prompt
+     * @param additionalInfo additional information used in constructing the LLM prompt
      * @param listener gets the ID of the new interaction
      */
     public void createInteraction(
@@ -125,7 +125,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param promptTemplate the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
-     * @param additionalInfo additional inofrmation used in constructing the LLM prompt
+     * @param additionalInfo additional information used in constructing the LLM prompt
      * @return ActionFuture for the interactionId of the new interaction
      */
     public ActionFuture<String> createInteraction(
@@ -176,7 +176,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     /**
      * Get the interactions associate with this conversation, sorted by recency
      * @param conversationId the conversation whose interactions to get
-     * @param from where to start listiing from
+     * @param from where to start listing from
      * @param maxResults how many interactions to get
      * @param listener gets the list of interactions in this conversation, sorted by recency
      */
@@ -187,7 +187,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     /**
      * Get the interactions associate with this conversation, sorted by recency
      * @param conversationId the conversation whose interactions to get
-     * @param from where to start listiing from
+     * @param from where to start listing from
      * @param maxResults how many interactions to get
      * @return ActionFuture the list of interactions in this conversation, sorted by recency
      */

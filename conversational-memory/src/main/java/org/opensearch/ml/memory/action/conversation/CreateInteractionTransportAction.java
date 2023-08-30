@@ -42,7 +42,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
     /**
      * Constructor
      * @param transportService for doing intra-cluster communication
-     * @param actionFilters not sure what this is for
+     * @param actionFilters for filtering actions
      * @param cmHandler handler for conversational memory
      * @param client client for general opensearch ops
      */
@@ -74,7 +74,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
                 });
             cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
         } catch (Exception e) {
-            log.error(e.toString());
+            log.error("Failed to create interaction for conversation " + cid, e);
             actionListener.onFailure(e);
         }
     }

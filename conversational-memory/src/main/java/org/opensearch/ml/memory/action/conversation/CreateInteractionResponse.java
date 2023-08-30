@@ -36,7 +36,7 @@ public class CreateInteractionResponse extends ActionResponse implements ToXCont
     private String interactionId;
 
     /**
-     * Convtructor
+     * Constructor
      * @param in input stream to create this from
      * @throws IOException if something breaks
      */

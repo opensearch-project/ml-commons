@@ -63,7 +63,7 @@ public interface ConversationalMemoryHandler {
      * @param promptTemplate the prompt template used for this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
-     * @param additionalInfo additional inofrmation used in constructing the LLM prompt
+     * @param additionalInfo additional information used in constructing the LLM prompt
      * @param listener gets the ID of the new interaction
      */
     public void createInteraction(
@@ -83,7 +83,7 @@ public interface ConversationalMemoryHandler {
      * @param promptTemplate the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
-     * @param additionalInfo additional inofrmation used in constructing the LLM prompt
+     * @param additionalInfo additional information used in constructing the LLM prompt
      * @return ActionFuture for the interactionId of the new interaction
      */
     public ActionFuture<String> createInteraction(
@@ -91,8 +91,8 @@ public interface ConversationalMemoryHandler {
         String input,
         String promptTemplate,
         String response,
-        String additionalInfo,
-        String metadata
+        String origin,
+        String additionalInfo
     );
 
     /**

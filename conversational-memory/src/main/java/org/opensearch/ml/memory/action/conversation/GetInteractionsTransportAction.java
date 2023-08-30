@@ -45,7 +45,7 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
     /**
      * Constructor
      * @param transportService for inter-node communications
-     * @param actionFilters not sure what this is for tbh
+     * @param actionFilters for filtering actions
      * @param cmHandler Handler for conversational memory operations
      * @param client OS Client for dealing with OS
      */
@@ -73,7 +73,7 @@ public class GetInteractionsTransportAction extends HandledTransportAction<GetIn
             }, e -> { internalListener.onFailure(e); });
             cmHandler.getInteractions(request.getConversationId(), from, maxResults, al);
         } catch (Exception e) {
-            log.error(e.toString());
+            log.error("Failed to get interactions for conversation " + request.getConversationId(), e);
             actionListener.onFailure(e);
         }
 
