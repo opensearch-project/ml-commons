@@ -71,7 +71,7 @@ public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
                 "origin",
-                ActionConstants.METADATA_FIELD,
+                ActionConstants.ADDITIONAL_INFO_FIELD,
                 "metadata"
             );
         RestMemoryCreateInteractionAction action = new RestMemoryCreateInteractionAction();
@@ -92,6 +92,6 @@ public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
         assert (req.getPromptTemplate().equals("pt"));
         assert (req.getResponse().equals("response"));
         assert (req.getOrigin().equals("origin"));
-        assert (req.getMetadata().equals("metadata"));
+        assert (req.getAdditionalInfo().equals("metadata"));
     }
 }

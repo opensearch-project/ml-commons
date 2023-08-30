@@ -73,7 +73,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":\""
-            + interaction.getTimestamp()
+            + interaction.getCreateTime()
             + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":\"metadata\"}],\"next_token\":2}";
         log.info(result);
         log.info(expected);
@@ -90,7 +90,7 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String result = BytesReference.bytes(builder).utf8ToString();
         String expected = "{\"interactions\":[{\"conversation_id\":\"cid\",\"interaction_id\":\"id0\",\"create_time\":\""
-            + interaction.getTimestamp()
+            + interaction.getCreateTime()
             + "\",\"input\":\"input\",\"prompt_template\":\"pt\",\"response\":\"response\",\"origin\":\"origin\",\"additional_info\":\"metadata\"}]}";
         log.info(result);
         log.info(expected);

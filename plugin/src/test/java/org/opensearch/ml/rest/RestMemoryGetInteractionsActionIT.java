@@ -91,7 +91,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
                 "origin",
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
-                ActionConstants.METADATA_FIELD,
+                ActionConstants.ADDITIONAL_INFO_FIELD,
                 "some metadata"
             );
         Response response = TestHelper
@@ -146,7 +146,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
                 "origin",
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
-                ActionConstants.METADATA_FIELD,
+                ActionConstants.ADDITIONAL_INFO_FIELD,
                 "some metadata"
             );
         Response response = TestHelper
@@ -209,7 +209,7 @@ public class RestMemoryGetInteractionsActionIT extends MLCommonsRestTestCase {
                 "origin",
                 ActionConstants.PROMPT_TEMPLATE_FIELD,
                 "promtp template",
-                ActionConstants.METADATA_FIELD,
+                ActionConstants.ADDITIONAL_INFO_FIELD,
                 "some metadata"
             );
         Response response = TestHelper

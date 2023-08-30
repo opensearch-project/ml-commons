@@ -47,7 +47,7 @@ public class ActionConstants {
     /** name of prompt template field in all requests */
     public final static String PROMPT_TEMPLATE_FIELD = "prompt_template";
     /** name of metadata field in all requests */
-    public final static String METADATA_FIELD = "additional_info";
+    public final static String ADDITIONAL_INFO_FIELD = "additional_info";
     /** name of success field in all requests */
     public final static String SUCCESS_FIELD = "success";
 

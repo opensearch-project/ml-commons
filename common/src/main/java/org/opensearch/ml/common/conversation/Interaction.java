@@ -42,7 +42,7 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private String id;
     @Getter
-    private Instant timestamp;
+    private Instant createTime;
     @Getter
     private String conversationId;
     @Getter
@@ -54,7 +54,7 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private String origin;
     @Getter
-    private String metadata;
+    private String additionalInfo;
 
     /**
      * Creates an Interaction object from a map of fields in the OS index
@@ -63,14 +63,14 @@ public class Interaction implements Writeable, ToXContentObject {
      * @return a new Interaction object representing the OS document
      */
     public static Interaction fromMap(String id, Map<String, Object> fields) {
-        Instant timestamp = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD));
+        Instant createTime = Instant.parse((String) fields.get(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD));
         String conversationId   = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD);
         String input     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD);
         String promptTemplate = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD);
         String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
         String origin     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
-        String metadata  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD);
-        return new Interaction(id, timestamp, conversationId, input, promptTemplate, response, origin, metadata);
+        String additionalInfo  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
+        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
     /**
@@ -91,27 +91,27 @@ public class Interaction implements Writeable, ToXContentObject {
      */
     public static Interaction fromStream(StreamInput in) throws IOException {
         String id = in.readString();
-        Instant timestamp = in.readInstant();
+        Instant createTime = in.readInstant();
         String conversationId = in.readString();
         String input = in.readString();
         String promptTemplate = in.readString();
         String response = in.readString();
         String origin = in.readString();
-        String metadata = in.readOptionalString();
-        return new Interaction(id, timestamp, conversationId, input, promptTemplate, response, origin, metadata);
+        String additionalInfo = in.readOptionalString();
+        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(id);
-        out.writeInstant(timestamp);
+        out.writeInstant(createTime);
         out.writeString(conversationId);
         out.writeString(input);
         out.writeString(promptTemplate);
         out.writeString(response);
         out.writeString(origin);
-        out.writeOptionalString(metadata);
+        out.writeOptionalString(additionalInfo);
     }
 
     @Override
@@ -119,13 +119,13 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.startObject();
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, conversationId);
         builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, id);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, timestamp);
+        builder.field(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, createTime);
         builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
         builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD, promptTemplate);
         builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
         builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
-        if(metadata != null) {
-            builder.field(ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD, metadata);
+        if(additionalInfo != null) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
         }
         builder.endObject();
         return builder;
@@ -137,13 +137,13 @@ public class Interaction implements Writeable, ToXContentObject {
             other instanceof Interaction &&
             ((Interaction) other).id.equals(this.id) &&
             ((Interaction) other).conversationId.equals(this.conversationId) &&
-            ((Interaction) other).timestamp.equals(this.timestamp) &&
+            ((Interaction) other).createTime.equals(this.createTime) &&
             ((Interaction) other).input.equals(this.input) &&
             ((Interaction) other).promptTemplate.equals(this.promptTemplate) &&
             ((Interaction) other).response.equals(this.response) &&
             ((Interaction) other).origin.equals(this.origin) && 
-            ( (((Interaction) other).metadata == null && this.metadata == null) ||
-              ((Interaction) other).metadata.equals(this.metadata))
+            ( (((Interaction) other).additionalInfo == null && this.additionalInfo == null) ||
+              ((Interaction) other).additionalInfo.equals(this.additionalInfo))
         );
     }
 
@@ -152,12 +152,12 @@ public class Interaction implements Writeable, ToXContentObject {
         return "Interaction{"
             + "id=" + id
             + ",cid=" + conversationId
-            + ",timestamp=" + timestamp
+            + ",create_time=" + createTime
             + ",origin=" + origin
             + ",input=" + input
             + ",promt_template=" + promptTemplate
             + ",response=" + response
-            + ",metadata=" + metadata
+            + ",additional_info=" + additionalInfo
             + "}";
     }
     

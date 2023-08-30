@@ -101,7 +101,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .origin("origin")
             .response("rsp")
             .promptTemplate("pt")
-            .metadata("meta");
+            .additionalInfo("meta");
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
         cmHandler.createInteraction(builder, createInteractionListener);
@@ -125,7 +125,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .input("inp")
             .response("rsp")
             .promptTemplate("pt")
-            .metadata("meta");
+            .additionalInfo("meta");
         ActionFuture<String> result = cmHandler.createInteraction(builder);
         assert (result.actionGet(200).equals("iid"));
     }

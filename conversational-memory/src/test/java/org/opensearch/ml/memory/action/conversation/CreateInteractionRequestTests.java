@@ -84,7 +84,7 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
                 "response",
                 ActionConstants.RESPONSE_ORIGIN_FIELD,
                 "origin",
-                ActionConstants.METADATA_FIELD,
+                ActionConstants.ADDITIONAL_INFO_FIELD,
                 "metadata"
             );
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -98,6 +98,6 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
         assert (request.getPromptTemplate().equals("pt"));
         assert (request.getResponse().equals("response"));
         assert (request.getOrigin().equals("origin"));
-        assert (request.getMetadata().equals("metadata"));
+        assert (request.getAdditionalInfo().equals("metadata"));
     }
 }

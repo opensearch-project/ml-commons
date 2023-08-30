@@ -146,9 +146,9 @@ public class InteractionsIndex {
                                 promptTemplate,
                                 ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
                                 response,
-                                ConversationalIndexConstants.INTERACTIONS_METADATA_FIELD,
+                                ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD,
                                 metadata,
-                                ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD,
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
                                 timestamp
                             );
                         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
@@ -236,7 +236,7 @@ public class InteractionsIndex {
         TermQueryBuilder builder = new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
         request.source().query(builder);
         request.source().from(from).size(maxResults);
-        request.source().sort(ConversationalIndexConstants.INTERACTIONS_TIMESTAMP_FIELD, SortOrder.DESC);
+        request.source().sort(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, SortOrder.DESC);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<Interaction>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(response -> {

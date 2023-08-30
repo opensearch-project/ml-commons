@@ -65,14 +65,14 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String rsp = request.getResponse();
         String ogn = request.getOrigin();
         String prompt = request.getPromptTemplate();
-        String metadata = request.getMetadata();
+        String additionalInfo = request.getAdditionalInfo();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener
                 .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
                     internalListener.onFailure(e);
                 });
-            cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, metadata, al);
+            cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
         } catch (Exception e) {
             log.error(e.toString());
             actionListener.onFailure(e);

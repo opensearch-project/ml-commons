@@ -64,9 +64,9 @@ public class ConversationalIndexConstants {
     /** Name of the interaction field for the response's origin */
     public final static String INTERACTIONS_ORIGIN_FIELD = "origin";
     /** Name of the interaction field for additional metadata */
-    public final static String INTERACTIONS_METADATA_FIELD = "additional_info";
+    public final static String INTERACTIONS_ADDITIONAL_INFO_FIELD = "additional_info";
     /** Name of the interaction field for the timestamp */
-    public final static String INTERACTIONS_TIMESTAMP_FIELD = "create_time";
+    public final static String INTERACTIONS_CREATE_TIME_FIELD = "create_time";
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"_meta\": {\n"
@@ -77,7 +77,7 @@ public class ConversationalIndexConstants {
         + INTERACTIONS_CONVERSATION_ID_FIELD
         + "\": {\"type\": \"keyword\"},\n"
         + "        \""
-        + INTERACTIONS_TIMESTAMP_FIELD
+        + INTERACTIONS_CREATE_TIME_FIELD
         + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
         + "        \""
         + INTERACTIONS_INPUT_FIELD
@@ -92,7 +92,7 @@ public class ConversationalIndexConstants {
         + INTERACTIONS_ORIGIN_FIELD
         + "\": {\"type\": \"keyword\"},\n"
         + "        \""
-        + INTERACTIONS_METADATA_FIELD
+        + INTERACTIONS_ADDITIONAL_INFO_FIELD
         + "\": {\"type\": \"text\"}\n"
         + "    }\n"
         + "}";

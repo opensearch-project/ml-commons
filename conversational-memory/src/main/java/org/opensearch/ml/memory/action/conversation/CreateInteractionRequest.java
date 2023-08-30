@@ -48,7 +48,7 @@ public class CreateInteractionRequest extends ActionRequest {
     @Getter
     private String origin;
     @Getter
-    private String metadata;
+    private String additionalInfo;
 
     /**
      * Constructor
@@ -62,7 +62,7 @@ public class CreateInteractionRequest extends ActionRequest {
         this.promptTemplate = in.readString();
         this.response = in.readString();
         this.origin = in.readOptionalString();
-        this.metadata = in.readOptionalString();
+        this.additionalInfo = in.readOptionalString();
     }
 
     @Override
@@ -73,7 +73,7 @@ public class CreateInteractionRequest extends ActionRequest {
         out.writeString(promptTemplate);
         out.writeString(response);
         out.writeOptionalString(origin);
-        out.writeOptionalString(metadata);
+        out.writeOptionalString(additionalInfo);
     }
 
     @Override
@@ -98,8 +98,8 @@ public class CreateInteractionRequest extends ActionRequest {
         String prmpt = body.get(ActionConstants.PROMPT_TEMPLATE_FIELD);
         String rsp = body.get(ActionConstants.AI_RESPONSE_FIELD);
         String ogn = body.get(ActionConstants.RESPONSE_ORIGIN_FIELD);
-        String metadata = body.get(ActionConstants.METADATA_FIELD);
-        return new CreateInteractionRequest(cid, inp, prmpt, rsp, ogn, metadata);
+        String addinf = body.get(ActionConstants.ADDITIONAL_INFO_FIELD);
+        return new CreateInteractionRequest(cid, inp, prmpt, rsp, ogn, addinf);
     }
 
 }

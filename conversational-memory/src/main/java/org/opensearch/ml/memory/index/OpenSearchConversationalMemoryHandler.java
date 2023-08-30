@@ -102,7 +102,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param promptTemplate the prompt template used for this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
-     * @param metadata additional inofrmation used in constructing the LLM prompt
+     * @param additionalInfo additional inofrmation used in constructing the LLM prompt
      * @param listener gets the ID of the new interaction
      */
     public void createInteraction(
@@ -111,11 +111,11 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         String promptTemplate,
         String response,
         String origin,
-        String metadata,
+        String additionalInfo,
         ActionListener<String> listener
     ) {
         Instant time = Instant.now();
-        interactionsIndex.createInteraction(conversationId, input, promptTemplate, response, origin, metadata, time, listener);
+        interactionsIndex.createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, time, listener);
     }
 
     /**
@@ -125,7 +125,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param promptTemplate the prompt template used in this interaction
      * @param response the Gen AI response for this interaction
      * @param origin the name of the GenAI agent in this interaction
-     * @param metadata arbitrary JSON string of extra stuff
+     * @param additionalInfo additional inofrmation used in constructing the LLM prompt
      * @return ActionFuture for the interactionId of the new interaction
      */
     public ActionFuture<String> createInteraction(
@@ -134,10 +134,10 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         String promptTemplate,
         String response,
         String origin,
-        String metadata
+        String additionalInfo
     ) {
         PlainActionFuture<String> fut = PlainActionFuture.newFuture();
-        createInteraction(conversationId, input, promptTemplate, response, origin, metadata, fut);
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, fut);
         return fut;
     }
 
@@ -147,7 +147,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param listener gets the interactionId of the newly created interaction
      */
     public void createInteraction(InteractionBuilder builder, ActionListener<String> listener) {
-        builder.timestamp(Instant.now());
+        builder.createTime(Instant.now());
         Interaction interaction = builder.build();
         interactionsIndex
             .createInteraction(
@@ -156,8 +156,8 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
                 interaction.getPromptTemplate(),
                 interaction.getResponse(),
                 interaction.getOrigin(),
-                interaction.getMetadata(),
-                interaction.getTimestamp(),
+                interaction.getAdditionalInfo(),
+                interaction.getCreateTime(),
                 listener
             );
     }
