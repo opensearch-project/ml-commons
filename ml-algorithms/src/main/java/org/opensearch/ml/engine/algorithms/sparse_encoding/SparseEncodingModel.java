@@ -62,9 +62,12 @@ public class SparseEncodingModel extends DLModel {
 
     @Override
     public Map<String, Object> getArguments(MLModelConfig modelConfig) {
+        Map<String, Object> arguments = new HashMap<>();
+        if (modelConfig == null){
+            return arguments;
+        }
         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
         Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-        Map<String, Object> arguments = new HashMap<>();
         if (modelMaxLength != null) {
             arguments.put("modelMaxLength", modelMaxLength);
         }
