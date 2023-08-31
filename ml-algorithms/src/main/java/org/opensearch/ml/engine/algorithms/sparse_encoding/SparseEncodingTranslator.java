@@ -75,27 +75,18 @@ public class SparseEncodingTranslator implements ServingTranslator {
         Output output = new Output(200, "OK");
 
         List<ModelTensor> outputs = new ArrayList<>();
-        Iterator<NDArray> iterator = list.iterator();
-        while (iterator.hasNext()) {
-            NDArray ndArray = iterator.next();
-            String name = ndArray.getName();
-            Map<String, Float> tokenWeightsMap = convertOutput(ndArray);
-            Map<String, Map<String, Float> > resultOutput = new HashMap<>();
-            resultOutput.put("response", tokenWeightsMap);
-            long[] shape = ndArray.getShape().getShape();
-            DataType dataType = ndArray.getDataType();
-            MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
-            ByteBuffer buffer = ndArray.toByteBuffer();
-            ModelTensor tensor = ModelTensor.builder()
-                    .name(name)
-                    .dataAsMap(resultOutput)
-                    .shape(shape)
-                    .dataType(mlResultDataType)
-                    .byteBuffer(buffer)
-                    .build();
-            outputs.add(tensor);
-        }
-
+        NDArray ndArray = list.get(0);
+        String name = ndArray.getName();
+        Map<String, Float> tokenWeightsMap = convertOutput(ndArray);
+        Map<String, Map<String, Float> > resultOutput = new HashMap<>();
+        resultOutput.put("response", tokenWeightsMap);
+        ByteBuffer buffer = ndArray.toByteBuffer();
+        ModelTensor tensor = ModelTensor.builder()
+                .name(name)
+                .dataAsMap(resultOutput)
+                .byteBuffer(buffer)
+                .build();
+        outputs.add(tensor);
         ModelTensors modelTensorOutput = new ModelTensors(outputs);
         output.add(modelTensorOutput.toBytes());
         return output;
