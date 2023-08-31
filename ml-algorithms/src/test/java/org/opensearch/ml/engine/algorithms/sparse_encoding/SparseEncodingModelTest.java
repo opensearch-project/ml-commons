@@ -14,14 +14,12 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
@@ -33,11 +31,8 @@ import java.nio.file.Path;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
 
 public class SparseEncodingModelTest {
     @Rule
@@ -48,7 +43,6 @@ public class SparseEncodingModelTest {
     private String modelName;
     private FunctionName functionName;
     private String version;
-    private TextEmbeddingModelConfig modelConfig;
     private MLModel model;
     private ModelHelper modelHelper;
     private Map<String, Object> params;
@@ -67,13 +61,13 @@ public class SparseEncodingModelTest {
         mlEngine = new MLEngine(mlCachePath, encryptor);
         modelId = "test_model_id";
         modelName = "test_model_name";
-        functionName = FunctionName.TEXT_EMBEDDING;
+        functionName = FunctionName.SPARSE_ENCODING;
         version = "1";
         model = MLModel.builder()
                 .modelFormat(MLModelFormat.TORCH_SCRIPT)
                 .name("test_model_name")
                 .modelId("test_model_id")
-                .algorithm(FunctionName.TEXT_EMBEDDING)
+                .algorithm(FunctionName.SPARSE_ENCODING)
                 .version("1.0.0")
                 .modelState(MLModelState.TRAINED)
                 .build();
@@ -133,7 +127,7 @@ public class SparseEncodingModelTest {
         sparseEncodingModel.initModel(model, params, encryptor);
         ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList("output")).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(textDocsInputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput)sparseEncodingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
