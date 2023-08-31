@@ -88,7 +88,7 @@ public class TokenizerTranslator implements ServingTranslator {
                     .toArray(String[]::new);
             Map<String, String[]> map = new HashMap<>();
 
-            map.put("tokens", tokens);
+            map.put("response", tokens);
             long[] shape = ndArray.getShape().getShape();
             DataType dataType = ndArray.getDataType();
             MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
