@@ -79,14 +79,16 @@ public class SparseEncodingTranslator implements ServingTranslator {
         while (iterator.hasNext()) {
             NDArray ndArray = iterator.next();
             String name = ndArray.getName();
-            Map<String, Float> dataAsMap = convertOutput(ndArray);
+            Map<String, Float> tokenWeightsMap = convertOutput(ndArray);
+            Map<String, Map<String, Float> > resultOutput = new HashMap<>();
+            resultOutput.put("response", tokenWeightsMap);
             long[] shape = ndArray.getShape().getShape();
             DataType dataType = ndArray.getDataType();
             MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
             ByteBuffer buffer = ndArray.toByteBuffer();
             ModelTensor tensor = ModelTensor.builder()
                     .name(name)
-                    .dataAsMap(dataAsMap)
+                    .dataAsMap(resultOutput)
                     .shape(shape)
                     .dataType(mlResultDataType)
                     .byteBuffer(buffer)
