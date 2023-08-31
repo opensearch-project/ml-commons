@@ -36,14 +36,6 @@ public interface Predictable {
     MLOutput predict(MLInput mlInput);
 
     /**
-     * Predict with given input data and model id.
-     * @param modelId model id
-     * @param input input data
-     * @return predicted results
-     */
-    ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
-
-    /**
      * Init model (load model into memory) with ML model content and params.
      * @param model ML model
      * @param params other parameters

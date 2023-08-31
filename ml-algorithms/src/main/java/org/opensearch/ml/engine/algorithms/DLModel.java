@@ -92,7 +92,7 @@ public abstract class DLModel implements Predictable {
             throw new MLException(errorMsg, e);
         }
     }
-    @Override
+
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
