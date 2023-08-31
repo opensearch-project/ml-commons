@@ -5,9 +5,11 @@
 
 package org.opensearch.ml.engine;
 
+import ai.djl.translate.TranslateException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 
 import java.util.Map;
@@ -32,6 +34,14 @@ public interface Predictable {
      * @return predicted results
      */
     MLOutput predict(MLInput mlInput);
+
+    /**
+     * Predict with given input data and model id.
+     * @param modelId model id
+     * @param input input data
+     * @return predicted results
+     */
+    ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
 
     /**
      * Init model (load model into memory) with ML model content and params.

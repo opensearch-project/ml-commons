@@ -40,22 +40,6 @@ public class TextEmbeddingModel extends DLModel {
     public static final String SENTENCE_EMBEDDING = "sentence_embedding";
 
     @Override
-    public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
-        MLInputDataset inputDataSet = mlInput.getInputDataset();
-        List<ModelTensors> tensorOutputs = new ArrayList<>();
-        Output output;
-        TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
-        ModelResultFilter resultFilter = textDocsInput.getResultFilter();
-        for (String doc : textDocsInput.getDocs()) {
-            Input input = new Input();
-            input.add(doc);
-            output = getPredictor().predict(input);
-            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
-        }
-        return new ModelTensorOutput(tensorOutputs);
-    }
-
-    @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
         TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
         TextEmbeddingModelConfig.FrameworkType transformersType = textEmbeddingModelConfig.getFrameworkType();
@@ -87,31 +71,6 @@ public class TextEmbeddingModel extends DLModel {
             return new HuggingfaceTextEmbeddingTranslatorFactory(poolingMode, normalizeResult, modelType, neuron);
         }
         return null;
-    }
-
-    @Override
-    public Map<String, Object> getArguments(MLModelConfig modelConfig) {
-        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-        Map<String, Object> arguments = new HashMap<>();
-        if (modelMaxLength != null) {
-            arguments.put("modelMaxLength", modelMaxLength);
-        }
-        return arguments;
-    }
-
-    @Override
-    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
-        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-        String warmUpSentence = "warm up sentence";
-        if (modelMaxLength != null) {
-            warmUpSentence = "sentence ".repeat(modelMaxLength);
-        }
-        // First request takes longer time. Predict once to warm up model.
-        Input input = new Input();
-        input.add(warmUpSentence);
-        predictor.predict(input);
     }
 
 }
