@@ -6,7 +6,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.ResourceNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -20,7 +19,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.engine.algorithms.tokenize.TokenizerModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
@@ -28,18 +26,14 @@ import org.opensearch.ml.engine.utils.FileUtils;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.file.Path;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
 
-public class TokenizeModelTest {
+public class TokenizerModelTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -102,11 +96,11 @@ public class TokenizeModelTest {
         for (int i=0;i<mlModelOutputs.size();i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
-            assertEquals(2, mlModelTensors.size());
+            assertEquals(1, mlModelTensors.size());
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            List<String> result = (List<String>) resultMap.get("tokens");
+            List<String> result = (List<String>) resultMap.get("response");
             assertEquals(result.size(), 3);
         }
         tokenizerModel.close();
@@ -129,7 +123,7 @@ public class TokenizeModelTest {
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            List<String> result = (List<String>) resultMap.get("tokens");
+            List<String> result = (List<String>) resultMap.get("response");
             assertEquals(result.size(), 3);
         }
         tokenizerModel.close();
