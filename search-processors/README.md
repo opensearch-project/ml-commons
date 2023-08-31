@@ -13,11 +13,11 @@ PUT /_search/pipeline/<search pipeline name>
 {
   "response_processors": [
     {
-        "generative_qa": {
+        "retrieval_augmented_generation": {
             "tag": <tag>,
             "description": <description>,
             "model_id": "<model_id>",
-            "context_field": <field> (e.g. "text")
+            "context_field_list": [<field>] (e.g. ["text"])
         }
     }
   ]
@@ -86,7 +86,7 @@ GET /<index>/_search\?search_pipeline\=<search pipeline name>
     ]
   }, // end of hits
   "ext": {
-    "generative_qa": {
+    "retrieval_augmented_generation": {
       "answer": "..."
     }
   }
