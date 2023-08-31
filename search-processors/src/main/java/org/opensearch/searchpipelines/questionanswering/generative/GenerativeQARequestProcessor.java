@@ -30,10 +30,6 @@ import java.util.Map;
  */
 public class GenerativeQARequestProcessor extends AbstractProcessor implements SearchRequestProcessor {
 
-    // TODO Use a bracket processor to combine this processor and 'generative_qa' response processor.
-    public static final String TYPE = "generative_question";
-    public static final String CONFIG_NAME_MODEL_ID = "model_id";
-
     private String modelId;
 
     protected GenerativeQARequestProcessor(String tag, String description, boolean ignoreFailure, String modelId) {
@@ -51,7 +47,7 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
 
     @Override
     public String getType() {
-        return TYPE;
+        return GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE;
     }
 
     public static final class Factory implements Processor.Factory<SearchRequestProcessor> {
@@ -66,7 +62,7 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
             PipelineContext pipelineContext
         ) throws Exception {
             return new GenerativeQARequestProcessor(tag, description, ignoreFailure,
-                ConfigurationUtils.readStringProperty(TYPE, tag, config, CONFIG_NAME_MODEL_ID)
+                ConfigurationUtils.readStringProperty(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID)
             );
         }
     }

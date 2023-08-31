@@ -48,18 +48,6 @@ import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException
 @Log4j2
 public class GenerativeQAResponseProcessor extends AbstractProcessor implements SearchResponseProcessor {
 
-    // The type of this search processor
-    public static final String SEARCH_PROCESSOR_TYPE = "generative_qa";
-
-    // The model_id of the model registered and deployed in OpenSearch.
-    public static final String CONFIG_NAME_MODEL_ID = "model_id";
-
-    // The name of the model supported by an LLM, e.g. "gpt-3.5" in OpenAI.
-    public static final String CONFIG_NAME_LLM_MODEL = "llm_model";
-
-    // The field in search results that contain the context to be sent to the LLM.
-    public static final String CONFIG_NAME_CONTEXT_FIELD_LIST = "context_field_list";
-
     // TODO Add "interaction_count".  This is how far back in chat history we want to go back when calling LLM.
 
     private final String llmModel;
@@ -97,7 +85,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
 
     @Override
     public String getType() {
-        return GenerativeQAResponseProcessor.SEARCH_PROCESSOR_TYPE;
+        return GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE;
     }
 
     private SearchResponse insertAnswer(SearchResponse response, String answer) {
@@ -144,11 +132,11 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             Map<String, Object> config,
             PipelineContext pipelineContext
         ) throws Exception {
-            String modelId = ConfigurationUtils.readOptionalStringProperty(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_MODEL_ID);
-            String llmModel = ConfigurationUtils.readOptionalStringProperty(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_LLM_MODEL);
-            List<String> contextFields = ConfigurationUtils.readList(SEARCH_PROCESSOR_TYPE, tag, config, CONFIG_NAME_CONTEXT_FIELD_LIST);
+            String modelId = ConfigurationUtils.readOptionalStringProperty(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID);
+            String llmModel = ConfigurationUtils.readOptionalStringProperty(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_LLM_MODEL);
+            List<String> contextFields = ConfigurationUtils.readList(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST);
             if (contextFields.isEmpty()) {
-                throw newConfigurationException(SEARCH_PROCESSOR_TYPE, tag, CONFIG_NAME_CONTEXT_FIELD_LIST, "required property can't be empty.");
+                throw newConfigurationException(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, "required property can't be empty.");
             }
             log.info("model_id {}, llm_model {}, context_field_list {}", modelId, llmModel, contextFields);
             return new GenerativeQAResponseProcessor(client, tag, description, ignoreFailure, ModelLocator.getLlm(modelId, client), llmModel, contextFields);

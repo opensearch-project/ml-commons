@@ -49,8 +49,8 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
     public void testProcessorFactoryRemoteModel() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
-        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_MODEL_ID, "xyz");
-        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
             .create(null, "tag", "desc", true, config, null);
@@ -60,8 +60,8 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
     public void testProcessResponseNoSearchHits() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
-        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_MODEL_ID, "dummy-model");
-        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
             .create(null, "tag", "desc", true, config, null);
@@ -103,8 +103,8 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
     public void testProcessResponse() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
-        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_MODEL_ID, "dummy-model");
-        config.put(GenerativeQAResponseProcessor.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
             .create(null, "tag", "desc", true, config, null);

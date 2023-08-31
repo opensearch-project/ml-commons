@@ -31,6 +31,9 @@ import java.io.IOException;
  */
 public class GenerativeSearchResponse extends SearchResponse {
 
+    private static final String EXT_SECTION_NAME = "ext";
+    private static final String GENERATIVE_QA_ANSWER_FIELD_NAME = "answer";
+
     private final String answer;
 
     public GenerativeSearchResponse(
@@ -52,9 +55,9 @@ public class GenerativeSearchResponse extends SearchResponse {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         innerToXContent(builder, params);
-        /* start of ext */ builder.startObject("ext");
-        /*   start of our stuff */ builder.startObject("generative_qa");
-        /*     body of our stuff    */ builder.field("answer", this.answer);
+        /* start of ext */ builder.startObject(EXT_SECTION_NAME);
+        /*   start of our stuff */ builder.startObject(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE);
+        /*     body of our stuff    */ builder.field(GENERATIVE_QA_ANSWER_FIELD_NAME, this.answer);
         /*   end of our stuff   */ builder.endObject();
         /* end of ext */ builder.endObject();
         builder.endObject();

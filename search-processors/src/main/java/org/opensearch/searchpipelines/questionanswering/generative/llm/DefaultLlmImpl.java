@@ -43,6 +43,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 @Log4j2
 public class DefaultLlmImpl implements Llm {
 
+    private static final String CONNECTOR_INPUT_PARAMETER_MODEL = "model";
+    private static final String CONNECTOR_INPUT_PARAMETER_MESSAGES = "messages";
+    private static final String CONNECTOR_OUTPUT_CHOICES = "choices";
+    private static final String CONNECTOR_OUTPUT_MESSAGE = "message";
+    private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
+    private static final String CONNECTOR_OUTPUT_MESSAGE_CONTENT = "content";
+
     private final String openSearchModelId;
 
     private MachineLearningClient mlClient;
@@ -69,25 +76,25 @@ public class DefaultLlmImpl implements Llm {
     public ChatCompletionOutput doChatCompletion(ChatCompletionInput chatCompletionInput) {
 
         Map<String, String> inputParameters = new HashMap<>();
-        inputParameters.put("model", chatCompletionInput.getModel());
-        inputParameters.put("messages", PromptUtil.getChatCompletionPrompt(chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts()));
+        inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
+        inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, PromptUtil.getChatCompletionPrompt(chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts()));
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(inputParameters).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
         ActionFuture<MLOutput> future = mlClient.predict(this.openSearchModelId, mlInput);
         ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet();
 
-        // Response from OpenAI
+        // Response from the (remote) model
         Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         log.info("dataAsMap: {}", dataAsMap.toString());
 
-        // TODO dataAsMap can be null or con contain information such as throttling.  Handle non-happy cases.
+        // TODO dataAsMap can be null or can contain information such as throttling.  Handle non-happy cases.
 
-        List choices = (List) dataAsMap.get("choices");
+        List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
         Map firstChoiceMap = (Map) choices.get(0);
         log.info("Choices: {}", firstChoiceMap.toString());
-        Map message = (Map) firstChoiceMap.get("message");
-        log.info("role: {}, content: {}", message.get("role"), message.get("content"));
+        Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
+        log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
 
-        return new ChatCompletionOutput(List.of(message.get("content")));
+        return new ChatCompletionOutput(List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT)));
     }
 }
