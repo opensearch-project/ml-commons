@@ -122,6 +122,18 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.memory.ConversationalMemoryHandler;
+import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
+import org.opensearch.ml.memory.action.conversation.CreateConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionAction;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionTransportAction;
+import org.opensearch.ml.memory.action.conversation.DeleteConversationAction;
+import org.opensearch.ml.memory.action.conversation.DeleteConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationsTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
+import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
@@ -149,6 +161,11 @@ import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
+import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
+import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
+import org.opensearch.ml.rest.RestMemoryDeleteConversationAction;
+import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
+import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -228,6 +245,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    private ConversationalMemoryHandler cmHandler;
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -260,7 +279,13 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
-                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class)
+                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
+
+                new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
+                new ActionHandler<>(GetConversationsAction.INSTANCE, GetConversationsTransportAction.class),
+                new ActionHandler<>(CreateInteractionAction.INSTANCE, CreateInteractionTransportAction.class),
+                new ActionHandler<>(GetInteractionsAction.INSTANCE, GetInteractionsTransportAction.class),
+                new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class)
             );
     }
 
@@ -293,6 +318,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
+        cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
@@ -447,7 +473,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
-                mlModelAutoRedeployer
+                mlModelAutoRedeployer,
+                cmHandler
             );
     }
 
@@ -486,6 +513,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
+
+        RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
+        RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();
+        RestMemoryCreateInteractionAction restCreateInteractionAction = new RestMemoryCreateInteractionAction();
+        RestMemoryGetInteractionsAction restListInteractionsAction = new RestMemoryGetInteractionsAction();
+        RestMemoryDeleteConversationAction restDeleteConversationAction = new RestMemoryDeleteConversationAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -512,7 +545,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLCreateConnectorAction,
                 restMLGetConnectorAction,
                 restMLDeleteConnectorAction,
-                restMLSearchConnectorAction
+                restMLSearchConnectorAction,
+                restCreateConversationAction,
+                restListConversationsAction,
+                restCreateInteractionAction,
+                restListInteractionsAction,
+                restDeleteConversationAction
             );
     }
 
