@@ -282,7 +282,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         this.xContentRegistry = xContentRegistry;
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
-        Path configFile = environment.configFile();
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client);
 

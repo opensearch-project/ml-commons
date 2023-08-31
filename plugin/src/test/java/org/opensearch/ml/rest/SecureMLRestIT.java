@@ -10,9 +10,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
-import org.apache.http.HttpHeaders;
-import org.apache.http.HttpHost;
-import org.apache.http.message.BasicHeader;
+import org.apache.hc.core5.http.HttpHeaders;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -60,7 +61,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String password = "IntegTest@SecureMLRestIT123";
 
     @Before
-    public void setup() throws IOException {
+    public void setup() throws IOException, ParseException {
         Response response = TestHelper
             .makeRequest(
                 client(),
