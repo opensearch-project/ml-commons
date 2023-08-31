@@ -56,16 +56,11 @@ public class TokenizerTranslator implements ServingTranslator {
         NDList ndList = new NDList();
         Encoding encodings = tokenizer.encode(sentence);
         long[] indices = encodings.getIds();
-        long[] attentionMask = encodings.getAttentionMask();
 
         NDArray indicesArray = manager.create(indices);
         indicesArray.setName("input1.input_ids");
 
-        NDArray attentionMaskArray = manager.create(attentionMask);
-        attentionMaskArray.setName("input1.attention_mask");
-
         ndList.add(indicesArray);
-        ndList.add(attentionMaskArray);
         return ndList;
     }
 
@@ -74,34 +69,30 @@ public class TokenizerTranslator implements ServingTranslator {
         Output output = new Output(200, "OK");
 
         List<ModelTensor> outputs = new ArrayList<>();
-        Iterator<NDArray> iterator = list.iterator();
-        while (iterator.hasNext()) {
-            NDArray ndArray = iterator.next();
-            String name = ndArray.getName();
+        NDArray ndArray = list.get(0);
+        String name = ndArray.getName();
 
+        long[] ids = ndArray.toLongArray();
+        String[] tokens = Arrays.stream(ids)
+                .mapToObj(value -> new long[]{value})
+                .map(value -> this.tokenizer.decode(value, true))
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+        Map<String, String[]> map = new HashMap<>();
 
-            long[] ids = ndArray.toLongArray();
-            String[] tokens = Arrays.stream(ids)
-                    .mapToObj(value -> new long[]{value})
-                    .map(value -> this.tokenizer.decode(value, true))
-                    .filter(s -> !s.isEmpty())
-                    .toArray(String[]::new);
-            Map<String, String[]> map = new HashMap<>();
-
-            map.put("response", tokens);
-            long[] shape = ndArray.getShape().getShape();
-            DataType dataType = ndArray.getDataType();
-            MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
-            ByteBuffer buffer = ndArray.toByteBuffer();
-            ModelTensor tensor = ModelTensor.builder()
-                    .name(name)
-                    .dataAsMap(map)
-                    .shape(shape)
-                    .dataType(mlResultDataType)
-                    .byteBuffer(buffer)
-                    .build();
-            outputs.add(tensor);
-        }
+        map.put("response", tokens);
+        long[] shape = ndArray.getShape().getShape();
+        DataType dataType = ndArray.getDataType();
+        MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
+        ByteBuffer buffer = ndArray.toByteBuffer();
+        ModelTensor tensor = ModelTensor.builder()
+                .name(name)
+                .dataAsMap(map)
+                .shape(shape)
+                .dataType(mlResultDataType)
+                .byteBuffer(buffer)
+                .build();
+        outputs.add(tensor);
 
         ModelTensors modelTensorOutput = new ModelTensors(outputs);
         output.add(modelTensorOutput.toBytes());
