@@ -81,15 +81,10 @@ public class TokenizerTranslator implements ServingTranslator {
         Map<String, String[]> map = new HashMap<>();
 
         map.put("response", tokens);
-        long[] shape = ndArray.getShape().getShape();
-        DataType dataType = ndArray.getDataType();
-        MLResultDataType mlResultDataType = MLResultDataType.valueOf(dataType.name());
         ByteBuffer buffer = ndArray.toByteBuffer();
         ModelTensor tensor = ModelTensor.builder()
                 .name(name)
                 .dataAsMap(map)
-                .shape(shape)
-                .dataType(mlResultDataType)
                 .byteBuffer(buffer)
                 .build();
         outputs.add(tensor);
