@@ -17,12 +17,15 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -38,6 +41,7 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
 
     private ConversationalMemoryHandler cmHandler;
     private Client client;
+    private ClusterService clusterService;
 
     /**
      * Constructor
@@ -51,15 +55,27 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         TransportService transportService,
         ActionFilters actionFilters,
         OpenSearchConversationalMemoryHandler cmHandler,
-        Client client
+        Client client,
+        ClusterService clusterService
     ) {
         super(CreateInteractionAction.NAME, transportService, actionFilters, CreateInteractionRequest::new);
         this.client = client;
         this.cmHandler = cmHandler;
+        this.clusterService = clusterService;
     }
 
     @Override
     protected void doExecute(Task task, CreateInteractionRequest request, ActionListener<CreateInteractionResponse> actionListener) {
+        if (!clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
+            actionListener
+                .onFailure(
+                    new OpenSearchException(
+                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
+                            + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME
+                    )
+                );
+            return;
+        }
         String cid = request.getConversationId();
         String inp = request.getInput();
         String rsp = request.getResponse();
