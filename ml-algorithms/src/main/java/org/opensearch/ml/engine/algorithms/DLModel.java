@@ -20,9 +20,12 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -40,6 +43,7 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -88,6 +92,21 @@ public abstract class DLModel implements Predictable {
             throw new MLException(errorMsg, e);
         }
     }
+    @Override
+    public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
+        MLInputDataset inputDataSet = mlInput.getInputDataset();
+        List<ModelTensors> tensorOutputs = new ArrayList<>();
+        Output output;
+        TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
+        ModelResultFilter resultFilter = textDocsInput.getResultFilter();
+        for (String doc : textDocsInput.getDocs()) {
+            Input input = new Input();
+            input.add(doc);
+            output = getPredictor().predict(input);
+            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
+        }
+        return new ModelTensorOutput(tensorOutputs);
+    }
 
     protected Predictor<Input, Output> getPredictor() {
         int currentDevice = nextDevice.getAndIncrement();
@@ -98,7 +117,7 @@ public abstract class DLModel implements Predictable {
         return predictors[currentDevice];
     }
 
-    public abstract ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
+    //public abstract ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
 
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
@@ -172,10 +191,33 @@ public abstract class DLModel implements Predictable {
     public abstract TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig);
 
     public Map<String, Object> getArguments(MLModelConfig modelConfig) {
-        return null;
+        Map<String, Object> arguments = new HashMap<>();
+        if (modelConfig == null){
+            return arguments;
+        }
+        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
+        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
+
+        if (modelMaxLength != null) {
+            arguments.put("modelMaxLength", modelMaxLength);
+        }
+        return arguments;
     }
 
-    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
+    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
+        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
+        String warmUpSentence = "warm up sentence";
+        if (modelConfig  != null) {
+            Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
+            if (modelMaxLength != null) {
+                warmUpSentence = "sentence ".repeat(modelMaxLength);
+            }
+        }
+        // First request takes longer time. Predict once to warm up model.
+        Input input = new Input();
+        input.add(warmUpSentence);
+        predictor.predict(input);
+    }
 
     protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
                              MLModelConfig modelConfig,
