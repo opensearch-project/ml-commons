@@ -1,0 +1,88 @@
+---
+"Test adding and getting back interactions":
+
+  - do: 
+      _plugins.conversational_create_interaction:
+          conversationId: test-cid
+          body:
+              input: test-input
+              prompt: test-prompt
+              response: test-response
+              agent: test-agent
+              attributes: test-attributes
+
+  - do: 
+      _plugins.conversational_create_interaction:
+          conversationId: test-cid
+          body:
+              input: test-input1
+              prompt: test-prompt1
+              response: test-response1
+              agent: test-agent1
+              attributes: test-attributes1
+  
+  - do:
+      _plugins.conversational_get_interactions:
+          conversationId: test-cid
+          
+  - match:
+      $body.interactions.0.input: test-input1
+
+  - match:
+      $body.interactions.1.input: test-input
+
+---
+"Test adding interactions, paginated":
+
+    - do: 
+        _plugins.conversational_create_interaction:
+            conversationId: test-cid
+            body:
+                input: test-input1
+                prompt: test-prompt
+                response: test-response
+                agent: test-agent
+                attributes: test-attributes
+    
+    - do: 
+        _plugins.conversational_create_interaction:
+            conversationId: test-cid
+            body:
+                input: test-input2
+                prompt: test-prompt
+                response: test-response
+                agent: test-agent
+                attributes: test-attributes
+
+    - do: 
+        _plugins.conversational_create_interaction:
+            conversationId: test-cid
+            body:
+                input: test-input3
+                prompt: test-prompt
+                response: test-response
+                agent: test-agent
+                attributes: test-attributes
+
+    - do:
+        _plugins.conversational_get_interactions:
+            conversationId: test-cid
+            maxResults: 2
+
+    - match:
+        $body.interactions.0.input: test-input3
+
+    - match:
+        $body.interactions.1.input: test-input2
+
+    - match:
+        $body.nextToken: 2
+
+    - do:
+        _plugins.conversational_get_interactions:
+            conversationId: test-cid
+            maxResults: 2
+            nextToken: 2
+    
+    - match: 
+        $body.interactions.0.input: test-input1
