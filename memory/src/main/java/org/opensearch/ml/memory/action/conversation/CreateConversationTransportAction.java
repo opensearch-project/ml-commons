@@ -17,12 +17,15 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -39,27 +42,45 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
     private ConversationalMemoryHandler cmHandler;
     private Client client;
 
+    private volatile boolean featureIsEnabled;
+
     /**
      * Constructor
      * @param transportService for inter-node communications
      * @param actionFilters for filtering actions
      * @param cmHandler Handler for conversational memory operations
      * @param client OS Client for dealing with OS
+     * @param clusterService for some cluster ops
      */
     @Inject
     public CreateConversationTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         OpenSearchConversationalMemoryHandler cmHandler,
-        Client client
+        Client client,
+        ClusterService clusterService
     ) {
         super(CreateConversationAction.NAME, transportService, actionFilters, CreateConversationRequest::new);
         this.cmHandler = cmHandler;
         this.client = client;
+        this.featureIsEnabled = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED, it -> featureIsEnabled = it);
     }
 
     @Override
     protected void doExecute(Task task, CreateConversationRequest request, ActionListener<CreateConversationResponse> actionListener) {
+        if (!featureIsEnabled) {
+            actionListener
+                .onFailure(
+                    new OpenSearchException(
+                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
+                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
+                    )
+                );
+            return;
+        }
         String name = request.getName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
