@@ -23,7 +23,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Setting;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
@@ -64,12 +63,10 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
         super(CreateConversationAction.NAME, transportService, actionFilters, CreateConversationRequest::new);
         this.cmHandler = cmHandler;
         this.client = client;
-        @SuppressWarnings("unchecked")
-        Setting<Boolean> setting = (Setting<Boolean>) clusterService
+        this.featureIsEnabled = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
             .getClusterSettings()
-            .get(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey());
-        this.featureIsEnabled = setting.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(setting, it -> featureIsEnabled = it);
+            .addSettingsUpdateConsumer(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED, it -> featureIsEnabled = it);
     }
 
     @Override
