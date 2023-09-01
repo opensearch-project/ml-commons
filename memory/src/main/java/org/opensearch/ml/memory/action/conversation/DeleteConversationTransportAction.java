@@ -23,6 +23,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Setting;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
@@ -41,7 +42,8 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
 
     private Client client;
     private ConversationalMemoryHandler cmHandler;
-    private ClusterService clusterService;
+
+    private volatile boolean featureIsEnabled;
 
     /**
      * Constructor
@@ -49,6 +51,7 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
      * @param actionFilters for filtering actions
      * @param cmHandler Handler for conversational memory operations
      * @param client OS Client for dealing with OS
+     * @param clusterService for some cluster ops
      */
     @Inject
     public DeleteConversationTransportAction(
@@ -61,17 +64,22 @@ public class DeleteConversationTransportAction extends HandledTransportAction<De
         super(DeleteConversationAction.NAME, transportService, actionFilters, DeleteConversationRequest::new);
         this.client = client;
         this.cmHandler = cmHandler;
-        this.clusterService = clusterService;
+        @SuppressWarnings("unchecked")
+        Setting<Boolean> setting = (Setting<Boolean>) clusterService
+            .getClusterSettings()
+            .get(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey());
+        this.featureIsEnabled = setting.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(setting, it -> featureIsEnabled = it);
     }
 
     @Override
     public void doExecute(Task task, DeleteConversationRequest request, ActionListener<DeleteConversationResponse> listener) {
-        if (!clusterService.getSettings().getAsBoolean(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false)) {
+        if (!featureIsEnabled) {
             listener
                 .onFailure(
                     new OpenSearchException(
                         "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME
+                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
                     )
                 );
             return;

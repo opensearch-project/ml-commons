@@ -21,12 +21,33 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.message.BasicHeader;
+import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.TestHelper;
 
+import com.google.common.collect.ImmutableList;
+
 public class RestMemoryCreateInteractionActionIT extends MLCommonsRestTestCase {
+
+    @Before
+    public void setupFeatureSettings() throws IOException {
+        super.setupSettings();
+        Response response = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"" + MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey() + "\":true}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, response.getStatusLine().getStatusCode());
+    }
 
     public void testCreateInteraction() throws IOException {
         Response ccresponse = TestHelper.makeRequest(client(), "POST", ActionConstants.CREATE_CONVERSATION_REST_PATH, null, "", null);

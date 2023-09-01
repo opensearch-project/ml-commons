@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -36,6 +37,7 @@ import org.mockito.Mockito;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -94,13 +96,16 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
         this.request = new GetConversationsRequest();
-        this.action = spy(new GetConversationsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
-        Settings settings = Settings.builder().put(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, true).build();
+        Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+
+        this.action = spy(new GetConversationsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
     }
 
     public void testGetConversations() {
@@ -189,6 +194,9 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
 
     public void testFeatureDisabled_ThenFail() {
         when(this.clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(Settings.EMPTY, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+        this.action = spy(new GetConversationsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
+
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());

@@ -129,6 +129,5 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
-        .boolSetting(ConversationalIndexConstants.MEMORY_FEATURE_FLAG_NAME, false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
 }
