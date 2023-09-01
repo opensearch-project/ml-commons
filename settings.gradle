@@ -17,3 +17,5 @@ include 'search-processors'
 project(":search-processors").name = rootProject.name + "-search-processors"
 include 'conversational-memory'
 project(":conversational-memory").name = rootProject.name + "-memory"
+include 'memory'
+project(":memory").name = rootProject.name + "-memory"
