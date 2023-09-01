@@ -344,7 +344,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         // TODO move this into MLFeatureEnabledSetting
         this.ragSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings()
+        clusterService
+            .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
@@ -677,31 +678,32 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public List<SearchPlugin.SearchExtSpec<?>> getSearchExts() {
-        return ragSearchPipelineEnabled ? List
-            .of(
-                new SearchPlugin.SearchExtSpec<>(
-                    GenerativeQAParamExtBuilder.PARAMETER_NAME,
-                    input -> new GenerativeQAParamExtBuilder(input),
-                    parser -> GenerativeQAParamExtBuilder.parse(parser)
+        return ragSearchPipelineEnabled
+            ? List
+                .of(
+                    new SearchPlugin.SearchExtSpec<>(
+                        GenerativeQAParamExtBuilder.PARAMETER_NAME,
+                        input -> new GenerativeQAParamExtBuilder(input),
+                        parser -> GenerativeQAParamExtBuilder.parse(parser)
+                    )
                 )
-            )
-               // Feature not enabled
-               : Collections.emptyList();
+            // Feature not enabled
+            : Collections.emptyList();
     }
 
     @Override
     public Map<String, Processor.Factory<SearchRequestProcessor>> getRequestProcessors(Parameters parameters) {
-        return ragSearchPipelineEnabled ?
-               Map.of(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory())
-               // Feature not enabled
-               : Collections.emptyMap();
+        return ragSearchPipelineEnabled
+            ? Map.of(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory())
+            // Feature not enabled
+            : Collections.emptyMap();
     }
 
     @Override
     public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
-        return ragSearchPipelineEnabled ?
-            Map.of(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client))
-               // Feature not enabled
-               : Collections.emptyMap();
+        return ragSearchPipelineEnabled
+            ? Map.of(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client))
+            // Feature not enabled
+            : Collections.emptyMap();
     }
 }
