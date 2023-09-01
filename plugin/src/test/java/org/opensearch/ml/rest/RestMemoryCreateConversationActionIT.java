@@ -36,7 +36,6 @@ public class RestMemoryCreateConversationActionIT extends MLCommonsRestTestCase 
 
     @Before
     public void setupFeatureSettings() throws IOException {
-        super.setupSettings();
         Response response = TestHelper
             .makeRequest(
                 client(),
