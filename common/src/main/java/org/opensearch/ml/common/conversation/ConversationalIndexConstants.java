@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.common.conversation;
 
+import org.opensearch.common.settings.Setting;
+
 /**
  * Class containing a bunch of constant defining how the conversational indices are formatted
  */
@@ -97,4 +99,7 @@ public class ConversationalIndexConstants {
         + "    }\n"
         + "}";
 
+    /** Feature Flag setting for conversational memory */
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.memory_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
