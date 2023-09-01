@@ -11,13 +11,13 @@ import com.amazonaws.encryptionsdk.CryptoResult;
 import com.amazonaws.encryptionsdk.jce.JceMasterKey;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ResourceNotFoundException;
-import org.opensearch.action.ActionListener;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.exception.MLException;
 
 import javax.crypto.spec.SecretKeySpec;
