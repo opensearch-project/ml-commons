@@ -24,7 +24,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.client.Client;
-import org.opensearch.ml.client.MachineLearningClient;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
@@ -32,6 +31,7 @@ import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 import org.opensearch.test.OpenSearchTestCase;
 
@@ -64,7 +64,7 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
     }
 
     public void testChatCompletionApi() throws Exception {
-        MachineLearningClient mlClient = mock(MachineLearningClient.class);
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         connector.setMlClient(mlClient);

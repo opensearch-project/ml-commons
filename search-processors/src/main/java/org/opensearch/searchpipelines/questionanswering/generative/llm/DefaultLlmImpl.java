@@ -21,14 +21,13 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
-import org.opensearch.ml.client.MachineLearningClient;
-import org.opensearch.ml.client.MachineLearningNodeClient;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 
 import java.util.HashMap;
@@ -52,17 +51,17 @@ public class DefaultLlmImpl implements Llm {
 
     private final String openSearchModelId;
 
-    private MachineLearningClient mlClient;
+    private MachineLearningInternalClient mlClient;
 
     public DefaultLlmImpl(String openSearchModelId, Client client) {
         checkNotNull(openSearchModelId);
         this.openSearchModelId = openSearchModelId;
-        this.mlClient = new MachineLearningNodeClient(client);
+        this.mlClient = new MachineLearningInternalClient(client);
 
     }
 
     @VisibleForTesting
-    void setMlClient(MachineLearningClient mlClient) {
+    void setMlClient(MachineLearningInternalClient mlClient) {
         this.mlClient = mlClient;
     }
 

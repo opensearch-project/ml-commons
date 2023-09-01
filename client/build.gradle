@@ -49,7 +49,6 @@ check.dependsOn jacocoTestCoverageVerification
 
 shadowJar {
     archiveClassifier.set(null)
-    dependsOn jar
 }
 
 task sourcesJar(type: Jar) {
