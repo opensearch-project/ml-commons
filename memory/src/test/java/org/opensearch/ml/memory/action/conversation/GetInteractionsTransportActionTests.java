@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -36,10 +37,12 @@ import org.mockito.Mockito;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
@@ -93,12 +96,16 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         this.cmHandler = Mockito.mock(OpenSearchConversationalMemoryHandler.class);
 
         this.request = new GetInteractionsRequest("test-cid");
-        this.action = spy(new GetInteractionsTransportAction(transportService, actionFilters, cmHandler, client));
 
-        Settings settings = Settings.builder().build();
+        Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);
         when(this.client.threadPool()).thenReturn(this.threadPool);
         when(this.threadPool.getThreadContext()).thenReturn(this.threadContext);
+        when(this.clusterService.getSettings()).thenReturn(settings);
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+
+        this.action = spy(new GetInteractionsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
     }
 
     public void testGetInteractions_noMorePages() {
@@ -176,4 +183,14 @@ public class GetInteractionsTransportActionTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getMessage().equals("Failure in doExecute"));
     }
 
+    public void testFeatureDisabled_ThenFail() {
+        when(this.clusterService.getSettings()).thenReturn(Settings.EMPTY);
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(Settings.EMPTY, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+        this.action = spy(new GetInteractionsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
+
+        action.doExecute(null, request, actionListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().startsWith("The experimental Conversation Memory feature is not enabled."));
+    }
 }

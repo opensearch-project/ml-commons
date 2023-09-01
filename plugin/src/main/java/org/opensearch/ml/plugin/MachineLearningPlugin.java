@@ -662,7 +662,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
-                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED
             );
         return settings;
     }
