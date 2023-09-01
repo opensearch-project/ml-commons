@@ -5,6 +5,7 @@
 
 package org.opensearch.searchpipelines.questionanswering.generative.client;
 
+import com.google.common.annotations.VisibleForTesting;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -36,6 +37,7 @@ public class MachineLearningInternalClient {
         return actionFuture;
     }
 
+    @VisibleForTesting
     void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
 
