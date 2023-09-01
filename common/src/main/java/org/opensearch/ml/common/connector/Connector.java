@@ -6,13 +6,12 @@
 package org.opensearch.ml.common.connector;
 
 import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.common.io.stream.StreamInput;
-import org.opensearch.common.io.stream.StreamOutput;
-import org.opensearch.common.io.stream.Writeable;
-import org.opensearch.common.Strings;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -32,7 +31,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 /**
@@ -95,7 +94,7 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     static Connector createConnector(XContentBuilder builder, String connectorProtocol) throws IOException {
-        String jsonStr = Strings.toString(builder);
+        String jsonStr = builder.toString();
         return createConnector(jsonStr, connectorProtocol);
     }
 
