@@ -41,6 +41,10 @@ dependencies {
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
 }
 
+compileJava {
+    dependsOn ':opensearch-ml-client:shadowJar'
+}
+
 test {
     include '**/*Tests.class'
     systemProperty 'tests.security.manager', 'false'
