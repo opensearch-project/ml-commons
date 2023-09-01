@@ -233,6 +233,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 throw new IllegalArgumentException("URL can't match trusted url regex");
             }
         }
+        System.out.println("registering the model");
         boolean isAsync = registerModelInput.getFunctionName() != FunctionName.REMOTE;
         MLTask mlTask = MLTask
             .builder()
@@ -249,8 +250,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                 String taskId = response.getId();
                 mlTask.setTaskId(taskId);
-                mlModelManager.registerMLModel(registerModelInput, mlTask);
-                listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
+                System.out.println("mlModelManager calls registerMLRemoteModel");
+                mlModelManager.registerMLRemoteModel(registerModelInput, mlTask, listener);
             }, e -> {
                 logException("Failed to register model", e, log);
                 listener.onFailure(e);

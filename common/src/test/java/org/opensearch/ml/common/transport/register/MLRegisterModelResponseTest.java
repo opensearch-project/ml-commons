@@ -16,24 +16,27 @@ public class MLRegisterModelResponseTest {
 
     private String taskId;
     private String status;
+    private String modelId;
 
     @Before
     public void setUp() throws Exception {
         taskId = "test_id";
         status = "test";
+        modelId = "model_id";
     }
 
     @Test
     public void writeTo_Success() throws IOException {
         // Setup
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
-        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, status);
+        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, status, modelId);
         // Run the test
         response.writeTo(bytesStreamOutput);
         MLRegisterModelResponse parsedResponse = new MLRegisterModelResponse(bytesStreamOutput.bytes().streamInput());
         // Verify the results
         assertEquals(response.getTaskId(), parsedResponse.getTaskId());
         assertEquals(response.getStatus(), parsedResponse.getStatus());
+        assertEquals(response.getModelId(), parsedResponse.getModelId());
     }
 
     @Test
@@ -48,5 +51,19 @@ public class MLRegisterModelResponseTest {
         // Verify the results
         assertEquals("{\"task_id\":\"test_id\"," +
                 "\"status\":\"test\"}", jsonStr);
+    }
+
+    @Test
+    public void testToXContent_withModelId() throws IOException {
+        // Setup
+        MLRegisterModelResponse response = new MLRegisterModelResponse(taskId, status, modelId);
+        // Run the test
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+        String jsonStr = builder.toString();
+        // Verify the results
+        assertEquals("{\"task_id\":\"test_id\"," +
+                "\"status\":\"test\"," + "\"model_id\":\"model_id\"}", jsonStr);
     }
 }

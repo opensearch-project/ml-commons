@@ -40,6 +40,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -202,6 +203,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(node2.getId()).thenReturn("node2Id");
 
         doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any());
+        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLRemoteModel(any(), any(), any());
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -358,7 +360,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
+        verify(mlModelManager).registerMLRemoteModel(eq(input), isA(MLTask.class), eq(actionListener));
     }
 
     public void test_execute_registerRemoteModel_withConnectorId_noPermissionToConnectorId() {
@@ -424,7 +426,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-        verify(actionListener).onResponse(argumentCaptor.capture());
+        verify(mlModelManager).registerMLRemoteModel(eq(input), isA(MLTask.class), eq(actionListener));
     }
 
     public void test_execute_registerRemoteModel_withInternalConnector_connectorIsNull() {
