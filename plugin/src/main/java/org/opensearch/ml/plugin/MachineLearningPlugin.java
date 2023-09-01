@@ -644,7 +644,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD,
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
-                MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
+                MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
+                MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED
             );
         return settings;
     }
