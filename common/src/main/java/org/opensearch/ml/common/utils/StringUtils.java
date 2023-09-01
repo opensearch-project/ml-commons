@@ -44,9 +44,6 @@ public class StringUtils {
     }
 
     public static Map<String, Object> fromJson(String input, String defaultKey) {
-        if (!isJson(input)) {
-            return Collections.singletonMap(defaultKey, input);
-        }
         Map<String, Object> result;
         JsonElement jsonElement = JsonParser.parseString(input);
         if (jsonElement.isJsonObject()) {

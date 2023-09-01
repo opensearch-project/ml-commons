@@ -167,24 +167,6 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void processOutput_noPostProcessFunction_nonJsonResponse() throws IOException {
-        ConnectorAction predictAction = ConnectorAction.builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("input", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        ModelTensors tensors = ConnectorUtils.processOutput("test response", connector, scriptService, parameters);
-        Assert.assertEquals(1, tensors.getMlModelTensors().size());
-        Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
-        Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("test response", tensors.getMlModelTensors().get(0).getDataAsMap().get("response"));
-    }
-
-    @Test
     public void processOutput_PostprocessFunction() throws IOException {
         String postprocessResult = "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
         when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult));
