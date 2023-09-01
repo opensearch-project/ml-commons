@@ -7,9 +7,11 @@ package org.opensearch.ml.plugin;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -247,6 +249,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private ConversationalMemoryHandler cmHandler;
 
+    private volatile boolean ragSearchPipelineEnabled;
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -337,6 +341,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
+
+        // TODO move this into MLFeatureEnabledSetting
+        this.ragSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
@@ -654,30 +663,45 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
-                MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED
+                MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
+                ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
             );
         return settings;
     }
 
+    /**
+     *
+     * Search processors for Retrieval Augmented Generation
+     *
+     */
+
     @Override
     public List<SearchPlugin.SearchExtSpec<?>> getSearchExts() {
-        return List
+        return ragSearchPipelineEnabled ? List
             .of(
                 new SearchPlugin.SearchExtSpec<>(
                     GenerativeQAParamExtBuilder.PARAMETER_NAME,
                     input -> new GenerativeQAParamExtBuilder(input),
                     parser -> GenerativeQAParamExtBuilder.parse(parser)
                 )
-            );
+            )
+               // Feature not enabled
+               : Collections.emptyList();
     }
 
     @Override
     public Map<String, Processor.Factory<SearchRequestProcessor>> getRequestProcessors(Parameters parameters) {
-        return Map.of(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory());
+        return ragSearchPipelineEnabled ?
+               Map.of(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory())
+               // Feature not enabled
+               : Collections.emptyMap();
     }
 
     @Override
     public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
-        return Map.of(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client));
+        return ragSearchPipelineEnabled ?
+            Map.of(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client))
+               // Feature not enabled
+               : Collections.emptyMap();
     }
 }
