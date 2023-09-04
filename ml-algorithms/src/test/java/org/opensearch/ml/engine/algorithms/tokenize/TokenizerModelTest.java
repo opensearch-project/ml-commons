@@ -72,7 +72,7 @@ public class TokenizerModelTest {
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         //modelZipFile = new File(getClass().getResource("demo_tokenize.zip").toURI());
-        modelZipFile = new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip"));
+        modelZipFile = new File(new URI("direct-tokenizer.zip"));
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -85,7 +85,7 @@ public class TokenizerModelTest {
     public void initModel_predict_Tokenize_SmallModel() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip")));
+        params.put(MODEL_ZIP_FILE, new File(new URI("direct-tokenizer.zip")));
         params.put(ML_ENGINE, mlEngine);
         MLModel smallModel = model.toBuilder().build();
         tokenizerModel.initModel(smallModel, params, encryptor);
@@ -134,8 +134,7 @@ public class TokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip")));
-        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("direct_tokenizer.zip").toURI()));
         tokenizerModel.initModel(model, params, encryptor);
     }
 
@@ -144,8 +143,7 @@ public class TokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo_tokenize.zip").toURI()));
-        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/direct-tokenizer.zip")));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("direct_tokenizer.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
         tokenizerModel.initModel(model, params, encryptor);
     }
