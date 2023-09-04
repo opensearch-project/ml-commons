@@ -15,7 +15,7 @@ This document contains a list of maintainers in this repo. See [opensearch-proje
 | Xun Zhang            | [Zhangxunmt](https://github.com/Zhangxunmt)         | Amazon      |
 | Yaliang Wu           | [ylwu-amzn](https://github.com/ylwu-amzn)           | Amazon      |
 | Zan Niu              | [zane-neo](https://github.com/zane-neo)             | Amazon      |
- | Xinyuan Lu           | [xinyual](https://github.com/xinyual)              | Amazon      |
+| Xinyuan Lu           | [xinyual](https://github.com/xinyual)              | Amazon      |
 
 ## Emeritus
 
