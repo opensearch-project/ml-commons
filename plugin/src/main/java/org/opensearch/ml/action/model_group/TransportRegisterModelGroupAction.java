@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.model_group;
 
-
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
