@@ -7,7 +7,6 @@ package org.opensearch.ml.plugin;
 
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 
 import java.nio.file.Path;
 import java.util.Collection;
@@ -251,6 +250,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private volatile boolean ragSearchPipelineEnabled;
 
+    public MachineLearningPlugin(Settings settings) {
+        this.ragSearchPipelineEnabled = MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
+    }
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -341,12 +344,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_MODEL_COUNT, new MLStat<>(false, new CounterSupplier()));
         stats.put(MLNodeLevelStat.ML_NODE_TOTAL_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
-
-        // TODO move this into MLFeatureEnabledSetting
-        this.ragSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(clusterService.getSettings());
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
@@ -458,6 +455,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             mlIndicesHandler,
             encryptor
         );
+
+        // TODO move this into MLFeatureEnabledSetting
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
         return ImmutableList
             .of(
@@ -665,7 +667,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
-                ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
+                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
             );
         return settings;
     }
