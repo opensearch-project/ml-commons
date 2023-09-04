@@ -73,8 +73,7 @@ public class SparseEncodingModelTest {
                 .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        //modelZipFile = new File(getClass().getResource("sparse_splade.zip").toURI());
-        modelZipFile = new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_splade.zip"));
+        modelZipFile = new File(getClass().getResource("sparse_splade.zip").toURI());
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -87,8 +86,7 @@ public class SparseEncodingModelTest {
     public void initModel_predict_TorchScript_SparseEncoding_SmallModel() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo-sparse.zip").toURI()));
-        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_three.zip")));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo-sparse.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
         MLModel smallModel = model.toBuilder().build();
         sparseEncodingModel.initModel(smallModel, params, encryptor);
@@ -100,7 +98,6 @@ public class SparseEncodingModelTest {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
-            //assertEquals(modelConfig.getEmbeddingDimension().intValue(), mlModelTensors.get(position).getData().length);
         }
         sparseEncodingModel.close();
     }
@@ -116,8 +113,6 @@ public class SparseEncodingModelTest {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
-            //assertEquals(4, mlModelTensors.size());
-            //assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
         sparseEncodingModel.close();
     }
@@ -135,7 +130,6 @@ public class SparseEncodingModelTest {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
-            //assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
         sparseEncodingModel.close();
     }
@@ -154,8 +148,7 @@ public class SparseEncodingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
-        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_three.zip")));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
         sparseEncodingModel.initModel(model, params, encryptor);
     }
 
@@ -164,8 +157,7 @@ public class SparseEncodingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        //params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
-        params.put(MODEL_ZIP_FILE, new File(new URI("file:///Users/xinyual/PycharmProjects/pythonProject3/sparse_three.zip")));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
         sparseEncodingModel.initModel(model, params, encryptor);
     }
