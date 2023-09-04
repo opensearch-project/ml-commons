@@ -40,7 +40,6 @@ public class RestActionUtils {
     public static final String PARAMETER_ALGORITHM = "algorithm";
     public static final String PARAMETER_ASYNC = "async";
     public static final String PARAMETER_RETURN_CONTENT = "return_content";
-    public static final String PARAMETER_MODEL_GROUP_NAME = "model_group_name";
     public static final String PARAMETER_MODEL_ID = "model_id";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String PARAMETER_CONNECTOR_ID = "connector_id";
