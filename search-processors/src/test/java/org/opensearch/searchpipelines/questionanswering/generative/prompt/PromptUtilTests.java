@@ -20,8 +20,11 @@ package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.test.OpenSearchTestCase;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -36,11 +39,16 @@ public class PromptUtilTests extends OpenSearchTestCase {
     public void testBuildMessageParameter() {
         String question = "Who am I";
         List<String> contexts = new ArrayList<>();
-        List<String> chatHistory = new ArrayList<>();
+        List<Interaction> chatHistory = List.of(Interaction.fromMap("convo1", Map.of(
+                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
+                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 1",
+                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer1")),
+            Interaction.fromMap("convo1", Map.of(
+                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
+                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 2",
+                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer2")));
         contexts.add("context 1");
         contexts.add("context 2");
-        chatHistory.add("message 1");
-        chatHistory.add("message 2");
         String parameter = PromptUtil.buildMessageParameter(question, chatHistory, contexts);
         Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
         assertTrue(isJson(parameter));

@@ -19,15 +19,19 @@ package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.XContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentGenerator;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
-import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamUtil;
-import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
 import org.opensearch.test.OpenSearchTestCase;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 public class GenerativeQAParametersTests extends OpenSearchTestCase {
 
@@ -91,5 +95,31 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         assertEquals(conversationId, actual.get(0));
         assertEquals(llmModel, actual.get(1));
         assertEquals(llmQuestion, actual.get(2));
+    }
+
+    public void testMisc() {
+        String conversationId = "a";
+        String llmModel = "b";
+        String llmQuestion = "c";
+        GenerativeQAParameters parameters = new GenerativeQAParameters(conversationId, llmModel, llmQuestion);
+        assertNotEquals(parameters, null);
+        assertNotEquals(parameters, "foo");
+        assertEquals(parameters, new GenerativeQAParameters(conversationId, llmModel, llmQuestion));
+        assertNotEquals(parameters, new GenerativeQAParameters("", llmModel, llmQuestion));
+        assertNotEquals(parameters, new GenerativeQAParameters(conversationId, "", llmQuestion));
+        assertNotEquals(parameters, new GenerativeQAParameters(conversationId, llmModel, ""));
+    }
+
+    public void testToXConent() throws IOException {
+        String conversationId = "a";
+        String llmModel = "b";
+        String llmQuestion = "c";
+        GenerativeQAParameters parameters = new GenerativeQAParameters(conversationId, llmModel, llmQuestion);
+        XContent xc = mock(XContent.class);
+        OutputStream os = mock(OutputStream.class);
+        XContentGenerator generator = mock(XContentGenerator.class);
+        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        XContentBuilder builder = new XContentBuilder(xc, os);
+        assertNotNull(parameters.toXContent(builder, null));
     }
 }

@@ -24,6 +24,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.client.Client;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
@@ -35,6 +37,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.client.Machin
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 import org.opensearch.test.OpenSearchTestCase;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -52,13 +55,17 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
         String question = "Who am I";
         List<String> contexts = new ArrayList<>();
-        List<String> chatHistory = new ArrayList<>();
         contexts.add("context 1");
         contexts.add("context 2");
-        chatHistory.add("message 1");
-        chatHistory.add("message 2");
+        List<Interaction> chatHistory = List.of(Interaction.fromMap("convo1", Map.of(
+            ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
+            ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 1",
+                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer1")),
+            Interaction.fromMap("convo1", Map.of(
+            ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
+            ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 2",
+                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer2")));
         String parameter = PromptUtil.getChatCompletionPrompt(question, chatHistory, contexts);
-        //System.out.println(parameter);
         Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
         assertTrue(isJson(parameter));
     }

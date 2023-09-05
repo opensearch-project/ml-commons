@@ -61,7 +61,7 @@ public class GenerativeQAParamExtBuilder extends SearchExtBuilder {
             return false;
         }
 
-        return Objects.equals(this.getParams(), ((GenerativeQAParamExtBuilder) obj).getParams());
+        return this.params.equals(((GenerativeQAParamExtBuilder) obj).getParams());
     }
 
     @Override
@@ -76,7 +76,7 @@ public class GenerativeQAParamExtBuilder extends SearchExtBuilder {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        return builder.value(params);
+        return builder.value(this.params);
     }
 
     public static GenerativeQAParamExtBuilder parse(XContentParser parser) throws IOException {
