@@ -13,20 +13,12 @@ import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.engine.algorithms.DLModel;
+import org.opensearch.ml.engine.algorithms.TextEmbeddingModel;
 import org.opensearch.ml.engine.annotation.Function;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
@@ -35,7 +27,7 @@ import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
 
 @Log4j2
 @Function(FunctionName.TEXT_EMBEDDING)
-public class TextEmbeddingModel extends DLModel {
+public class TextEmbeddingDenseModel extends TextEmbeddingModel {
 
     public static final String SENTENCE_EMBEDDING = "sentence_embedding";
 
@@ -83,19 +75,4 @@ public class TextEmbeddingModel extends DLModel {
         }
         return arguments;
     }
-
-    @Override
-    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
-        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-        String warmUpSentence = "warm up sentence";
-        if (modelMaxLength != null) {
-            warmUpSentence = "sentence ".repeat(modelMaxLength);
-        }
-        // First request takes longer time. Predict once to warm up model.
-        Input input = new Input();
-        input.add(warmUpSentence);
-        predictor.predict(input);
-    }
-
 }

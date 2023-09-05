@@ -55,7 +55,7 @@ public class TokenizerTranslator implements ServingTranslator {
             path = this.modelPath;
         }
         idf = new HashMap<>();
-        if (path.resolve("idf.json") != null){
+        if (Files.exists(path.resolve("idf.json"))){
             Gson gson = new Gson();
             Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
             idf = gson.fromJson(new InputStreamReader(Files.newInputStream(path.resolve("idf.json"))), mapType);

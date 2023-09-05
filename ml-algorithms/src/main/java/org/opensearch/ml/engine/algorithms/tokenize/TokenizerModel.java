@@ -22,6 +22,7 @@ import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
+import org.opensearch.ml.engine.algorithms.TextEmbeddingModel;
 import org.opensearch.ml.engine.annotation.Function;
 
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ import java.util.Map;
 
 @Log4j2
 @Function(FunctionName.TOKENIZE)
-public class TokenizerModel extends DLModel {
+public class TokenizerModel extends TextEmbeddingModel {
     @Override
     public TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig) {
         return null;
