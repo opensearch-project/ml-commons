@@ -137,7 +137,6 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         SearchRequest searchRequest = argumentCaptor.getValue();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
-        System.out.println(searchRequest);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
             searchRequest.source().toString()
