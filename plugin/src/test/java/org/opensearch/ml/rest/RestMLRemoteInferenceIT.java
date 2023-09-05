@@ -129,7 +129,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String modelId = (String) responseMap.get("model_id");
         response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
-        assertEquals("CREATED", (String) responseMap.get("status"));
+        assertEquals("COMPLETED", (String) responseMap.get("status"));
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
     }
