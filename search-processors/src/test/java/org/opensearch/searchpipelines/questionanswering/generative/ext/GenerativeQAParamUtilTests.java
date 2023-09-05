@@ -19,15 +19,9 @@ package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
-import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamUtil;
-import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
 import org.opensearch.test.OpenSearchTestCase;
 
 import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 
 public class GenerativeQAParamUtilTests extends OpenSearchTestCase {
 

@@ -23,6 +23,10 @@ import java.util.Collections;
 
 public class LlmIOUtilTests extends OpenSearchTestCase {
 
+    public void testCtor() {
+        assertNotNull(new LlmIOUtil());
+    }
+
     public void testChatCompletionInput() {
         ChatCompletionInput input = LlmIOUtil.createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList());
         assertTrue(input instanceof ChatCompletionInput);
