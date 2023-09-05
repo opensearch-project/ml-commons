@@ -23,6 +23,7 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
@@ -51,7 +52,7 @@ public class ConversationalMemoryClient {
     public String createConversation(String name) {
 
         CreateConversationResponse response = client.execute(CreateConversationAction.INSTANCE, new CreateConversationRequest(name)).actionGet();
-
+        log.info("createConversation: id: {}", response.getId());
         return response.getId();
     }
 
@@ -67,6 +68,8 @@ public class ConversationalMemoryClient {
 
     public List<Interaction> getInteractions(String conversationId, int lastN) {
 
+        Preconditions.checkArgument(lastN > 0, "lastN must be at least 1.");
+
         log.info("In getInteractions, conversationId {}, lastN {}", conversationId, lastN);
 
         List<Interaction> interactions = new ArrayList<>();
@@ -77,7 +80,7 @@ public class ConversationalMemoryClient {
             GetInteractionsResponse response =
                 client.execute(GetInteractionsAction.INSTANCE, new GetInteractionsRequest(conversationId, maxResults, from)).actionGet();
             List<Interaction> list = response.getInteractions();
-            if (list != null && !list.isEmpty()) {
+            if (list != null && !CollectionUtils.isEmpty(list)) {
                 interactions.addAll(list);
                 from += list.size();
                 maxResults -= list.size();
