@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
@@ -24,18 +26,22 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.ingest.ConfigurationUtils;
+import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamUtil;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
+import org.opensearch.searchpipelines.questionanswering.generative.client.ConversationalMemoryClient;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionOutput;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ModelLocator;
+import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -48,10 +54,15 @@ import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException
 @Log4j2
 public class GenerativeQAResponseProcessor extends AbstractProcessor implements SearchResponseProcessor {
 
+    private static final int DEFAULT_CHAT_HISTORY_WINDOW = 10;
+
     // TODO Add "interaction_count".  This is how far back in chat history we want to go back when calling LLM.
 
     private final String llmModel;
     private final List<String> contextFields;
+
+    @Setter
+    private ConversationalMemoryClient memoryClient;
 
     @Getter
     @Setter
@@ -64,6 +75,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         this.llmModel = llmModel;
         this.contextFields = contextFields;
         this.llm = llm;
+        this.memoryClient = new ConversationalMemoryClient(client);
     }
 
     @Override
@@ -71,16 +83,23 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
 
         log.info("Entering processResponse.");
 
-        List<String> chatHistory = getChatHistory(request);
         GenerativeQAParameters params = GenerativeQAParamUtil.getGenerativeQAParameters(request);
         String llmQuestion = params.getLlmQuestion();
         String llmModel = params.getLlmModel() == null ? this.llmModel : params.getLlmModel();
         String conversationId = params.getConversationId();
         log.info("LLM question: {}, LLM model {}, conversation id: {}", llmQuestion, llmModel, conversationId);
+        List<Interaction> chatHistory = (conversationId == null) ? Collections.emptyList() : memoryClient.getInteractions(conversationId, DEFAULT_CHAT_HISTORY_WINDOW);
+        List<String> searchResults = getSearchResults(response);
+        ChatCompletionOutput output = llm.doChatCompletion(LlmIOUtil.createChatCompletionInput(llmModel, llmQuestion, chatHistory, searchResults));
+        String answer = (String) output.getAnswers().get(0);
 
-        ChatCompletionOutput output = llm.doChatCompletion(LlmIOUtil.createChatCompletionInput(llmModel, llmQuestion, chatHistory, getSearchResults(response)));
+        String interactionId = null;
+        if (conversationId != null) {
+            interactionId = memoryClient.createInteraction(conversationId, llmQuestion, PromptUtil.DEFAULT_CHAT_COMPLETION_PROMPT_TEMPLATE, answer,
+                GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, jsonArrayToString(searchResults));
+        }
 
-        return insertAnswer(response, (String) output.getAnswers().get(0));
+        return insertAnswer(response, answer, interactionId);
     }
 
     @Override
@@ -88,14 +107,12 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         return GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE;
     }
 
-    private SearchResponse insertAnswer(SearchResponse response, String answer) {
+    private SearchResponse insertAnswer(SearchResponse response, String answer, String interactionId) {
+
+        // TODO return the interaction id in the response.
+
         return new GenerativeSearchResponse(answer, response.getInternalResponse(), response.getScrollId(), response.getTotalShards(), response.getSuccessfulShards(),
             response.getSkippedShards(), response.getSuccessfulShards(), response.getShardFailures(), response.getClusters());
-    }
-
-    // TODO Integrate with Conversational Memory
-    private List<String> getChatHistory(SearchRequest request) {
-        return new ArrayList<>();
     }
 
     private List<String> getSearchResults(SearchResponse response) {
@@ -113,6 +130,12 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             }
         }
         return searchResults;
+    }
+
+    private static String jsonArrayToString(List<String> listOfStrings) {
+        JsonArray array = new JsonArray(listOfStrings.size());
+        listOfStrings.forEach(array::add);
+        return array.toString();
     }
 
     public static final class Factory implements Processor.Factory<SearchResponseProcessor> {

@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import org.opensearch.ml.common.conversation.Interaction;
+
 import java.util.List;
 
 /**
@@ -24,7 +26,7 @@ import java.util.List;
  */
 public class LlmIOUtil {
 
-    public static ChatCompletionInput createChatCompletionInput(String llmModel, String question, List<String> chatHistory, List<String> contexts) {
+    public static ChatCompletionInput createChatCompletionInput(String llmModel, String question, List<Interaction> chatHistory, List<String> contexts) {
 
         // TODO pick the right subclass based on the modelId.
 

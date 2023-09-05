@@ -57,7 +57,6 @@ public class DefaultLlmImpl implements Llm {
         checkNotNull(openSearchModelId);
         this.openSearchModelId = openSearchModelId;
         this.mlClient = new MachineLearningInternalClient(client);
-
     }
 
     @VisibleForTesting
@@ -76,13 +75,15 @@ public class DefaultLlmImpl implements Llm {
 
         Map<String, String> inputParameters = new HashMap<>();
         inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
-        inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, PromptUtil.getChatCompletionPrompt(chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts()));
+        String messages = PromptUtil.getChatCompletionPrompt(chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts());
+        inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
+        log.info("Messages to LLM: {}", messages);
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(inputParameters).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
         ActionFuture<MLOutput> future = mlClient.predict(this.openSearchModelId, mlInput);
         ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet();
 
-        // Response from the (remote) model
+        // Response from a remote model
         Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         log.info("dataAsMap: {}", dataAsMap.toString());
 
