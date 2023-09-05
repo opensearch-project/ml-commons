@@ -5,7 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.tokenize;
 
-
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.modality.Input;
@@ -18,6 +19,7 @@ import ai.djl.translate.ArgumentsUtil;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.ServingTranslator;
 import ai.djl.translate.TranslatorContext;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -26,11 +28,17 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.*;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.util.stream.*;
+import java.lang.reflect.Type;
 
+@Log4j2
 public class TokenizerTranslator implements ServingTranslator {
     private HuggingFaceTokenizer tokenizer;
     private Path modelPath;
+    private Map<String, Float> idf;
     public TokenizerTranslator(Path modelPath)
     {
         this.modelPath = modelPath;
@@ -45,6 +53,12 @@ public class TokenizerTranslator implements ServingTranslator {
         Path path = ctx.getModel().getModelPath();
         if (this.modelPath != null) {
             path = this.modelPath;
+        }
+        idf = new HashMap<>();
+        if (path.resolve("idf.json") != null){
+            Gson gson = new Gson();
+            Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
+            idf = gson.fromJson(new InputStreamReader(Files.newInputStream(path.resolve("idf.json"))), mapType);
         }
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(path.resolve("tokenizer.json")).build();
     }
@@ -78,13 +92,17 @@ public class TokenizerTranslator implements ServingTranslator {
                 .map(value -> this.tokenizer.decode(value, true))
                 .filter(s -> !s.isEmpty())
                 .toArray(String[]::new);
-        Map<String, String[]> map = new HashMap<>();
-
-        map.put("response", tokens);
+        Map<String, Float> tokenWeights = Arrays.stream(tokens)
+                .collect(Collectors.toMap(
+                        token -> token,
+                        token -> idf.getOrDefault(token, 1.0f)
+                ));
+        Map<String, Map<String, Float> > resultMap = new HashMap<>();
+        resultMap.put("response", tokenWeights);
         ByteBuffer buffer = ndArray.toByteBuffer();
         ModelTensor tensor = ModelTensor.builder()
                 .name(name)
-                .dataAsMap(map)
+                .dataAsMap(resultMap)
                 .byteBuffer(buffer)
                 .build();
         outputs.add(tensor);
