@@ -9,8 +9,9 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -680,32 +681,42 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public List<SearchPlugin.SearchExtSpec<?>> getSearchExts() {
-        return ragSearchPipelineEnabled
-            ? List
-                .of(
+        List<SearchPlugin.SearchExtSpec<?>> searchExts = new ArrayList<>();
+
+        if (ragSearchPipelineEnabled) {
+            searchExts
+                .add(
                     new SearchPlugin.SearchExtSpec<>(
                         GenerativeQAParamExtBuilder.PARAMETER_NAME,
                         input -> new GenerativeQAParamExtBuilder(input),
                         parser -> GenerativeQAParamExtBuilder.parse(parser)
                     )
-                )
-            // Feature not enabled
-            : Collections.emptyList();
+                );
+        }
+
+        return searchExts;
     }
 
     @Override
     public Map<String, Processor.Factory<SearchRequestProcessor>> getRequestProcessors(Parameters parameters) {
-        return ragSearchPipelineEnabled
-            ? Map.of(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory())
-            // Feature not enabled
-            : Collections.emptyMap();
+        Map<String, Processor.Factory<SearchRequestProcessor>> requestProcessors = new HashMap<>();
+
+        if (ragSearchPipelineEnabled) {
+            requestProcessors.put(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory());
+        }
+
+        return requestProcessors;
     }
 
     @Override
     public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
-        return ragSearchPipelineEnabled
-            ? Map.of(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client))
-            // Feature not enabled
-            : Collections.emptyMap();
+        Map<String, Processor.Factory<SearchResponseProcessor>> responseProcessors = new HashMap<>();
+
+        if (ragSearchPipelineEnabled) {
+            responseProcessors
+                .put(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client));
+        }
+
+        return responseProcessors;
     }
 }

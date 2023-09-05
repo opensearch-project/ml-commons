@@ -74,7 +74,7 @@ public class ConversationalMemoryClient {
 
         List<Interaction> interactions = new ArrayList<>();
         int from = 0;
-        boolean done = false;
+        boolean allInteractionsFetched = false;
         int maxResults = lastN;
         do {
             GetInteractionsResponse response =
@@ -92,8 +92,8 @@ public class ConversationalMemoryClient {
                 break;
             }
             log.info("Interactions: {}, from: {}, maxResults: {}", interactions, from, maxResults);
-            done = !response.hasMorePages();
-        } while (from < lastN && !done);
+            allInteractionsFetched = !response.hasMorePages();
+        } while (from < lastN && !allInteractionsFetched);
 
         return interactions;
     }
