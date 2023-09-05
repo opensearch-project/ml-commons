@@ -19,7 +19,7 @@ import org.opensearch.ml.engine.algorithms.DLModel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TextEmbeddingModel extends DLModel {
+public abstract class TextEmbeddingModel extends DLModel {
     @Override
     public ModelTensorOutput innerPredict(MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
