@@ -64,15 +64,4 @@ public class TextEmbeddingDenseModel extends TextEmbeddingModel {
         }
         return null;
     }
-
-    @Override
-    public Map<String, Object> getArguments(MLModelConfig modelConfig) {
-        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-        Map<String, Object> arguments = new HashMap<>();
-        if (modelMaxLength != null) {
-            arguments.put("modelMaxLength", modelMaxLength);
-        }
-        return arguments;
-    }
 }

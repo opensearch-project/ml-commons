@@ -17,7 +17,9 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public abstract class TextEmbeddingModel extends DLModel {
     @Override
@@ -51,13 +53,18 @@ public abstract class TextEmbeddingModel extends DLModel {
         predictor.predict(input);
     }
 
-    @Override
-    public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
-        return null;
+    public Map<String, Object> getArguments(MLModelConfig modelConfig) {
+        Map<String, Object> arguments = new HashMap<>();
+        if (modelConfig == null){
+            return arguments;
+        }
+        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
+        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
+
+        if (modelMaxLength != null) {
+            arguments.put("modelMaxLength", modelMaxLength);
+        }
+        return arguments;
     }
 
-    @Override
-    public TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig) {
-        return null;
-    }
 }
