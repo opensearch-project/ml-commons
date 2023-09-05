@@ -59,7 +59,7 @@ public class PromptUtil {
         return buildMessageParameter(question, chatHistory, contexts);
     }
 
-    enum Role {
+    enum ChatRole {
         USER("user"),
         ASSISTANT("assistant"),
         SYSTEM("system");
@@ -69,7 +69,7 @@ public class PromptUtil {
         @Getter
         private String name;
 
-        Role(String name) {
+        ChatRole(String name) {
             this.name = name;
         }
     }
@@ -80,15 +80,15 @@ public class PromptUtil {
         // TODO better prompt template management is needed here.
 
         JsonArray messageArray = new JsonArray();
-        messageArray.add(new Message(Role.USER, DEFAULT_CHAT_COMPLETION_PROMPT_TEMPLATE).toJson());
+        messageArray.add(new Message(ChatRole.USER, DEFAULT_CHAT_COMPLETION_PROMPT_TEMPLATE).toJson());
         for (String result : contexts) {
-            messageArray.add(new Message(Role.USER, "SEARCH RESULT: " + result).toJson());
+            messageArray.add(new Message(ChatRole.USER, "SEARCH RESULT: " + result).toJson());
         }
         if (!chatHistory.isEmpty()) {
             Messages.fromInteractions(chatHistory).getMessages().forEach(m -> messageArray.add(m.toJson()));
         }
-        messageArray.add(new Message(Role.USER, "QUESTION: " + question).toJson());
-        messageArray.add(new Message(Role.USER, "ANSWER:").toJson());
+        messageArray.add(new Message(ChatRole.USER, "QUESTION: " + question).toJson());
+        messageArray.add(new Message(ChatRole.USER, "ANSWER:").toJson());
 
         return messageArray.toString();
     }
@@ -114,8 +114,8 @@ public class PromptUtil {
             List<Message> messages = new ArrayList<>();
 
             for (Interaction interaction : interactions) {
-                messages.add(new Message(Role.USER, interaction.getInput()));
-                messages.add(new Message(Role.ASSISTANT, interaction.getResponse()));
+                messages.add(new Message(ChatRole.USER, interaction.getInput()));
+                messages.add(new Message(ChatRole.ASSISTANT, interaction.getResponse()));
             }
 
             return new Messages(messages);
@@ -128,7 +128,7 @@ public class PromptUtil {
         private final static String MESSAGE_FIELD_CONTENT = "content";
 
         @Getter
-        private Role role;
+        private ChatRole chatRole;
         @Getter
         private String content;
 
@@ -138,15 +138,15 @@ public class PromptUtil {
             json = new JsonObject();
         }
 
-        public Message(Role role, String content) {
+        public Message(ChatRole chatRole, String content) {
             this();
-            setRole(role);
+            setChatRole(chatRole);
             setContent(content);
         }
 
-        public void setRole(Role role) {
+        public void setChatRole(ChatRole chatRole) {
             json.remove(MESSAGE_FIELD_ROLE);
-            json.add(MESSAGE_FIELD_ROLE, new JsonPrimitive(role.getName()));
+            json.add(MESSAGE_FIELD_ROLE, new JsonPrimitive(chatRole.getName()));
         }
         public void setContent(String content) {
             this.content = StringEscapeUtils.escapeJson(content);
