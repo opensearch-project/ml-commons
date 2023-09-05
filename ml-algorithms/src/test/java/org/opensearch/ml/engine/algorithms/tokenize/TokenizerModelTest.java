@@ -1,5 +1,8 @@
 package org.opensearch.ml.engine.algorithms.tokenize;
 
+import ai.djl.inference.Predictor;
+import ai.djl.modality.Input;
+import ai.djl.translate.TranslateException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -8,11 +11,14 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.annotation.InputDataSet;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -30,6 +36,10 @@ import java.nio.file.Path;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 
@@ -82,7 +92,7 @@ public class TokenizerModelTest {
     }
 
     @Test
-    public void initModel_predict_Tokenize_SmallModel() throws URISyntaxException {
+    public void initModel_predict_Tokenize_SmallModel() throws URISyntaxException, TranslateException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(new URI("direct-tokenizer.zip")));
@@ -90,6 +100,10 @@ public class TokenizerModelTest {
         MLModel smallModel = model.toBuilder().build();
         tokenizerModel.initModel(smallModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build();
+        MLInput mlInput1 = mock(MLInput.class);
+        TextDocsInputDataSet inputDataSet1 = mock(TextDocsInputDataSet.class);
+        when(mlInput1.getInputDataset()).thenReturn(inputDataSet1);
+        when(inputDataSet1.getInputDataType()).thenReturn(MLInputDataType.DATA_FRAME);
         ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
@@ -103,6 +117,13 @@ public class TokenizerModelTest {
             List<String> result = (List<String>) resultMap.get("response");
             assertEquals(result.size(), 3);
         }
+
+        Input input = mock(Input.class);
+        Predictor<Input, Output> predictor = mock(Predictor.class);
+        Output output1 = mock(Output.class);
+        when(predictor.predict(any(Input.class))).thenReturn(output1);
+        assertNotNull(output1);
+//        assertEquals("mocked output", output1.toString());
         tokenizerModel.close();
     }
 

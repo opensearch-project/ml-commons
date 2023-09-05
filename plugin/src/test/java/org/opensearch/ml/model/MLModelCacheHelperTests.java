@@ -29,7 +29,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel;
+import org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLPredictRequestStats;
 import org.opensearch.test.OpenSearchTestCase;
@@ -47,7 +47,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
     private String modelId;
     private String nodeId;
-    private TextEmbeddingModel predictor;
+    private TextEmbeddingDenseModel predictor;
     private int maxMonitoringRequests;
 
     private List<String> targetWorkerNodes;
@@ -65,7 +65,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
 
         modelId = "model_id1";
         nodeId = "node_id1";
-        predictor = spy(new TextEmbeddingModel());
+        predictor = spy(new TextEmbeddingDenseModel());
         targetWorkerNodes = new ArrayList<>();
         targetWorkerNodes.add(nodeId);
     }

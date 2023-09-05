@@ -20,12 +20,9 @@ import lombok.extern.log4j.Log4j2;
 import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataset.MLInputDataset;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -33,7 +30,6 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
-import org.opensearch.ml.engine.algorithms.tokenize.EmptyModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
@@ -43,7 +39,6 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,28 +79,13 @@ public abstract class DLModel implements Predictable {
                 if (predictors == null) {
                     throw new MLException("model not deployed.");
                 }
-                return predict(modelId, mlInput);
+                return innerPredict(mlInput);
             });
         } catch (Throwable e) {
             String errorMsg = "Failed to inference " + mlInput.getAlgorithm() + " model: " + modelId;
             log.error(errorMsg, e);
             throw new MLException(errorMsg, e);
         }
-    }
-
-    public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
-        MLInputDataset inputDataSet = mlInput.getInputDataset();
-        List<ModelTensors> tensorOutputs = new ArrayList<>();
-        Output output;
-        TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
-        ModelResultFilter resultFilter = textDocsInput.getResultFilter();
-        for (String doc : textDocsInput.getDocs()) {
-            Input input = new Input();
-            input.add(doc);
-            output = getPredictor().predict(input);
-            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
-        }
-        return new ModelTensorOutput(tensorOutputs);
     }
 
     protected Predictor<Input, Output> getPredictor() {
@@ -117,7 +97,7 @@ public abstract class DLModel implements Predictable {
         return predictors[currentDevice];
     }
 
-    //public abstract ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
+    public abstract ModelTensorOutput innerPredict(MLInput input) throws TranslateException;
 
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
@@ -158,8 +138,7 @@ public abstract class DLModel implements Predictable {
                 model.getName(),
                 model.getVersion(),
                 model.getModelConfig(),
-                engine,
-                model.getAlgorithm()
+                engine
         );
     }
 
@@ -191,38 +170,14 @@ public abstract class DLModel implements Predictable {
     public abstract TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig);
 
     public Map<String, Object> getArguments(MLModelConfig modelConfig) {
-        Map<String, Object> arguments = new HashMap<>();
-        if (modelConfig == null){
-            return arguments;
-        }
-        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-
-        if (modelMaxLength != null) {
-            arguments.put("modelMaxLength", modelMaxLength);
-        }
-        return arguments;
+        return null;
     }
 
-    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
-        TextEmbeddingModelConfig textEmbeddingModelConfig = (TextEmbeddingModelConfig) modelConfig;
-        String warmUpSentence = "warm up sentence";
-        if (modelConfig  != null) {
-            Integer modelMaxLength = textEmbeddingModelConfig.getModelMaxLength();
-            if (modelMaxLength != null) {
-                warmUpSentence = "sentence ".repeat(modelMaxLength);
-            }
-        }
-        // First request takes longer time. Predict once to warm up model.
-        Input input = new Input();
-        input.add(warmUpSentence);
-        predictor.predict(input);
-    }
+    public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
 
     protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
                              MLModelConfig modelConfig,
-                             String engine,
-                             FunctionName modelAlgorithm) {
+                             String engine) {
         try {
             if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
                 throw new IllegalArgumentException("unsupported engine");
@@ -265,45 +220,35 @@ public abstract class DLModel implements Predictable {
                     devices = Engine.getEngine(engine).getDevices();
                     for (int i = 0; i < devices.length; i++) {
                         log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
-                        ZooModel<Input, Output> model;
-                        Predictor<Input, Output> predictor;
-                        if (modelAlgorithm != FunctionName.TOKENIZE) {
-                            Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
-                                    .setTypes(Input.class, Output.class)
-                                    .optApplication(Application.UNDEFINED)
-                                    .optEngine(engine)
-                                    .optDevice(devices[i])
-                                    .optModelPath(modelPath);
-                            Translator translator = getTranslator(engine, modelConfig);
-                            TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
-                            if (translatorFactory != null) {
-                                criteriaBuilder.optTranslatorFactory(translatorFactory);
-                            } else if (translator != null) {
-                                criteriaBuilder.optTranslator(translator);
-                            }
-
-                            Map<String, Object> arguments = getArguments(modelConfig);
-                            if (arguments != null && arguments.size() > 0) {
-                                for (Map.Entry<String, Object> entry : arguments.entrySet()) {
-                                    criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
-                                }
-                            }
-
-                            Criteria<Input, Output> criteria = criteriaBuilder.build();
-                            model = criteria.loadModel();
-                            predictor = model.newPredictor();
+                        Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
+                                .setTypes(Input.class, Output.class)
+                                .optApplication(Application.UNDEFINED)
+                                .optEngine(engine)
+                                .optDevice(devices[i])
+                                .optModelPath(modelPath);
+                        Translator translator = getTranslator(engine, modelConfig);
+                        TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
+                        if (translatorFactory != null) {
+                            criteriaBuilder.optTranslatorFactory(translatorFactory);
+                        } else if (translator != null) {
+                            criteriaBuilder.optTranslator(translator);
                         }
-                        else
-                        {
-                            model = EmptyModel.newInstance(modelPath);
-                            predictor = model.newPredictor();
+
+                        Map<String, Object> arguments = getArguments(modelConfig);
+                        if (arguments != null && arguments.size() > 0) {
+                            for (Map.Entry<String,Object> entry : arguments.entrySet()) {
+                                criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
+                            }
                         }
+
+                        Criteria<Input, Output> criteria = criteriaBuilder.build();
+                        ZooModel<Input, Output> model = criteria.loadModel();
+                        Predictor<Input, Output> predictor = model.newPredictor();
                         predictorList.add(predictor);
                         modelList.add(model);
 
                         // First request takes longer time. Predict once to warm up model.
                         warmUp(predictor, modelId, modelConfig);
-
                     }
                     if (predictorList.size() > 0) {
                         this.predictors = predictorList.toArray(new Predictor[0]);
