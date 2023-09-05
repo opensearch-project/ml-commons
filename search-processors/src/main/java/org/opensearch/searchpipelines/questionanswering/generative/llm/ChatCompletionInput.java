@@ -21,6 +21,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ml.common.conversation.Interaction;
 
 import java.util.List;
 
@@ -35,6 +36,6 @@ public class ChatCompletionInput {
 
     private String model;
     private String question;
-    private List<String> chatHistory;
+    private List<Interaction> chatHistory;
     private List<String> contexts;
 }
