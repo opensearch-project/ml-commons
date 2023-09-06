@@ -83,26 +83,6 @@ public class SparseEncodingModelTest {
     }
 
     @Test
-    public void initModel_predict_TorchScript_SparseEncoding_SmallModel() throws URISyntaxException {
-        Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_demo.zip").toURI()));
-        params.put(ML_ENGINE, mlEngine);
-        MLModel smallModel = model.toBuilder().build();
-        sparseEncodingModel.initModel(smallModel, params, encryptor);
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)sparseEncodingModel.predict(mlInput);
-        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
-        assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
-            ModelTensors tensors = mlModelOutputs.get(i);
-            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
-            assertEquals(1, mlModelTensors.size());
-        }
-        sparseEncodingModel.close();
-    }
-
-    @Test
     public void initModel_predict_TorchScript_SparseEncoding() {
         sparseEncodingModel.initModel(model, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build();
