@@ -189,7 +189,7 @@ integTest {
 }
 
 testClusters.integTest {
-    testDistribution = "ARCHIVE"
+    testDistribution = "INTEG_TEST"
     // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1
     if (_numNodes > 1) numberOfNodes = _numNodes
     // When running integration tests it doesn't forward the --debug-jvm to the cluster anymore
