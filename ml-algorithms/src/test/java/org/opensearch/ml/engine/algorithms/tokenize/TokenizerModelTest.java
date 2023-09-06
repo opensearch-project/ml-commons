@@ -18,6 +18,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -81,8 +82,8 @@ public class TokenizerModelTest {
                 .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        //modelZipFile = new File(getClass().getResource("demo_tokenize.zip").toURI());
-        modelZipFile = new File(new URI("direct-tokenizer.zip"));
+        modelZipFile = new File(getClass().getResource("tokenize-demo.zip").toURI());
+        //modelZipFile = new File(new URI("direct-tokenizer.zip"));
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -92,18 +93,9 @@ public class TokenizerModelTest {
     }
 
     @Test
-    public void initModel_predict_Tokenize_SmallModel() throws URISyntaxException, TranslateException {
-        Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(new URI("direct-tokenizer.zip")));
-        params.put(ML_ENGINE, mlEngine);
-        MLModel smallModel = model.toBuilder().build();
-        tokenizerModel.initModel(smallModel, params, encryptor);
+    public void initModel_predict_Tokenize() throws URISyntaxException, TranslateException {
+        tokenizerModel.initModel(model, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build();
-        MLInput mlInput1 = mock(MLInput.class);
-        TextDocsInputDataSet inputDataSet1 = mock(TextDocsInputDataSet.class);
-        when(mlInput1.getInputDataset()).thenReturn(inputDataSet1);
-        when(inputDataSet1.getInputDataType()).thenReturn(MLInputDataType.DATA_FRAME);
         ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
@@ -114,22 +106,14 @@ public class TokenizerModelTest {
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            List<String> result = (List<String>) resultMap.get("response");
+            Map<String, Float> result = (Map<String, Float>) resultMap.get("response");
             assertEquals(result.size(), 3);
         }
-
-        Input input = mock(Input.class);
-        Predictor<Input, Output> predictor = mock(Predictor.class);
-        Output output1 = mock(Output.class);
-        when(predictor.predict(any(Input.class))).thenReturn(output1);
-        assertNotNull(output1);
-//        assertEquals("mocked output", output1.toString());
-        tokenizerModel.close();
     }
 
 
     @Test
-    public void initModel_predict_Tokenize_SmallModel_ResultFilter() {
+    public void initModel_predict_Tokenize_ResultFilter() {
         tokenizerModel.initModel(model, params, encryptor);
         ModelResultFilter resultFilter = ModelResultFilter.builder().targetResponse(Arrays.asList("input1.input_ids")).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
@@ -144,7 +128,7 @@ public class TokenizerModelTest {
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            List<String> result = (List<String>) resultMap.get("response");
+            Map<String, Float> result = (Map<String, Float>) resultMap.get("response");
             assertEquals(result.size(), 3);
         }
         tokenizerModel.close();
@@ -155,7 +139,7 @@ public class TokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("direct_tokenizer.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("tokenize-demo.zip").toURI()));
         tokenizerModel.initModel(model, params, encryptor);
     }
 
@@ -164,7 +148,7 @@ public class TokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("direct_tokenizer.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("tokenize-demo.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
         tokenizerModel.initModel(model, params, encryptor);
     }
@@ -182,7 +166,7 @@ public class TokenizerModelTest {
         try {
             Map<String, Object> params = new HashMap<>();
             params.put(MODEL_HELPER, modelHelper);
-            params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
+            params.put(MODEL_ZIP_FILE, new File(getClass().getResource("../text_embedding/wrong_zip_with_2_pt_file.zip").toURI()));
             params.put(ML_ENGINE, mlEngine);
             tokenizerModel.initModel(model, params, encryptor);
         } catch (Exception e) {
