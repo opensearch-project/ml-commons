@@ -322,7 +322,7 @@ jacocoTestCoverageVerification {
 check.dependsOn jacocoTestCoverageVerification
 
 configurations.all {
-    resolutionStrategy.force 'org.apache.commons:commons-lang3:"${versions.commonslang}"'
+    resolutionStrategy.force 'org.apache.commons:commons-lang3:3.13.0'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
