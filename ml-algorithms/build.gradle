@@ -63,6 +63,7 @@ dependencies {
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
     implementation 'com.jayway.jsonpath:json-path:2.8.0'
     implementation group: 'org.json', name: 'json', version: '20230227'
+    implementation 'org.bouncycastle:bcprov-ext-jdk15on:1.70'
 }
 
 lombok {
