@@ -73,7 +73,7 @@ public class SparseEncodingModelTest {
                 .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
-        modelZipFile = new File(getClass().getResource("sparse_splade.zip").toURI());
+        modelZipFile = new File(getClass().getResource("sparse_demo.zip").toURI());
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -86,7 +86,7 @@ public class SparseEncodingModelTest {
     public void initModel_predict_TorchScript_SparseEncoding_SmallModel() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("demo-sparse.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_demo.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
         MLModel smallModel = model.toBuilder().build();
         sparseEncodingModel.initModel(smallModel, params, encryptor);
@@ -148,7 +148,7 @@ public class SparseEncodingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_demo.zip").toURI()));
         sparseEncodingModel.initModel(model, params, encryptor);
     }
 
@@ -157,7 +157,7 @@ public class SparseEncodingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("ML engine is null");
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_splade.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("sparse_demo.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
         sparseEncodingModel.initModel(model, params, encryptor);
     }
@@ -175,7 +175,7 @@ public class SparseEncodingModelTest {
         try {
             Map<String, Object> params = new HashMap<>();
             params.put(MODEL_HELPER, modelHelper);
-            params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
+            params.put(MODEL_ZIP_FILE, new File(getClass().getResource("../text_embedding/wrong_zip_with_2_pt_file.zip").toURI()));
             params.put(ML_ENGINE, mlEngine);
             sparseEncodingModel.initModel(model, params, encryptor);
         } catch (Exception e) {
