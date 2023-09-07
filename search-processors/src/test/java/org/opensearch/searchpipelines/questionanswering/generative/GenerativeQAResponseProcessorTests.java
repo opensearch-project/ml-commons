@@ -41,6 +41,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -50,13 +51,15 @@ import static org.mockito.Mockito.when;
 
 public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
+    private BooleanSupplier alwaysOn = () -> true;
+
     public void testProcessorFactoryRemoteModel() throws Exception {
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client, alwaysOn)
             .create(null, "tag", "desc", true, config, null);
         assertNotNull(processor);
     }
@@ -64,7 +67,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
     public void testGetType() {
         Client client = mock(Client.class);
         Llm llm = mock(Llm.class);
-        GenerativeQAResponseProcessor processor = new GenerativeQAResponseProcessor(client, null, null, false, llm, "foo", List.of("text"));
+        GenerativeQAResponseProcessor processor = new GenerativeQAResponseProcessor(client, null, null, false, llm, "foo", List.of("text"), alwaysOn);
         assertEquals(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, processor.getType());
     }
 
@@ -74,7 +77,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client, alwaysOn)
             .create(null, "tag", "desc", true, config, null);
 
         SearchRequest request = new SearchRequest(); // mock(SearchRequest.class);
@@ -117,7 +120,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client, alwaysOn)
             .create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -172,7 +175,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client)
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(client, alwaysOn)
             .create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);

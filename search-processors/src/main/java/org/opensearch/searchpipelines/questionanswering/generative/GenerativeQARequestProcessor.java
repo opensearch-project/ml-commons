@@ -19,11 +19,13 @@ package org.opensearch.searchpipelines.questionanswering.generative;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.ingest.ConfigurationUtils;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * Defines the request processor for generative QA search pipelines.
@@ -31,16 +33,22 @@ import java.util.Map;
 public class GenerativeQARequestProcessor extends AbstractProcessor implements SearchRequestProcessor {
 
     private String modelId;
+    private final BooleanSupplier featureFlagSupplier;
 
-    protected GenerativeQARequestProcessor(String tag, String description, boolean ignoreFailure, String modelId) {
+    protected GenerativeQARequestProcessor(String tag, String description, boolean ignoreFailure, String modelId, BooleanSupplier supplier) {
         super(tag, description, ignoreFailure);
         this.modelId = modelId;
+        this.featureFlagSupplier = supplier;
     }
 
     @Override
     public SearchRequest processRequest(SearchRequest request) throws Exception {
 
         // TODO Use chat history to rephrase the question with full conversation context.
+
+        if (!featureFlagSupplier.getAsBoolean()) {
+            throw new RuntimeException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
+        }
 
         return request;
     }
@@ -52,6 +60,12 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
 
     public static final class Factory implements Processor.Factory<SearchRequestProcessor> {
 
+        private final BooleanSupplier featureFlagSupplier;
+
+        public Factory(BooleanSupplier supplier) {
+            this.featureFlagSupplier = supplier;
+        }
+
         @Override
         public SearchRequestProcessor create(
             Map<String, Processor.Factory<SearchRequestProcessor>> processorFactories,
@@ -61,9 +75,18 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
             Map<String, Object> config,
             PipelineContext pipelineContext
         ) throws Exception {
-            return new GenerativeQARequestProcessor(tag, description, ignoreFailure,
-                ConfigurationUtils.readStringProperty(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID)
-            );
+            if (featureFlagSupplier.getAsBoolean()) {
+                return new GenerativeQARequestProcessor(tag, description, ignoreFailure,
+                    ConfigurationUtils.readStringProperty(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
+                        tag,
+                        config,
+                        GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID
+                    ),
+                    this.featureFlagSupplier
+                );
+            } else {
+                throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
+            }
         }
     }
 }

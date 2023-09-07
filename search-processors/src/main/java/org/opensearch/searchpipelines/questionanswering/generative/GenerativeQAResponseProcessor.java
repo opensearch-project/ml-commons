@@ -27,6 +27,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.Processor;
@@ -44,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException;
 
@@ -69,19 +71,26 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     // Mainly for unit testing purpose
     private Llm llm;
 
+    private final BooleanSupplier featureFlagSupplier;
+
     protected GenerativeQAResponseProcessor(Client client, String tag, String description, boolean ignoreFailure,
-        Llm llm, String llmModel, List<String> contextFields) {
+        Llm llm, String llmModel, List<String> contextFields, BooleanSupplier supplier) {
         super(tag, description, ignoreFailure);
         this.llmModel = llmModel;
         this.contextFields = contextFields;
         this.llm = llm;
         this.memoryClient = new ConversationalMemoryClient(client);
+        this.featureFlagSupplier = supplier;
     }
 
     @Override
     public SearchResponse processResponse(SearchRequest request, SearchResponse response) throws Exception {
 
         log.info("Entering processResponse.");
+
+        if (!this.featureFlagSupplier.getAsBoolean()) {
+            throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
+        }
 
         GenerativeQAParameters params = GenerativeQAParamUtil.getGenerativeQAParameters(request);
         String llmQuestion = params.getLlmQuestion();
@@ -141,9 +150,11 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     public static final class Factory implements Processor.Factory<SearchResponseProcessor> {
 
         private final Client client;
+        private final BooleanSupplier featureFlagSupplier;
 
-        public Factory(Client client) {
+        public Factory(Client client, BooleanSupplier supplier) {
             this.client = client;
+            this.featureFlagSupplier = supplier;
         }
 
         @Override
@@ -155,14 +166,42 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             Map<String, Object> config,
             PipelineContext pipelineContext
         ) throws Exception {
-            String modelId = ConfigurationUtils.readOptionalStringProperty(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID);
-            String llmModel = ConfigurationUtils.readOptionalStringProperty(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_LLM_MODEL);
-            List<String> contextFields = ConfigurationUtils.readList(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, config, GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST);
-            if (contextFields.isEmpty()) {
-                throw newConfigurationException(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, tag, GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, "required property can't be empty.");
+            if (this.featureFlagSupplier.getAsBoolean()) {
+                String modelId = ConfigurationUtils.readOptionalStringProperty(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                    tag,
+                    config,
+                    GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID
+                );
+                String llmModel = ConfigurationUtils.readOptionalStringProperty(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                    tag,
+                    config,
+                    GenerativeQAProcessorConstants.CONFIG_NAME_LLM_MODEL
+                );
+                List<String> contextFields = ConfigurationUtils.readList(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                    tag,
+                    config,
+                    GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST
+                );
+                if (contextFields.isEmpty()) {
+                    throw newConfigurationException(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                        tag,
+                        GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST,
+                        "required property can't be empty."
+                    );
+                }
+                log.info("model_id {}, llm_model {}, context_field_list {}", modelId, llmModel, contextFields);
+                return new GenerativeQAResponseProcessor(client,
+                    tag,
+                    description,
+                    ignoreFailure,
+                    ModelLocator.getLlm(modelId, client),
+                    llmModel,
+                    contextFields,
+                    featureFlagSupplier
+                );
+            } else {
+                throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
             }
-            log.info("model_id {}, llm_model {}, context_field_list {}", modelId, llmModel, contextFields);
-            return new GenerativeQAResponseProcessor(client, tag, description, ignoreFailure, ModelLocator.getLlm(modelId, client), llmModel, contextFields);
         }
     }
 }

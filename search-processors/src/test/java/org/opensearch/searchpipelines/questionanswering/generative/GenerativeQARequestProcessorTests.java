@@ -23,27 +23,30 @@ import org.opensearch.test.OpenSearchTestCase;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
+
+    private BooleanSupplier alwaysOn = () -> true;
 
     public void testProcessorFactory() throws Exception {
 
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
         SearchRequestProcessor processor =
-            new GenerativeQARequestProcessor.Factory().create(null, "tag", "desc", true, config, null);
+            new GenerativeQARequestProcessor.Factory(alwaysOn).create(null, "tag", "desc", true, config, null);
         assertTrue(processor instanceof GenerativeQARequestProcessor);
     }
 
     public void testProcessRequest() throws Exception {
-        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo");
+        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo", alwaysOn);
         SearchRequest request = new SearchRequest();
         SearchRequest processed = processor.processRequest(request);
         assertEquals(request, processed);
     }
 
     public void testGetType() {
-        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo");
+        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo", alwaysOn);
         assertEquals(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, processor.getType());
     }
 }
