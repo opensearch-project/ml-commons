@@ -1,0 +1,44 @@
+{
+    "_plugins.conversational_create_interaction": {
+        "stability": "stable",
+        "url": {
+            "paths": [
+                {
+                    "path": "/_plugins/ml/conversational/memory/{conversationId}",
+                    "methods": ["POST"],
+                    "parts": {
+                        "conversationId": {
+                            "type": "string",
+                            "description": "ID of conversation to add this interaction to"
+                        }
+                    }
+                }
+            ]
+        },
+        "params": {
+            "input": {
+                "type": "string",
+                "description": "human input in the interaction"
+            },
+            "prompt": {
+                "type": "string",
+                "description": "prompting around the input"
+            },
+            "response": {
+                "type": "string",
+                "description": "AI response from the input"
+            },
+            "agent": {
+                "type": "string",
+                "description": "GenAI Agent used for this interaction"
+            },
+            "attributes": {
+                "type": "string",
+                "description": "arbitrary XContent string of additional data associated with this interaction"
+            }
+        },
+        "body": {
+            "description": "the interaction"
+        }
+    }
+}
