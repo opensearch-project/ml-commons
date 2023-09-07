@@ -97,8 +97,10 @@ public class TokenizerTranslator implements ServingTranslator {
                         token -> token,
                         token -> idf.getOrDefault(token, 1.0f)
                 ));
-        Map<String, Map<String, Float> > resultMap = new HashMap<>();
-        resultMap.put("response", tokenWeights);
+        Map<String, List<Map<String, Float> > > resultMap = new HashMap<>();
+        List<Map<String, Float> > listOftokenWeights = new ArrayList<>();
+        listOftokenWeights.add(tokenWeights);
+        resultMap.put("response", listOftokenWeights);
         ByteBuffer buffer = ndArray.toByteBuffer();
         ModelTensor tensor = ModelTensor.builder()
                 .name(name)

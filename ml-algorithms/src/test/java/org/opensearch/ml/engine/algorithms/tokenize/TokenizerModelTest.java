@@ -83,7 +83,6 @@ public class TokenizerModelTest {
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("tokenize-demo.zip").toURI());
-        //modelZipFile = new File(new URI("direct-tokenizer.zip"));
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
