@@ -52,9 +52,7 @@ public class StringUtils {
     public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
         Map<String, Object> result;
         JsonElement jsonElement = JsonParser.parseString(jsonStr);
-        if (jsonElement.isJsonObject()) {
-            result = gson.fromJson(jsonElement, Map.class);
-        } else if (jsonElement.isJsonArray()) {
+        if (jsonElement.isJsonObject() || jsonElement.isJsonArray()) {
             List<Object> list = gson.fromJson(jsonElement, List.class);
             result = new HashMap<>();
             result.put(defaultKey, list);
