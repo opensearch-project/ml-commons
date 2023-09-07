@@ -6,9 +6,11 @@
 package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
@@ -17,9 +19,17 @@ import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -33,17 +43,20 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     Client client;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
+    MLModelManager mlModelManager;
 
     @Inject
     public UpdateConnectorTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLModelManager mlModelManager
     ) {
         super(MLUpdateConnectorAction.NAME, transportService, actionFilters, MLUpdateConnectorRequest::new);
         this.client = client;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlModelManager = mlModelManager;
     }
 
     @Override
@@ -57,7 +70,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(hasPermission -> {
                 if (Boolean.TRUE.equals(hasPermission)) {
-                    client.update(updateRequest, getUpdateResponseListener(connectorId, listener, context));
+                    updateUndeployedConnector(connectorId, updateRequest, listener, context);
                 } else {
                     listener
                         .onFailure(
@@ -72,6 +85,44 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);
         }
+    }
+
+    private void updateUndeployedConnector(
+        String connectorId,
+        UpdateRequest updateRequest,
+        ActionListener<UpdateResponse> listener,
+        ThreadContext.StoredContext context
+    ) {
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder.must(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+        boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
+        sourceBuilder.query(boolQueryBuilder);
+        searchRequest.source(sourceBuilder);
+
+        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
+            if (searchHits.length == 0) {
+                client.update(updateRequest, getUpdateResponseListener(connectorId, listener, context));
+            } else {
+                log.error(searchHits.length + " models are still using this connector, please undeploy the models first!");
+                listener
+                    .onFailure(
+                        new MLValidationException(
+                            searchHits.length + " models are still using this connector, please undeploy the models first!"
+                        )
+                    );
+            }
+        }, e -> {
+            if (e instanceof IndexNotFoundException) {
+                client.update(updateRequest, getUpdateResponseListener(connectorId, listener, context));
+                return;
+            }
+            log.error("Failed to update ML connector: " + connectorId, e);
+            listener.onFailure(e);
+
+        }));
     }
 
     private ActionListener<UpdateResponse> getUpdateResponseListener(

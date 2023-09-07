@@ -15,14 +15,20 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchResponseSections;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
@@ -34,8 +40,14 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -77,17 +89,22 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
     @Mock
     ActionListener<UpdateResponse> actionListener;
 
+    @Mock
+    MLModelManager mlModelManager;
+
     ThreadContext threadContext;
 
     private Settings settings;
 
     private ShardId shardId;
 
+    private SearchResponse searchResponse;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
     @Before
-    public void setup() {
+    public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         settings = Settings
             .builder()
@@ -109,12 +126,28 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         when(updateRequest.getConnectorId()).thenReturn(connector_id);
         when(updateRequest.getUpdateContent()).thenReturn(updateContent);
 
+        SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
+        searchResponse = new SearchResponse(
+            searchSections,
+            null,
+            1,
+            1,
+            0,
+            11,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
+
         transportUpdateConnectorAction = new UpdateConnectorTransportAction(
             transportService,
             actionFilters,
             client,
-            connectorAccessControlHelper
+            connectorAccessControlHelper,
+            mlModelManager
         );
+
+        when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
     }
@@ -125,6 +158,12 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -182,6 +221,13 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
         UpdateResponse updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -201,6 +247,12 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("update document failure"));
             return null;
@@ -210,5 +262,85 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("update document failure", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_execute_SearchResponseNotEmpty() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(noneEmptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("1 models are still using this connector, please undeploy the models first!", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_execute_SearchResponseError() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new RuntimeException("Error in Search Request"));
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Error in Search Request", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_execute_SearchIndexNotFoundError() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException("Index not found!"));
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        transportUpdateConnectorAction.doExecute(task, updateRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    private SearchResponse noneEmptySearchResponse() throws IOException {
+        String modelContent = "{\"name\":\"Remote_Model\",\"algorithm\":\"Remote\",\"version\":1,\"connector_id\":\"test_id\"}";
+        SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { model }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
+        SearchResponse searchResponse = new SearchResponse(
+            searchSections,
+            null,
+            1,
+            1,
+            0,
+            11,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
+
+        return searchResponse;
     }
 }
