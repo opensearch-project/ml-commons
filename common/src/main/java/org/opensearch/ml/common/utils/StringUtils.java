@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,7 +53,13 @@ public class StringUtils {
     public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
         Map<String, Object> result;
         JsonElement jsonElement = JsonParser.parseString(jsonStr);
-        if (jsonElement.isJsonObject() || jsonElement.isJsonArray()) {
+        if (jsonElement.isJsonObject()) {
+            Map<String, Object> resultJson = gson.fromJson(jsonElement, Map.class);
+            List<Object> list = new ArrayList<>();
+            list.add(resultJson);
+            result = new HashMap<>();
+            result.put(defaultKey, list);
+        } else if (jsonElement.isJsonArray()) {
             List<Object> list = gson.fromJson(jsonElement, List.class);
             result = new HashMap<>();
             result.put(defaultKey, list);
