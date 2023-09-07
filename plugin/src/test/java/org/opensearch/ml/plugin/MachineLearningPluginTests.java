@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
@@ -35,44 +34,10 @@ import org.opensearch.searchpipelines.questionanswering.generative.ext.Generativ
 
 public class MachineLearningPluginTests {
 
-    @Test
-    public void testGetSearchExtsFeatureDisabled() {
-        Settings settings = Settings.builder().build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
-        List<SearchPlugin.SearchExtSpec<?>> searchExts = plugin.getSearchExts();
-        assertEquals(0, searchExts.size());
-    }
-
-    @Test
-    public void testGetSearchExtsFeatureDisabledExplicit() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.rag_pipeline_feature_enabled", "false").build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
-        List<SearchPlugin.SearchExtSpec<?>> searchExts = plugin.getSearchExts();
-        assertEquals(0, searchExts.size());
-    }
-
-    @Test
-    public void testGetRequestProcessorsFeatureDisabled() {
-        Settings settings = Settings.builder().build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
-        SearchPipelinePlugin.Parameters parameters = mock(SearchPipelinePlugin.Parameters.class);
-        Map<String, ?> requestProcessors = plugin.getRequestProcessors(parameters);
-        assertEquals(0, requestProcessors.size());
-    }
-
-    @Test
-    public void testGetResponseProcessorsFeatureDisabled() {
-        Settings settings = Settings.builder().build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
-        SearchPipelinePlugin.Parameters parameters = mock(SearchPipelinePlugin.Parameters.class);
-        Map<String, ?> responseProcessors = plugin.getResponseProcessors(parameters);
-        assertEquals(0, responseProcessors.size());
-    }
+    MachineLearningPlugin plugin = new MachineLearningPlugin();
 
     @Test
     public void testGetSearchExts() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.rag_pipeline_feature_enabled", "true").build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
         List<SearchPlugin.SearchExtSpec<?>> searchExts = plugin.getSearchExts();
         assertEquals(1, searchExts.size());
         SearchPlugin.SearchExtSpec<?> spec = searchExts.get(0);
@@ -81,8 +46,6 @@ public class MachineLearningPluginTests {
 
     @Test
     public void testGetRequestProcessors() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.rag_pipeline_feature_enabled", "true").build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
         SearchPipelinePlugin.Parameters parameters = mock(SearchPipelinePlugin.Parameters.class);
         Map<String, ?> requestProcessors = plugin.getRequestProcessors(parameters);
         assertEquals(1, requestProcessors.size());
@@ -93,8 +56,6 @@ public class MachineLearningPluginTests {
 
     @Test
     public void testGetResponseProcessors() {
-        Settings settings = Settings.builder().put("plugins.ml_commons.rag_pipeline_feature_enabled", "true").build();
-        MachineLearningPlugin plugin = new MachineLearningPlugin(settings);
         SearchPipelinePlugin.Parameters parameters = mock(SearchPipelinePlugin.Parameters.class);
         Map<String, ?> responseProcessors = plugin.getResponseProcessors(parameters);
         assertEquals(1, responseProcessors.size());

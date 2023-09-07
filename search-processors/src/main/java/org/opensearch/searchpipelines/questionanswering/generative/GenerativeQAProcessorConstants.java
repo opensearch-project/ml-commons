@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import org.opensearch.common.settings.Setting;
+
 public class GenerativeQAProcessorConstants {
 
     // Identifier for the generative QA request processor
@@ -33,4 +35,9 @@ public class GenerativeQAProcessorConstants {
 
     // The field in search results that contain the context to be sent to the LLM.
     public static final String CONFIG_NAME_CONTEXT_FIELD_LIST = "context_field_list";
+
+    public static final Setting<Boolean> RAG_PIPELINE_FEATURE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final String FEATURE_NOT_ENABLED_ERROR_MSG = RAG_PIPELINE_FEATURE_ENABLED.getKey() + " is not enabled.";
 }

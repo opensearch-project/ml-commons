@@ -10,6 +10,7 @@ import java.util.function.Function;
 
 import org.opensearch.common.settings.Setting;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
 import com.google.common.collect.ImmutableList;
 
@@ -168,7 +169,8 @@ public final class MLCommonsSettings {
         );
         
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
+
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
-    public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED =
+        GenerativeQAProcessorConstants.RAG_PIPELINE_FEATURE_ENABLED;
 }
