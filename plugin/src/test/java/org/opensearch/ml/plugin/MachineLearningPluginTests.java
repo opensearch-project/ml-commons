@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;

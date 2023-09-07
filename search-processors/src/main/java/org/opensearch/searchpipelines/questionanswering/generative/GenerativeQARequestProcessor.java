@@ -47,7 +47,7 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
         // TODO Use chat history to rephrase the question with full conversation context.
 
         if (!featureFlagSupplier.getAsBoolean()) {
-            throw new RuntimeException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
+            throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
         }
 
         return request;

@@ -26,9 +26,11 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.pipeline.Processor;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
 import org.opensearch.searchpipelines.questionanswering.generative.client.ConversationalMemoryClient;
@@ -222,5 +224,48 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         }
 
         assertTrue(exceptionThrown);
+    }
+
+    public void testProcessorFactoryFeatureDisabled() throws Exception {
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+
+        Processor.Factory factory = new GenerativeQAResponseProcessor.Factory(client, () -> false);
+
+        try {
+            factory.create(null, "tag", "desc", true, config, null);
+        } catch (MLException e) {
+            assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+        }
+    }
+
+    // Use this only for the following test case.
+    private boolean featureEnabled001;
+    public void testProcessorFeatureOffOnOff() throws Exception {
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+
+        featureEnabled001 = false;
+        BooleanSupplier supplier = () -> featureEnabled001;
+        Processor.Factory factory = new GenerativeQAResponseProcessor.Factory(client, supplier);
+        GenerativeQAResponseProcessor processor;
+        try {
+            processor = (GenerativeQAResponseProcessor) factory.create(null, "tag", "desc", true, config, null);
+        } catch (MLException e) {
+            assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+        }
+        featureEnabled001 = true;
+        processor = (GenerativeQAResponseProcessor) factory.create(null, "tag", "desc", true, config, null);
+
+        featureEnabled001 = false;
+        try {
+            processor.processResponse(mock(SearchRequest.class), mock(SearchResponse.class));
+        } catch (MLException e) {
+            assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+        }
     }
 }
