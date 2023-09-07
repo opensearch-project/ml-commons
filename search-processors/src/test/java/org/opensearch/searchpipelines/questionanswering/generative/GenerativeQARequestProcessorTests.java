@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.search.pipeline.Processor;
@@ -32,6 +34,9 @@ import static org.mockito.Mockito.mock;
 public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
 
     private BooleanSupplier alwaysOn = () -> true;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     public void testProcessorFactory() throws Exception {
 
@@ -55,14 +60,13 @@ public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
     }
 
     public void testProcessorFactoryFeatureFlagDisabled() throws Exception {
+
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
-        Processor.Factory factory = new GenerativeQARequestProcessor.Factory(()->false);
-        try {
-            factory.create(null, "tag", "desc", true, config, null);
-        } catch (MLException e) {
-            assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
-        }
+        Processor processor =
+            new GenerativeQARequestProcessor.Factory(()->false).create(null, "tag", "desc", true, config, null);
     }
 
     // Only to be used for the following test case.
@@ -71,18 +75,24 @@ public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
         Processor.Factory factory = new GenerativeQARequestProcessor.Factory(()->featureFlag001);
+        boolean firstExceptionThrown = false;
         try {
             factory.create(null, "tag", "desc", true, config, null);
         } catch (MLException e) {
             assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+            firstExceptionThrown = true;
         }
+        assertTrue(firstExceptionThrown);
         featureFlag001 = true;
         GenerativeQARequestProcessor processor = (GenerativeQARequestProcessor) factory.create(null, "tag", "desc", true, config, null);
         featureFlag001 = false;
+        boolean secondExceptionThrown = false;
         try {
             processor.processRequest(mock(SearchRequest.class));
         } catch (MLException e) {
             assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+            secondExceptionThrown = true;
         }
+        assertTrue(secondExceptionThrown);
     }
 }

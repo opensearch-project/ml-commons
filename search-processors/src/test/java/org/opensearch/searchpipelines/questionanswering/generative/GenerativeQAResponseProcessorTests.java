@@ -17,6 +17,8 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -54,6 +56,9 @@ import static org.mockito.Mockito.when;
 public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
     private BooleanSupplier alwaysOn = () -> true;
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
 
     public void testProcessorFactoryRemoteModel() throws Exception {
         Client client = mock(Client.class);
@@ -227,18 +232,18 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
     }
 
     public void testProcessorFactoryFeatureDisabled() throws Exception {
+
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
+
         Client client = mock(Client.class);
         Map<String, Object> config = new HashMap<>();
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        Processor.Factory factory = new GenerativeQAResponseProcessor.Factory(client, () -> false);
-
-        try {
-            factory.create(null, "tag", "desc", true, config, null);
-        } catch (MLException e) {
-            assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
-        }
+        Processor processor =
+            new GenerativeQAResponseProcessor.Factory(client, () -> false)
+                .create(null, "tag", "desc", true, config, null);
     }
 
     // Use this only for the following test case.
@@ -253,19 +258,25 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         BooleanSupplier supplier = () -> featureEnabled001;
         Processor.Factory factory = new GenerativeQAResponseProcessor.Factory(client, supplier);
         GenerativeQAResponseProcessor processor;
+        boolean firstExceptionThrown = false;
         try {
             processor = (GenerativeQAResponseProcessor) factory.create(null, "tag", "desc", true, config, null);
         } catch (MLException e) {
             assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+            firstExceptionThrown = true;
         }
+        assertTrue(firstExceptionThrown);
         featureEnabled001 = true;
         processor = (GenerativeQAResponseProcessor) factory.create(null, "tag", "desc", true, config, null);
 
         featureEnabled001 = false;
+        boolean secondExceptionThrown = false;
         try {
             processor.processResponse(mock(SearchRequest.class), mock(SearchResponse.class));
         } catch (MLException e) {
             assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
+            secondExceptionThrown = true;
         }
+        assertTrue(secondExceptionThrown);
     }
 }
