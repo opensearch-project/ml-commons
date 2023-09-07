@@ -251,10 +251,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private volatile boolean ragSearchPipelineEnabled;
 
-    public MachineLearningPlugin(Settings settings) {
-        this.ragSearchPipelineEnabled = MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
-    }
-
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -458,6 +454,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         );
 
         // TODO move this into MLFeatureEnabledSetting
+        // search processor factories below will get BooleanSupplier that supplies the current value being updated through this.
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
@@ -683,16 +680,14 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     public List<SearchPlugin.SearchExtSpec<?>> getSearchExts() {
         List<SearchPlugin.SearchExtSpec<?>> searchExts = new ArrayList<>();
 
-        if (ragSearchPipelineEnabled) {
-            searchExts
-                .add(
-                    new SearchPlugin.SearchExtSpec<>(
-                        GenerativeQAParamExtBuilder.PARAMETER_NAME,
-                        input -> new GenerativeQAParamExtBuilder(input),
-                        parser -> GenerativeQAParamExtBuilder.parse(parser)
-                    )
-                );
-        }
+        searchExts
+            .add(
+                new SearchPlugin.SearchExtSpec<>(
+                    GenerativeQAParamExtBuilder.PARAMETER_NAME,
+                    input -> new GenerativeQAParamExtBuilder(input),
+                    parser -> GenerativeQAParamExtBuilder.parse(parser)
+                )
+            );
 
         return searchExts;
     }
@@ -701,9 +696,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     public Map<String, Processor.Factory<SearchRequestProcessor>> getRequestProcessors(Parameters parameters) {
         Map<String, Processor.Factory<SearchRequestProcessor>> requestProcessors = new HashMap<>();
 
-        if (ragSearchPipelineEnabled) {
-            requestProcessors.put(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, new GenerativeQARequestProcessor.Factory());
-        }
+        requestProcessors
+            .put(
+                GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
+                new GenerativeQARequestProcessor.Factory(() -> this.ragSearchPipelineEnabled)
+            );
 
         return requestProcessors;
     }
@@ -712,10 +709,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
         Map<String, Processor.Factory<SearchResponseProcessor>> responseProcessors = new HashMap<>();
 
-        if (ragSearchPipelineEnabled) {
-            responseProcessors
-                .put(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, new GenerativeQAResponseProcessor.Factory(this.client));
-        }
+        responseProcessors
+            .put(
+                GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                new GenerativeQAResponseProcessor.Factory(this.client, () -> this.ragSearchPipelineEnabled)
+            );
 
         return responseProcessors;
     }
