@@ -11,7 +11,9 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -124,6 +126,18 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.memory.ConversationalMemoryHandler;
+import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
+import org.opensearch.ml.memory.action.conversation.CreateConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionAction;
+import org.opensearch.ml.memory.action.conversation.CreateInteractionTransportAction;
+import org.opensearch.ml.memory.action.conversation.DeleteConversationAction;
+import org.opensearch.ml.memory.action.conversation.DeleteConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationsTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
+import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
@@ -151,6 +165,11 @@ import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
+import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
+import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
+import org.opensearch.ml.rest.RestMemoryDeleteConversationAction;
+import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
+import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -170,10 +189,19 @@ import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
 import org.opensearch.plugins.Plugin;
+import org.opensearch.plugins.SearchPipelinePlugin;
+import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.script.ScriptService;
+import org.opensearch.search.pipeline.Processor;
+import org.opensearch.search.pipeline.SearchRequestProcessor;
+import org.opensearch.search.pipeline.SearchResponseProcessor;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQARequestProcessor;
+import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAResponseProcessor;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 import org.opensearch.threadpool.ExecutorBuilder;
 import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
@@ -183,7 +211,7 @@ import com.google.common.collect.ImmutableList;
 
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin {
+public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -224,6 +252,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
 
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    private ConversationalMemoryHandler cmHandler;
+
+    private volatile boolean ragSearchPipelineEnabled;
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -256,7 +288,13 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
-                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class)
+                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
+
+                new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
+                new ActionHandler<>(GetConversationsAction.INSTANCE, GetConversationsTransportAction.class),
+                new ActionHandler<>(CreateInteractionAction.INSTANCE, CreateInteractionTransportAction.class),
+                new ActionHandler<>(GetInteractionsAction.INSTANCE, GetInteractionsTransportAction.class),
+                new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class)
             );
     }
 
@@ -288,6 +326,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
+        cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
@@ -424,6 +463,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
             encryptor
         );
 
+        // TODO move this into MLFeatureEnabledSetting
+        // search processor factories below will get BooleanSupplier that supplies the current value being updated through this.
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
+
         return ImmutableList
             .of(
                 encryptor,
@@ -449,7 +494,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 mlCommonsClusterEventListener,
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
-                mlModelAutoRedeployer
+                mlModelAutoRedeployer,
+                cmHandler
             );
     }
 
@@ -492,6 +538,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
+
+        RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
+        RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();
+        RestMemoryCreateInteractionAction restCreateInteractionAction = new RestMemoryCreateInteractionAction();
+        RestMemoryGetInteractionsAction restListInteractionsAction = new RestMemoryGetInteractionsAction();
+        RestMemoryDeleteConversationAction restDeleteConversationAction = new RestMemoryDeleteConversationAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -518,7 +570,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLCreateConnectorAction,
                 restMLGetConnectorAction,
                 restMLDeleteConnectorAction,
-                restMLSearchConnectorAction
+                restMLSearchConnectorAction,
+                restCreateConversationAction,
+                restListConversationsAction,
+                restCreateInteractionAction,
+                restListInteractionsAction,
+                restDeleteConversationAction
             );
     }
 
@@ -624,8 +681,58 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
-                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED
+                MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
             );
         return settings;
+    }
+
+    /**
+     *
+     * Search processors for Retrieval Augmented Generation
+     *
+     */
+
+    @Override
+    public List<SearchPlugin.SearchExtSpec<?>> getSearchExts() {
+        List<SearchPlugin.SearchExtSpec<?>> searchExts = new ArrayList<>();
+
+        searchExts
+            .add(
+                new SearchPlugin.SearchExtSpec<>(
+                    GenerativeQAParamExtBuilder.PARAMETER_NAME,
+                    input -> new GenerativeQAParamExtBuilder(input),
+                    parser -> GenerativeQAParamExtBuilder.parse(parser)
+                )
+            );
+
+        return searchExts;
+    }
+
+    @Override
+    public Map<String, Processor.Factory<SearchRequestProcessor>> getRequestProcessors(Parameters parameters) {
+        Map<String, Processor.Factory<SearchRequestProcessor>> requestProcessors = new HashMap<>();
+
+        requestProcessors
+            .put(
+                GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
+                new GenerativeQARequestProcessor.Factory(() -> this.ragSearchPipelineEnabled)
+            );
+
+        return requestProcessors;
+    }
+
+    @Override
+    public Map<String, Processor.Factory<SearchResponseProcessor>> getResponseProcessors(Parameters parameters) {
+        Map<String, Processor.Factory<SearchResponseProcessor>> responseProcessors = new HashMap<>();
+
+        responseProcessors
+            .put(
+                GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
+                new GenerativeQAResponseProcessor.Factory(this.client, () -> this.ragSearchPipelineEnabled)
+            );
+
+        return responseProcessors;
     }
 }
