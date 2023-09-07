@@ -167,7 +167,7 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
-        
+
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
 
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
