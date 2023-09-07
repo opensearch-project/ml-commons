@@ -251,10 +251,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private volatile boolean ragSearchPipelineEnabled;
 
-    public MachineLearningPlugin(Settings settings) {
-        this.ragSearchPipelineEnabled = MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
-    }
-
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
