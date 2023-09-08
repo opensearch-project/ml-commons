@@ -37,6 +37,7 @@ Compatible with OpenSearch 2.10.0
 * Correct imports for new location with regard to core refactoring ([#1206](https://github.com/opensearch-project/ml-commons/pull/1206))
 * Fix breaking change caused by opensearch core ([#1187](https://github.com/opensearch-project/ml-commons/pull/1187))
 * Bump OpenSearch snapshot version to 2.10 ([#1157](https://github.com/opensearch-project/ml-commons/pull/1157))
+* Bump aws-encryption-sdk-java to fix CVE-2023-33201 ([#1309](https://github.com/opensearch-project/ml-commons/pull/1309))
 
 ### Refactoring
 * Renaming metrics ([#1224](https://github.com/opensearch-project/ml-commons/pull/1224))
