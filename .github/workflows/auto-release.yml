@@ -25,4 +25,4 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           github_token: ${{ steps.github_app_token.outputs.token }}
-          bodyFile: release-notes/opensearch-anomaly-detection.release-notes-${{steps.tag.outputs.tag}}.md
+          bodyFile: release-notes/opensearch-ml-common.release-notes-${{steps.tag.outputs.tag}}.md
