@@ -54,11 +54,7 @@ public class StringUtils {
         Map<String, Object> result;
         JsonElement jsonElement = JsonParser.parseString(jsonStr);
         if (jsonElement.isJsonObject()) {
-            Map<String, Object> resultJson = gson.fromJson(jsonElement, Map.class);
-            List<Object> list = new ArrayList<>();
-            list.add(resultJson);
-            result = new HashMap<>();
-            result.put(defaultKey, list);
+            result = gson.fromJson(jsonElement, Map.class);
         } else if (jsonElement.isJsonArray()) {
             List<Object> list = gson.fromJson(jsonElement, List.class);
             result = new HashMap<>();
