@@ -120,7 +120,7 @@ public class MLIndicesHandler {
                                             internalListener.onFailure(new MLException("Failed to update index" + indexName));
                                         }
                                     }, exception -> {
-                                        log.error("Failed to update index " + indexName, exception);
+                                        log.error("Failed to update index: " + indexName, exception);
                                         internalListener.onFailure(exception);
                                     })
                                 );
