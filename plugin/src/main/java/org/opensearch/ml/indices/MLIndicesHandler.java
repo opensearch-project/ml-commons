@@ -68,7 +68,7 @@ public class MLIndicesHandler {
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();
-        final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-6");
+        final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-5");
 
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
