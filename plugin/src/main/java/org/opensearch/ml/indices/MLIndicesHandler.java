@@ -109,10 +109,10 @@ public class MLIndicesHandler {
                                                     internalListener.onResponse(true);
                                                 } else {
                                                     internalListener
-                                                        .onFailure(new MLException("Failed to update index setting: " + indexName));
+                                                        .onFailure(new MLException("Failed to update index setting for: " + indexName));
                                                 }
                                             }, exception -> {
-                                                log.error("Failed to update index setting: " + indexName, exception);
+                                                log.error("Failed to update index setting for: " + indexName, exception);
                                                 internalListener.onFailure(exception);
                                             }));
                                     }, exception -> {
