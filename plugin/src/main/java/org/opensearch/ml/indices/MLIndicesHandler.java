@@ -37,8 +37,9 @@ public class MLIndicesHandler {
 
     ClusterService clusterService;
     Client client;
-
+    private static final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-5");
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
+
     static {
         for (MLIndex mlIndex : MLIndex.values()) {
             indexMappingUpdated.put(mlIndex.getIndexName(), new AtomicBoolean(false));
@@ -68,7 +69,6 @@ public class MLIndicesHandler {
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();
         String mapping = index.getMapping();
-        final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-5");
 
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -108,9 +108,13 @@ public class MLIndicesHandler {
                                                     indexMappingUpdated.get(indexName).set(true);
                                                     internalListener.onResponse(true);
                                                 } else {
-                                                    internalListener.onFailure(new MLException("Failed to update index setting: " + indexName));
+                                                    internalListener
+                                                        .onFailure(new MLException("Failed to update index setting: " + indexName));
                                                 }
-                                            }, internalListener::onFailure));
+                                            }, exception -> {
+                                                log.error("Failed to update index setting: " + indexName, exception);
+                                                internalListener.onFailure(exception);
+                                            }));
                                     }, exception -> {
                                         log.error("Failed to update index " + indexName, exception);
                                         internalListener.onFailure(exception);
