@@ -98,23 +98,25 @@ public class MLIndicesHandler {
                                 .putMapping(
                                     new PutMappingRequest().indices(indexName).source(mapping, XContentType.JSON),
                                     ActionListener.wrap(response -> {
-                                        UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                        updateSettingRequest.indices(indexName).settings(indexSettings);
-                                        client
-                                            .admin()
-                                            .indices()
-                                            .updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
-                                                if (response.isAcknowledged()) {
-                                                    indexMappingUpdated.get(indexName).set(true);
-                                                    internalListener.onResponse(true);
-                                                } else {
-                                                    internalListener
-                                                        .onFailure(new MLException("Failed to update index setting for: " + indexName));
-                                                }
-                                            }, exception -> {
-                                                log.error("Failed to update index setting for: " + indexName, exception);
-                                                internalListener.onFailure(exception);
-                                            }));
+                                        if (response.isAcknowledged()) {
+                                            UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
+                                            updateSettingRequest.indices(indexName).settings(indexSettings);
+                                            client
+                                                .admin()
+                                                .indices()
+                                                .updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
+                                                    if (response.isAcknowledged()) {
+                                                        indexMappingUpdated.get(indexName).set(true);
+                                                        internalListener.onResponse(true);
+                                                    } else {
+                                                        internalListener
+                                                            .onFailure(new MLException("Failed to update index setting for: " + indexName));
+                                                    }
+                                                }, exception -> {
+                                                    log.error("Failed to update index setting for: " + indexName, exception);
+                                                    internalListener.onFailure(exception);
+                                                }));
+                                        }
                                     }, exception -> {
                                         log.error("Failed to update index " + indexName, exception);
                                         internalListener.onFailure(exception);
