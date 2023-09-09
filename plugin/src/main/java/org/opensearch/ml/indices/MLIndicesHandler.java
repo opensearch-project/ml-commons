@@ -108,7 +108,7 @@ public class MLIndicesHandler {
                                                     indexMappingUpdated.get(indexName).set(true);
                                                     internalListener.onResponse(true);
                                                 } else {
-                                                    internalListener.onFailure(new MLException("Failed to update index: " + indexName));
+                                                    internalListener.onFailure(new MLException("Failed to update index setting: " + indexName));
                                                 }
                                             }, internalListener::onFailure));
                                     }, exception -> {
