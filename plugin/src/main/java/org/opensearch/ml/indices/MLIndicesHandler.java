@@ -117,7 +117,7 @@ public class MLIndicesHandler {
                                                     internalListener.onFailure(exception);
                                                 }));
                                         } else {
-                                            internalListener.onFailure(new MLException("Failed to update index " + indexName));
+                                            internalListener.onFailure(new MLException("Failed to update index: " + indexName));
                                         }
                                     }, exception -> {
                                         log.error("Failed to update index " + indexName, exception);
