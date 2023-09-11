@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.tokenize;
 
 import ai.djl.Application;
+import ai.djl.MalformedModelException;
 import ai.djl.engine.Engine;
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
@@ -13,6 +14,7 @@ import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
 import ai.djl.repository.zoo.Criteria;
+import ai.djl.repository.zoo.ModelNotFoundException;
 import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
@@ -38,6 +40,7 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.nio.ByteBuffer;
@@ -96,62 +99,18 @@ public class TokenizerModel extends DLModel {
         return new ModelTensorOutput(tensorOutputs);
     }
 
-
-    protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
-                              MLModelConfig modelConfig,
-                              String engine, FunctionName functionName) {
-        log.info("for tokenize model special load model");
-        try {
-            if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
-                throw new IllegalArgumentException("unsupported engine");
-            }
-            List<Predictor<Input, Output>> predictorList = new ArrayList<>();
-            List<ZooModel<Input, Output>> modelList = new ArrayList<>();
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
-                try {
-                    System.setProperty("PYTORCH_PRECXX11", "true");
-                    System.setProperty("DJL_CACHE_DIR", mlEngine.getMlCachePath().toAbsolutePath().toString());
-                    // DJL will read "/usr/java/packages/lib" if don't set "java.library.path". That will throw
-                    // access denied exception
-                    System.setProperty("java.library.path", mlEngine.getMlCachePath().toAbsolutePath().toString());
-                    System.setProperty("ai.djl.pytorch.num_interop_threads", "1");
-                    System.setProperty("ai.djl.pytorch.num_threads", "1");
-                    Thread.currentThread().setContextClassLoader(ai.djl.Model.class.getClassLoader());
-                    Path modelPath = mlEngine.getModelCachePath(modelId, modelName, version);
-                    log.info("model path========");
-                    log.info(modelPath);
-                    File pathFile = new File(modelPath.toUri());
-                    if (pathFile.exists()) {
-                        FileUtils.deleteDirectory(pathFile);
-                    }
-                    ZipUtils.unzip(modelZipFile, modelPath);
-                    tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
-                    if (Files.exists(modelPath.resolve("idf.json"))){
-                        Gson gson = new Gson();
-                        Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
-                        idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
-                    }
-                    log.info("tokenize Model {} is successfully deployed", modelId);
-                    return null;
-                } catch (Throwable e) {
-                    String errorMessage = "Failed to deploy model " + modelId;
-                    log.error(errorMessage, e);
-                    close();
-                    throw new MLException(errorMessage, e);
-                } finally {
-                    deleteFileQuietly(mlEngine.getDeployModelPath(modelId));
-                    Thread.currentThread().setContextClassLoader(contextClassLoader);
-                }
-            });
-        } catch (PrivilegedActionException e) {
-            String errorMsg = "Failed to deploy model " + modelId;
-            log.error(errorMsg, e);
-            throw new MLException(errorMsg, e);
+    protected void innerLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
+                                  String engine,
+                                  Path modelPath,
+                                  MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
+        tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
+        if (Files.exists(modelPath.resolve("idf.json"))){
+            Gson gson = new Gson();
+            Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
+            idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
         }
+        log.info("tokenize Model {} is successfully deployed", modelId);
     }
-
-
     @Override
     public boolean isModelReady() {
         if (modelHelper == null || modelId == null) {

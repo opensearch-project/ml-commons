@@ -7,11 +7,13 @@ package org.opensearch.ml.engine.algorithms;
 
 import ai.djl.Application;
 import ai.djl.Device;
+import ai.djl.MalformedModelException;
 import ai.djl.engine.Engine;
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
 import ai.djl.repository.zoo.Criteria;
+import ai.djl.repository.zoo.ModelNotFoundException;
 import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
@@ -34,6 +36,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -138,8 +141,7 @@ public abstract class DLModel implements Predictable {
                 model.getName(),
                 model.getVersion(),
                 model.getModelConfig(),
-                engine,
-                model.getAlgorithm()
+                engine
         );
     }
 
@@ -176,9 +178,61 @@ public abstract class DLModel implements Predictable {
 
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
 
+    protected void innerLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
+                                  String engine,
+                                  Path modelPath,
+                                  MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
+        devices = Engine.getEngine(engine).getDevices();
+        for (int i = 0; i < devices.length; i++) {
+            log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
+            ZooModel<Input, Output> model;
+            Predictor<Input, Output> predictor;
+            Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
+                    .setTypes(Input.class, Output.class)
+                    .optApplication(Application.UNDEFINED)
+                    .optEngine(engine)
+                    .optDevice(devices[i])
+                    .optModelPath(modelPath);
+            Translator translator = getTranslator(engine, modelConfig);
+            TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
+            if (translatorFactory != null) {
+                criteriaBuilder.optTranslatorFactory(translatorFactory);
+            } else if (translator != null) {
+                criteriaBuilder.optTranslator(translator);
+            }
+
+            Map<String, Object> arguments = getArguments(modelConfig);
+            if (arguments != null && arguments.size() > 0) {
+                for (Map.Entry<String, Object> entry : arguments.entrySet()) {
+                    criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
+                }
+            }
+
+            Criteria<Input, Output> criteria = criteriaBuilder.build();
+            model = criteria.loadModel();
+            predictor = model.newPredictor();
+            predictorList.add(predictor);
+            modelList.add(model);
+
+            // First request takes longer time. Predict once to warm up model.
+            warmUp(predictor, modelId, modelConfig);
+        }
+
+
+        if (predictorList.size() > 0) {
+            this.predictors = predictorList.toArray(new Predictor[0]);
+            predictorList.clear();
+        }
+        if (modelList.size() > 0) {
+            this.models = modelList.toArray(new ZooModel[0]);
+            modelList.clear();
+        }
+        log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
+    }
+
     protected void loadModel(File modelZipFile, String modelId, String modelName, String version,
                              MLModelConfig modelConfig,
-                             String engine, FunctionName functionName) {
+                             String engine) {
         try {
             if (!PYTORCH_ENGINE.equals(engine) && !ONNX_ENGINE.equals(engine)) {
                 throw new IllegalArgumentException("unsupported engine");
@@ -218,53 +272,7 @@ public abstract class DLModel implements Predictable {
                             }
                         }
                     }
-                    devices = Engine.getEngine(engine).getDevices();
-                    for (int i = 0; i < devices.length; i++) {
-                        log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
-                        ZooModel<Input, Output> model;
-                        Predictor<Input, Output> predictor;
-                        Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
-                                .setTypes(Input.class, Output.class)
-                                .optApplication(Application.UNDEFINED)
-                                .optEngine(engine)
-                                .optDevice(devices[i])
-                                .optModelPath(modelPath);
-                        Translator translator = getTranslator(engine, modelConfig);
-                        TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
-                        if (translatorFactory != null) {
-                            criteriaBuilder.optTranslatorFactory(translatorFactory);
-                        } else if (translator != null) {
-                            criteriaBuilder.optTranslator(translator);
-                        }
-
-                        Map<String, Object> arguments = getArguments(modelConfig);
-                        if (arguments != null && arguments.size() > 0) {
-                            for (Map.Entry<String, Object> entry : arguments.entrySet()) {
-                                criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
-                            }
-                        }
-
-                        Criteria<Input, Output> criteria = criteriaBuilder.build();
-                        model = criteria.loadModel();
-                        predictor = model.newPredictor();
-                        predictorList.add(predictor);
-                        modelList.add(model);
-
-                        // First request takes longer time. Predict once to warm up model.
-                        warmUp(predictor, modelId, modelConfig);
-                    }
-
-
-
-                    if (predictorList.size() > 0) {
-                        this.predictors = predictorList.toArray(new Predictor[0]);
-                        predictorList.clear();
-                    }
-                    if (modelList.size() > 0) {
-                        this.models = modelList.toArray(new ZooModel[0]);
-                        modelList.clear();
-                    }
-                    log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
+                    innerLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
                     return null;
                 } catch (Throwable e) {
                     String errorMessage = "Failed to deploy model " + modelId;
