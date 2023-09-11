@@ -30,7 +30,6 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.Predictable;
-import org.opensearch.ml.engine.algorithms.tokenize.EmptyModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ZipUtils;
 

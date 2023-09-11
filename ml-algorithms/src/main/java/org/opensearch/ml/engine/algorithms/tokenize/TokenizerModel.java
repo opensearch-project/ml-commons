@@ -55,7 +55,7 @@ import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 @Log4j2
 @Function(FunctionName.TOKENIZE)
-public class TokenizerModel extends TextEmbeddingModel {
+public class TokenizerModel extends DLModel {
     private HuggingFaceTokenizer tokenizer;
 
     private Map<String, Float> idf;
@@ -153,21 +153,21 @@ public class TokenizerModel extends TextEmbeddingModel {
 
 
     @Override
-    public TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig) {
-        return null;
-    }
-
-    @Override
-    public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
-        return new TokenizerTranslator(null);
-    }
-
-    @Override
     public boolean isModelReady() {
         if (modelHelper == null || modelId == null) {
             return false;
         }
         return true;
+    }
+
+    @Override
+    public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
+        return null;
+    }
+
+    @Override
+    public TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig) {
+        return null;
     }
 
 }
