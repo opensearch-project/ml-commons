@@ -85,9 +85,9 @@ public class TokenizerModel extends DLModel {
                             token -> idf.getOrDefault(token, 1.0f)
                     ));
             Map<String, List<Map<String, Float> > > resultMap = new HashMap<>();
-            List<Map<String, Float> > listOftokenWeights = new ArrayList<>();
-            listOftokenWeights.add(tokenWeights);
-            resultMap.put("response", listOftokenWeights);
+            List<Map<String, Float> > listOfTokenWeights = new ArrayList<>();
+            listOfTokenWeights.add(tokenWeights);
+            resultMap.put("response", listOfTokenWeights);
             ModelTensor tensor = ModelTensor.builder()
                     .dataAsMap(resultMap)
                     .build();
