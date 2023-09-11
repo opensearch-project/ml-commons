@@ -79,7 +79,7 @@ POST /_plugins/_ml/models/_register
 {
     "name": "huggingface/sentence-transformers/all-MiniLM-L12-v2",
     "version": "1.0.1",
-    "model_format": "TORCH_SCRIPT"
+    "model_format": "TORCH_SCRIPT",
     "model_group_id": "7IjOsYgBFp6IJxCceZ1-"
 }
 
@@ -129,12 +129,12 @@ Now we can register model using URL upload:
 POST /_plugins/_ml/models/_register
 {
     "name": "sentence-transformers/all-MiniLM-L6-v2",
-	"version": "1.0.1",
-	"description": "This is a sentence-transformers model: It maps sentences & paragraphs to a 384 dimensional dense vector space and can be used for tasks like clustering or semantic search.",
-	"model_task_type": "TEXT_EMBEDDING",
-	"model_format": "TORCH_SCRIPT",
-	"model_content_hash_value": "c15f0d2e62d872be5b5bc6c84d2e0f4921541e29fefbef51d59cc10a8ae30e0f",
-	"model_config": {
+    "version": "1.0.1",
+    "description": "This is a sentence-transformers model: It maps sentences & paragraphs to a 384 dimensional dense vector space and can be used for tasks like clustering or semantic search.",
+    "model_task_type": "TEXT_EMBEDDING",
+    "model_format": "TORCH_SCRIPT",
+    "model_content_hash_value": "c15f0d2e62d872be5b5bc6c84d2e0f4921541e29fefbef51d59cc10a8ae30e0f",
+    "model_config": {
 		"model_type": "bert",
 		"embedding_dimension": 384,
 		"framework_type": "sentence_transformers",
@@ -303,18 +303,18 @@ The only difference is the uploading model input, for load/predict/profile/unloa
 # Sample request
 POST /_plugins/_ml/models/_upload
 {
-  "name": "sentence-transformers/all-MiniLM-L6-v2",
-  "version": "1.0.0",
-  "description": "test model",
-  "model_format": "TORCH_SCRIPT",
-  "model_config": {
-    "model_type": "bert",
-    "embedding_dimension": 384,
-    "framework_type": "huggingface_transformers",
-    "pooling_mode":"mean",
-    "normalize_result":"true"
-  },
-  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_huggingface.zip?raw=true"
+    "name": "sentence-transformers/all-MiniLM-L6-v2",
+    "version": "1.0.0",
+    "description": "test model",
+    "model_format": "TORCH_SCRIPT",
+    "model_config": {
+        "model_type": "bert",
+        "embedding_dimension": 384,
+        "framework_type": "huggingface_transformers",
+        "pooling_mode":"mean",
+        "normalize_result":"true"
+    },
+    "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_torchscript_huggingface.zip?raw=true"
 }
 ```
 
@@ -330,17 +330,17 @@ The only difference is the uploading model input, for load/predict/profile/unloa
 # Sample request
 POST /_plugins/_ml/models/_upload
 {
-  "name": "sentence-transformers/all-MiniLM-L6-v2",
-  "version": "1.0.0",
-  "description": "test model",
-  "model_format": "ONNX",
-  "model_config": {
-    "model_type": "bert",
-    "embedding_dimension": 384,
-    "framework_type": "huggingface_transformers",
-    "pooling_mode":"mean",
-    "normalize_result":"true"
-  },
-  "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_onnx.zip?raw=true"
+    "name": "sentence-transformers/all-MiniLM-L6-v2",
+    "version": "1.0.0",
+    "description": "test model",
+    "model_format": "ONNX",
+    "model_config": {
+        "model_type": "bert",
+        "embedding_dimension": 384,
+        "framework_type": "huggingface_transformers",
+        "pooling_mode":"mean",
+        "normalize_result":"true"
+    },
+    "url": "https://github.com/opensearch-project/ml-commons/raw/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/all-MiniLM-L6-v2_onnx.zip?raw=true"
 }
 ```
