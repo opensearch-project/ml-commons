@@ -224,42 +224,39 @@ public abstract class DLModel implements Predictable {
                         log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
                         ZooModel<Input, Output> model;
                         Predictor<Input, Output> predictor;
-                        if (functionName != FunctionName.TOKENIZE) {
-                            Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
-                                    .setTypes(Input.class, Output.class)
-                                    .optApplication(Application.UNDEFINED)
-                                    .optEngine(engine)
-                                    .optDevice(devices[i])
-                                    .optModelPath(modelPath);
-                            Translator translator = getTranslator(engine, modelConfig);
-                            TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
-                            if (translatorFactory != null) {
-                                criteriaBuilder.optTranslatorFactory(translatorFactory);
-                            } else if (translator != null) {
-                                criteriaBuilder.optTranslator(translator);
-                            }
-
-                            Map<String, Object> arguments = getArguments(modelConfig);
-                            if (arguments != null && arguments.size() > 0) {
-                                for (Map.Entry<String, Object> entry : arguments.entrySet()) {
-                                    criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
-                                }
-                            }
-
-                            Criteria<Input, Output> criteria = criteriaBuilder.build();
-                            model = criteria.loadModel();
-                            predictor = model.newPredictor();
+                        Criteria.Builder<Input, Output> criteriaBuilder = Criteria.builder()
+                                .setTypes(Input.class, Output.class)
+                                .optApplication(Application.UNDEFINED)
+                                .optEngine(engine)
+                                .optDevice(devices[i])
+                                .optModelPath(modelPath);
+                        Translator translator = getTranslator(engine, modelConfig);
+                        TranslatorFactory translatorFactory = getTranslatorFactory(engine, modelConfig);
+                        if (translatorFactory != null) {
+                            criteriaBuilder.optTranslatorFactory(translatorFactory);
+                        } else if (translator != null) {
+                            criteriaBuilder.optTranslator(translator);
                         }
-                        else {
-                            model = EmptyModel.newInstance(modelPath);
-                            predictor = model.newPredictor();
+
+                        Map<String, Object> arguments = getArguments(modelConfig);
+                        if (arguments != null && arguments.size() > 0) {
+                            for (Map.Entry<String, Object> entry : arguments.entrySet()) {
+                                criteriaBuilder.optArgument(entry.getKey(), entry.getValue());
+                            }
                         }
+
+                        Criteria<Input, Output> criteria = criteriaBuilder.build();
+                        model = criteria.loadModel();
+                        predictor = model.newPredictor();
                         predictorList.add(predictor);
                         modelList.add(model);
 
                         // First request takes longer time. Predict once to warm up model.
                         warmUp(predictor, modelId, modelConfig);
                     }
+
+
+
                     if (predictorList.size() > 0) {
                         this.predictors = predictorList.toArray(new Predictor[0]);
                         predictorList.clear();
