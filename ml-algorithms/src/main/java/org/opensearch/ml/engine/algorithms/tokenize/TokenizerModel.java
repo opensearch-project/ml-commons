@@ -162,4 +162,12 @@ public class TokenizerModel extends TextEmbeddingModel {
         return new TokenizerTranslator(null);
     }
 
+    @Override
+    public boolean isModelReady() {
+        if (modelHelper == null || modelId == null) {
+            return false;
+        }
+        return true;
+    }
+
 }
