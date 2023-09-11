@@ -119,7 +119,7 @@ public class TokenizerModel extends TextEmbeddingModel {
                     System.setProperty("ai.djl.pytorch.num_threads", "1");
                     Thread.currentThread().setContextClassLoader(ai.djl.Model.class.getClassLoader());
                     Path modelPath = mlEngine.getModelCachePath(modelId, modelName, version);
-                    log.info("model path");
+                    log.info("model path========");
                     log.info(modelPath);
                     File pathFile = new File(modelPath.toUri());
                     if (pathFile.exists()) {
@@ -130,7 +130,7 @@ public class TokenizerModel extends TextEmbeddingModel {
                     if (Files.exists(modelPath.resolve("idf.json"))){
                         Gson gson = new Gson();
                         Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
-                        idf = gson.fromJson(new InputStreamReader(Files.newInputStream(path.resolve("idf.json"))), mapType);
+                        idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
                     }
                     log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
                     return null;
