@@ -77,7 +77,7 @@ public abstract class DLModel implements Predictable {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {
                 Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-                if (predictors == null) {
+                if (predictors == null && mlInput.getAlgorithm() != FunctionName.TOKENIZE) {
                     throw new MLException("model not deployed.");
                 }
                 return innerPredict(mlInput);
