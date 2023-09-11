@@ -132,7 +132,7 @@ public class TokenizerModel extends TextEmbeddingModel {
                         Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
                         idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
                     }
-                    log.info("Model {} is successfully deployed on {} devices", modelId, devices.length);
+                    log.info("tokenize Model {} is successfully deployed", modelId);
                     return null;
                 } catch (Throwable e) {
                     String errorMessage = "Failed to deploy model " + modelId;
