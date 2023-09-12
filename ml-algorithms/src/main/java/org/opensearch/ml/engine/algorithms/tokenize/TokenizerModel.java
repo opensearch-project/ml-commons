@@ -121,6 +121,25 @@ public class TokenizerModel extends DLModel {
     }
 
     @Override
+    public void close() {
+        if (modelHelper != null && modelId != null) {
+            modelHelper.deleteFileCache(modelId);
+            if (predictors != null) {
+                closePredictors(predictors);
+                predictors = null;
+            }
+            if (models != null) {
+                closeModels(models);
+                models = null;
+            }
+            if (idf != null || tokenizer != null) {
+                tokenizer = null;
+                idf = null;
+            }
+        }
+    }
+
+    @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) {
         return null;
     }
