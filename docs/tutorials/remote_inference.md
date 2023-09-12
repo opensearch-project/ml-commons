@@ -54,7 +54,7 @@ That means if user have access to a model group, they have access to all model v
 
 # Connector
 
-A connector defines protocol between ml-commons and external ML service. Read this [connector doc](https://opensearch.org/docs/latest/ml-commons-plugin/connectors/) for more details.
+A connector defines protocol between ml-commons and external ML service. Read this [connector doc](https://opensearch.org/docs/latest/ml-commons-plugin/extensibility/connectors/) for more details.
 
 A connector consists of 7 parts
 
