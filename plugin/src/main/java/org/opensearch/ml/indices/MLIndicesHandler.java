@@ -37,7 +37,7 @@ public class MLIndicesHandler {
 
     ClusterService clusterService;
     Client client;
-    private static final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-5");
+    private static final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-1");
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
 
     static {
