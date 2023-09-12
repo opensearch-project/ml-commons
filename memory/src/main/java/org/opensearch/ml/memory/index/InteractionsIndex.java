@@ -75,7 +75,7 @@ public class InteractionsIndex {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
             log.debug("No interactions index found. Adding it");
             CreateIndexRequest request = Requests.createIndexRequest(indexName).mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS);
-            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                 ActionListener<CreateIndexResponse> al = ActionListener.wrap(r -> {
                     if (r.equals(new CreateIndexResponse(true, true, indexName))) {
@@ -130,6 +130,11 @@ public class InteractionsIndex {
         ActionListener<String> listener
     ) {
         initInteractionsIndexIfAbsent(ActionListener.wrap(indexExists -> {
+            String userstr = client
+                .threadPool()
+                .getThreadContext()
+                .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+            String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
             if (indexExists) {
                 this.conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
                     if (access) {
@@ -151,7 +156,7 @@ public class InteractionsIndex {
                                 ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
                                 timestamp
                             );
-                        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+                        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                             ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                             ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {
                                 if (resp.status() == RestStatus.CREATED) {
@@ -165,13 +170,6 @@ public class InteractionsIndex {
                             listener.onFailure(e);
                         }
                     } else {
-                        String userstr = client
-                            .threadPool()
-                            .getThreadContext()
-                            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                        String user = User.parse(userstr) == null
-                            ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS
-                            : User.parse(userstr).getName();
                         throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                     }
                 }, e -> { listener.onFailure(e); }));
@@ -313,7 +311,9 @@ public class InteractionsIndex {
             listener.onResponse(true);
             return;
         }
-        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<List<Interaction>> searchListener = ActionListener.wrap(interactions -> {
                 BulkRequest request = Requests.bulkRequest();
@@ -330,11 +330,6 @@ public class InteractionsIndex {
                 if (access) {
                     getAllInteractions(conversationId, resultsAtATime, searchListener);
                 } else {
-                    String userstr = client
-                        .threadPool()
-                        .getThreadContext()
-                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
                     throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
             }, e -> { listener.onFailure(e); });
