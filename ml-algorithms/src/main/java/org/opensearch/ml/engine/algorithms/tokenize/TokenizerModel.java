@@ -104,6 +104,7 @@ public class TokenizerModel extends DLModel {
                                   Path modelPath,
                                   MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
+        idf = new HashMap<>();
         if (Files.exists(modelPath.resolve("idf.json"))){
             Gson gson = new Gson();
             Type mapType = new TypeToken<Map<String, Float>>() {}.getType();

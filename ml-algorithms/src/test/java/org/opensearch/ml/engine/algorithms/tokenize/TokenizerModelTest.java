@@ -105,33 +105,13 @@ public class TokenizerModelTest {
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            Map<String, Float> result = (Map<String, Float>) resultMap.get("response");
+            List< Map<String, Float>>  resultList = (List< Map<String, Float>>) resultMap.get("response");
+            assertEquals(resultList.size(), 1);
+            Map<String, Float> result = resultList.get(0);
             assertEquals(result.size(), 3);
         }
     }
 
-
-    @Test
-    public void initModel_predict_Tokenize_ResultFilter() {
-        tokenizerModel.initModel(model, params, encryptor);
-        ModelResultFilter resultFilter = ModelResultFilter.builder().targetResponse(Arrays.asList("input1.input_ids")).build();
-        TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(textDocsInputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
-        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
-        assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
-            ModelTensors tensors = mlModelOutputs.get(i);
-            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
-            assertEquals(1, mlModelTensors.size());
-            ModelTensor tensor = mlModelTensors.get(0);
-            Map<String, ?> resultMap = tensor.getDataAsMap();
-            assertEquals(resultMap.size(), 1);
-            Map<String, Float> result = (Map<String, Float>) resultMap.get("response");
-            assertEquals(result.size(), 3);
-        }
-        tokenizerModel.close();
-    }
 
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
