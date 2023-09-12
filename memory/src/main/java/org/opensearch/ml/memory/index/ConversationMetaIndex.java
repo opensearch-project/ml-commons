@@ -48,6 +48,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.search.SearchHit;
@@ -75,7 +76,7 @@ public class ConversationMetaIndex {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
             log.debug("No conversational meta index found. Adding it");
             CreateIndexRequest request = Requests.createIndexRequest(indexName).mapping(ConversationalIndexConstants.META_MAPPING);
-            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                 ActionListener<CreateIndexResponse> al = ActionListener.wrap(createIndexResponse -> {
                     if (createIndexResponse.equals(new CreateIndexResponse(true, true, indexName))) {
@@ -130,7 +131,7 @@ public class ConversationMetaIndex {
                         ConversationalIndexConstants.USER_FIELD,
                         userstr == null ? null : User.parse(userstr).getName()
                     );
-                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                     ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {
                         if (resp.status() == RestStatus.CREATED) {
@@ -181,7 +182,7 @@ public class ConversationMetaIndex {
         request.source().query(queryBuilder);
         request.source().from(from).size(maxResults);
         request.source().sort(ConversationalIndexConstants.META_CREATED_FIELD, SortOrder.DESC);
-        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<List<ConversationMeta>> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             ActionListener<SearchResponse> al = ActionListener.wrap(searchResponse -> {
                 List<ConversationMeta> result = new LinkedList<ConversationMeta>();
@@ -225,37 +226,34 @@ public class ConversationMetaIndex {
             listener.onResponse(true);
         }
         DeleteRequest delRequest = Requests.deleteRequest(indexName).id(conversationId);
-        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
-            ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            // When we get the delete response, do this:
-            ActionListener<DeleteResponse> al = ActionListener.wrap(deleteResponse -> {
-                if (deleteResponse.getResult() == Result.DELETED) {
-                    internalListener.onResponse(true);
-                } else if (deleteResponse.status() == RestStatus.NOT_FOUND) {
-                    internalListener.onResponse(true);
-                } else {
-                    internalListener.onResponse(false);
-                }
-            }, e -> {
-                log.error("Failure deleting conversation " + conversationId, e);
-                internalListener.onFailure(e);
-            });
-            this.checkAccess(conversationId, ActionListener.wrap(access -> {
-                if (access) {
+        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+        this.checkAccess(conversationId, ActionListener.wrap(access -> {
+            if (access) {
+                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
+                    // When we get the delete response, do this:
+                    ActionListener<DeleteResponse> al = ActionListener.wrap(deleteResponse -> {
+                        if (deleteResponse.getResult() == Result.DELETED) {
+                            internalListener.onResponse(true);
+                        } else if (deleteResponse.status() == RestStatus.NOT_FOUND) {
+                            internalListener.onResponse(true);
+                        } else {
+                            internalListener.onResponse(false);
+                        }
+                    }, e -> {
+                        log.error("Failure deleting conversation " + conversationId, e);
+                        internalListener.onFailure(e);
+                    });
                     client.delete(delRequest, al);
-                } else {
-                    String userstr = client
-                        .threadPool()
-                        .getThreadContext()
-                        .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr).getName();
-                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+                } catch (Exception e) {
+                    log.error("Failed deleting conversation with id=" + conversationId, e);
+                    listener.onFailure(e);
                 }
-            }, e -> { internalListener.onFailure(e); }));
-        } catch (Exception e) {
-            log.error("Failed deleting conversation with id=" + conversationId, e);
-            listener.onFailure(e);
-        }
+            } else {
+                throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
+            }
+        }, e -> { listener.onFailure(e); }));
     }
 
     /**
@@ -269,13 +267,9 @@ public class ConversationMetaIndex {
             listener.onResponse(true);
             return;
         }
-        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().newStoredContext(true)) {
+        String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            String userstr = client
-                .threadPool()
-                .getThreadContext()
-                .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-            log.info("USERSTR: " + userstr);
             // If security is off - User doesn't exist - you have permission
             if (userstr == null || User.parse(userstr) == null) {
                 internalListener.onResponse(true);

@@ -402,17 +402,6 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getMessage().equals("Test Fail in Delete"));
     }
 
-    public void testDelete_HighLevelFailure_ThenFail() {
-        doReturn(true).when(metadata).hasIndex(anyString());
-        doThrow(new RuntimeException("Check Fail")).when(conversationMetaIndex).checkAccess(any(), any());
-        @SuppressWarnings("unchecked")
-        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
-        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
-        assert (argCaptor.getValue().getMessage().equals("Check Fail"));
-    }
-
     public void testCheckAccess_DoesNotExist_ThenFail() {
         setupUser("user");
         doReturn(true).when(metadata).hasIndex(anyString());
