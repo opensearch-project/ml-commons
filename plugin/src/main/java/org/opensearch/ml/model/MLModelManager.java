@@ -293,6 +293,7 @@ public class MLModelManager {
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
                     log.debug("Index model meta doc successfully {}", modelName);
+                    mlStats.createModelCounterStatIfAbsent(response.getId(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
                     wrappedListener.onResponse(response.getId());
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
@@ -578,6 +579,7 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
+                    mlStats.createModelCounterStatIfAbsent(modelId, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
                     mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
@@ -640,6 +642,7 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for register model task {}", modelId, taskId);
+                    mlStats.createModelCounterStatIfAbsent(modelId, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
                     // model group id is not present in request body.
                     registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
@@ -865,6 +868,7 @@ public class MLModelManager {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
+        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
             if (workerNodes != null && workerNodes.size() > 0) {
@@ -1210,6 +1214,7 @@ public class MLModelManager {
                     mlStats
                         .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT)
                         .increment();
+                    mlStats.createModelCounterStatIfAbsent(modelId, ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 } else {
                     modelUndeployStatus.put(modelId, NOT_FOUND);
                 }
@@ -1221,6 +1226,7 @@ public class MLModelManager {
                 modelUndeployStatus.put(modelId, UNDEPLOYED);
                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).decrement();
                 mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
+                mlStats.createModelCounterStatIfAbsent(modelId, ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 removeModel(modelId);
             }
         }

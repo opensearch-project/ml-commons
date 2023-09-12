@@ -204,6 +204,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         mlStats
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
+        mlStats
+                .createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
+                .increment();
         mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
 
@@ -230,7 +233,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     throw new IllegalArgumentException("Model not ready to be used: " + modelId);
                 }
             } catch (Exception e) {
-                handlePredictFailure(mlTask, internalListener, e, false);
+                handlePredictFailure(mlTask, internalListener, e, false, modelId);
             }
 
             // search model by model id.
@@ -256,7 +259,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             OpenSearchException e = new OpenSearchException(
                                 "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + modelId
                             );
-                            handlePredictFailure(mlTask, internalListener, e, false);
+                            handlePredictFailure(mlTask, internalListener, e, false, modelId);
                             return;
                         }
                         // run predict
@@ -277,18 +280,18 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
                 }, e -> {
                     log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
-                    handlePredictFailure(mlTask, internalListener, e, true);
+                    handlePredictFailure(mlTask, internalListener, e, true, modelId);
                 });
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
                 client.get(getRequest, threadedActionListener(ActionListener.runBefore(getModelListener, () -> context.restore())));
             } catch (Exception e) {
                 log.error("Failed to get model " + mlTask.getModelId(), e);
-                handlePredictFailure(mlTask, internalListener, e, true);
+                handlePredictFailure(mlTask, internalListener, e, true, modelId);
             }
         } else {
             IllegalArgumentException e = new IllegalArgumentException("ModelId is invalid");
             log.error("ModelId is invalid", e);
-            handlePredictFailure(mlTask, internalListener, e, false);
+            handlePredictFailure(mlTask, internalListener, e, false, modelId);
         }
     }
 
@@ -296,11 +299,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return new ThreadedActionListener<>(log, threadPool, PREDICT_THREAD_POOL, listener, false);
     }
 
-    private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure) {
+    private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure, String modelId) {
         if (trackFailure) {
             mlStats
                 .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
                 .increment();
+            mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT);
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         handleAsyncMLTaskFailure(mlTask, e);

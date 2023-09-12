@@ -17,7 +17,9 @@ import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLAlgoStats;
+import org.opensearch.ml.stats.MLModelStats;
 import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.ml.stats.MLStatsInput;
 
 public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentFragment {
     /**
@@ -30,6 +32,12 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
      * Example: {kmeans: { train: { request_count: 1} }}
      */
     private Map<FunctionName, MLAlgoStats> algorithmStats;
+    /**
+     * Model stats which includes stats level stats.
+     *
+     * Example: {model_id: { predict: { request_count: 1} }}
+     */
+    private Map<String, MLModelStats> modelStats;
 
     /**
      * Constructor
@@ -45,6 +53,9 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
         if (in.readBoolean()) {
             this.algorithmStats = in.readMap(stream -> stream.readEnum(FunctionName.class), MLAlgoStats::new);
         }
+        if (in.readBoolean()) {
+            this.modelStats = in.readMap(stream -> stream.readOptionalString(), MLModelStats::new);
+        }
     }
 
     public MLStatsNodeResponse(DiscoveryNode node, Map<MLNodeLevelStat, Object> nodeStats) {
@@ -52,14 +63,15 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
         this.nodeStats = nodeStats;
     }
 
-    public MLStatsNodeResponse(DiscoveryNode node, Map<MLNodeLevelStat, Object> nodeStats, Map<FunctionName, MLAlgoStats> algorithmStats) {
+    public MLStatsNodeResponse(DiscoveryNode node, Map<MLNodeLevelStat, Object> nodeStats, Map<FunctionName, MLAlgoStats> algorithmStats, Map<String, MLModelStats> modelStats) {
         super(node);
         this.nodeStats = nodeStats;
         this.algorithmStats = algorithmStats;
+        this.modelStats = modelStats;
     }
 
     public boolean isEmpty() {
-        return getNodeLevelStatSize() == 0 && getAlgorithmStatSize() == 0;
+        return getNodeLevelStatSize() == 0 && getAlgorithmStatSize() == 0 && getModelStatSize() == 0;
     }
 
     /**
@@ -88,6 +100,12 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
         } else {
             out.writeBoolean(false);
         }
+        if (modelStats != null) {
+            out.writeBoolean(true);
+            out.writeMap(modelStats, (stream, v) -> stream.writeOptionalString(v), (stream, stats) -> stats.writeTo(stream));
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
@@ -97,9 +115,18 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
             }
         }
         if (algorithmStats != null) {
-            builder.startObject("algorithms");
+            builder.startObject(MLStatsInput.ALGORITHMS);
             for (Map.Entry<FunctionName, MLAlgoStats> stat : algorithmStats.entrySet()) {
                 builder.startObject(stat.getKey().name().toLowerCase(Locale.ROOT));
+                stat.getValue().toXContent(builder, params);
+                builder.endObject();
+            }
+            builder.endObject();
+        }
+        if (modelStats != null) {
+            builder.startObject(MLStatsInput.MODELS);
+            for (Map.Entry<String, MLModelStats> stat : modelStats.entrySet()) {
+                builder.startObject(stat.getKey());
                 stat.getValue().toXContent(builder, params);
                 builder.endObject();
             }
@@ -120,17 +147,36 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
         return algorithmStats == null ? 0 : algorithmStats.size();
     }
 
-    public boolean hasAlgorithmStats(FunctionName algorithm) {
-        return algorithmStats == null ? false : algorithmStats.containsKey(algorithm);
+    public int getModelStatSize() {
+        return modelStats == null ? 0 : modelStats.size();
     }
+
+    public boolean hasAlgorithmStats(FunctionName algorithm) {
+        return algorithmStats != null && algorithmStats.containsKey(algorithm);
+    }
+
+    public boolean hasModelStats(String modelId) {
+        return modelStats != null && modelStats.containsKey(modelId);
+    }
+
 
     public MLAlgoStats getAlgorithmStats(FunctionName algorithm) {
         return algorithmStats == null ? null : algorithmStats.get(algorithm);
     }
 
+    public MLModelStats getModelStats(String modelId) {
+        return modelStats == null ? null : modelStats.get(modelId);
+    }
+
     public void removeAlgorithmStats(FunctionName algorithm) {
         if (algorithmStats != null) {
             algorithmStats.remove(algorithm);
+        }
+    }
+
+    public void removeModelStats(String modelId) {
+        if (modelStats != null) {
+            modelStats.remove(modelId);
         }
     }
 }

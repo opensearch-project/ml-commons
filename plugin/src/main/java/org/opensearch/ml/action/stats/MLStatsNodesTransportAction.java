@@ -21,6 +21,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionStats;
 import org.opensearch.ml.stats.MLAlgoStats;
+import org.opensearch.ml.stats.MLModelStats;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStatLevel;
 import org.opensearch.ml.stats.MLStats;
@@ -125,6 +126,22 @@ public class MLStatsNodesTransportAction extends
             }
         }
 
-        return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats);
+        Map<String, MLModelStats> modelStats = new HashMap<>();
+        // return model level stats
+        if (mlStatsInput.includeModelStats()) {
+            for (String modelId : mlStats.getAllModels()) {
+                if (mlStatsInput.retrieveStatsForModel(modelId)) {
+                    Map<ActionName, MLActionStats> actionStatsMap = new HashMap<>();
+                    for (Map.Entry<ActionName, MLActionStats> entry : mlStats.getModelStats(modelId).entrySet()) {
+                        if (mlStatsInput.retrieveStatsForAction(entry.getKey())) {
+                            actionStatsMap.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    modelStats.put(modelId, new MLModelStats(actionStatsMap));
+                }
+            }
+        }
+
+        return new MLStatsNodeResponse(clusterService.localNode(), statValues, algorithmStats, modelStats);
     }
 }

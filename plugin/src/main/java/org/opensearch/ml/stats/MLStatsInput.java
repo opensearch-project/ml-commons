@@ -35,6 +35,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
     public static final String ACTION_LEVEL_STATS = "action_level_stats";
     public static final String NODE_IDS = "node_ids";
     public static final String ALGORITHMS = "algorithms";
+    public static final String MODELS = "models";
     public static final String ACTIONS = "actions";
 
     /**
@@ -63,6 +64,11 @@ public class MLStatsInput implements ToXContentObject, Writeable {
      */
     private EnumSet<FunctionName> algorithms;
     /**
+     * Which model's stats will be retrieved.
+     */
+    private Set<String> models;
+
+    /**
      * Which action's stats will be retrieved.
      */
     private EnumSet<ActionName> actions;
@@ -75,6 +81,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
      * @param actionLevelStats action level stats which will be retrieved
      * @param nodeIds retrieve stats on these nodes
      * @param algorithms retrieve stats for which algorithms
+     * @param models retrieve stats for which models
      * @param actions retrieve stats for which actions
      */
     @Builder
@@ -85,6 +92,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         EnumSet<MLActionLevelStat> actionLevelStats,
         Set<String> nodeIds,
         EnumSet<FunctionName> algorithms,
+        Set<String> models,
         EnumSet<ActionName> actions
     ) {
         this.targetStatLevels = targetStatLevels;
@@ -93,6 +101,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         this.actionLevelStats = actionLevelStats;
         this.nodeIds = nodeIds;
         this.algorithms = algorithms;
+        this.models = models;
         this.actions = actions;
     }
 
@@ -103,6 +112,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         this.actionLevelStats = EnumSet.noneOf(MLActionLevelStat.class);
         this.nodeIds = new HashSet<>();
         this.algorithms = EnumSet.noneOf(FunctionName.class);
+        this.models = new HashSet<>();
         this.actions = EnumSet.noneOf(ActionName.class);
     }
 
@@ -112,6 +122,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         nodeLevelStats = input.readBoolean() ? input.readEnumSet(MLNodeLevelStat.class) : EnumSet.noneOf(MLNodeLevelStat.class);
         actionLevelStats = input.readBoolean() ? input.readEnumSet(MLActionLevelStat.class) : EnumSet.noneOf(MLActionLevelStat.class);
         nodeIds = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
+        models = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
         algorithms = input.readBoolean() ? input.readEnumSet(FunctionName.class) : EnumSet.noneOf(FunctionName.class);
         actions = input.readBoolean() ? input.readEnumSet(ActionName.class) : EnumSet.noneOf(ActionName.class);
     }
@@ -123,6 +134,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         writeEnumSet(out, nodeLevelStats);
         writeEnumSet(out, actionLevelStats);
         out.writeOptionalStringCollection(nodeIds);
+        out.writeOptionalStringCollection(models);
         writeEnumSet(out, algorithms);
         writeEnumSet(out, actions);
     }
@@ -142,6 +154,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         EnumSet<MLNodeLevelStat> nodeLevelStats = EnumSet.noneOf(MLNodeLevelStat.class);
         EnumSet<MLActionLevelStat> actionLevelStats = EnumSet.noneOf(MLActionLevelStat.class);
         Set<String> nodeIds = new HashSet<>();
+        Set<String> models = new HashSet<>();
         EnumSet<FunctionName> algorithms = EnumSet.noneOf(FunctionName.class);
         EnumSet<ActionName> actions = EnumSet.noneOf(ActionName.class);
 
@@ -184,6 +197,9 @@ public class MLStatsInput implements ToXContentObject, Writeable {
                 case ALGORITHMS:
                     parseField(parser, algorithms, input -> FunctionName.from(input.toUpperCase(Locale.ROOT)), FunctionName.class);
                     break;
+                case MODELS:
+                    parseArrayField(parser, models);
+                    break;
                 case ACTIONS:
                     parseField(parser, actions, input -> ActionName.from(input.toUpperCase(Locale.ROOT)), ActionName.class);
                     break;
@@ -200,6 +216,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
             .actionLevelStats(actionLevelStats)
             .nodeIds(nodeIds)
             .algorithms(algorithms)
+                .models(models)
             .actions(actions)
             .build();
     }
@@ -224,6 +241,9 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         }
         if (algorithms != null) {
             builder.field(ALGORITHMS, algorithms);
+        }
+        if (models != null) {
+            builder.field(MODELS, models);
         }
         if (actions != null) {
             builder.field(ACTIONS, actions);
@@ -252,8 +272,16 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         return algorithms == null || algorithms.size() == 0;
     }
 
+    public boolean retrieveStatsForAllModels() {
+        return models == null || models.size() == 0;
+    }
+
     public boolean retrieveStatsForAlgo(FunctionName algoName) {
         return retrieveStatsForAllAlgos() || algorithms.contains(algoName);
+    }
+
+    public boolean retrieveStatsForModel(String modelId) {
+        return retrieveStatsForAllModels() || models.contains(modelId);
     }
 
     public boolean retrieveStatsForAction(ActionName actionName) {
@@ -283,10 +311,15 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         }
         return !targetStatLevels.contains(MLStatLevel.NODE)
             && !targetStatLevels.contains(MLStatLevel.ALGORITHM)
+                && !targetStatLevels.contains(MLStatLevel.MODEL)
             && !targetStatLevels.contains(MLStatLevel.ACTION);
     }
 
     public boolean includeAlgoStats() {
         return targetStatLevels.contains(MLStatLevel.ALGORITHM) || targetStatLevels.contains(MLStatLevel.ACTION);
+    }
+
+    public boolean includeModelStats() {
+        return targetStatLevels.contains(MLStatLevel.MODEL) || targetStatLevels.contains(MLStatLevel.ACTION);
     }
 }
