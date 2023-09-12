@@ -38,6 +38,7 @@ import ai.djl.modality.Output;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -139,7 +140,7 @@ public class SparseEncodingModelTest {
         when(ndArray.getFloat(any())).thenReturn(1.0f);
         when(ndArray.toLongArray()).thenReturn(new long[]{10000, 10001});
         when(ndArray.getName()).thenReturn("output");
-        ByteBuffer buffer = mock(ByteBuffer.class);
+        ByteBuffer buffer = mock(MappedByteBuffer.class);
         when(ndArray.toByteBuffer()).thenReturn(buffer);
         List<NDArray> ndArrayList = Collections.singletonList(ndArray);
         NDList ndList = new NDList(ndArrayList);
