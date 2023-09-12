@@ -35,13 +35,13 @@ public class CommonValue {
     public static final String ML_MODEL_GROUP_INDEX = ".plugins-ml-model-group";
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
-    public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 1;
-    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 6;
+    public static final Integer ML_MODEL_GROUP_INDEX_SCHEMA_VERSION = 2;
+    public static final Integer ML_MODEL_INDEX_SCHEMA_VERSION = 7;
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
-    public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 1;
-    public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 1;
+    public static final Integer ML_TASK_INDEX_SCHEMA_VERSION = 2;
+    public static final Integer ML_CONNECTOR_SCHEMA_VERSION = 2;
     public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
-    public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 1;
+    public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
