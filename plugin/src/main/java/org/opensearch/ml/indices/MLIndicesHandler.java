@@ -6,8 +6,6 @@
 package org.opensearch.ml.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
 
 import java.util.HashMap;
@@ -18,6 +16,7 @@ import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.mapping.put.PutMappingRequest;
+import org.opensearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -38,11 +37,13 @@ public class MLIndicesHandler {
 
     ClusterService clusterService;
     Client client;
-
+    private static final Map<String, Object> indexSettings = Map.of("index.auto_expand_replicas", "0-5");
     private static final Map<String, AtomicBoolean> indexMappingUpdated = new HashMap<>();
+
     static {
-        indexMappingUpdated.put(ML_MODEL_INDEX, new AtomicBoolean(false));
-        indexMappingUpdated.put(ML_TASK_INDEX, new AtomicBoolean(false));
+        for (MLIndex mlIndex : MLIndex.values()) {
+            indexMappingUpdated.put(mlIndex.getIndexName(), new AtomicBoolean(false));
+        }
     }
 
     public void initModelGroupIndexIfAbsent(ActionListener<Boolean> listener) {
@@ -83,7 +84,7 @@ public class MLIndicesHandler {
                     log.error("Failed to create index " + indexName, e);
                     internalListener.onFailure(e);
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping);
+                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping).settings(indexSettings);
                 client.admin().indices().create(request, actionListener);
             } else {
                 log.debug("index:{} is already created", indexName);
@@ -98,8 +99,23 @@ public class MLIndicesHandler {
                                     new PutMappingRequest().indices(indexName).source(mapping, XContentType.JSON),
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
-                                            indexMappingUpdated.get(indexName).set(true);
-                                            internalListener.onResponse(true);
+                                            UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
+                                            updateSettingRequest.indices(indexName).settings(indexSettings);
+                                            client
+                                                .admin()
+                                                .indices()
+                                                .updateSettings(updateSettingRequest, ActionListener.wrap(updateResponse -> {
+                                                    if (response.isAcknowledged()) {
+                                                        indexMappingUpdated.get(indexName).set(true);
+                                                        internalListener.onResponse(true);
+                                                    } else {
+                                                        internalListener
+                                                            .onFailure(new MLException("Failed to update index setting for: " + indexName));
+                                                    }
+                                                }, exception -> {
+                                                    log.error("Failed to update index setting for: " + indexName, exception);
+                                                    internalListener.onFailure(exception);
+                                                }));
                                         } else {
                                             internalListener.onFailure(new MLException("Failed to update index: " + indexName));
                                         }
