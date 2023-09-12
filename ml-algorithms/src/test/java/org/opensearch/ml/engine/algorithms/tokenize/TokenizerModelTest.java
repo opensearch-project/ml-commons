@@ -1,7 +1,11 @@
 package org.opensearch.ml.engine.algorithms.tokenize;
 
+import ai.djl.MalformedModelException;
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
+import ai.djl.modality.Output;
+import ai.djl.repository.zoo.ModelNotFoundException;
+import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
@@ -11,15 +15,12 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.annotation.InputDataSet;
-import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -31,9 +32,10 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
 import java.io.File;
-import java.net.URI;
+import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
@@ -89,6 +91,50 @@ public class TokenizerModelTest {
         tokenizerModel = new TokenizerModel();
 
         inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is dog")).build();
+    }
+
+    @Test
+    public void test_InnerLoadModel() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
+        TokenizerModel tokenizerModel = mock(TokenizerModel.class);
+        Predictor<Input, Output> predictor = mock(Predictor.class);
+        List<Predictor<Input, Output>> predictorList = Collections.singletonList(predictor);
+        ZooModel<Input, Output> model = mock(ZooModel.class);
+        List<ZooModel<Input, Output> > modelList = Collections.singletonList(model);
+        String engine = "engine";
+        Path modelPath = mock(Path.class);
+        when(modelPath.resolve((String) any())).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()));
+        MLModelConfig modelConfig = mock(MLModelConfig.class);
+        tokenizerModel.innerLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
+    }
+
+    @Test
+    public void test_InnerPredict() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
+        TokenizerModel tokenizerModel = new TokenizerModel();
+        Predictor<Input, Output> predictor = mock(Predictor.class);
+        List<Predictor<Input, Output>> predictorList = Collections.singletonList(predictor);
+        ZooModel<Input, Output> model = mock(ZooModel.class);
+        List<ZooModel<Input, Output> > modelList = Collections.singletonList(model);
+        String engine = "engine";
+        Path modelPath = Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent();
+        MLModelConfig modelConfig = mock(MLModelConfig.class);
+        tokenizerModel.innerLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
+
+        MLInput mlInput = mock(MLInput.class);
+        TextDocsInputDataSet textDocsInputDataSet = mock(TextDocsInputDataSet.class);
+        when(mlInput.getInputDataset()).thenReturn(textDocsInputDataSet);
+
+        when(textDocsInputDataSet.getResultFilter()).thenReturn(null);
+        List<String> docs = Collections.singletonList("hello world");
+        when(textDocsInputDataSet.getDocs()).thenReturn(docs);
+        ModelTensorOutput modelTensorOutput = tokenizerModel.innerPredict(mlInput);
+        assertNotNull(modelTensorOutput);
+        List<ModelTensors> modelTensorsList = modelTensorOutput.getMlModelOutputs();
+        assertEquals(1, modelTensorsList.size());
+        ModelTensors modelTensors = modelTensorsList.get(0);
+        List<ModelTensor> modelTensorList = modelTensors.getMlModelTensors();
+        assertEquals(1, modelTensorList.size());
+        ModelTensor modelTensor = modelTensorList.get(0);
+        assertNotNull(modelTensor);
     }
 
     @Test

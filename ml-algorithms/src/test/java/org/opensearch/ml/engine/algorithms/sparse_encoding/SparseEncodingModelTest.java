@@ -1,11 +1,18 @@
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
+import ai.djl.Model;
+import ai.djl.ndarray.NDArray;
+import ai.djl.ndarray.NDList;
+import ai.djl.ndarray.NDManager;
+import ai.djl.ndarray.types.Shape;
+import ai.djl.translate.TranslatorContext;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.Mock;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -23,14 +30,21 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
+import ai.djl.modality.Input;
 
 import java.io.File;
+import java.io.IOException;
+import ai.djl.modality.Output;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 
@@ -80,6 +94,65 @@ public class SparseEncodingModelTest {
         sparseEncodingModel = new SparseEncodingModel();
 
         inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is a happy dog")).build();
+    }
+
+    @Test
+    public void test_SparseEncoding_Translator_ProcessInput() throws URISyntaxException, IOException {
+        SparseEncodingTranslator sparseEncodingTranslator = new SparseEncodingTranslator();
+        TranslatorContext translatorContext = mock(TranslatorContext.class);
+        Model mlModel = mock(Model.class);
+        when(translatorContext.getModel()).thenReturn(mlModel);
+        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent());
+        sparseEncodingTranslator.prepare(translatorContext);
+
+        NDManager manager = mock(NDManager.class);
+        when(translatorContext.getNDManager()).thenReturn(manager);
+        Input input = mock(Input.class);
+        String testSentence = "hello world";
+        when(input.getAsString(0)).thenReturn(testSentence);
+        NDArray indiceNdArray = mock(NDArray.class);
+        when(indiceNdArray.toLongArray()).thenReturn(new long[]{102l, 101l});
+        when(manager.create((long[]) any())).thenReturn(indiceNdArray);
+        doNothing().when(indiceNdArray).setName(any());
+        NDList outputList = sparseEncodingTranslator.processInput(translatorContext, input);
+        assertEquals(2, outputList.size());
+        Iterator<NDArray> iterator = outputList.iterator();
+        while (iterator.hasNext()) {
+            NDArray ndArray = iterator.next();
+            long [] output = ndArray.toLongArray();
+            assertEquals(2, output.length);
+        }
+    }
+
+    @Test
+    public void test_SparseEncoding_Translator_ProcessOutput() throws URISyntaxException, IOException {
+        SparseEncodingTranslator sparseEncodingTranslator = new SparseEncodingTranslator();
+        TranslatorContext translatorContext = mock(TranslatorContext.class);
+        Model mlModel = mock(Model.class);
+        when(translatorContext.getModel()).thenReturn(mlModel);
+        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent());
+        sparseEncodingTranslator.prepare(translatorContext);
+
+        NDArray ndArray = mock(NDArray.class);
+        when(ndArray.nonzero()).thenReturn(ndArray);
+        when(ndArray.squeeze()).thenReturn(ndArray);
+        when(ndArray.getFloat(any())).thenReturn(1.0f);
+        when(ndArray.toLongArray()).thenReturn(new long[]{10000, 10001});
+        when(ndArray.getName()).thenReturn("output");
+        ByteBuffer buffer = mock(ByteBuffer.class);
+        when(ndArray.toByteBuffer()).thenReturn(buffer);
+        List<NDArray> ndArrayList = Collections.singletonList(ndArray);
+        NDList ndList = new NDList(ndArrayList);
+        Output output = sparseEncodingTranslator.processOutput(translatorContext, ndList);
+        assertNotNull(output);
+        byte[] bytes = output.getData().getAsBytes();
+        ModelTensors tensorOutput = ModelTensors.fromBytes(bytes);
+        List<ModelTensor> modelTensorsList = tensorOutput.getMlModelTensors();
+        assertEquals(1, modelTensorsList.size());
+        ModelTensor modelTensor = modelTensorsList.get(0);
+        assertEquals("output", modelTensor.getName());
+        Map<String, ?> dataAsMap = modelTensor.getDataAsMap();
+        assertEquals(1, dataAsMap.size());
     }
 
     @Test
