@@ -140,8 +140,6 @@ public class SparseEncodingModelTest {
         when(ndArray.getFloat(any())).thenReturn(1.0f);
         when(ndArray.toLongArray()).thenReturn(new long[]{10000, 10001});
         when(ndArray.getName()).thenReturn("output");
-        ByteBuffer buffer = mock(MappedByteBuffer.class);
-        when(ndArray.toByteBuffer()).thenReturn(buffer);
         List<NDArray> ndArrayList = Collections.singletonList(ndArray);
         NDList ndList = new NDList(ndArrayList);
         Output output = sparseEncodingTranslator.processOutput(translatorContext, ndList);

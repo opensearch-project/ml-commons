@@ -84,11 +84,9 @@ public class SparseEncodingTranslator implements ServingTranslator {
             List<Map<String, Float> > listOftokenWeights = new ArrayList<>();
             listOftokenWeights.add(tokenWeightsMap);
             resultMap.put("response", listOftokenWeights);
-            ByteBuffer buffer = ndArray.toByteBuffer();
             ModelTensor tensor = ModelTensor.builder()
                     .name(name)
                     .dataAsMap(resultMap)
-                    .byteBuffer(buffer)
                     .build();
             outputs.add(tensor);
         }
