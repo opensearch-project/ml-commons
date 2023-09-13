@@ -404,6 +404,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testCheckAccess_DoesNotExist_ThenFail() {
         setupUser("user");
+        setupRefreshSuccess();
         doReturn(true).when(metadata).hasIndex(anyString());
         GetResponse response = mock(GetResponse.class);
         doReturn(false).when(response).isExists();
@@ -423,6 +424,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testCheckAccess_WrongId_ThenFail() {
         setupUser("user");
+        setupRefreshSuccess();
         doReturn(true).when(metadata).hasIndex(anyString());
         GetResponse response = mock(GetResponse.class);
         doReturn(true).when(response).isExists();
@@ -443,6 +445,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testCheckAccess_GetFails_ThenFail() {
         setupUser("user");
+        setupRefreshSuccess();
         doReturn(true).when(metadata).hasIndex(anyString());
         doAnswer(invocation -> {
             ActionListener<GetResponse> al = invocation.getArgument(1);
@@ -459,6 +462,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testCheckAccess_ClientFails_ThenFail() {
         setupUser("user");
+        setupRefreshSuccess();
         doReturn(true).when(metadata).hasIndex(anyString());
         doThrow(new RuntimeException("Client Test Fail")).when(client).get(any(), any());
         @SuppressWarnings("unchecked")
