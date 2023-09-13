@@ -33,9 +33,12 @@ import org.opensearch.ml.memory.ConversationalMemoryHandler;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.extern.log4j.Log4j2;
+
 /**
  * Class for handling all Conversational Memory operactions
  */
+@Log4j2
 public class OpenSearchConversationalMemoryHandler implements ConversationalMemoryHandler {
 
     private ConversationMetaIndex conversationMetaIndex;
@@ -247,19 +250,25 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
         StepListener<Boolean> accessListener = new StepListener<>();
         conversationMetaIndex.checkAccess(conversationId, accessListener);
-
+        log.info("DELETING CID " + conversationId);
         accessListener.whenComplete(access -> {
             if (access) {
                 StepListener<Boolean> metaDeleteListener = new StepListener<>();
                 StepListener<Boolean> interactionsListener = new StepListener<>();
 
-                conversationMetaIndex.deleteConversation(conversationId, metaDeleteListener);
                 interactionsIndex.deleteConversation(conversationId, interactionsListener);
 
-                metaDeleteListener.whenComplete(metaResult -> {
-                    interactionsListener
-                        .whenComplete(interactionResult -> { listener.onResponse(metaResult && interactionResult); }, listener::onFailure);
+                interactionsListener
+                    .whenComplete(
+                        interactionResult -> { conversationMetaIndex.deleteConversation(conversationId, metaDeleteListener); },
+                        listener::onFailure
+                    );
+
+                metaDeleteListener.whenComplete(metaDeleteResult -> {
+                    log.info("SUCCESSFUL DELETION OF CID " + conversationId);
+                    listener.onResponse(metaDeleteResult && interactionsListener.result());
                 }, listener::onFailure);
+
             } else {
                 listener.onResponse(false);
             }
