@@ -146,7 +146,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     public void testNodeOperation_NoNodeLevelStat_AlgoStat() {
         MLStats mlStats = new MLStats(statsMap);
         mlStats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
-        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT,MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
 
         MLStatsNodesTransportAction action = new MLStatsNodesTransportAction(
             client().threadPool(),

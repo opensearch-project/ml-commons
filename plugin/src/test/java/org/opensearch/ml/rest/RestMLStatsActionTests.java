@@ -212,7 +212,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                        "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
                 )
         );
     }
@@ -229,7 +229,6 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
                     new MLActionStats(ImmutableMap.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, kmeansTrainRequestCount))
                 );
             algoStats.put(FunctionName.KMEANS, new MLAlgoStats(actionStats));
-
 
             Map<String, MLModelStats> modelStats = new HashMap<>();
 
@@ -343,7 +342,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                        "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
                 )
         );
     }
@@ -369,7 +368,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
         assertEquals(
-                "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
+            "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
             content.utf8ToString()
         );
     }

@@ -120,8 +120,8 @@ public class MLTrainingTaskRunner extends MLTaskRunner<MLTrainingTaskRequest, ML
                 ActionListener<MLTaskResponse> internalListener = ActionListener.wrap(res -> {
                     String modelId = ((MLTrainingOutput) res.getOutput()).getModelId();
                     mlStats
-                            .createModelCounterStatIfAbsent(modelId, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
-                            .increment();
+                        .createModelCounterStatIfAbsent(modelId, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
+                        .increment();
                     log.info("ML model trained successfully, task id: {}, model id: {}", taskId, modelId);
                     mlTask.setModelId(modelId);
                     handleAsyncMLTaskComplete(mlTask);

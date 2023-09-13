@@ -73,7 +73,10 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"algorithms\":{\"kmeans\":{\"predict\":{\"ml_action_request_count\":100}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":100}}}}", taskContent);
+        assertEquals(
+            "{\"algorithms\":{\"kmeans\":{\"predict\":{\"ml_action_request_count\":100}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":100}}}}",
+            taskContent
+        );
     }
 
     public void testWriteTo_AlgoStats() throws IOException {
@@ -103,7 +106,6 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         MLStatsNodeResponse response = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
         return response;
     }
-
 
     public void testToXContent_WithAlgoAndModelStats() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -170,7 +172,6 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         assertEquals(0, response.getAlgorithmStatSize());
         assertEquals(0, response.getModelStatSize());
     }
-
 
     public void testIsEmpty_NonEmptyNodeAndAlgoStats() {
         MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(

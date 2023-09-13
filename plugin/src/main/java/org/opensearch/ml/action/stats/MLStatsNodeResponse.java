@@ -63,7 +63,12 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
         this.nodeStats = nodeStats;
     }
 
-    public MLStatsNodeResponse(DiscoveryNode node, Map<MLNodeLevelStat, Object> nodeStats, Map<FunctionName, MLAlgoStats> algorithmStats, Map<String, MLModelStats> modelStats) {
+    public MLStatsNodeResponse(
+        DiscoveryNode node,
+        Map<MLNodeLevelStat, Object> nodeStats,
+        Map<FunctionName, MLAlgoStats> algorithmStats,
+        Map<String, MLModelStats> modelStats
+    ) {
         super(node);
         this.nodeStats = nodeStats;
         this.algorithmStats = algorithmStats;
@@ -158,7 +163,6 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
     public boolean hasModelStats(String modelId) {
         return modelStats != null && modelStats.containsKey(modelId);
     }
-
 
     public MLAlgoStats getAlgorithmStats(FunctionName algorithm) {
         return algorithmStats == null ? null : algorithmStats.get(algorithm);

@@ -216,7 +216,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
             .actionLevelStats(actionLevelStats)
             .nodeIds(nodeIds)
             .algorithms(algorithms)
-                .models(models)
+            .models(models)
             .actions(actions)
             .build();
     }
@@ -311,7 +311,7 @@ public class MLStatsInput implements ToXContentObject, Writeable {
         }
         return !targetStatLevels.contains(MLStatLevel.NODE)
             && !targetStatLevels.contains(MLStatLevel.ALGORITHM)
-                && !targetStatLevels.contains(MLStatLevel.MODEL)
+            && !targetStatLevels.contains(MLStatLevel.MODEL)
             && !targetStatLevels.contains(MLStatLevel.ACTION);
     }
 

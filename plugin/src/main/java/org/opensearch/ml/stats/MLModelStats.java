@@ -5,15 +5,15 @@
 
 package org.opensearch.ml.stats;
 
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Map;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentFragment;
 import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
-import java.util.Locale;
-import java.util.Map;
 
 public class MLModelStats implements ToXContentFragment, Writeable {
 

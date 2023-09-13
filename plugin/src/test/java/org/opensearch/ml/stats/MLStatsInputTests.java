@@ -39,7 +39,7 @@ public class MLStatsInputTests extends OpenSearchTestCase {
             .actionLevelStats(EnumSet.allOf(MLActionLevelStat.class))
             .nodeIds(ImmutableSet.of(node1, node2))
             .algorithms(EnumSet.allOf(FunctionName.class))
-                .models(ImmutableSet.of(modelId))
+            .models(ImmutableSet.of(modelId))
             .actions(EnumSet.allOf(ActionName.class))
             .build();
     }
@@ -157,10 +157,7 @@ public class MLStatsInputTests extends OpenSearchTestCase {
             mlStatsInput.getAlgorithms().toArray(new FunctionName[0]),
             parsedMLStatsInput.getAlgorithms().toArray(new FunctionName[0])
         );
-        assertArrayEquals(
-                mlStatsInput.getModels().toArray(new String[0]),
-                parsedMLStatsInput.getModels().toArray(new String[0])
-        );
+        assertArrayEquals(mlStatsInput.getModels().toArray(new String[0]), parsedMLStatsInput.getModels().toArray(new String[0]));
         assertArrayEquals(mlStatsInput.getActions().toArray(new ActionName[0]), parsedMLStatsInput.getActions().toArray(new ActionName[0]));
         assertEquals(2, parsedMLStatsInput.getNodeIds().size());
         assertTrue(parsedMLStatsInput.getNodeIds().contains(node1));

@@ -204,9 +204,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         mlStats
             .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
             .increment();
-        mlStats
-                .createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
-                .increment();
+        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
 
@@ -299,7 +297,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         return new ThreadedActionListener<>(log, threadPool, PREDICT_THREAD_POOL, listener, false);
     }
 
-    private void handlePredictFailure(MLTask mlTask, ActionListener<MLTaskResponse> listener, Exception e, boolean trackFailure, String modelId) {
+    private void handlePredictFailure(
+        MLTask mlTask,
+        ActionListener<MLTaskResponse> listener,
+        Exception e,
+        boolean trackFailure,
+        String modelId
+    ) {
         if (trackFailure) {
             mlStats
                 .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
