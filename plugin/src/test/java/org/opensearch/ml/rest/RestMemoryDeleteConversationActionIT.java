@@ -26,6 +26,7 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
 import org.junit.Before;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.settings.MLCommonsSettings;
@@ -163,15 +164,20 @@ public class RestMemoryDeleteConversationActionIT extends MLCommonsRestTestCase 
         assert (!gcmap.containsKey("next_token"));
         assert (((ArrayList) gcmap.get("conversations")).size() == 0);
 
-        Response giresponse = TestHelper
-            .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
-        assert (giresponse != null);
-        assert (TestHelper.restStatus(giresponse) == RestStatus.OK);
-        HttpEntity gihttpEntity = giresponse.getEntity();
-        String gientityString = TestHelper.httpEntityToString(gihttpEntity);
-        Map gimap = gson.fromJson(gientityString, Map.class);
-        assert (gimap.containsKey("interactions"));
-        assert (!gimap.containsKey("next_token"));
-        assert (((ArrayList) gimap.get("interactions")).size() == 0);
+        try {
+            Response giresponse = TestHelper
+                .makeRequest(client(), "GET", ActionConstants.GET_INTERACTIONS_REST_PATH.replace("{conversation_id}", cid), null, "", null);
+            assert (giresponse != null);
+            assert (TestHelper.restStatus(giresponse) == RestStatus.OK);
+            HttpEntity gihttpEntity = giresponse.getEntity();
+            String gientityString = TestHelper.httpEntityToString(gihttpEntity);
+            Map gimap = gson.fromJson(gientityString, Map.class);
+            assert (gimap.containsKey("interactions"));
+            assert (!gimap.containsKey("next_token"));
+            assert (((ArrayList) gimap.get("interactions")).size() == 0);
+            assert (false);
+        } catch (ResponseException e) {
+            assert (TestHelper.restStatus(e.getResponse()) == RestStatus.NOT_FOUND);
+        }
     }
 }
