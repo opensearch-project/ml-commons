@@ -250,7 +250,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
         StepListener<Boolean> accessListener = new StepListener<>();
         conversationMetaIndex.checkAccess(conversationId, accessListener);
-        log.info("DELETING CID " + conversationId);
+        log.info("DELETING CONVERSATION " + conversationId);
         accessListener.whenComplete(access -> {
             if (access) {
                 StepListener<Boolean> metaDeleteListener = new StepListener<>();
@@ -265,7 +265,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
                     );
 
                 metaDeleteListener.whenComplete(metaDeleteResult -> {
-                    log.info("SUCCESSFUL DELETION OF CID " + conversationId);
+                    log.info("SUCCESSFUL DELETION OF CONVERSATION " + conversationId);
                     listener.onResponse(metaDeleteResult && interactionsListener.result());
                 }, listener::onFailure);
 

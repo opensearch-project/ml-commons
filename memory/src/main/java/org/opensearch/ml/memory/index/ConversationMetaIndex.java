@@ -297,7 +297,6 @@ public class ConversationMetaIndex {
                     log.error("Failed to refresh conversations index during check access ", e);
                     internalListener.onFailure(e);
                 }));
-            // client.get(getRequest, al);
         } catch (Exception e) {
             listener.onFailure(e);
         }
