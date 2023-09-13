@@ -270,16 +270,16 @@ public class ConversationMetaIndex {
         String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            // If security is off - User doesn't exist - you have permission
-            if (userstr == null || User.parse(userstr) == null) {
-                internalListener.onResponse(true);
-                return;
-            }
             GetRequest getRequest = Requests.getRequest(indexName).id(conversationId);
             ActionListener<GetResponse> al = ActionListener.wrap(getResponse -> {
                 // If the conversation doesn't exist, fail
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
                     throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
+                }
+                // If security is off - User doesn't exist - you have permission
+                if (userstr == null || User.parse(userstr) == null) {
+                    internalListener.onResponse(true);
+                    return;
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(conversationId, getResponse.getSourceAsMap());
                 String user = User.parse(userstr).getName();
@@ -290,7 +290,13 @@ public class ConversationMetaIndex {
                 }
                 internalListener.onResponse(true);
             }, e -> { internalListener.onFailure(e); });
-            client.get(getRequest, al);
+            client
+                .admin()
+                .indices()
+                .refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> { client.get(getRequest, al); }, e -> {
+                    log.error("Failed to refresh conversations index during check access ", e);
+                    internalListener.onFailure(e);
+                }));
         } catch (Exception e) {
             listener.onFailure(e);
         }
