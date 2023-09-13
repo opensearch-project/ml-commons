@@ -114,7 +114,7 @@ public class TokenizerModel extends DLModel {
     }
     @Override
     public boolean isModelReady() {
-        if (modelHelper == null || modelId == null) {
+        if (modelHelper == null || modelId == null || tokenizer == null) {
             return false;
         }
         return true;
