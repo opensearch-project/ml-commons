@@ -249,16 +249,18 @@ public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase 
         });
 
         StepListener<List<Interaction>> inters2 = new StepListener<>();
-        inters1.whenComplete(ints -> { cmHandler.getInteractions(cid2.result(), 0, 10, inters2); }, e -> {
+        inters1.whenComplete(ints -> {
             cdl.countDown();
             assert (false);
+        }, e -> {
+            assert (e.getMessage().startsWith("Conversation ["));
+            cmHandler.getInteractions(cid2.result(), 0, 10, inters2);
         });
 
         LatchedActionListener<List<Interaction>> finishAndAssert = new LatchedActionListener<>(ActionListener.wrap(r -> {
             assert (del.result());
             assert (conversations.result().size() == 1);
             assert (conversations.result().get(0).getId().equals(cid2.result()));
-            assert (inters1.result().size() == 0);
             assert (inters2.result().size() == 1);
             assert (inters2.result().get(0).getId().equals(iid3.result()));
         }, e -> { assert (false); }), cdl);
