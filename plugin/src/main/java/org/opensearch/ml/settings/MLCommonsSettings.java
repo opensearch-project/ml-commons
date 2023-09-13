@@ -5,13 +5,14 @@
 
 package org.opensearch.ml.settings;
 
-import com.google.common.collect.ImmutableList;
+import java.util.List;
+import java.util.function.Function;
+
 import org.opensearch.common.settings.Setting;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
-import java.util.List;
-import java.util.function.Function;
+import com.google.common.collect.ImmutableList;
 
 public final class MLCommonsSettings {
 
