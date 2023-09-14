@@ -75,6 +75,7 @@ public class TokenizerModel extends DLModel {
             long[] indices = encodings.getIds();
             List<ModelTensor> outputs = new ArrayList<>();
             String[] tokens = Arrays.stream(indices)
+                    .distinct()
                     .mapToObj(value -> new long[]{value})
                     .map(value -> this.tokenizer.decode(value, true))
                     .filter(s -> !s.isEmpty())
