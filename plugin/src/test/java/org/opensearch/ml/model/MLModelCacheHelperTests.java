@@ -284,7 +284,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.addWorkerNode(modelId, nodeId);
         MLModelProfile modelProfile = cacheHelper.getModelProfile(modelId);
         assertNotNull(modelProfile);
-        assertTrue(modelProfile.getPredictor().contains("TextEmbeddingModel"));
+        assertTrue(modelProfile.getPredictor().contains("TextEmbeddingDenseModel"));
         assertEquals(MLModelState.DEPLOYED, modelProfile.getModelState());
         assertArrayEquals(new String[] { nodeId }, modelProfile.getWorkerNodes());
         assertNull(modelProfile.getModelInferenceStats());
