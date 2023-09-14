@@ -340,7 +340,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
-        verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), FunctionName.TEXT_EMBEDDING, any());
+        verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Ignore
