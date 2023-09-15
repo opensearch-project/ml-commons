@@ -16,7 +16,7 @@ public class MLPreProcessFunction {
     public static final String TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT = "connector.pre_process.cohere.embedding";
     public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "connector.pre_process.openai.embedding";
 
-    public static final String NEURAL_SEARCH_EMBEDDING_INPUT = "connector.pre_process.neural_search.text_embedding";
+    public static final String NEURAL_SEARCH_EMBEDDING_INPUT = "connector.pre_process.default";
 
     private static Function<List<String>, Map<String, Object>> cohereTextEmbeddingPreProcess() {
         return inputs -> Map.of("parameters", Map.of("texts", inputs));

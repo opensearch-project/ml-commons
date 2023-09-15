@@ -19,7 +19,7 @@ public class MLPostProcessFunction {
     public static final String COHERE_EMBEDDING = "connector.post_process.cohere.embedding";
     public static final String OPENAI_EMBEDDING = "connector.post_process.openai.embedding";
 
-    public static final String NEURAL_SEARCH_EMBEDDING = "connector.post_process.neural_search.text_embedding";
+    public static final String NEURAL_SEARCH_EMBEDDING = "connector.post_process.default";
 
     private static final Map<String, String> JSON_PATH_EXPRESSION = new HashMap<>();
 
