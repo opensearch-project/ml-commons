@@ -120,10 +120,10 @@ jobs:
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     environment: ml-commons-cicd-env
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:  [windows-2019, windows-latest]
+    runs-on: windows-2019
+    #strategy:
+    #  matrix:
+    #    os:  [windows-2019, windows-latest]
 
     steps:
       - name: Setup Java ${{ matrix.java }}
