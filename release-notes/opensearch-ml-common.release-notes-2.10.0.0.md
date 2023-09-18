@@ -3,7 +3,7 @@
 Compatible with OpenSearch 2.10.0
 
 
-### Features
+### Experimental Features
 * Conversations and Generative AI in OpenSearch ([#1150](https://github.com/opensearch-project/ml-commons/issues/1150))
 
 ### Enhancements
@@ -23,6 +23,10 @@ Compatible with OpenSearch 2.10.0
 * Handle escaping string parameters explicitly ([#1174](https://github.com/opensearch-project/ml-commons/pull/1174))
 * Fix model count bug ([#1180](https://github.com/opensearch-project/ml-commons/pull/1180))
 * Fix core package name to address compilation errors ([#1157](https://github.com/opensearch-project/ml-commons/pull/1157))
+* Fix system index access bug ([#1320](https://github.com/opensearch-project/ml-commons/pull/1320))
+* Fix unassigned ml system shard replicas ([#1315](https://github.com/opensearch-project/ml-commons/pull/1315))
+* Adjust index replicas settings to keep consistent with AOS 2.9 ([#1325](https://github.com/opensearch-project/ml-commons/pull/1325))
+* Fix GetInteractions returned different results in security-enabled and -disabled settings ([#1334](https://github.com/opensearch-project/ml-commons/pull/1334))
 
 ### Documentation
 * Updating cohere blueprint doc ([#1213](https://github.com/opensearch-project/ml-commons/pull/1213))
