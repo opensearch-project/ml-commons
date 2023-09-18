@@ -104,9 +104,9 @@ public abstract class AbstractConnector implements Connector {
             Map<String, Object> data = StringUtils.fromJson((String) response, "response");
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
         } else {
-        Map<String, Object> map = new HashMap<>();
-        map.put("response", response);
-        modelTensors.add(ModelTensor.builder().name("response").dataAsMap(map).build());
+            Map<String, Object> map = new HashMap<>();
+            map.put("response", response);
+            modelTensors.add(ModelTensor.builder().name("response").dataAsMap(map).build());
         }
     }
 
