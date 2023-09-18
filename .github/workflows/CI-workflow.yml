@@ -6,8 +6,8 @@ on:
       - 'backport/**'
       - 'create-pull-request/**'
       - 'dependabot/**'
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+  #pull_request_target:
+    #types: [opened, synchronize, reopened]
 
 permissions:
   id-token: write
