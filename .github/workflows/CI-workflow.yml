@@ -6,8 +6,8 @@ on:
       - 'backport/**'
       - 'create-pull-request/**'
       - 'dependabot/**'
-  #pull_request_target:
-    #types: [opened, synchronize, reopened]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
 
 permissions:
   id-token: write
@@ -20,7 +20,7 @@ jobs:
         java: [11, 17]
 
     name: Build and Test MLCommons Plugin
-    #if: github.repository == 'opensearch-project/ml-commons'
+    if: github.repository == 'opensearch-project/ml-commons'
     environment: ml-commons-cicd-env
     runs-on: ubuntu-latest
 
@@ -118,7 +118,7 @@ jobs:
       matrix:
         java: [11, 17]
     name: Build and Test MLCommons Plugin on Windows
-    #if: github.repository == 'opensearch-project/ml-commons'
+    if: github.repository == 'opensearch-project/ml-commons'
     environment: ml-commons-cicd-env
     runs-on: ${{ matrix.os }}
     strategy:
