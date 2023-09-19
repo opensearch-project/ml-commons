@@ -393,7 +393,7 @@ tasks.withType(licenseHeaders.class) {
     additionalLicense 'AL   ', 'Apache', 'Licensed under the Apache License, Version 2.0 (the "License")'
 }
 
-String bwcVersion = "2.4.0.0"
+String bwcVersion = "2.10.0.0"
 String bwcShortVersion = bwcVersion[0..4]
 String baseName = "mlCommonsBwcCluster"
 String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
