@@ -28,6 +28,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -54,7 +56,7 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class TransportUpdateModelAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
-
+    MLModelManager mlModelManager;
     NamedXContentRegistry xContentRegistry;
     ModelAccessControlHelper modelAccessControlHelper;
 
@@ -64,10 +66,12 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         ActionFilters actionFilters,
         Client client,
         NamedXContentRegistry xContentRegistry,
+        MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
+        this.mlModelManager = mlModelManager;
         this.xContentRegistry = xContentRegistry;
         this.modelAccessControlHelper = modelAccessControlHelper;
     }
@@ -77,6 +81,7 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         MLUpdateModelRequest updateModelRequest = MLUpdateModelRequest.fromActionRequest(request);
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
+        String relinkModelGroupId = Strings.hasLength(updateModelInput.getModelGroupId()) ? updateModelInput.getModelGroupId() : null;
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
         try {
             updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
@@ -100,11 +105,10 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                             algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
                         }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
-
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                                 if (Boolean.TRUE.equals(hasPermission)) {
-                                    client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+                                    updateModel(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
                                 } else {
                                     actionListener
                                         .onFailure(
@@ -149,6 +153,36 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
             log.error("Failed to update ML model: " + modelId, exception);
             actionListener.onFailure(exception);
         }), context::restore);
+    }
+
+    private void updateModel(
+        String modelId,
+        String relinkModelGroupId,
+        User user,
+        UpdateRequest updateRequest,
+        ActionListener<UpdateResponse> actionListener,
+        ThreadContext.StoredContext context
+    ) {
+        if (relinkModelGroupId != null) {
+            modelAccessControlHelper.validateModelGroupAccess(user, relinkModelGroupId, client, ActionListener.wrap(hasRelinkPermission -> {
+                if (Boolean.TRUE.equals(hasRelinkPermission)) {
+                    client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+                } else {
+                    actionListener
+                        .onFailure(
+                            new MLValidationException(
+                                "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
+                                    + relinkModelGroupId
+                            )
+                        );
+                }
+            }, exception -> {
+                log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                actionListener.onFailure(exception);
+            }));
+        } else {
+            client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+        }
     }
 
     @Deprecated

@@ -16,7 +16,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
@@ -31,28 +30,25 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String DESCRIPTION_FIELD = "description"; // optional
     public static final String MODEL_NAME_FIELD = "name"; // optional
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
-    public static final String MODEL_FORMAT_FIELD = "model_format"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
-    public static final String CONNECTOR_FIELD = "connector"; // optional
-    public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
+    public static final String CONNECTOR_FIELD = "connector"; // optional Access control? Re-use?
+    public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional Access control? Case-switch?
 
     @Getter
     private String modelId;
     private String description;
     private String name;
     private String modelGroupId;
-    private MLModelFormat modelFormat;
     private MLModelConfig modelConfig;
     private Connector connector;
     private String connectorId;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelInput(String modelId, String description, String name, String modelGroupId, MLModelFormat modelFormat, MLModelConfig modelConfig, Connector connector, String connectorId) {
+    public MLUpdateModelInput(String modelId, String description, String name, String modelGroupId, MLModelConfig modelConfig, Connector connector, String connectorId) {
         this.modelId = modelId;
         this.description = description;
         this.name = name;
         this.modelGroupId = modelGroupId;
-        this.modelFormat = modelFormat;
         this.modelConfig = modelConfig;
         this.connector = connector;
         this.connectorId = connectorId;
@@ -63,9 +59,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.description = in.readOptionalString();
         this.name = in.readOptionalString();
         this.modelGroupId = in.readOptionalString();
-        if (in.readBoolean()) {
-            modelFormat = in.readEnum(MLModelFormat.class);
-        }
         if (in.readBoolean()) {
             modelConfig = new TextEmbeddingModelConfig(in);
         }
@@ -88,9 +81,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelGroupId != null) {
             builder.field(MODEL_GROUP_ID_FIELD, modelGroupId);
         }
-        if (modelFormat != null) {
-            builder.field(MODEL_FORMAT_FIELD, modelFormat);
-        }
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
@@ -110,12 +100,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(description);
         out.writeOptionalString(name);
         out.writeOptionalString(modelGroupId);
-        if (modelFormat != null) {
-            out.writeBoolean(true);
-            out.writeEnum(modelFormat);
-        } else {
-            out.writeBoolean(false);
-        }
         if (modelConfig != null) {
             out.writeBoolean(true);
             modelConfig.writeTo(out);
@@ -132,7 +116,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     }
 
     public static MLUpdateModelInput parse(XContentParser parser, String modelId) throws IOException {
-        MLUpdateModelInput input = new MLUpdateModelInput(modelId, null, null, null, null, null, null, null);
+        MLUpdateModelInput input = new MLUpdateModelInput(modelId, null, null, null, null, null, null);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -149,9 +133,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     input.setModelGroupId(parser.text());
-                    break;
-                case MODEL_FORMAT_FIELD:
-                    input.setModelFormat(MLModelFormat.from(parser.text()));
                     break;
                 case MODEL_CONFIG_FIELD:
                     input.setModelConfig(TextEmbeddingModelConfig.parse(parser));
