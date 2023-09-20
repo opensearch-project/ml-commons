@@ -18,7 +18,6 @@
 package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -26,10 +25,21 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.apache.commons.text.StringEscapeUtils;
+import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.script.Script;
+import org.opensearch.script.ScriptService;
+import org.opensearch.script.ScriptType;
+import org.opensearch.script.TemplateScript;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+
+import static java.util.Collections.singletonMap;
 
 /**
  * A utility class for producing prompts for LLMs.
@@ -40,7 +50,7 @@ import java.util.List;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class PromptUtil {
 
-    public static final String DEFAULT_CHAT_COMPLETION_PROMPT_TEMPLATE =
+    public static final String DEFAULT_SYSTEM_PROMPT =
         "Generate a concise and informative answer in less than 100 words for the given question, taking into context: "
             + "- An enumerated list of search results"
             + "- A rephrase of the question that was used to generate the search results"
@@ -56,7 +66,11 @@ public class PromptUtil {
     }
 
     public static String getChatCompletionPrompt(String question, List<Interaction> chatHistory, List<String> contexts) {
-        return buildMessageParameter(question, chatHistory, contexts);
+        return getChatCompletionPrompt(DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
+    }
+
+    public static String getChatCompletionPrompt(String systemPrompt, String userInstructions, String question, List<Interaction> chatHistory, List<String> contexts) {
+        return buildMessageParameter(systemPrompt, userInstructions, question, chatHistory, contexts);
     }
 
     enum ChatRole {
@@ -75,17 +89,34 @@ public class PromptUtil {
     }
 
     @VisibleForTesting
-    static String buildMessageParameter(String question, List<Interaction> chatHistory, List<String> contexts) {
+    static String buildMessageParameter(String systemPrompt, String userInstructions, String question, List<Interaction> chatHistory, List<String> contexts) {
 
         // TODO better prompt template management is needed here.
 
+        if (Strings.isNullOrEmpty(systemPrompt) && Strings.isNullOrEmpty(userInstructions)) {
+            systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        }
+
         JsonArray messageArray = new JsonArray();
-        messageArray.add(new Message(ChatRole.USER, DEFAULT_CHAT_COMPLETION_PROMPT_TEMPLATE).toJson());
-        for (String result : contexts) {
-            messageArray.add(new Message(ChatRole.USER, "SEARCH RESULT: " + result).toJson());
+
+        /*
+        if (!Strings.isNullOrEmpty(systemPrompt)) {
+            messageArray.add(new Message(ChatRole.SYSTEM, systemPrompt).toJson());
+        }
+        if (!Strings.isNullOrEmpty(userInstructions)) {
+            messageArray.add(new Message(ChatRole.USER, userInstructions).toJson());
+        }*/
+
+        messageArray.addAll(getPromptTemplateAsJsonArray(systemPrompt, userInstructions));
+        for (int i = 0; i < contexts.size(); i++) {
+            messageArray.add(new Message(ChatRole.USER, "SEARCH RESULT " + (i+1) + ": " + contexts.get(i)).toJson());
         }
         if (!chatHistory.isEmpty()) {
-            Messages.fromInteractions(chatHistory).getMessages().forEach(m -> messageArray.add(m.toJson()));
+            // The oldest interaction first
+            //Collections.reverse(chatHistory);
+            List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
+            Collections.reverse(messages);
+            messages.forEach(m -> messageArray.add(m.toJson()));
         }
         messageArray.add(new Message(ChatRole.USER, "QUESTION: " + question).toJson());
         messageArray.add(new Message(ChatRole.USER, "ANSWER:").toJson());
@@ -93,7 +124,21 @@ public class PromptUtil {
         return messageArray.toString();
     }
 
-    private static Gson gson = new Gson();
+    public static String getPromptTemplate(String systemPrompt, String userInstructions) {
+        return getPromptTemplateAsJsonArray(systemPrompt, userInstructions).toString();
+    }
+
+    static JsonArray getPromptTemplateAsJsonArray(String systemPrompt, String userInstructions) {
+        JsonArray messageArray = new JsonArray();
+
+        if (!Strings.isNullOrEmpty(systemPrompt)) {
+            messageArray.add(new Message(ChatRole.SYSTEM, systemPrompt).toJson());
+        }
+        if (!Strings.isNullOrEmpty(userInstructions)) {
+            messageArray.add(new Message(ChatRole.USER, userInstructions).toJson());
+        }
+        return messageArray;
+    }
 
     @Getter
     static class Messages {

@@ -18,6 +18,7 @@
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 
 import java.util.List;
 
@@ -26,10 +27,17 @@ import java.util.List;
  */
 public class LlmIOUtil {
 
-    public static ChatCompletionInput createChatCompletionInput(String llmModel, String question, List<Interaction> chatHistory, List<String> contexts) {
+    public static ChatCompletionInput createChatCompletionInput(String llmModel, String question, List<Interaction> chatHistory,
+        List<String> contexts, int timeoutInSeconds) {
 
         // TODO pick the right subclass based on the modelId.
 
-        return new ChatCompletionInput(llmModel, question, chatHistory, contexts);
+        return createChatCompletionInput(PromptUtil.DEFAULT_SYSTEM_PROMPT, null, llmModel, question, chatHistory, contexts, timeoutInSeconds);
+    }
+
+    public static ChatCompletionInput createChatCompletionInput(String systemPrompt, String userInstructions, String llmModel,
+        String question, List<Interaction> chatHistory, List<String> contexts, int timeoutInSeconds) {
+
+        return new ChatCompletionInput(llmModel, question, chatHistory, contexts, timeoutInSeconds, systemPrompt, userInstructions);
     }
 }

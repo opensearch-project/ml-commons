@@ -23,6 +23,7 @@ import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Output from LLMs via HttpConnector
@@ -30,8 +31,31 @@ import java.util.List;
 @Log4j2
 @Getter
 @Setter
-@AllArgsConstructor
 public class ChatCompletionOutput {
 
     private List<Object> answers;
+    private List<String> errors;
+
+    private boolean errorOccurred;
+
+    public ChatCompletionOutput(List<Object> answers, List<String> errors) {
+
+        if (answers == null && errors == null) {
+            throw new IllegalArgumentException("answers and errors can't both be null.");
+        }
+
+        if (answers == null) {
+            if (errors.isEmpty()) {
+                throw new IllegalArgumentException("If answers is not provided, one or more errors must be provided.");
+            }
+            this.errorOccurred = true;
+        } else if (errors == null) {
+            if (answers.isEmpty()) {
+                throw new IllegalArgumentException("If errors is not provided, one or more answers must be provided.");
+            }
+        }
+
+        this.answers = answers;
+        this.errors = errors;
+    }
 }

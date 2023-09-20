@@ -17,20 +17,44 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 import org.opensearch.test.OpenSearchTestCase;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class ChatCompletionOutputTests extends OpenSearchTestCase {
 
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
     public void testCtor() {
-        ChatCompletionOutput output = new ChatCompletionOutput(List.of("answer"));
+        ChatCompletionOutput output = new ChatCompletionOutput(List.of("answer"), null);
         assertNotNull(output);
     }
 
     public void testGettersSetters() {
         String answer = "answer";
-        ChatCompletionOutput output = new ChatCompletionOutput(List.of(answer));
+        ChatCompletionOutput output = new ChatCompletionOutput(List.of(answer), null);
         assertEquals(answer, (String) output.getAnswers().get(0));
+    }
+
+    public void testIllegalArgument1() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("answers and errors can't both be null.");
+        new ChatCompletionOutput(null, null);
+    }
+
+    public void testIllegalArgument2() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("If answers is not provided, one or more errors must be provided.");
+        new ChatCompletionOutput(null, new ArrayList<>());
+    }
+
+    public void testIllegalArgument3() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("If errors is not provided, one or more answers must be provided.");
+        new ChatCompletionOutput(new ArrayList<>(), null);
     }
 }

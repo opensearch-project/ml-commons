@@ -48,7 +48,7 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         String conversationId = UUID.randomUUID().toString();
         CreateConversationResponse response = new CreateConversationResponse(conversationId);
         ActionFuture<CreateConversationResponse> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(response);
+        when(future.actionGet(anyLong())).thenReturn(response);
         when(client.execute(eq(CreateConversationAction.INSTANCE), any())).thenReturn(future);
         String name = "foo";
         String actual = memoryClient.createConversation(name);
@@ -66,7 +66,7 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         IntStream.range(0, lastN).forEach(i -> interactions.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null)));
         GetInteractionsResponse response = new GetInteractionsResponse(interactions, lastN, false);
         ActionFuture<GetInteractionsResponse> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(response);
+        when(future.actionGet(anyLong())).thenReturn(response);
         when(client.execute(eq(GetInteractionsAction.INSTANCE), any())).thenReturn(future);
         ArgumentCaptor<GetInteractionsRequest> captor = ArgumentCaptor.forClass(GetInteractionsRequest.class);
 
@@ -91,9 +91,9 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         IntStream.range(0, lastN).forEach(i -> secondPage.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null)));
         GetInteractionsResponse response2 = new GetInteractionsResponse(secondPage, lastN, false);
         ActionFuture<GetInteractionsResponse> future1 = mock(ActionFuture.class);
-        when(future1.actionGet()).thenReturn(response1);
+        when(future1.actionGet(anyLong())).thenReturn(response1);
         ActionFuture<GetInteractionsResponse> future2 = mock(ActionFuture.class);
-        when(future2.actionGet()).thenReturn(response2);
+        when(future2.actionGet(anyLong())).thenReturn(response2);
         when(client.execute(eq(GetInteractionsAction.INSTANCE), any())).thenReturn(future1).thenReturn(future2);
         ArgumentCaptor<GetInteractionsRequest> captor = ArgumentCaptor.forClass(GetInteractionsRequest.class);
 
@@ -119,7 +119,7 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         IntStream.range(0, found).forEach(i -> interactions.add(new Interaction(Integer.toString(i), Instant.now(), conversationId, "foo", "bar", "x", "y", null)));
         GetInteractionsResponse response = new GetInteractionsResponse(interactions, found, false);
         ActionFuture<GetInteractionsResponse> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(response);
+        when(future.actionGet(anyLong())).thenReturn(response);
         when(client.execute(eq(GetInteractionsAction.INSTANCE), any())).thenReturn(future);
         ArgumentCaptor<GetInteractionsRequest> captor = ArgumentCaptor.forClass(GetInteractionsRequest.class);
 
@@ -138,7 +138,7 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         GetInteractionsResponse response1 = new GetInteractionsResponse(null, 0, true);
         GetInteractionsResponse response2 = new GetInteractionsResponse(List.of(), 0, true);
         ActionFuture<GetInteractionsResponse> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(response1).thenReturn(response2);
+        when(future.actionGet(anyLong())).thenReturn(response1).thenReturn(response2);
         when(client.execute(eq(GetInteractionsAction.INSTANCE), any())).thenReturn(future);
         List<Interaction> actual = memoryClient.getInteractions("1", 10);
         assertTrue(actual.isEmpty());
@@ -152,7 +152,7 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         GetInteractionsResponse response1 = new GetInteractionsResponse(null, 0, true);
         GetInteractionsResponse response2 = new GetInteractionsResponse(List.of(), 0, false);
         ActionFuture<GetInteractionsResponse> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(response1).thenReturn(response2);
+        when(future.actionGet(anyLong())).thenReturn(response1).thenReturn(response2);
         when(client.execute(eq(GetInteractionsAction.INSTANCE), any())).thenReturn(future);
         List<Interaction> actual = memoryClient.getInteractions("1", 10);
         assertTrue(actual.isEmpty());
@@ -166,7 +166,7 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         String id = UUID.randomUUID().toString();
         CreateInteractionResponse res = new CreateInteractionResponse(id);
         ActionFuture<CreateInteractionResponse> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(res);
+        when(future.actionGet(anyLong())).thenReturn(res);
         when(client.execute(eq(CreateInteractionAction.INSTANCE), any())).thenReturn(future);
         String actual = memoryClient.createInteraction("cid", "input", "prompt", "answer", "origin", "hits");
         assertEquals(id, actual);

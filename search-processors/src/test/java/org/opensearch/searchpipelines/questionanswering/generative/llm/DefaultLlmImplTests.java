@@ -81,14 +81,39 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
         ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
         ActionFuture<MLOutput> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(mlOutput);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
         when(mlClient.predict(any(), any())).thenReturn(future);
-        ChatCompletionInput input = new ChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList());
+        ChatCompletionInput input = new ChatCompletionInput("model", "question", Collections.emptyList(),
+            Collections.emptyList(), 0, "prompt", "instructions");
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
         MLInput mlInput = captor.getValue();
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
         assertEquals("answer", (String) output.getAnswers().get(0));
+    }
+
+    public void testChatCompletionThrowingError() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        String errorMessage = "throttled";
+        Map<String, String> messageMap = Map.of("message", errorMessage);
+        Map<String, ?> dataAsMap = Map.of("error", messageMap);
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput("model", "question", Collections.emptyList(),
+            Collections.emptyList(), 0, "prompt", "instructions");
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals(errorMessage, (String) output.getErrors().get(0));
     }
 
     private boolean isJson(String Json) {

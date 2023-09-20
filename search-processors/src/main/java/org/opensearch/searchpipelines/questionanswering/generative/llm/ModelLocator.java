@@ -30,6 +30,7 @@ import org.opensearch.client.Client;
 public class ModelLocator {
 
     public static Llm getLlm(String modelId, Client client) {
+
         return new DefaultLlmImpl(modelId, client);
     }
 

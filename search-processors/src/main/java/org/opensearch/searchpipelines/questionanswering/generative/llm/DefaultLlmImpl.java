@@ -48,6 +48,7 @@ public class DefaultLlmImpl implements Llm {
     private static final String CONNECTOR_OUTPUT_MESSAGE = "message";
     private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
     private static final String CONNECTOR_OUTPUT_MESSAGE_CONTENT = "content";
+    private static final String CONNECTOR_OUTPUT_ERROR = "error";
 
     private final String openSearchModelId;
 
@@ -75,13 +76,14 @@ public class DefaultLlmImpl implements Llm {
 
         Map<String, String> inputParameters = new HashMap<>();
         inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
-        String messages = PromptUtil.getChatCompletionPrompt(chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts());
+        String messages = PromptUtil.getChatCompletionPrompt(chatCompletionInput.getSystemPrompt(), chatCompletionInput.getUserInstructions(),
+            chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts());
         inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
         log.info("Messages to LLM: {}", messages);
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(inputParameters).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
         ActionFuture<MLOutput> future = mlClient.predict(this.openSearchModelId, mlInput);
-        ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet();
+        ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet(chatCompletionInput.getTimeoutInSeconds() * 1000);
 
         // Response from a remote model
         Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
@@ -90,11 +92,23 @@ public class DefaultLlmImpl implements Llm {
         // TODO dataAsMap can be null or can contain information such as throttling.  Handle non-happy cases.
 
         List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
-        Map firstChoiceMap = (Map) choices.get(0);
-        log.info("Choices: {}", firstChoiceMap.toString());
-        Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
-        log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
-
-        return new ChatCompletionOutput(List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT)));
+        List<Object> answers = null;
+        List<String> errors = null;
+        if (choices == null) {
+            /*
+             * error={message=This model's maximum context length is 4097 tokens. However, your messages resulted in 4456 tokens.
+             *                Please reduce the length of the messages.,
+             *        type=invalid_request_error, param=messages, code=context_length_exceeded}
+             */
+            Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
+            errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
+        } else {
+            Map firstChoiceMap = (Map) choices.get(0);
+            log.info("Choices: {}", firstChoiceMap.toString());
+            Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
+            log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+            answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+        }
+        return new ChatCompletionOutput(answers, errors);
     }
 }
