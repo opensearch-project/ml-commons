@@ -21,9 +21,19 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.output.MLTrainingOutput;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -57,6 +67,12 @@ public class MachineLearningClientTest {
 
     @Mock
     SearchResponse searchResponse;
+
+    @Mock
+    MLRegisterModelResponse registerModelResponse;
+
+    @Mock
+    MLDeployModelResponse deployModelResponse;
 
     private String modekId = "test_model_id";
     private MLModel mlModel;
@@ -131,6 +147,16 @@ public class MachineLearningClientTest {
             @Override
             public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
                 listener.onResponse(searchResponse);
+            }
+
+            @Override
+            public void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener) {
+                listener.onResponse(registerModelResponse);
+            }
+
+            @Override
+            public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+                listener.onResponse(deployModelResponse);
             }
         };
     }
@@ -250,5 +276,32 @@ public class MachineLearningClientTest {
     @Test
     public void searchTask() {
         assertEquals(searchResponse, machineLearningClient.searchTask(new SearchRequest()).actionGet());
+    }
+
+    @Test
+    public void register() {
+        MLModelConfig config = TextEmbeddingModelConfig.builder()
+                .modelType("testModelType")
+                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(100)
+                .build();
+        MLRegisterModelInput mlInput = MLRegisterModelInput.builder()
+                .functionName(FunctionName.KMEANS)
+                .modelName("testModelName")
+                .version("testModelVersion")
+                .modelGroupId("modelGroupId")
+                .url("url")
+                .modelFormat(MLModelFormat.ONNX)
+                .modelConfig(config)
+                .deployModel(true)
+                .modelNodeIds(new String[]{"modelNodeIds" })
+                .build();
+        assertEquals(registerModelResponse, machineLearningClient.register(mlInput).actionGet());
+    }
+
+    @Test
+    public void deploy() {
+        assertEquals(deployModelResponse, machineLearningClient.deploy("modelId").actionGet());
     }
 }
