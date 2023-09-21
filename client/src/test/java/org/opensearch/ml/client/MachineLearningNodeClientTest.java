@@ -31,13 +31,20 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -46,6 +53,10 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
@@ -108,6 +119,12 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<SearchResponse> searchTaskActionListener;
+
+    @Mock
+    ActionListener<MLRegisterModelResponse> RegisterModelActionListener;
+
+    @Mock
+    ActionListener<MLDeployModelResponse> DeployModelActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -552,6 +569,67 @@ public class MachineLearningNodeClientTest {
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();
         assertEquals(taskId, source.get(MLTask.TASK_ID_FIELD));
         assertEquals(modelId, source.get(MLTask.MODEL_ID_FIELD));
+    }
+
+    @Test
+    public void register() {
+        String taskId = "taskId";
+        String status = MLTaskState.CREATED.name();
+        FunctionName functionName = FunctionName.KMEANS;
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelResponse> actionListener = invocation.getArgument(2);
+            MLRegisterModelResponse output = new MLRegisterModelResponse(taskId, status);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLRegisterModelAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        MLModelConfig config = TextEmbeddingModelConfig.builder()
+                .modelType("testModelType")
+                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+                .embeddingDimension(100)
+                .build();
+        MLRegisterModelInput mlInput = MLRegisterModelInput.builder()
+                .functionName(functionName)
+                .modelName("testModelName")
+                .version("testModelVersion")
+                .modelGroupId("modelGroupId")
+                .url("url")
+                .modelFormat(MLModelFormat.ONNX)
+                .modelConfig(config)
+                .deployModel(true)
+                .modelNodeIds(new String[]{"modelNodeIds" })
+                .build();
+        machineLearningNodeClient.register(mlInput, RegisterModelActionListener);
+
+        verify(client).execute(eq(MLRegisterModelAction.INSTANCE), isA(MLRegisterModelRequest.class), any());
+        verify(RegisterModelActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(taskId, (argumentCaptor.getValue()).getTaskId());
+        assertEquals(status, (argumentCaptor.getValue()).getStatus());
+    }
+
+    @Test
+    public void deploy() {
+        String taskId = "taskId";
+        String status = MLTaskState.CREATED.name();
+        MLTaskType mlTaskType = MLTaskType.DEPLOY_MODEL;
+        String modelId = "modelId";
+        FunctionName functionName = FunctionName.KMEANS;
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
+            MLDeployModelResponse output = new MLDeployModelResponse(taskId, mlTaskType, status);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLDeployModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLDeployModelResponse.class);
+        machineLearningNodeClient.deploy(modelId, DeployModelActionListener);
+
+        verify(client).execute(eq(MLDeployModelAction.INSTANCE), isA(MLDeployModelRequest.class), any());
+        verify(DeployModelActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(taskId, (argumentCaptor.getValue()).getTaskId());
+        assertEquals(status, (argumentCaptor.getValue()).getStatus());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
