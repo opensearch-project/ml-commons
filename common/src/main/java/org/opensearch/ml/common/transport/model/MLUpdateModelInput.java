@@ -43,7 +43,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String connectorId;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelInput(String modelId, String description, String name, String modelGroupId, MLModelConfig modelConfig, Map<String, Object> connector, String connectorId) {
+    public MLUpdateModelInput(String modelId, String description, String name, String modelGroupId, MLModelConfig modelConfig, String connectorId) {
         this.modelId = modelId;
         this.description = description;
         this.name = name;
@@ -102,7 +102,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     }
 
     public static MLUpdateModelInput parse(XContentParser parser, String modelId) throws IOException {
-        MLUpdateModelInput input = new MLUpdateModelInput(modelId, null, null, null, null, null, null);
+        MLUpdateModelInput input = new MLUpdateModelInput(modelId, null, null, null, null, null);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
