@@ -5,11 +5,14 @@
 
 package org.opensearch.ml.breaker;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_SHORTAGE_THRESHOLD;
 import java.io.File;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.exception.MLException;
 
 /**
@@ -20,6 +23,7 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
     private static final String ML_DISK_CB = "Disk Circuit Breaker";
     public static final long DEFAULT_DISK_SHORTAGE_THRESHOLD = 5L;
     private static final long GB = 1024 * 1024 * 1024;
+    private volatile float diskShortageThreshold = 5L;
     private String diskDir;
 
     public DiskCircuitBreaker(String diskDir) {
@@ -30,6 +34,12 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
     public DiskCircuitBreaker(long threshold, String diskDir) {
         super(threshold);
         this.diskDir = diskDir;
+    }
+
+    public DiskCircuitBreaker(Settings settings, ClusterService clusterService){
+        super(DEFAULT_DISK_SHORTAGE_THRESHOLD);
+        this.diskShortageThreshold = ML_COMMONS_DISK_SHORTAGE_THRESHOLD.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_DISK_SHORTAGE_THRESHOLD, it -> diskShortageThreshold = it);
     }
 
     @Override

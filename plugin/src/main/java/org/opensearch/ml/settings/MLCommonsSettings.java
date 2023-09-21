@@ -165,4 +165,7 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+    
+    public static final Setting<Float> ML_COMMONS_DISK_SHORTAGE_THRESHOLD = Setting
+        .floatSetting("plugins.ml_commons.disk_shortage_threshold", 5L, 10L, 1L, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
