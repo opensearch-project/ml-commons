@@ -8,19 +8,34 @@ package org.opensearch.ml.client;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelInput;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -30,6 +45,10 @@ import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
@@ -40,9 +59,12 @@ import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 
+import java.io.IOException;
+import java.time.Instant;
 import java.util.Map;
 import java.util.function.Function;
 
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.input.Constants.ASYNC;
 import static org.opensearch.ml.common.input.Constants.MODELID;
 import static org.opensearch.ml.common.input.Constants.PREDICT;
@@ -188,6 +210,22 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLTaskSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
             listener.onResponse(searchResponse);
         }, listener::onFailure));
+    }
+
+    @Override
+    public void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener) {
+        MLRegisterModelRequest registerRequest = new MLRegisterModelRequest(mlInput);
+        client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
+            listener.onFailure(e);
+        }));
+    }
+
+    @Override
+    public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, false);
+        client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, ActionListener.wrap(listener::onResponse, e -> {
+            listener.onFailure(e);
+        }));
     }
 
     private ActionListener<MLTaskResponse> getMlPredictionTaskResponseActionListener(ActionListener<MLOutput> listener) {
