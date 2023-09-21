@@ -450,9 +450,9 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     public void testCohereGenerateTextModel() throws IOException, InterruptedException {
         // Skip test if key is null
-        if (COHERE_KEY == null) {
+        /*if (COHERE_KEY == null) {
             return;
-        }
+        }*/
         String entity = "{\n"
             + "  \"name\": \"Cohere generate text model Connector\",\n"
             + "  \"description\": \"The connector to public Cohere generate text model service\",\n"
@@ -503,6 +503,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
+        logger.info("$$$SARAT$$$ " + responseMap);
         List responseList = (List) responseMap.get("inference_results");
         responseMap = (Map) responseList.get(0);
         responseList = (List) responseMap.get("output");
