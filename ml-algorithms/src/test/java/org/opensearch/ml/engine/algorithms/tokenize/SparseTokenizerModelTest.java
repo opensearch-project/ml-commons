@@ -150,7 +150,7 @@ public class SparseTokenizerModelTest {
             ModelTensor tensor = mlModelTensors.get(0);
             Map<String, ?> resultMap = tensor.getDataAsMap();
             assertEquals(resultMap.size(), 1);
-            List< Map<String, Float>>  resultList = (List< Map<String, Float>>) resultMap.get("response");
+            List<Map<String, Float>>  resultList = (List< Map<String, Float>>) resultMap.get("response");
             assertEquals(resultList.size(), 1);
             Map<String, Float> result = resultList.get(0);
             assertEquals(result.size(), 3);

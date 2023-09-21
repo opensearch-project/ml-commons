@@ -71,12 +71,9 @@ public class SparseTokenizerModel extends DLModel {
                             token -> token,
                             token -> idf.getOrDefault(token, 1.0f)
                     ));
-            Map<String, List<Map<String, Float> > > resultMap = new HashMap<>();
-            List<Map<String, Float> > listOfTokenWeights = new ArrayList<>();
-            listOfTokenWeights.add(tokenWeights);
-            resultMap.put(ML_MAP_RESPONSE_KEY, listOfTokenWeights);
+            Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeights));
             ModelTensor tensor = ModelTensor.builder()
-                    .dataAsMap(resultMap)
+                    .dataAsMap(wrappedMap)
                     .build();
             outputs.add(tensor);
             ModelTensors modelTensorOutput = new ModelTensors(outputs);

@@ -82,13 +82,10 @@ public class SparseEncodingTranslator implements ServingTranslator {
             NDArray ndArray = iterator.next();
             String name = ndArray.getName();
             Map<String, Float> tokenWeightsMap = convertOutput(ndArray);
-            Map<String, List<Map<String, Float> > > resultMap = new HashMap<>();
-            List<Map<String, Float> > listOftokenWeights = new ArrayList<>();
-            listOftokenWeights.add(tokenWeightsMap);
-            resultMap.put(ML_MAP_RESPONSE_KEY, listOftokenWeights);
+            Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeightsMap));
             ModelTensor tensor = ModelTensor.builder()
                     .name(name)
-                    .dataAsMap(resultMap)
+                    .dataAsMap(wrappedMap)
                     .build();
             outputs.add(tensor);
         }
