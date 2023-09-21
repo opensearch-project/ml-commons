@@ -15,7 +15,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLCommonsClassLoader;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -104,7 +103,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
             }
-            if (url != null && modelConfig == null && functionName != FunctionName.TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) {
+            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) {
                 throw new IllegalArgumentException("model config is null");
             }
         }

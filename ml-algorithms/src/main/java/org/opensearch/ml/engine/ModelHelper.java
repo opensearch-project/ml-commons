@@ -237,7 +237,7 @@ public class ModelHelper {
                 }
             }
         }
-        if (!hasPtFile && !hasOnnxFile && functionName != FunctionName.TOKENIZE) {
+        if (!hasPtFile && !hasOnnxFile && functionName != FunctionName.SPARSE_TOKENIZE) {
             throw new IllegalArgumentException("Can't find model file");
         }
         if (!hasTokenizerFile) {

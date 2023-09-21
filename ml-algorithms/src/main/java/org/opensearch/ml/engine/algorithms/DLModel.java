@@ -79,10 +79,10 @@ public abstract class DLModel implements Predictable {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<ModelTensorOutput>) () -> {
                 Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-                if (predictors == null && mlInput.getAlgorithm() != FunctionName.TOKENIZE) {
+                if (!isModelReady()) {
                     throw new MLException("model not deployed.");
                 }
-                return innerPredict(mlInput);
+                return this.predict(modelId, mlInput);
             });
         } catch (Throwable e) {
             String errorMsg = "Failed to inference " + mlInput.getAlgorithm() + " model: " + modelId;
@@ -100,7 +100,7 @@ public abstract class DLModel implements Predictable {
         return predictors[currentDevice];
     }
 
-    public abstract ModelTensorOutput innerPredict(MLInput input) throws TranslateException;
+    public abstract ModelTensorOutput predict(String modelId, MLInput input) throws TranslateException;
 
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
@@ -178,10 +178,10 @@ public abstract class DLModel implements Predictable {
 
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {}
 
-    protected void innerLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
-                                  String engine,
-                                  Path modelPath,
-                                  MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
+    protected void doLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
+                               String engine,
+                               Path modelPath,
+                               MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
         devices = Engine.getEngine(engine).getDevices();
         for (int i = 0; i < devices.length; i++) {
             log.debug("load model {} to device {}: {}", modelId, i, devices[i]);
@@ -272,7 +272,7 @@ public abstract class DLModel implements Predictable {
                             }
                         }
                     }
-                    innerLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
+                    doLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
                     return null;
                 } catch (Throwable e) {
                     String errorMessage = "Failed to deploy model " + modelId;

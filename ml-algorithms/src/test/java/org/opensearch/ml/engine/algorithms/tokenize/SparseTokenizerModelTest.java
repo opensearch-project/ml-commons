@@ -21,7 +21,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -46,7 +45,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 
-public class TokenizerModelTest {
+public class SparseTokenizerModelTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -58,7 +57,7 @@ public class TokenizerModelTest {
     private MLModel model;
     private ModelHelper modelHelper;
     private Map<String, Object> params;
-    private TokenizerModel tokenizerModel;
+    private SparseTokenizerModel sparseTokenizerModel;
     private Path mlCachePath;
     private Path mlConfigPath;
     private TextDocsInputDataSet inputDataSet;
@@ -72,13 +71,13 @@ public class TokenizerModelTest {
         mlEngine = new MLEngine(mlCachePath, encryptor);
         modelId = "test_model_id";
         modelName = "test_model_name";
-        functionName = FunctionName.TOKENIZE;
+        functionName = FunctionName.SPARSE_TOKENIZE;
         version = "1";
         model = MLModel.builder()
                 .modelFormat(MLModelFormat.TORCH_SCRIPT)
                 .name("test_model_name")
                 .modelId("test_model_id")
-                .algorithm(FunctionName.TOKENIZE)
+                .algorithm(FunctionName.SPARSE_TOKENIZE)
                 .version("1.0.0")
                 .modelState(MLModelState.TRAINED)
                 .build();
@@ -88,14 +87,14 @@ public class TokenizerModelTest {
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
-        tokenizerModel = new TokenizerModel();
+        sparseTokenizerModel = new SparseTokenizerModel();
 
         inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is dog")).build();
     }
 
     @Test
-    public void test_InnerLoadModel() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
-        TokenizerModel tokenizerModel = mock(TokenizerModel.class);
+    public void test_doLoadModel() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
+        SparseTokenizerModel sparseTokenizerModel = mock(SparseTokenizerModel.class);
         Predictor<Input, Output> predictor = mock(Predictor.class);
         List<Predictor<Input, Output>> predictorList = Collections.singletonList(predictor);
         ZooModel<Input, Output> model = mock(ZooModel.class);
@@ -104,12 +103,12 @@ public class TokenizerModelTest {
         Path modelPath = mock(Path.class);
         when(modelPath.resolve((String) any())).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()));
         MLModelConfig modelConfig = mock(MLModelConfig.class);
-        tokenizerModel.innerLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
+        sparseTokenizerModel.doLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
     }
 
     @Test
-    public void test_InnerPredict() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
-        TokenizerModel tokenizerModel = new TokenizerModel();
+    public void test_Predict() throws URISyntaxException, TranslateException, ModelNotFoundException, MalformedModelException, IOException {
+        SparseTokenizerModel sparseTokenizerModel = new SparseTokenizerModel();
         Predictor<Input, Output> predictor = mock(Predictor.class);
         List<Predictor<Input, Output>> predictorList = Collections.singletonList(predictor);
         ZooModel<Input, Output> model = mock(ZooModel.class);
@@ -117,7 +116,7 @@ public class TokenizerModelTest {
         String engine = "engine";
         Path modelPath = Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent();
         MLModelConfig modelConfig = mock(MLModelConfig.class);
-        tokenizerModel.innerLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
+        sparseTokenizerModel.doLoadModel(predictorList, modelList, engine, modelPath, modelConfig);
 
         MLInput mlInput = mock(MLInput.class);
         TextDocsInputDataSet textDocsInputDataSet = mock(TextDocsInputDataSet.class);
@@ -126,7 +125,7 @@ public class TokenizerModelTest {
         when(textDocsInputDataSet.getResultFilter()).thenReturn(null);
         List<String> docs = Collections.singletonList("hello world");
         when(textDocsInputDataSet.getDocs()).thenReturn(docs);
-        ModelTensorOutput modelTensorOutput = tokenizerModel.innerPredict(mlInput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) sparseTokenizerModel.predict(null, mlInput);
         assertNotNull(modelTensorOutput);
         List<ModelTensors> modelTensorsList = modelTensorOutput.getMlModelOutputs();
         assertEquals(1, modelTensorsList.size());
@@ -139,9 +138,9 @@ public class TokenizerModelTest {
 
     @Test
     public void initModel_predict_Tokenize() throws URISyntaxException, TranslateException {
-        tokenizerModel.initModel(model, params, encryptor);
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)tokenizerModel.predict(mlInput);
+        sparseTokenizerModel.initModel(model, params, encryptor);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput) sparseTokenizerModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -165,7 +164,7 @@ public class TokenizerModelTest {
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("tokenize-demo.zip").toURI()));
-        tokenizerModel.initModel(model, params, encryptor);
+        sparseTokenizerModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -175,7 +174,7 @@ public class TokenizerModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("tokenize-demo.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
-        tokenizerModel.initModel(model, params, encryptor);
+        sparseTokenizerModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -183,7 +182,7 @@ public class TokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model id is null");
         model.setModelId(null);
-        tokenizerModel.initModel(model, params, encryptor);
+        sparseTokenizerModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -193,7 +192,7 @@ public class TokenizerModelTest {
             params.put(MODEL_HELPER, modelHelper);
             params.put(MODEL_ZIP_FILE, new File(getClass().getResource("../text_embedding/wrong_zip_with_2_pt_file.zip").toURI()));
             params.put(ML_ENGINE, mlEngine);
-            tokenizerModel.initModel(model, params, encryptor);
+            sparseTokenizerModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals(MLException.class, e.getClass());
             Throwable rootCause = ExceptionUtils.getRootCause(e);
@@ -207,14 +206,14 @@ public class TokenizerModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("wrong function name");
         MLModel mlModel = model.toBuilder().algorithm(FunctionName.KMEANS).build();
-        tokenizerModel.initModel(mlModel, params, encryptor);
+        sparseTokenizerModel.initModel(mlModel, params, encryptor);
     }
 
     @Test
     public void predict_NullModelHelper() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build());
+        sparseTokenizerModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -223,34 +222,34 @@ public class TokenizerModelTest {
         exceptionRule.expectMessage("model not deployed");
         model.setModelId(null);
         try {
-            tokenizerModel.initModel(model, params, encryptor);
+            sparseTokenizerModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals("model id is null", e.getMessage());
         }
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build());
+        sparseTokenizerModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build());
     }
 
     @Test
-    public void predict_AfterModelClosed() {
+    public void predict_AfterModelClosed() throws TranslateException {
         exceptionRule.expect(MLException.class);
-        exceptionRule.expectMessage("Failed to inference TOKENIZE");
-        tokenizerModel.initModel(model, params, encryptor);
-        tokenizerModel.close();
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build());
+        exceptionRule.expectMessage("Failed to inference SPARSE_TOKENIZE");
+        sparseTokenizerModel.initModel(model, params, encryptor);
+        sparseTokenizerModel.close();
+        sparseTokenizerModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void parseModelTensorOutput_NullOutput() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("No output generated");
-        tokenizerModel.parseModelTensorOutput(null, null);
+        sparseTokenizerModel.parseModelTensorOutput(null, null);
     }
 
     @Test
     public void predict_BeforeInitingModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        tokenizerModel.predict(MLInput.builder().algorithm(FunctionName.TOKENIZE).inputDataset(inputDataSet).build(), model);
+        sparseTokenizerModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_TOKENIZE).inputDataset(inputDataSet).build(), model);
     }
 
     @After

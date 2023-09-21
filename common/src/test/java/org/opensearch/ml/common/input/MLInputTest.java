@@ -10,11 +10,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.core.common.Strings;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -136,7 +134,7 @@ public class MLInputTest {
     @Test
     public void parse_NLP_Related() throws IOException {
         parse_NLPModel(FunctionName.TEXT_EMBEDDING);
-        parse_NLPModel(FunctionName.TOKENIZE);
+        parse_NLPModel(FunctionName.SPARSE_TOKENIZE);
         parse_NLPModel(FunctionName.SPARSE_ENCODING);
     }
 
@@ -156,7 +154,7 @@ public class MLInputTest {
     @Test
     public void parse_NLPRelated_NullResultFilter() throws IOException {
         parse_NLPModel_NullResultFilter(FunctionName.TEXT_EMBEDDING);
-        parse_NLPModel_NullResultFilter(FunctionName.TOKENIZE);
+        parse_NLPModel_NullResultFilter(FunctionName.SPARSE_TOKENIZE);
         parse_NLPModel_NullResultFilter(FunctionName.SPARSE_ENCODING);
     }
 

@@ -25,6 +25,8 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.*;
 
+import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
+
 public class SparseEncodingTranslator implements ServingTranslator {
     private HuggingFaceTokenizer tokenizer;
 
@@ -83,7 +85,7 @@ public class SparseEncodingTranslator implements ServingTranslator {
             Map<String, List<Map<String, Float> > > resultMap = new HashMap<>();
             List<Map<String, Float> > listOftokenWeights = new ArrayList<>();
             listOftokenWeights.add(tokenWeightsMap);
-            resultMap.put("response", listOftokenWeights);
+            resultMap.put(ML_MAP_RESPONSE_KEY, listOftokenWeights);
             ModelTensor tensor = ModelTensor.builder()
                     .name(name)
                     .dataAsMap(resultMap)

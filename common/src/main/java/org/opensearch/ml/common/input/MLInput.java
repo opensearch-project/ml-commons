@@ -239,7 +239,7 @@ public class MLInput implements Input {
             }
         }
         MLInputDataset inputDataSet = null;
-        if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.TOKENIZE) {
+        if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.SPARSE_TOKENIZE) {
             ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
         }

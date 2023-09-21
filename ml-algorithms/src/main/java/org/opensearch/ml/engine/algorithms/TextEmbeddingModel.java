@@ -23,7 +23,7 @@ import java.util.Map;
 
 public abstract class TextEmbeddingModel extends DLModel {
     @Override
-    public ModelTensorOutput innerPredict(MLInput mlInput) throws TranslateException {
+    public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;

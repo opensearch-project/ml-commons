@@ -84,7 +84,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (modelContentHashValue == null) {
             throw new IllegalArgumentException("model content hash value is null");
         }
-        if (modelConfig == null && functionName != FunctionName.TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) {
+        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) {
             throw new IllegalArgumentException("model config is null");
         }
         if (totalChunks == null) {

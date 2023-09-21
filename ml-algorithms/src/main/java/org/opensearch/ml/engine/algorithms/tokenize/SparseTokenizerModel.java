@@ -5,15 +5,12 @@
 
 package org.opensearch.ml.engine.algorithms.tokenize;
 
-import ai.djl.Application;
 import ai.djl.MalformedModelException;
-import ai.djl.engine.Engine;
 import ai.djl.huggingface.tokenizers.Encoding;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
-import ai.djl.repository.zoo.Criteria;
 import ai.djl.repository.zoo.ModelNotFoundException;
 import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
@@ -22,49 +19,38 @@ import ai.djl.translate.TranslatorFactory;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.log4j.Log4j2;
-import org.apache.commons.io.FileUtils;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
-import org.opensearch.ml.engine.algorithms.TextEmbeddingModel;
 import org.opensearch.ml.engine.annotation.Function;
-import org.opensearch.ml.engine.utils.ZipUtils;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.opensearch.ml.engine.ModelHelper.*;
-import static org.opensearch.ml.engine.ModelHelper.ONNX_FILE_EXTENSION;
+import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
 @Log4j2
-@Function(FunctionName.TOKENIZE)
-public class TokenizerModel extends DLModel {
+@Function(FunctionName.SPARSE_TOKENIZE)
+public class SparseTokenizerModel extends DLModel {
     private HuggingFaceTokenizer tokenizer;
 
     private Map<String, Float> idf;
 
     @Override
-    public ModelTensorOutput innerPredict(MLInput mlInput) throws TranslateException {
+    public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
@@ -88,7 +74,7 @@ public class TokenizerModel extends DLModel {
             Map<String, List<Map<String, Float> > > resultMap = new HashMap<>();
             List<Map<String, Float> > listOfTokenWeights = new ArrayList<>();
             listOfTokenWeights.add(tokenWeights);
-            resultMap.put("response", listOfTokenWeights);
+            resultMap.put(ML_MAP_RESPONSE_KEY, listOfTokenWeights);
             ModelTensor tensor = ModelTensor.builder()
                     .dataAsMap(resultMap)
                     .build();
@@ -100,10 +86,10 @@ public class TokenizerModel extends DLModel {
         return new ModelTensorOutput(tensorOutputs);
     }
 
-    protected void innerLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
-                                  String engine,
-                                  Path modelPath,
-                                  MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
+    protected void doLoadModel(List<Predictor<Input, Output>> predictorList, List<ZooModel<Input, Output>> modelList,
+                               String engine,
+                               Path modelPath,
+                               MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
         idf = new HashMap<>();
         if (Files.exists(modelPath.resolve("idf.json"))){

@@ -166,7 +166,7 @@ public class MLCommonsClassLoaderTests {
     @Test
     public void testClassLoader_MLInput() throws IOException {
         testClassLoader_MLInput_DlModel(FunctionName.TEXT_EMBEDDING);
-        testClassLoader_MLInput_DlModel(FunctionName.TOKENIZE);
+        testClassLoader_MLInput_DlModel(FunctionName.SPARSE_TOKENIZE);
         testClassLoader_MLInput_DlModel(FunctionName.SPARSE_ENCODING);
     }
 
