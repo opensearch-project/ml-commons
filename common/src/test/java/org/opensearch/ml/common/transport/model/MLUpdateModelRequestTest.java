@@ -20,11 +20,11 @@ public class MLUpdateModelRequestTest {
 
     private MLUpdateModelInput updateModelInput;
     private TextEmbeddingModelConfig config;
-    private Connector connector;
+    private Map<String, Object> connector;
 
     @Before
     public void setUp(){
-        connector = HttpConnectorTest.createHttpConnector();
+        connector = Map.of("test-connector-key","test-connector-value");
 
         MLModelConfig config = TextEmbeddingModelConfig.builder()
                 .modelType("testModelType")
@@ -37,7 +37,6 @@ public class MLUpdateModelRequestTest {
                 .modelGroupId("modelGroupId")
                 .name("name")
                 .description("description")
-                .modelFormat(MLModelFormat.ONNX)
                 .modelConfig(config)
                 .connector(connector)
                 .connectorId("test-connector_id");

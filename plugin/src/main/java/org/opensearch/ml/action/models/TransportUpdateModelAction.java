@@ -7,14 +7,13 @@ package org.opensearch.ml.action.models;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.FunctionName.REMOTE;
+import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.io.IOException;
-import java.util.Map;
 
-import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -33,15 +32,14 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -56,9 +54,9 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class TransportUpdateModelAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
-    MLModelManager mlModelManager;
     NamedXContentRegistry xContentRegistry;
     ModelAccessControlHelper modelAccessControlHelper;
+    ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Inject
     public TransportUpdateModelAction(
@@ -66,14 +64,14 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         ActionFilters actionFilters,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        MLModelManager mlModelManager,
+        ConnectorAccessControlHelper connectorAccessControlHelper,
         ModelAccessControlHelper modelAccessControlHelper
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
-        this.mlModelManager = mlModelManager;
         this.xContentRegistry = xContentRegistry;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.connectorAccessControlHelper = connectorAccessControlHelper;
     }
 
     @Override
@@ -81,8 +79,8 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         MLUpdateModelRequest updateModelRequest = MLUpdateModelRequest.fromActionRequest(request);
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
-        String relinkModelGroupId = Strings.hasLength(updateModelInput.getModelGroupId()) ? updateModelInput.getModelGroupId() : null;
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
+
         try {
             updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
         } catch (IOException e) {
@@ -99,8 +97,8 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
             client.get(getModelRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = MLNodeUtils.createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         String algorithmName = "";
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         if (r.getSource() != null && r.getSource().get(ALGORITHM_FIELD) != null) {
                             algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
                         }
@@ -108,12 +106,20 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                                 if (Boolean.TRUE.equals(hasPermission)) {
-                                    updateModel(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
+                                    updateRemoteOrTextEmbeddingModel(
+                                        modelId,
+                                        updateModelInput,
+                                        mlModel,
+                                        user,
+                                        updateRequest,
+                                        actionListener,
+                                        context
+                                    );
                                 } else {
                                     actionListener
                                         .onFailure(
                                             new MLValidationException(
-                                                "User Doesn't have privilege to perform this operation on this model, model ID" + modelId
+                                                "User doesn't have privilege to perform this operation on this model, model ID" + modelId
                                             )
                                         );
                                 }
@@ -127,12 +133,92 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     actionListener
-                        .onFailure(new IllegalArgumentException("Failed to find model to delete with the provided model id: " + modelId));
+                        .onFailure(new IllegalArgumentException("Failed to find model to update with the provided model id: " + modelId));
                 }
             }, e -> actionListener.onFailure(new MLResourceNotFoundException("Fail to find model"))));
         } catch (Exception e) {
             log.error("Failed to update ML model for " + modelId, e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private void updateModelWithRelinkStandAloneConnector(
+        String modelId,
+        String relinkModelGroupId,
+        String relinkConnectorId,
+        MLModel mlModel,
+        User user,
+        UpdateRequest updateRequest,
+        ActionListener<UpdateResponse> actionListener,
+        ThreadContext.StoredContext context
+    ) {
+        if (Strings.hasLength(mlModel.getConnectorId())) {
+            connectorAccessControlHelper
+                .validateConnectorAccess(client, relinkConnectorId, ActionListener.wrap(hasRelinkConnectorPermission -> {
+                    if (Boolean.TRUE.equals(hasRelinkConnectorPermission)) {
+                        updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
+                    } else {
+                        actionListener
+                            .onFailure(
+                                new MLValidationException(
+                                    "You don't have permission to update the connector, connector id: " + relinkConnectorId
+                                )
+                            );
+                    }
+                }, exception -> {
+                    log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", relinkConnectorId, exception);
+                    actionListener.onFailure(exception);
+                }));
+        } else {
+            actionListener
+                .onFailure(
+                    new IllegalArgumentException("This remote does not have a connector_id field, maybe it uses an internal connector.")
+                );
+        }
+    }
+
+    private void updateRemoteOrTextEmbeddingModel(
+        String modelId,
+        MLUpdateModelInput updateModelInput,
+        MLModel mlModel,
+        User user,
+        UpdateRequest updateRequest,
+        ActionListener<UpdateResponse> actionListener,
+        ThreadContext.StoredContext context
+    ) {
+        String relinkModelGroupId = Strings.hasLength(updateModelInput.getModelGroupId()) ? updateModelInput.getModelGroupId() : null;
+        String relinkConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
+
+        if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
+            if (relinkConnectorId == null) {
+                updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
+            } else {
+                actionListener
+                    .onFailure(new IllegalArgumentException("Trying to update the connector or connector_id field on a local model"));
+            }
+        } else if (mlModel.getAlgorithm() == REMOTE) {
+            if (relinkConnectorId == null) {
+                updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
+            } else {
+                updateModelWithRelinkStandAloneConnector(
+                    modelId,
+                    relinkModelGroupId,
+                    relinkConnectorId,
+                    mlModel,
+                    user,
+                    updateRequest,
+                    actionListener,
+                    context
+                );
+            }
+        } else {
+            actionListener
+                .onFailure(
+                    new MLValidationException(
+                        "User doesn't have privilege to perform this operation on this function category"
+                            + mlModel.getAlgorithm().toString()
+                    )
+                );
         }
     }
 
@@ -155,7 +241,7 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         }), context::restore);
     }
 
-    private void updateModel(
+    private void updateModelWithOrWithoutRelinkModelGroup(
         String modelId,
         String relinkModelGroupId,
         User user,
@@ -182,30 +268,6 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
             }));
         } else {
             client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
-        }
-    }
-
-    @Deprecated
-    private void updateModel(
-        String modelId,
-        Map<String, Object> modelSource,
-        MLUpdateModelInput updateModelInput,
-        ActionListener<UpdateResponse> actionListener
-    ) {
-        if (StringUtils.isNotBlank(updateModelInput.getDescription())) {
-            modelSource.put(MLModel.DESCRIPTION_FIELD, updateModelInput.getDescription());
-        }
-
-        UpdateRequest updateModelRequest = new UpdateRequest();
-        updateModelRequest.index(ML_MODEL_INDEX).id(modelId).doc(modelSource);
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.update(updateModelRequest, ActionListener.wrap(actionListener::onResponse, e -> {
-                log.error("Failed to update ML model for " + modelId, e);
-                throw new MLException("Failed to update ML model for " + modelId, e);
-            }));
-        } catch (Exception e) {
-            logException("Failed to update ML model for " + modelId, e, log);
-            actionListener.onFailure(e);
         }
     }
 }

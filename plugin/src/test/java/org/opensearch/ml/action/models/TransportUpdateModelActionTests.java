@@ -40,6 +40,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -88,6 +89,9 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -98,7 +102,14 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
 
         transportUpdateModelAction = spy(
-            new TransportUpdateModelAction(transportService, actionFilters, client, xContentRegistry, modelAccessControlHelper)
+            new TransportUpdateModelAction(
+                transportService,
+                actionFilters,
+                client,
+                xContentRegistry,
+                connectorAccessControlHelper,
+                modelAccessControlHelper
+            )
         );
 
         threadContext = new ThreadContext(settings);

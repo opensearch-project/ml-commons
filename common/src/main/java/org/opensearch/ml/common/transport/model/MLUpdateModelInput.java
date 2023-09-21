@@ -19,6 +19,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
+import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
@@ -31,8 +32,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     public static final String MODEL_NAME_FIELD = "name"; // optional
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // optional
     public static final String MODEL_CONFIG_FIELD = "model_config"; // optional
-    public static final String CONNECTOR_FIELD = "connector"; // optional Access control? Re-use?
-    public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional Access control? Case-switch?
+    public static final String CONNECTOR_ID_FIELD = "connector_id"; // optional
 
     @Getter
     private String modelId;
@@ -40,17 +40,15 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     private String name;
     private String modelGroupId;
     private MLModelConfig modelConfig;
-    private Connector connector;
     private String connectorId;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelInput(String modelId, String description, String name, String modelGroupId, MLModelConfig modelConfig, Connector connector, String connectorId) {
+    public MLUpdateModelInput(String modelId, String description, String name, String modelGroupId, MLModelConfig modelConfig, Map<String, Object> connector, String connectorId) {
         this.modelId = modelId;
         this.description = description;
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.modelConfig = modelConfig;
-        this.connector = connector;
         this.connectorId = connectorId;
     }
 
@@ -61,9 +59,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         this.modelGroupId = in.readOptionalString();
         if (in.readBoolean()) {
             modelConfig = new TextEmbeddingModelConfig(in);
-        }
-        if (in.readBoolean()) {
-            connector = Connector.fromStream(in);
         }
         this.connectorId = in.readOptionalString();
     }
@@ -84,9 +79,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
-        if (connector != null) {
-            builder.field(CONNECTOR_FIELD, connector);
-        }
         if (connectorId != null) {
             builder.field(CONNECTOR_ID_FIELD, connectorId);
         }
@@ -103,12 +95,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
         if (modelConfig != null) {
             out.writeBoolean(true);
             modelConfig.writeTo(out);
-        } else {
-            out.writeBoolean(false);
-        }
-        if (connector != null) {
-            out.writeBoolean(true);
-            connector.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -136,9 +122,6 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     break;
                 case MODEL_CONFIG_FIELD:
                     input.setModelConfig(TextEmbeddingModelConfig.parse(parser));
-                    break;
-                case CONNECTOR_FIELD:
-                    input.setConnector(createConnector(parser));
                     break;
                 case CONNECTOR_ID_FIELD:
                     input.setConnectorId(parser.text());
