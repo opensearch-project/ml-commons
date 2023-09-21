@@ -38,7 +38,6 @@ public class MLUpdateModelRequestTest {
                 .name("name")
                 .description("description")
                 .modelConfig(config)
-                .connector(connector)
                 .connectorId("test-connector_id");
     }
 }
