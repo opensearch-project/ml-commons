@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.apache.logging.log4j.util.Strings;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
@@ -59,9 +58,6 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
         }
 
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
-        if (Strings.isBlank(modelId)) {
-            throw new IOException("Update Model request has no model ID");
-        }
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);

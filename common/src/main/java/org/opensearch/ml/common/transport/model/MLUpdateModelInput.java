@@ -102,35 +102,76 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
     }
 
     public static MLUpdateModelInput parse(XContentParser parser, String modelId) throws IOException {
-        MLUpdateModelInput input = new MLUpdateModelInput(modelId, null, null, null, null, null);
+        String description = null;
+        String name = null;
+        String modelGroupId = null;
+        MLModelConfig modelConfig = null;
+        String connectorId = null;
+
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case MODEL_ID_FIELD:
-                    input.setModelId(parser.text());
-                    break;
                 case DESCRIPTION_FIELD:
-                    input.setDescription(parser.text());
+                    description = parser.text();
                     break;
                 case MODEL_NAME_FIELD:
-                    input.setName(parser.text());
+                    name = parser.text();
                     break;
                 case MODEL_GROUP_ID_FIELD:
-                    input.setModelGroupId(parser.text());
+                    modelGroupId = parser.text();
                     break;
                 case MODEL_CONFIG_FIELD:
-                    input.setModelConfig(TextEmbeddingModelConfig.parse(parser));
+                    modelConfig = TextEmbeddingModelConfig.parse(parser);
                     break;
                 case CONNECTOR_ID_FIELD:
-                    input.setConnectorId(parser.text());
+                    connectorId = parser.text();
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return input;
+        return new MLUpdateModelInput(modelId, description, name, modelGroupId, modelConfig, connectorId);
+    }
+
+    public static MLUpdateModelInput parse(XContentParser parser) throws IOException {
+        String modelId = null;
+        String description = null;
+        String name = null;
+        String modelGroupId = null;
+        MLModelConfig modelConfig = null;
+        String connectorId = null;
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+            switch (fieldName) {
+                case MODEL_ID_FIELD:
+                    modelId = parser.text();
+                    break;
+                case DESCRIPTION_FIELD:
+                    description = parser.text();
+                    break;
+                case MODEL_NAME_FIELD:
+                    name = parser.text();
+                    break;
+                case MODEL_GROUP_ID_FIELD:
+                    modelGroupId = parser.text();
+                    break;
+                case MODEL_CONFIG_FIELD:
+                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    break;
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.text();
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        return new MLUpdateModelInput(modelId, description, name, modelGroupId, modelConfig, connectorId);
     }
 }
