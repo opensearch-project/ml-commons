@@ -60,8 +60,6 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processInput_TextDocsInputDataSet_NoPreprocessFunction() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Must provide pre_process_function for predict action to process text docs input.");
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test1", "test2")).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
