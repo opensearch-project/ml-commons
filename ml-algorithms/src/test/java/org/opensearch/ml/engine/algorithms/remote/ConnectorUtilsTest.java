@@ -24,7 +24,6 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.utils.GsonUtil;
 import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
@@ -37,6 +36,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 public class ConnectorUtilsTest {
 
@@ -126,7 +126,7 @@ public class ConnectorUtilsTest {
     @Test
     public void processInput_TextDocsInputDataSet_PreprocessFunction_OneTextDoc() {
         List<String> input = Collections.singletonList("test_value");
-        String inputJson = GsonUtil.toJson(input);
+        String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
                 "{\"input\": \"${parameters.input}\"}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, "texts");
     }
@@ -136,7 +136,7 @@ public class ConnectorUtilsTest {
         List<String> input = new ArrayList<>();
         input.add("test_value1");
         input.add("test_value2");
-        String inputJson = GsonUtil.toJson(input);
+        String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
                 "{\"input\": ${parameters.input}}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT, "input");
     }

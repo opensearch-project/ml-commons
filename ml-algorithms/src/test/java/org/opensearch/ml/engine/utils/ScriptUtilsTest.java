@@ -39,7 +39,7 @@ public class ScriptUtilsTest {
     @Test
     public void test_executeBuildInPostProcessFunction() {
         List<List<Float>> input = Arrays.asList(Arrays.asList(1.0f, 2.0f), Arrays.asList(3.0f, 4.0f));
-        List<ModelTensor> modelTensors = ScriptUtils.executeBuildInPostProcessFunction(input, MLPostProcessFunction.get(MLPostProcessFunction.NEURAL_SEARCH_EMBEDDING));
+        List<ModelTensor> modelTensors = ScriptUtils.executeBuildInPostProcessFunction(input, MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING));
         assertNotNull(modelTensors);
         assertEquals(2, modelTensors.size());
     }
