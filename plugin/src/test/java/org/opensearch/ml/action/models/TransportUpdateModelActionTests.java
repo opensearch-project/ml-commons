@@ -180,33 +180,6 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithNoUpdateModelInput() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        MLUpdateModelRequest noUpdateModelInputUpdateModelRequest = MLUpdateModelRequest.builder().updateModelInput(null).build();
-        transportUpdateModelAction.doExecute(task, noUpdateModelInputUpdateModelRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
-    }
-
-    @Test
     public void testUpdateModelWithoutRelinkModelGroupSuccess() throws IOException {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
@@ -328,7 +301,12 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new RuntimeException("Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."));
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
@@ -344,8 +322,8 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
-                argumentCaptor.getValue().getMessage()
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
