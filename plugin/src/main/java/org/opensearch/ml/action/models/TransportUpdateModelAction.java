@@ -101,7 +101,8 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         if (r.getSource() != null && r.getSource().get(ALGORITHM_FIELD) != null) {
                             algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
-                        }
+                        } else
+                            throw new RuntimeException("FUNCTION_NAME_FIELD not found for this model, model ID " + modelId);
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
@@ -119,7 +120,7 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                                     actionListener
                                         .onFailure(
                                             new MLValidationException(
-                                                "User doesn't have privilege to perform this operation on this model, model ID" + modelId
+                                                "User doesn't have privilege to perform this operation on this model, model ID " + modelId
                                             )
                                         );
                                 }
@@ -215,7 +216,7 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
             actionListener
                 .onFailure(
                     new MLValidationException(
-                        "User doesn't have privilege to perform this operation on this function category"
+                        "User doesn't have privilege to perform this operation on this function category: "
                             + mlModel.getAlgorithm().toString()
                     )
                 );

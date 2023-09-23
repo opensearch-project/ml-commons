@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
@@ -16,7 +18,9 @@ import java.io.IOException;
 
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetRequest;
@@ -37,6 +41,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
@@ -82,10 +88,12 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     TransportUpdateModelAction transportUpdateModelAction;
-    MLUpdateModelRequest mlUpdateModelRequest;
-    MLUpdateModelInput mlUpdateModelInput;
+    MLUpdateModelRequest updateLocalModelRequest;
+    MLUpdateModelInput updateLocalModelInput;
+    MLUpdateModelRequest updateRemoteModelRequest;
+    MLUpdateModelInput updateRemoteModelInput;
+    MLModel mlModelWithNullFunctionName;
     ThreadContext threadContext;
-
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
@@ -96,8 +104,32 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        mlUpdateModelInput = MLUpdateModelInput.builder().modelId("test_id").description("testDescription").build();
-        mlUpdateModelRequest = MLUpdateModelRequest.builder().updateModelInput(mlUpdateModelInput).build();
+        updateLocalModelInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .name("updated_test_name")
+            .description("updated_test_description")
+            .modelGroupId("updated_test_model_group_id")
+            .build();
+        updateLocalModelRequest = MLUpdateModelRequest.builder().updateModelInput(updateLocalModelInput).build();
+        updateRemoteModelInput = MLUpdateModelInput
+            .builder()
+            .modelId("test_model_id")
+            .name("updated_test_name")
+            .description("updated_test_description")
+            .modelGroupId("updated_test_model_group_id")
+            .connectorId("updated_test_connector_id")
+            .build();
+        updateRemoteModelRequest = MLUpdateModelRequest.builder().updateModelInput(updateRemoteModelInput).build();
+
+        mlModelWithNullFunctionName = MLModel
+                .builder()
+                .name("test_name")
+                .modelId("test_model_id")
+                .modelGroupId("test_model_group_id")
+                .description("test_description")
+                .modelState(MLModelState.REGISTERED)
+                .build();
 
         Settings settings = Settings.builder().build();
 
@@ -117,7 +149,8 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void testUpdateModel_Success() throws IOException {
+    @Test
+    public void testUpdateLocalModelSuccess() throws IOException {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
@@ -130,29 +163,424 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        GetResponse getResponse = prepareMLModel();
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        transportUpdateModelAction.doExecute(task, mlUpdateModelRequest, actionListener);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
-    public GetResponse prepareMLModel() throws IOException {
-        MLModel mlModel = MLModel
-            .builder()
-            .modelId("test_id")
-            .description("test_description")
-            .modelState(MLModelState.REGISTERED)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .build();
+    @Test
+    public void testUpdateLocalModelWithoutRelinkModelGroupSuccess() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        
+        updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithLocalInformationSuccess() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
+        GetResponse getResponse = prepareGetResponse(remoteModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithRemoteInformationSuccess() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
+        GetResponse getResponse = prepareGetResponse(remoteModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithNoStandAloneConnectorFound() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel remoteModelWithInternalConnector = prepareUnsupportedMLModel(FunctionName.REMOTE);
+        GetResponse getResponse = prepareGetResponse(remoteModelWithInternalConnector);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "This remote does not have a connector_id field, maybe it uses an internal connector.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlNoPermission() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
+        GetResponse getResponse = prepareGetResponse(remoteModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(false);
+            return null;
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "You don't have permission to update the connector, connector id: updated_test_connector_id",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelWithModelAccessControlNoPermission() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "User doesn't have privilege to perform this operation on this model, model ID test_model_id",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelWithRelinkModelGroupModelAccessControlNoPermission() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("test_model_group_id"), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        })
+            .when(modelAccessControlHelper)
+            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID updated_test_model_group_id",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelWithModelNotFound() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find model to update with the provided model id: test_model_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateModelWithFunctionNameFieldNotFound() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        GetResponse getResponse = prepareGetResponse(mlModelWithNullFunctionName);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("FUNCTION_NAME_FIELD not found for this model, model ID test_model_id", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateLocalModelWithRemoteInformation() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Trying to update the connector or connector_id field on a local model", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateLocalModelWithUnsupportedFunction() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModelWithUnsupportedFunction = prepareUnsupportedMLModel(FunctionName.KMEANS);
+        GetResponse getResponse = prepareGetResponse(localModelWithUnsupportedFunction);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "User doesn't have privilege to perform this operation on this function category: KMEANS",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    private MLModel prepareMLModel(FunctionName functionName) throws IllegalArgumentException {
+        MLModel mlModel;
+        switch (functionName) {
+            case TEXT_EMBEDDING:
+                mlModel = MLModel
+                    .builder()
+                    .name("test_name")
+                    .modelId("test_model_id")
+                    .modelGroupId("test_model_group_id")
+                    .description("test_description")
+                    .modelState(MLModelState.REGISTERED)
+                    .algorithm(FunctionName.TEXT_EMBEDDING)
+                    .build();
+                return mlModel;
+            case REMOTE:
+                mlModel = MLModel
+                    .builder()
+                    .name("test_name")
+                    .modelId("test_model_id")
+                    .modelGroupId("test_model_group_id")
+                    .description("test_description")
+                    .modelState(MLModelState.REGISTERED)
+                    .algorithm(FunctionName.REMOTE)
+                    .connectorId("test_connector_id")
+                    .build();
+                return mlModel;
+            default:
+                throw new IllegalArgumentException("Please choose from FunctionName.TEXT_EMBEDDING and FunctionName.REMOTE");
+        }
+    }
+
+    private MLModel prepareUnsupportedMLModel(FunctionName unsupportedCase) throws IllegalArgumentException {
+        MLModel mlModel;
+        switch (unsupportedCase) {
+            case REMOTE:
+                mlModel = MLModel
+                        .builder()
+                        .name("test_name")
+                        .modelId("test_model_id")
+                        .description("test_description")
+                        .modelState(MLModelState.REGISTERED)
+                        .algorithm(FunctionName.REMOTE)
+                        .connector(HttpConnector.builder().name("test_connector").protocol("http").build())
+                        .build();
+                return mlModel;
+            case KMEANS:
+                mlModel = MLModel
+                        .builder()
+                        .name("test_name")
+                        .modelId("test_model_id")
+                        .modelState(MLModelState.REGISTERED)
+                        .algorithm(FunctionName.KMEANS)
+                        .build();
+                return mlModel;
+            default:
+                throw new IllegalArgumentException("Please choose from FunctionName.REMOTE and FunctionName.KMEANS");
+        }
+    }
+
+    private GetResponse prepareGetResponse(MLModel mlModel) throws IOException {
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
-        return getResponse;
+        return new GetResponse(getResult);
     }
 }
