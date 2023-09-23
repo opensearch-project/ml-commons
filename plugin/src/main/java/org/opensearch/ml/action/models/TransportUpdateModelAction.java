@@ -223,25 +223,6 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         }
     }
 
-    private ActionListener<UpdateResponse> getUpdateResponseListener(
-        String modelId,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
-    ) {
-        return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
-            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
-                log.info("Model id:{} failed update", modelId);
-                actionListener.onResponse(updateResponse);
-                return;
-            }
-            log.info("Completed Update Model Request, model id:{} updated", modelId);
-            actionListener.onResponse(updateResponse);
-        }, exception -> {
-            log.error("Failed to update ML model: " + modelId, exception);
-            actionListener.onFailure(exception);
-        }), context::restore);
-    }
-
     private void updateModelWithOrWithoutRelinkModelGroup(
         String modelId,
         String relinkModelGroupId,
@@ -270,5 +251,24 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         } else {
             client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
         }
+    }
+
+    private ActionListener<UpdateResponse> getUpdateResponseListener(
+        String modelId,
+        ActionListener<UpdateResponse> actionListener,
+        ThreadContext.StoredContext context
+    ) {
+        return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                log.info("Model id:{} failed update", modelId);
+                actionListener.onResponse(updateResponse);
+                return;
+            }
+            log.info("Completed Update Model Request, model id:{} updated", modelId);
+            actionListener.onResponse(updateResponse);
+        }, exception -> {
+            log.error("Failed to update ML model: " + modelId, exception);
+            actionListener.onFailure(exception);
+        }), context::restore);
     }
 }
