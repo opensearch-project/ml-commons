@@ -46,7 +46,14 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void registerModelGroup() throws InterruptedException {
-        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput("mock_model_group_name", "mock model group desc", null, null, null);
+        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
+            "mock_model_group_name",
+            "mock model group desc",
+            null,
+            null,
+            null,
+            null
+        );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
         this.modelGroupId = response.getModelGroupId();

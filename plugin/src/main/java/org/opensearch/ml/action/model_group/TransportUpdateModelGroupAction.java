@@ -9,10 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
@@ -33,9 +30,11 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.model.ModelGroupTag;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
@@ -88,6 +87,12 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLUpdateModelGroupResponse> listener) {
         MLUpdateModelGroupRequest updateModelGroupRequest = MLUpdateModelGroupRequest.fromActionRequest(request);
         MLUpdateModelGroupInput updateModelGroupInput = updateModelGroupRequest.getUpdateModelGroupInput();
+
+        if (!CollectionUtils.isEmpty(updateModelGroupInput.getTags()) && updateModelGroupInput.getTags().size() > 10) {
+            listener.onFailure(new IllegalArgumentException("The size of tags cannot be larger than 10"));
+            return;
+        }
+
         String modelGroupId = updateModelGroupInput.getModelGroupID();
         User user = RestActionUtils.getUserContext(client);
         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
@@ -102,6 +107,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
                             validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+
+                            deleteTagsOfModelVersion(updateModelGroupInput, mlModelGroup);
+
                             updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener, user);
                         }
                     } else {
@@ -122,6 +130,39 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         } else {
             validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
             updateModelGroup(modelGroupId, new HashMap<>(), updateModelGroupInput, listener, user);
+        }
+    }
+
+    private void deleteTagsOfModelVersion(MLUpdateModelGroupInput updateModelGroupInput, MLModelGroup mlModelGroup) {
+        List<ModelGroupTag> existedTags = mlModelGroup.getTags();
+        List<ModelGroupTag> updatedTags = updateModelGroupInput.getTags();
+
+        if (CollectionUtils.isEmpty(updatedTags)) {
+            return;
+        }
+
+        List<ModelGroupTag> toDeleteTags = new ArrayList<>();
+
+        Set<String> updatedTagKeys = new HashSet<>();
+        for (ModelGroupTag tag : updatedTags) {
+            updatedTagKeys.add(tag.getKey());
+        }
+
+        for (ModelGroupTag tag : existedTags) {
+            if (!updatedTagKeys.contains(tag.getKey())) {
+                toDeleteTags.add(tag);
+            }
+        }
+
+        // Get the model version to be updated based on the modelGroupId and the key value of the tag to
+        // be deleted.
+        List<MLModel> models = new ArrayList<>();
+
+        // Loop through each model version to update the tags and remove the ones that need to be
+        // removed.
+        for (MLModel model : models) {
+            // TODO
+            // model update tags to be deleted
         }
     }
 
@@ -147,6 +188,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         }
         if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
             source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
+        }
+        if (!CollectionUtils.isEmpty(updateModelGroupInput.getTags())) {
+            source.put(MLModelGroup.TAGS_FIELD, updateModelGroupInput.getTags());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
             source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
@@ -179,7 +223,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         } else {
             updateModelGroup(modelGroupId, source, listener);
         }
-
     }
 
     private void updateModelGroup(String modelGroupId, Map<String, Object> source, ActionListener<MLUpdateModelGroupResponse> listener) {
@@ -266,5 +309,4 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             );
         }
     }
-
 }

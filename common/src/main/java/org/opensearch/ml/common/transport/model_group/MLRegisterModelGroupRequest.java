@@ -62,8 +62,7 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
             return (MLRegisterModelGroupRequest) actionRequest;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLRegisterModelGroupRequest(input);
@@ -71,6 +70,5 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to parse ActionRequest into MLCreateModelMetaRequest", e);
         }
-
     }
 }

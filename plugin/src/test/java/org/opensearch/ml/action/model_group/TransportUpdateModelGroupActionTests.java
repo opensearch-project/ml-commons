@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -43,9 +44,8 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
-import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
-import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
-import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
+import org.opensearch.ml.common.model.ModelGroupTag;
+import org.opensearch.ml.common.transport.model_group.*;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.utils.TestHelper;
@@ -351,6 +351,34 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_FailedToExceedTagSizeException() {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IllegalArgumentException("The size of tags cannot be larger than 10"));
+            return null;
+        }).when(client).get(any(), any());
+
+        List<ModelGroupTag> tags = new ArrayList<>();
+        for (int i = 0; i < 11; i++) {
+            tags.add(new ModelGroupTag("key" + i, "type" + i));
+        }
+        MLUpdateModelGroupInput updateModelGroupInput = MLUpdateModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .backendRoles(null)
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(null)
+            .tags(tags)
+            .build();
+        MLUpdateModelGroupRequest actionRequest = new MLUpdateModelGroupRequest(updateModelGroupInput);
+
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("The size of tags cannot be larger than 10", argumentCaptor.getValue().getMessage());
     }
 
     public void test_FailedToGetModelGroupException() {

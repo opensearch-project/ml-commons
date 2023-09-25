@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -26,6 +27,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
@@ -94,7 +96,6 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
             mlModelGroupManager
         );
         assertNotNull(transportRegisterModelGroupAction);
-
     }
 
     public void test_Success() {
@@ -125,6 +126,35 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("Failed to init model group index", argumentCaptor.getValue().getMessage());
     }
 
+    public void test_Failure_exceed_size() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onFailure(new Exception("The size of tags cannot be larger than 10"));
+            return null;
+        }).when(mlModelGroupManager).createModelGroup(any(), any());
+
+        List<ModelGroupTag> tags = new ArrayList<>();
+        for (int i = 0; i < 11; i++) {
+            tags.add(new ModelGroupTag("key" + i, "type" + i));
+        }
+        MLRegisterModelGroupInput registerModelGroupInput = MLRegisterModelGroupInput
+            .builder()
+            .name("modelGroupName")
+            .description("This is a test model group")
+            .backendRoles(null)
+            .modelAccessMode(AccessMode.PUBLIC)
+            .isAddAllBackendRoles(null)
+            .tags(tags)
+            .build();
+        MLRegisterModelGroupRequest actionRequest = new MLRegisterModelGroupRequest(registerModelGroupInput);
+
+        transportRegisterModelGroupAction.doExecute(task, actionRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("The size of tags cannot be larger than 10", argumentCaptor.getValue().getMessage());
+    }
+
     private MLRegisterModelGroupRequest prepareRequest(
         List<String> backendRoles,
         AccessMode modelAccessMode,
@@ -140,5 +170,4 @@ public class TransportRegisterModelGroupActionTests extends OpenSearchTestCase {
             .build();
         return new MLRegisterModelGroupRequest(registerModelGroupInput);
     }
-
 }

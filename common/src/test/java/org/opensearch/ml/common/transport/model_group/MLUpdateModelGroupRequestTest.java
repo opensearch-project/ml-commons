@@ -7,7 +7,7 @@ import static org.junit.Assert.assertSame;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -15,6 +15,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 
 public class MLUpdateModelGroupRequestTest {
 
@@ -22,14 +23,15 @@ public class MLUpdateModelGroupRequestTest {
 
     @Before
     public void setUp(){
-
-        mlUpdateModelGroupInput = mlUpdateModelGroupInput.builder()
+        mlUpdateModelGroupInput = MLUpdateModelGroupInput.builder()
                 .modelGroupID("modelGroupId")
                 .name("name")
                 .description("description")
-                .backendRoles(Arrays.asList("IT"))
+                .backendRoles(List.of("IT"))
                 .modelAccessMode(AccessMode.RESTRICTED)
                 .isAddAllBackendRoles(true)
+                .tags(List.of(new ModelGroupTag("tag1", "String"),
+                    new ModelGroupTag("tag2", "Number")))
                 .build();
     }
 
@@ -48,6 +50,10 @@ public class MLUpdateModelGroupRequestTest {
         assertEquals("IT", request.getUpdateModelGroupInput().getBackendRoles().get(0));
         assertEquals(AccessMode.RESTRICTED, request.getUpdateModelGroupInput().getModelAccessMode());
         assertEquals(true, request.getUpdateModelGroupInput().getIsAddAllBackendRoles());
+        assertEquals("tag1", request.getUpdateModelGroupInput().getTags().get(0).getKey());
+        assertEquals("String", request.getUpdateModelGroupInput().getTags().get(0).getType());
+        assertEquals("tag2", request.getUpdateModelGroupInput().getTags().get(1).getKey());
+        assertEquals("Number", request.getUpdateModelGroupInput().getTags().get(1).getType());
     }
 
     @Test
@@ -107,6 +113,10 @@ public class MLUpdateModelGroupRequestTest {
         MLUpdateModelGroupRequest result = MLUpdateModelGroupRequest.fromActionRequest(actionRequest);
         assertNotSame(result, request);
         assertEquals(request.getUpdateModelGroupInput().getName(), result.getUpdateModelGroupInput().getName());
+        assertEquals(request.getUpdateModelGroupInput().getTags().get(0).getKey(), result.getUpdateModelGroupInput().getTags().get(0).getKey());
+        assertEquals(request.getUpdateModelGroupInput().getTags().get(0).getType(), result.getUpdateModelGroupInput().getTags().get(0).getType());
+        assertEquals(request.getUpdateModelGroupInput().getTags().get(1).getKey(), result.getUpdateModelGroupInput().getTags().get(1).getKey());
+        assertEquals(request.getUpdateModelGroupInput().getTags().get(1).getType(), result.getUpdateModelGroupInput().getTags().get(1).getType());
     }
 
     @Test(expected = UncheckedIOException.class)

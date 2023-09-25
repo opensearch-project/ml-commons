@@ -12,6 +12,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
@@ -64,6 +65,12 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelGroupResponse> listener) {
         MLRegisterModelGroupRequest createModelGroupRequest = MLRegisterModelGroupRequest.fromActionRequest(request);
         MLRegisterModelGroupInput createModelGroupInput = createModelGroupRequest.getRegisterModelGroupInput();
+
+        if (!CollectionUtils.isEmpty(createModelGroupInput.getTags()) && createModelGroupInput.getTags().size() > 10) {
+            listener.onFailure(new IllegalArgumentException("The size of tags cannot be larger than 10"));
+            return;
+        }
+
         mlModelGroupManager.createModelGroup(createModelGroupInput, ActionListener.wrap(modelGroupId -> {
             listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name()));
         }, ex -> {
