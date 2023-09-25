@@ -39,6 +39,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 
@@ -90,7 +91,6 @@ public class SparseTokenizerModel extends DLModel {
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
         idf = new HashMap<>();
         if (Files.exists(modelPath.resolve("idf.json"))){
-            Gson gson = new Gson();
             Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
             idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
         }
@@ -108,14 +108,6 @@ public class SparseTokenizerModel extends DLModel {
     public void close() {
         if (modelHelper != null && modelId != null) {
             modelHelper.deleteFileCache(modelId);
-            if (predictors != null) {
-                closePredictors(predictors);
-                predictors = null;
-            }
-            if (models != null) {
-                closeModels(models);
-                models = null;
-            }
             if (idf != null || tokenizer != null) {
                 tokenizer = null;
                 idf = null;
