@@ -9,8 +9,9 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import com.google.common.collect.ImmutableList;
 import java.util.*;
-
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -46,10 +47,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
-
-import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TransportUpdateModelGroupAction extends HandledTransportAction<ActionRequest, MLUpdateModelGroupResponse> {
@@ -137,6 +134,10 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         List<ModelGroupTag> existedTags = mlModelGroup.getTags();
         List<ModelGroupTag> updatedTags = updateModelGroupInput.getTags();
 
+        if (CollectionUtils.isEmpty(updatedTags)) {
+            return;
+        }
+
         List<ModelGroupTag> toDeleteTags = new ArrayList<>();
 
         Set<String> updatedTagKeys = new HashSet<>();
@@ -185,7 +186,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
             source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
         }
-        if (updateModelGroupInput.getTags() != null && !CollectionUtils.isEmpty(updateModelGroupInput.getTags())) {
+        if (!CollectionUtils.isEmpty(updateModelGroupInput.getTags())) {
             source.put(MLModelGroup.TAGS_FIELD, updateModelGroupInput.getTags());
         }
         if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
