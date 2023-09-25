@@ -39,7 +39,7 @@ public class MLPostProcessFunction {
         return embeddings -> {
             List<ModelTensor> modelTensors = new ArrayList<>();
             if (embeddings == null) {
-                throw new IllegalArgumentException("NumbersList is null when applying build-in post process function!");
+                throw new IllegalArgumentException("The list of embeddings is null when using the built-in post-processing function.");
             }
             embeddings.forEach(embedding -> modelTensors.add(
                 ModelTensor

@@ -87,7 +87,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("no predict action found");
         }
         String preProcessFunction = predictAction.get().getPreProcessFunction();
-        preProcessFunction = preProcessFunction == null ? MLPreProcessFunction.DEFAULT_EMBEDDING_INPUT : preProcessFunction;
+        preProcessFunction = preProcessFunction == null ? MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT : preProcessFunction;
         if (MLPreProcessFunction.contains(preProcessFunction)) {
             Map<String, Object> buildInFunctionResult = MLPreProcessFunction.get(preProcessFunction).apply(docs);
             return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(buildInFunctionResult)).build();

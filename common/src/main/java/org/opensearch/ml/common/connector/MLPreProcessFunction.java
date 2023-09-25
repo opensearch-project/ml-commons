@@ -16,7 +16,7 @@ public class MLPreProcessFunction {
     public static final String TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT = "connector.pre_process.cohere.embedding";
     public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "connector.pre_process.openai.embedding";
 
-    public static final String DEFAULT_EMBEDDING_INPUT = "connector.pre_process.default.embedding";
+    public static final String TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT = "connector.pre_process.default.embedding";
 
     private static Function<List<String>, Map<String, Object>> cohereTextEmbeddingPreProcess() {
         return inputs -> Map.of("parameters", Map.of("texts", inputs));
@@ -29,7 +29,7 @@ public class MLPreProcessFunction {
     static {
         PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, cohereTextEmbeddingPreProcess());
         PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT, openAiTextEmbeddingPreProcess());
-        PRE_PROCESS_FUNCTIONS.put(DEFAULT_EMBEDDING_INPUT, openAiTextEmbeddingPreProcess());
+        PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT, openAiTextEmbeddingPreProcess());
     }
 
     public static boolean contains(String functionName) {
