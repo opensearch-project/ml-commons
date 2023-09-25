@@ -95,6 +95,7 @@ public class MLModelGroupManager {
                                 .owner(user)
                                 .createdTime(Instant.now())
                                 .lastUpdatedTime(Instant.now())
+                                .tags(input.getTags())
                                 .build();
                         } else {
                             validateSecurityDisabledOrModelAccessControlDisabled(input);
@@ -104,6 +105,7 @@ public class MLModelGroupManager {
                                 .access(AccessMode.PUBLIC.getValue())
                                 .createdTime(Instant.now())
                                 .lastUpdatedTime(Instant.now())
+                                .tags(input.getTags())
                                 .build();
                         }
 

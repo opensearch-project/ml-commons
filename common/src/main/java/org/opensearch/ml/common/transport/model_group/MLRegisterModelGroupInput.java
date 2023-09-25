@@ -5,22 +5,23 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
-import lombok.Builder;
-import lombok.Data;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.AccessMode;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 
 @Data
 public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
@@ -30,15 +31,17 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
     public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES = "add_all_backend_roles"; //optional
+    public static final String TAGS_FIELD = "tags"; //optional
 
     private String name;
     private String description;
     private List<String> backendRoles;
     private AccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
+    private List<ModelGroupTag> tags;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelGroupInput(String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+    public MLRegisterModelGroupInput(String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles,List<ModelGroupTag> tags) {
         if (name == null) {
             throw new IllegalArgumentException("model group name is null");
         }
@@ -47,6 +50,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         this.backendRoles = backendRoles;
         this.modelAccessMode = modelAccessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
+        this.tags = tags;
     }
 
     public MLRegisterModelGroupInput(StreamInput in) throws IOException{
@@ -57,6 +61,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
             modelAccessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
+        this.tags=in.readList(ModelGroupTag::new);
     }
 
     @Override
@@ -76,6 +81,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isAddAllBackendRoles);
+        if(!CollectionUtils.isEmpty(tags)){
+            out.writeList(tags);
+        }
     }
 
     @Override
@@ -94,6 +102,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
         }
+        if(!CollectionUtils.isEmpty(tags)){
+            builder.field(TAGS_FIELD, tags);
+        }
         builder.endObject();
         return builder;
     }
@@ -104,6 +115,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
         List<String> backendRoles = null;
         AccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
+        List<ModelGroupTag> tags=null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -129,12 +141,19 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
                     break;
+                case TAGS_FIELD:
+                    tags = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        tags.add(ModelGroupTag.parse(parser));
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelGroupInput(name, description, backendRoles, modelAccessMode, isAddAllBackendRoles);
+        return new MLRegisterModelGroupInput(name, description, backendRoles, modelAccessMode, isAddAllBackendRoles,tags);
     }
 
 }

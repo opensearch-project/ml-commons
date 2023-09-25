@@ -5,11 +5,14 @@
 
 package org.opensearch.ml.action.model_group;
 
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
@@ -34,7 +37,8 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.PUBLIC,
-            false
+            false,
+            List.of(new ModelGroupTag("tag1", "String"), new ModelGroupTag("tag2", "Number"))
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -47,14 +51,23 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.PRIVATE,
-            false
+            false,
+            List.of(new ModelGroupTag("tag1", "String"), new ModelGroupTag("tag2", "Number"))
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
     public void test_register_model_group_without_access_fields() {
-        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput("mock_model_group_name", "mock_model_group_desc", null, null, null);
+        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
+            "mock_model_group_name",
+            "mock_model_group_desc",
+            null,
+            null,
+            null,
+            List.of(new ModelGroupTag("tag1", "String"), new ModelGroupTag("tag2", "Number"))
+        );
+
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
@@ -66,7 +79,8 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.RESTRICTED,
-            true
+            true,
+            List.of(new ModelGroupTag("tag1", "String"), new ModelGroupTag("tag2", "Number"))
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -79,7 +93,8 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             ImmutableList.of("role-1"),
             AccessMode.RESTRICTED,
-            null
+            null,
+            List.of(new ModelGroupTag("tag1", "String"), new ModelGroupTag("tag2", "Number"))
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();

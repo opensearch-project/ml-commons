@@ -10,10 +10,12 @@ import lombok.Data;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -31,7 +33,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
     public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles"; //optional
-
+    public static final String TAGS_FIELD = "tags"; //optional
 
     private String modelGroupID;
     private String name;
@@ -39,15 +41,17 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     private List<String> backendRoles;
     private AccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
+    private List<ModelGroupTag> tags;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles,List<ModelGroupTag> tags) {
         this.modelGroupID = modelGroupID;
         this.name = name;
         this.description = description;
         this.backendRoles = backendRoles;
         this.modelAccessMode = modelAccessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
+        this.tags = tags;
     }
 
     public MLUpdateModelGroupInput(StreamInput in) throws IOException {
@@ -59,6 +63,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
             modelAccessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
+        this.tags=in.readList(ModelGroupTag::new);
     }
 
     @Override
@@ -79,6 +84,9 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         }
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES_FIELD, isAddAllBackendRoles);
+        }
+        if(!CollectionUtils.isEmpty(tags)){
+            builder.field(TAGS_FIELD, tags);
         }
         builder.endObject();
         return builder;
@@ -102,6 +110,9 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isAddAllBackendRoles);
+        if(!CollectionUtils.isEmpty(tags)){
+            out.writeList(tags);
+        }
     }
 
     public static MLUpdateModelGroupInput parse(XContentParser parser) throws IOException {
@@ -111,6 +122,7 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
         List<String> backendRoles = null;
         AccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
+        List<ModelGroupTag> tags=null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -139,11 +151,18 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
                 case ADD_ALL_BACKEND_ROLES_FIELD:
                     isAddAllBackendRoles = parser.booleanValue();
                     break;
+                case TAGS_FIELD:
+                    tags = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                            tags.add(ModelGroupTag.parse(parser));
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLUpdateModelGroupInput(modelGroupID, name, description, backendRoles, modelAccessMode, isAddAllBackendRoles);
+        return new MLUpdateModelGroupInput(modelGroupID, name, description, backendRoles, modelAccessMode, isAddAllBackendRoles,tags);
     }
 }

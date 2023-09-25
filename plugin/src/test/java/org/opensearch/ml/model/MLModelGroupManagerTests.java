@@ -34,6 +34,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -129,7 +130,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void test_ModelGroupNameNotUnique() throws IOException {//
+    public void test_ModelGroupNameNotUnique() throws IOException {
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
@@ -343,6 +344,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             .backendRoles(backendRoles)
             .modelAccessMode(modelAccessMode)
             .isAddAllBackendRoles(isAddAllBackendRoles)
+            .tags(List.of(new ModelGroupTag("tag1", "String"), new ModelGroupTag("tag2", "Number")))
             .build();
     }
 
@@ -355,12 +357,20 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             + "                    \"last_updated_time\": 1684981986069,\n"
             + "                    \"_id\": \"model_group_ID\",\n"
             + "                    \"name\": \"model_group_IT\",\n"
-            + "                    \"description\": \"This is an example description\"\n"
+            + "                    \"description\": \"This is an example description\",\n"
+            + "                    \"tags\": [\n"
+            + "                        {\n"
+            + "                            \"key\": \"tag1\",\n"
+            + "                            \"type\": \"String\"\n"
+            + "                        },\n"
+            + "                        {   \"key\": \"tag2\",\n"
+            + "                            \"type\": \"Number\"\n"
+            + "                        }\n"
+            + "                    ]\n"
             + "                }";
         SearchHit modelGroup = SearchHit.fromXContent(TestHelper.parser(modelContent));
         SearchHits hits = new SearchHits(new SearchHit[] { modelGroup }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(searchResponse.getHits()).thenReturn(hits);
         return searchResponse;
     }
-
 }

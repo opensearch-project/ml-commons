@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,6 +22,7 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.model.ModelGroupTag;
 
 @Getter
 public class MLModelGroup implements ToXContentObject {
@@ -34,7 +36,7 @@ public class MLModelGroup implements ToXContentObject {
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //unique ID assigned to each model group
     public static final String CREATED_TIME_FIELD = "created_time"; //model group created time stamp
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time"; //updated whenever a new model version is created
-
+    public static final String TAGS_FIELD = "tags";
 
     @Setter
     private String name;
@@ -50,10 +52,12 @@ public class MLModelGroup implements ToXContentObject {
     private Instant createdTime;
     private Instant lastUpdatedTime;
 
+    private List<ModelGroupTag> tags;
 
     @Builder(toBuilder = true)
     public MLModelGroup(String name, String description, int latestVersion,
-                        List<String> backendRoles, User owner, String access,
+                        List<String> backendRoles, User owner,List<ModelGroupTag> tags,
+                        String access,
                         String modelGroupId,
                         Instant createdTime,
                         Instant lastUpdatedTime) {
@@ -69,6 +73,7 @@ public class MLModelGroup implements ToXContentObject {
         this.modelGroupId = modelGroupId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
+        this.tags = tags;
     }
 
 
@@ -84,6 +89,8 @@ public class MLModelGroup implements ToXContentObject {
         } else {
             this.owner = null;
         }
+
+        tags = input.readList(ModelGroupTag::new);
         access = input.readOptionalString();
         modelGroupId = input.readOptionalString();
         createdTime = input.readOptionalInstant();
@@ -106,6 +113,8 @@ public class MLModelGroup implements ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
+
+        out.writeList(Objects.requireNonNullElseGet(tags, ArrayList::new));
         out.writeOptionalString(access);
         out.writeOptionalString(modelGroupId);
         out.writeOptionalInstant(createdTime);
@@ -125,6 +134,10 @@ public class MLModelGroup implements ToXContentObject {
         }
         if (owner != null) {
             builder.field(OWNER, owner);
+        }
+
+        if (!CollectionUtils.isEmpty(tags)) {
+            builder.field(TAGS_FIELD, tags);
         }
         if (access != null) {
             builder.field(ACCESS, access);
@@ -152,6 +165,7 @@ public class MLModelGroup implements ToXContentObject {
         String modelGroupId = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
+    List<ModelGroupTag> tags = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -178,6 +192,15 @@ public class MLModelGroup implements ToXContentObject {
                 case OWNER:
                     owner = User.parse(parser);
                     break;
+
+                case TAGS_FIELD:
+                     tags = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                      while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        tags.add(ModelGroupTag.parse(parser));
+                    }
+
+                    break;
                 case ACCESS:
                     access = parser.text();
                     break;
@@ -201,6 +224,7 @@ public class MLModelGroup implements ToXContentObject {
                 .backendRoles(backendRoles)
                 .latestVersion(latestVersion)
                 .owner(owner)
+                .tags(tags)
                 .access(access)
                 .modelGroupId(modelGroupId)
                 .createdTime(createdTime)

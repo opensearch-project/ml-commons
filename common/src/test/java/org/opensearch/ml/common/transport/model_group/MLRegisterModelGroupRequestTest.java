@@ -7,7 +7,7 @@ import static org.junit.Assert.assertSame;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -15,6 +15,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.model.ModelGroupTag;
 
 public class MLRegisterModelGroupRequestTest {
 
@@ -23,12 +24,14 @@ public class MLRegisterModelGroupRequestTest {
     @Before
     public void setUp(){
 
-        mlRegisterModelGroupInput = mlRegisterModelGroupInput.builder()
+        mlRegisterModelGroupInput = MLRegisterModelGroupInput.builder()
                 .name("name")
                 .description("description")
-                .backendRoles(Arrays.asList("IT"))
+                .backendRoles(List.of("IT"))
                 .modelAccessMode(AccessMode.RESTRICTED)
                 .isAddAllBackendRoles(true)
+                .tags(List.of(new ModelGroupTag("tag1", "String"),
+                    new ModelGroupTag("tag2", "Number")))
                 .build();
     }
 
@@ -45,6 +48,8 @@ public class MLRegisterModelGroupRequestTest {
         assertEquals(request.getRegisterModelGroupInput().getBackendRoles().get(0), parsedRequest.getRegisterModelGroupInput().getBackendRoles().get(0));
         assertEquals(request.getRegisterModelGroupInput().getModelAccessMode(), parsedRequest.getRegisterModelGroupInput().getModelAccessMode());
         assertEquals(request.getRegisterModelGroupInput().getIsAddAllBackendRoles() ,parsedRequest.getRegisterModelGroupInput().getIsAddAllBackendRoles());
+        assertEquals(request.getRegisterModelGroupInput().getTags().get(0) ,parsedRequest.getRegisterModelGroupInput().getTags().get(0));
+        assertEquals(request.getRegisterModelGroupInput().getTags().get(1) ,parsedRequest.getRegisterModelGroupInput().getTags().get(1));
     }
 
     @Test
