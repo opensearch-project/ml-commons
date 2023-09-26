@@ -55,6 +55,8 @@ public class SparseTokenizerModel extends DLModel {
 
     private Map<String, Float> idf;
 
+    public String IDF_FILE_NAME = "idf.json";
+
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
@@ -95,9 +97,9 @@ public class SparseTokenizerModel extends DLModel {
                                MLModelConfig modelConfig) throws ModelNotFoundException, MalformedModelException, IOException, TranslateException {
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
         idf = new HashMap<>();
-        if (Files.exists(modelPath.resolve("idf.json"))){
+        if (Files.exists(modelPath.resolve(IDF_FILE_NAME))){
             Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
-            idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
+            idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve(IDF_FILE_NAME))), mapType);
         }
         log.info("sparse tokenize Model {} is successfully deployed", modelId);
     }
