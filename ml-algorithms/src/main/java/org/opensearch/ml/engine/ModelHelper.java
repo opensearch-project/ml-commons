@@ -7,7 +7,6 @@ package org.opensearch.ml.engine;
 
 import ai.djl.training.util.DownloadUtils;
 import ai.djl.training.util.ProgressBar;
-import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.core.action.ActionListener;
@@ -32,6 +31,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.engine.utils.FileUtils.splitFileIntoChunks;
@@ -48,11 +48,9 @@ public class ModelHelper {
     public static final String PYTORCH_ENGINE = "PyTorch";
     public static final String ONNX_ENGINE = "OnnxRuntime";
     private final MLEngine mlEngine;
-    private Gson gson;
 
     public ModelHelper(MLEngine mlEngine) {
         this.mlEngine = mlEngine;
-        gson = new Gson();
     }
 
     public void downloadPrebuiltModelConfig(String taskId, MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelInput> listener) {

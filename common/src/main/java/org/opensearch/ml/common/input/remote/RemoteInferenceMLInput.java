@@ -14,14 +14,9 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
 import java.util.Map;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.REMOTE})
 public class RemoteInferenceMLInput extends MLInput {
