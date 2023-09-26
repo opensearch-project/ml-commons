@@ -84,7 +84,8 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
         try {
             updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            log.error("Failed to construct the update request with the input.", e);
+            actionListener.onFailure(e);
         }
         updateRequest.docAsUpsert(true);
         User user = RestActionUtils.getUserContext(client);
@@ -101,8 +102,10 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         if (r.getSource() != null && r.getSource().get(ALGORITHM_FIELD) != null) {
                             algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
-                        } else
-                            throw new RuntimeException("FUNCTION_NAME_FIELD not found for this model, model ID " + modelId);
+                        } else {
+                            actionListener
+                                .onFailure(new RuntimeException("FUNCTION_NAME_FIELD not found for this model, model ID " + modelId));
+                        }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {

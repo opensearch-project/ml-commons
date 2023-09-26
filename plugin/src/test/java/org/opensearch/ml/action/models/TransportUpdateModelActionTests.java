@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,6 +77,12 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
 
     @Mock
     GetResponse getResponse;
+
+    @Mock
+    MLUpdateModelInput mockUpdateModelInput;
+
+    @Mock
+    MLUpdateModelRequest mockUpdateModelRequest;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -644,8 +651,11 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("FUNCTION_NAME_FIELD not found for this model, model ID test_model_id", argumentCaptor.getValue().getMessage());
+        verify(actionListener, times(2)).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Cannot invoke \"org.opensearch.ml.common.FunctionName.toString()\" because the return value of \"org.opensearch.ml.common.MLModel.getAlgorithm()\" is null",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
