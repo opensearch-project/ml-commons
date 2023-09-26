@@ -26,7 +26,7 @@ Machine Learning Commons for OpenSearch is a new solution that make it easy to d
 Until today, the challenge is significant to build a new machine learning feature inside OpenSearch. The reasons include:
 
 * **Disruption to OpenSearch Core features**. Machine learning is very computationally intensive. But currently there is no way to add dedicated computation resources in OpenSearch for machine learning jobs, hence these jobs have to share same resources with Core features, such as: indexing and searching. That might cause the latency increasing on search request, and cause circuit breaker exception on memory usage. To address this, we have to carefully distribute models and limit the data size to run the AD job. When more and more ML features are added into OpenSearch, it will become much harder to manage.
-* **Lack of support for machine learning algorithms.** Customers need more algorighms within Opensearch, otherwise the data need be exported to outside of elasticsearch, such as s3 first to do the job, which will bring extra cost and latency.
+* **Lack of support for machine learning algorithms.** Customers need more algorithms within Opensearch, otherwise the data need be exported to outside of elasticsearch, such as s3 first to do the job, which will bring extra cost and latency.
 * **Lack of resource management mechanism between multiple machine learning jobs.** It's hard to coordinate the resources between multi features.
 
 
