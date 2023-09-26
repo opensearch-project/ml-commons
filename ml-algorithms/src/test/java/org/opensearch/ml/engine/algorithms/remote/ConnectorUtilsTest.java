@@ -24,7 +24,6 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.utils.GsonUtil;
 import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
@@ -37,6 +36,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 public class ConnectorUtilsTest {
 
@@ -60,8 +60,6 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processInput_TextDocsInputDataSet_NoPreprocessFunction() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Must provide pre_process_function for predict action to process text docs input.");
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test1", "test2")).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
@@ -126,7 +124,7 @@ public class ConnectorUtilsTest {
     @Test
     public void processInput_TextDocsInputDataSet_PreprocessFunction_OneTextDoc() {
         List<String> input = Collections.singletonList("test_value");
-        String inputJson = GsonUtil.toJson(input);
+        String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
                 "{\"input\": \"${parameters.input}\"}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, "texts");
     }
@@ -136,7 +134,7 @@ public class ConnectorUtilsTest {
         List<String> input = new ArrayList<>();
         input.add("test_value1");
         input.add("test_value2");
-        String inputJson = GsonUtil.toJson(input);
+        String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
                 "{\"input\": ${parameters.input}}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT, "input");
     }
@@ -160,24 +158,6 @@ public class ConnectorUtilsTest {
         parameters.put("key1", "value1");
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         ModelTensors tensors = ConnectorUtils.processOutput("{\"response\": \"test response\"}", connector, scriptService, ImmutableMap.of());
-        Assert.assertEquals(1, tensors.getMlModelTensors().size());
-        Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
-        Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("test response", tensors.getMlModelTensors().get(0).getDataAsMap().get("response"));
-    }
-
-    @Test
-    public void processOutput_noPostProcessFunction_nonJsonResponse() throws IOException {
-        ConnectorAction predictAction = ConnectorAction.builder()
-            .actionType(ConnectorAction.ActionType.PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("input", "value1");
-        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        ModelTensors tensors = ConnectorUtils.processOutput("test response", connector, scriptService, parameters);
         Assert.assertEquals(1, tensors.getMlModelTensors().size());
         Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());

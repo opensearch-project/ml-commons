@@ -18,7 +18,6 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.utils.GsonUtil;
 import org.opensearch.script.ScriptService;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -40,6 +39,7 @@ import java.util.Optional;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executeBuildInPostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePreprocessFunction;
@@ -87,9 +87,7 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("no predict action found");
         }
         String preProcessFunction = predictAction.get().getPreProcessFunction();
-        if (preProcessFunction == null) {
-            throw new IllegalArgumentException("Must provide pre_process_function for predict action to process text docs input.");
-        }
+        preProcessFunction = preProcessFunction == null ? MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT : preProcessFunction;
         if (MLPreProcessFunction.contains(preProcessFunction)) {
             Map<String, Object> buildInFunctionResult = MLPreProcessFunction.get(preProcessFunction).apply(docs);
             return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(buildInFunctionResult)).build();
@@ -102,7 +100,7 @@ public class ConnectorUtils {
             if (processedInput.isEmpty()) {
                 throw new IllegalArgumentException("Wrong input");
             }
-            Map<String, Object> map = GsonUtil.fromJson(processedInput.get(), Map.class);
+            Map<String, Object> map = gson.fromJson(processedInput.get(), Map.class);
             return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(map)).build();
         }
     }
@@ -116,7 +114,7 @@ public class ConnectorUtils {
                     if (parametersMap.get(key) instanceof String) {
                         parameterStringMap.put(key, (String) parametersMap.get(key));
                     } else {
-                        parameterStringMap.put(key, GsonUtil.toJson(parametersMap.get(key)));
+                        parameterStringMap.put(key, gson.toJson(parametersMap.get(key)));
                     }
                 }
                 return null;

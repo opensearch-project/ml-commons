@@ -5,25 +5,29 @@
 
 package org.opensearch.ml.common.utils;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.opensearch.core.common.bytes.BytesReference;
-import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class StringUtils {
+
+    public static final Gson gson;
+
+    static {
+        gson = new Gson();
+    }
 
     public static boolean isJson(String Json) {
         try {
@@ -45,16 +49,13 @@ public class StringUtils {
         return utf8EncodedString;
     }
 
-    public static Map<String, Object> fromJson(String input, String defaultKey) {
-        if (!isJson(input)) {
-            return Collections.singletonMap(defaultKey, input);
-        }
+    public static Map<String, Object> fromJson(String jsonStr, String defaultKey) {
         Map<String, Object> result;
-        JsonElement jsonElement = JsonParser.parseString(input);
+        JsonElement jsonElement = JsonParser.parseString(jsonStr);
         if (jsonElement.isJsonObject()) {
-            result = GsonUtil.fromJson(jsonElement, Map.class);
+            result = gson.fromJson(jsonElement, Map.class);
         } else if (jsonElement.isJsonArray()) {
-            List<Object> list = GsonUtil.fromJson(jsonElement, List.class);
+            List<Object> list = gson.fromJson(jsonElement, List.class);
             result = new HashMap<>();
             result.put(defaultKey, list);
         } else {
@@ -72,7 +73,7 @@ public class StringUtils {
                     if (value instanceof String) {
                         parameters.put(key, (String)value);
                     } else {
-                        parameters.put(key, GsonUtil.toJson(value));
+                        parameters.put(key, gson.toJson(value));
                     }
                     return null;
                 });
@@ -81,9 +82,5 @@ public class StringUtils {
             }
         }
         return parameters;
-    }
-
-    public static String xContentBuilderToString(XContentBuilder builder) {
-        return BytesReference.bytes(builder).utf8ToString();
     }
 }
