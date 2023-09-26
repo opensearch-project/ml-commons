@@ -23,7 +23,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-abstract public class SentenceTransformerTranslator implements ServingTranslator {
+public abstract class SentenceTransformerTranslator implements ServingTranslator {
     protected HuggingFaceTokenizer tokenizer;
 
     @Override

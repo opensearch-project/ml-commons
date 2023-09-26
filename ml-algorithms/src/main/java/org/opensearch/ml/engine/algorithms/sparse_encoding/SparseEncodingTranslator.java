@@ -29,19 +29,6 @@ import java.util.*;
 import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
 
 public class SparseEncodingTranslator extends SentenceTransformerTranslator {
-    private Map<String, Float>  convertOutput(NDArray array)
-    {
-        Map<String, Float> map = new HashMap<>();
-        NDArray nonZeroIndices = array.nonzero().squeeze();
-
-        for (long index : nonZeroIndices.toLongArray()) {
-            String s = this.tokenizer.decode(new long[]{index}, true);
-            if (!s.isEmpty()){
-                map.put(s, array.getFloat(index));
-            }
-        }
-        return map;
-    }
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
         Output output = new Output(200, "OK");
@@ -63,5 +50,18 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         ModelTensors modelTensorOutput = new ModelTensors(outputs);
         output.add(modelTensorOutput.toBytes());
         return output;
+    }
+    private Map<String, Float>  convertOutput(NDArray array)
+    {
+        Map<String, Float> map = new HashMap<>();
+        NDArray nonZeroIndices = array.nonzero().squeeze();
+
+        for (long index : nonZeroIndices.toLongArray()) {
+            String s = this.tokenizer.decode(new long[]{index}, true);
+            if (!s.isEmpty()){
+                map.put(s, array.getFloat(index));
+            }
+        }
+        return map;
     }
 }
