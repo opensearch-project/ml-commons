@@ -103,7 +103,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
             }
-            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // tokenize model doesn't model config. And currently we only support one sparse model type, it's pretrained. It doesn't need model config.
+            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently, we only support one type of sparse model, which is pretrained, and it doesn't necessitate a model configuration.
                 throw new IllegalArgumentException("model config is null");
             }
         }

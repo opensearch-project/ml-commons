@@ -36,7 +36,12 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -94,7 +99,7 @@ public class SparseTokenizerModel extends DLModel {
             Type mapType = new TypeToken<Map<String, Float>>() {}.getType();
             idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve("idf.json"))), mapType);
         }
-        log.info("tokenize Model {} is successfully deployed", modelId);
+        log.info("sparse tokenize Model {} is successfully deployed", modelId);
     }
     @Override
     public boolean isModelReady() {

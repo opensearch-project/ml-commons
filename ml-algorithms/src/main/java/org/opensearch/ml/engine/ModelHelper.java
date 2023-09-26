@@ -237,7 +237,7 @@ public class ModelHelper {
                 }
             }
         }
-        if (!hasPtFile && !hasOnnxFile && functionName != FunctionName.SPARSE_TOKENIZE) { // tokenizer model doesn't need model file.
+        if (!hasPtFile && !hasOnnxFile && functionName != FunctionName.SPARSE_TOKENIZE) { // sparse tokenizer model doesn't need model file.
             throw new IllegalArgumentException("Can't find model file");
         }
         if (!hasTokenizerFile) {
