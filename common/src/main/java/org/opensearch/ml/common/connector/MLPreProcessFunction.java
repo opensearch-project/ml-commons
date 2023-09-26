@@ -28,7 +28,7 @@ public class MLPreProcessFunction {
                 "        }\n" +
                 "    }\n" +
                 "    builder.append(\"]\");\n" +
-                "    def parameters = \"{\" +\"\\\"prompt\\\":\" + builder + \"}\";\n" +
+                "    def parameters = \"{\" +\"\\\"texts\\\":\" + builder + \"}\";\n" +
                 "    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";");
 
         PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT, "\n    StringBuilder builder = new StringBuilder();\n" +
