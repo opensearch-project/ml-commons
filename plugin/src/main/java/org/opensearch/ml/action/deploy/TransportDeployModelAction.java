@@ -250,11 +250,11 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     listener.onFailure(e);
                 }));
             }, e -> {
-                log.error("Failed to get ML model " + modelId, e);
+                log.error("Failed to retrieve the ML model with ID: " + modelId, e);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
-            log.error("Failed to deploy model " + modelId, e);
+            log.error("Failed to deploy the ML model with ID " + modelId, e);
             listener.onFailure(e);
         }
 
