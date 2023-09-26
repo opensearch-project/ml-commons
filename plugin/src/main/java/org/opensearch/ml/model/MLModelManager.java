@@ -519,7 +519,8 @@ public class MLModelManager {
                 modelName,
                 version,
                 registerModelInput.getUrl(),
-                registerModelInput.getHashValue(), functionName,
+                registerModelInput.getHashValue(),
+                functionName,
                 ActionListener.wrap(result -> {
                     Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
                     if (modelSizeInBytes >= MODEL_FILE_SIZE_LIMIT) {
