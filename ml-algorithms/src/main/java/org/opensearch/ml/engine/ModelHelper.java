@@ -191,7 +191,7 @@ public class ModelHelper {
      * @param modelContentHash model content hash value
      * @param listener action listener
      */
-    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, String modelContentHash, ActionListener<Map<String, Object>> listener) {
+    public void downloadAndSplit(MLModelFormat modelFormat, String taskId, String modelName, String version, String url, String modelContentHash, FunctionName functionName, ActionListener<Map<String, Object>> listener) {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 Path registerModelPath = mlEngine.getRegisterModelPath(taskId, modelName, version);
@@ -200,7 +200,7 @@ public class ModelHelper {
                 File modelZipFile = new File(modelPath);
                 log.debug("download model to file {}", modelZipFile.getAbsolutePath());
                 DownloadUtils.download(url, modelPath, new ProgressBar());
-                verifyModelZipFile(modelFormat, modelPath, modelName);
+                verifyModelZipFile(modelFormat, modelPath, modelName, functionName);
                 String hash = calculateFileHash(modelZipFile);
                 if (hash.equals(modelContentHash)) {
                     List<String> chunkFiles = splitFileIntoChunks(modelZipFile, modelPartsPath, CHUNK_SIZE);
@@ -222,7 +222,7 @@ public class ModelHelper {
         }
     }
 
-    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath, String modelName) throws IOException {
+    public void verifyModelZipFile(MLModelFormat modelFormat, String modelZipFilePath, String modelName, FunctionName functionName) throws IOException {
         boolean hasPtFile = false;
         boolean hasOnnxFile = false;
         boolean hasTokenizerFile = false;
@@ -237,7 +237,7 @@ public class ModelHelper {
                 }
             }
         }
-        if (!hasPtFile && !hasOnnxFile) {
+        if (!hasPtFile && !hasOnnxFile && functionName != FunctionName.SPARSE_TOKENIZE) { // sparse tokenizer model doesn't need model file.
             throw new IllegalArgumentException("Can't find model file");
         }
         if (!hasTokenizerFile) {
