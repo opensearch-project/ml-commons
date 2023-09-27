@@ -16,7 +16,6 @@ import ai.djl.repository.zoo.ZooModel;
 import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
-import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.FunctionName;
@@ -36,18 +35,26 @@ import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
-import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+/**
+ * Tokenizer model will load from two file: tokenizer file and IDF file.
+ * For IDF file, it is a predefined weight for each Token. It is calculated like the BM25 IDF for each dataset.
+ * Decouple idf with model inference will give a more tight upperbound for predicted token weight. And this can help accelerate the WAND algorithm for lucene 9.7.
+ * IDF introduces global token information, boost search relevance.
+ * In our pretrained Tokenizer model, we will provide a general IDF from MSMARCO. Customer could recalculate a IDF in their own dataset.
+ * If without IDF, the weight of each token in the result will be set to 1.0.
+ * Since we regard tokenizer as a model. Cusotmer needs to keep the consistency between tokenizer/model by themselves.
+ */
 @Log4j2
 @Function(FunctionName.SPARSE_TOKENIZE)
 public class SparseTokenizerModel extends DLModel {

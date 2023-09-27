@@ -1,6 +1,8 @@
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
 import ai.djl.Model;
+import ai.djl.modality.Input;
+import ai.djl.modality.Output;
 import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
@@ -27,22 +29,24 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
-import ai.djl.modality.Input;
 
 import java.io.File;
 import java.io.IOException;
-import ai.djl.modality.Output;
-
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
-import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 
 public class TextEmbeddingSparseEncodingModelTest {
     @Rule
@@ -98,7 +102,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         TranslatorContext translatorContext = mock(TranslatorContext.class);
         Model mlModel = mock(Model.class);
         when(translatorContext.getModel()).thenReturn(mlModel);
-        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent());
+        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("../tokenize/tokenizer.json").toURI()).getParent());
         sparseEncodingTranslator.prepare(translatorContext);
 
         NDManager manager = mock(NDManager.class);
@@ -126,7 +130,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         TranslatorContext translatorContext = mock(TranslatorContext.class);
         Model mlModel = mock(Model.class);
         when(translatorContext.getModel()).thenReturn(mlModel);
-        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("tokenizer.json").toURI()).getParent());
+        when(mlModel.getModelPath()).thenReturn(Paths.get(getClass().getResource("../tokenize/tokenizer.json").toURI()).getParent());
         sparseEncodingTranslator.prepare(translatorContext);
 
         NDArray ndArray = mock(NDArray.class);
