@@ -27,12 +27,16 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 public class ConnectorUtilsTest {
 
@@ -56,8 +60,6 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processInput_TextDocsInputDataSet_NoPreprocessFunction() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Must provide pre_process_function for predict action to process text docs input.");
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test1", "test2")).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
@@ -121,18 +123,20 @@ public class ConnectorUtilsTest {
 
     @Test
     public void processInput_TextDocsInputDataSet_PreprocessFunction_OneTextDoc() {
+        List<String> input = Collections.singletonList("test_value");
+        String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
-                "{\"input\": \"${parameters.input}\"}",
-                "{\"parameters\": { \"input\": \"test_value\" } }",
-                "test_value");
+                "{\"input\": \"${parameters.input}\"}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, "texts");
     }
 
     @Test
     public void processInput_TextDocsInputDataSet_PreprocessFunction_MultiTextDoc() {
+        List<String> input = new ArrayList<>();
+        input.add("test_value1");
+        input.add("test_value2");
+        String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
-                "{\"input\": ${parameters.input}}",
-                "{\"parameters\": { \"input\": [\"test_value1\", \"test_value2\"] } }",
-                "[\"test_value1\",\"test_value2\"]");
+                "{\"input\": ${parameters.input}}", input, inputJson, MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT, "input");
     }
 
     @Test
@@ -143,7 +147,7 @@ public class ConnectorUtilsTest {
     }
 
     @Test
-    public void processOutput_NoPostprocessFunction() throws IOException {
+    public void processOutput_NoPostprocessFunction_jsonResponse() throws IOException {
         ConnectorAction predictAction = ConnectorAction.builder()
                 .actionType(ConnectorAction.ActionType.PREDICT)
                 .method("POST")
@@ -186,10 +190,8 @@ public class ConnectorUtilsTest {
         Assert.assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
     }
 
-    private void processInput_TextDocsInputDataSet_PreprocessFunction(String requestBody, String preprocessResult, String expectedProcessedInput) {
-        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult));
-
-        TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test1", "test2")).build();
+    private void processInput_TextDocsInputDataSet_PreprocessFunction(String requestBody, List<String> inputs, String expectedProcessedInput, String preProcessName, String resultKey) {
+        TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(inputs).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
         ConnectorAction predictAction = ConnectorAction.builder()
@@ -197,7 +199,7 @@ public class ConnectorUtilsTest {
                 .method("POST")
                 .url("http://test.com/mock")
                 .requestBody(requestBody)
-                .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT)
+                .preProcessFunction(preProcessName)
                 .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
@@ -205,6 +207,6 @@ public class ConnectorUtilsTest {
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
         Assert.assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
-        Assert.assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get("input"));
+        Assert.assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
     }
 }
