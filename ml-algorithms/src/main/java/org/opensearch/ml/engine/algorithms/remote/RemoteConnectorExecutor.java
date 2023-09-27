@@ -32,14 +32,8 @@ public interface RemoteConnectorExecutor {
 
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-            List textDocs = new ArrayList(textDocsInputDataSet.getDocs());
-            for (int i = 0; i < textDocsInputDataSet.getDocs().size(); i++) {
-                preparePayloadAndInvokeRemoteModel(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build()).build(), tensorOutputs);
-                if (tensorOutputs.size() >= textDocsInputDataSet.getDocs().size()) {
-                    break;
-                }
-                textDocs.remove(0);
-            }
+            List<String> textDocs = new ArrayList<>(textDocsInputDataSet.getDocs());
+            preparePayloadAndInvokeRemoteModel(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build()).build(), tensorOutputs);
         } else {
             preparePayloadAndInvokeRemoteModel(mlInput, tensorOutputs);
         }
@@ -65,7 +59,7 @@ public interface RemoteConnectorExecutor {
         }
 
         RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, parameters, getScriptService());
-        if (inputData != null && inputData.getParameters() != null) {
+        if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
         }
         String payload = connector.createPredictPayload(parameters);

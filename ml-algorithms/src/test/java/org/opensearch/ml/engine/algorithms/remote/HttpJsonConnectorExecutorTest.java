@@ -29,12 +29,15 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
 import java.util.Arrays;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
@@ -94,32 +97,34 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInput_NoPreprocessFunction() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Must provide pre_process_function for predict action to process text docs input.");
+    public void executePredict_TextDocsInput_NoPreprocessFunction() throws IOException {
         ConnectorAction predictAction = ConnectorAction.builder()
                 .actionType(ConnectorAction.ActionType.PREDICT)
                 .method("POST")
                 .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .requestBody("{\"input\": ${parameters.input}}")
                 .build();
+        when(httpClient.execute(any())).thenReturn(response);
+        HttpEntity entity = new StringEntity("{\"response\": \"test result\"}");
+        when(response.getEntity()).thenReturn(entity);
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
-        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
-        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+        ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
+        Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
+        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
+        Assert.assertEquals("test result", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("response"));
     }
 
     @Test
     public void executePredict_TextDocsInput() throws IOException {
         String preprocessResult1 = "{\"parameters\": { \"input\": \"test doc1\" } }";
-        String postprocessResult1 = "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[3],\"data\":[1, 2, 3]}";
         String preprocessResult2 = "{\"parameters\": { \"input\": \"test doc2\" } }";
-        String postprocessResult2 = "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[3],\"data\":[4, 5, 6]}";
         when(scriptService.compile(any(), any()))
                 .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult1))
-                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult1))
-                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult2))
-                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult2));
+                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult2));
 
         ConnectorAction predictAction = ConnectorAction.builder()
                 .actionType(ConnectorAction.ActionType.PREDICT)
@@ -127,21 +132,28 @@ public class HttpJsonConnectorExecutorTest {
                 .url("http://test.com/mock")
                 .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
                 .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
-                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .requestBody("{\"input\": ${parameters.input}}")
                 .build();
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setScriptService(scriptService);
         when(httpClient.execute(any())).thenReturn(response);
-        String modelResponse = "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
+        String modelResponse = "{\n" + "    \"object\": \"list\",\n" + "    \"data\": [\n" + "        {\n"
+            + "            \"object\": \"embedding\",\n" + "            \"index\": 0,\n" + "            \"embedding\": [\n"
+            + "                -0.014555434,\n" + "                -0.002135904,\n" + "                0.0035105038\n" + "            ]\n"
+            + "        },\n" + "        {\n" + "            \"object\": \"embedding\",\n" + "            \"index\": 1,\n"
+            + "            \"embedding\": [\n" + "                -0.014555434,\n" + "                -0.002135904,\n"
+            + "                0.0035105038\n" + "            ]\n" + "        }\n" + "    ],\n"
+            + "    \"model\": \"text-embedding-ada-002-v2\",\n" + "    \"usage\": {\n" + "        \"prompt_tokens\": 5,\n"
+            + "        \"total_tokens\": 5\n" + "    }\n" + "}";
         HttpEntity entity = new StringEntity(modelResponse);
         when(response.getEntity()).thenReturn(entity);
         when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
-        Assert.assertEquals(2, modelTensorOutput.getMlModelOutputs().size());
+        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals("sentence_embedding", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
-        Assert.assertArrayEquals(new Number[] {1, 2, 3}, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData());
-        Assert.assertArrayEquals(new Number[] {4, 5, 6}, modelTensorOutput.getMlModelOutputs().get(1).getMlModelTensors().get(0).getData());
+        Assert.assertArrayEquals(new Number[] {-0.014555434, -0.002135904, 0.0035105038}, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData());
+        Assert.assertArrayEquals(new Number[] {-0.014555434, -0.002135904, 0.0035105038}, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1).getData());
     }
 }
