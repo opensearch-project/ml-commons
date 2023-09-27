@@ -25,7 +25,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
  * ML input class which supports a list fo text docs.
  * This class can be used for TEXT_EMBEDDING model.
  */
-@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_EMBEDDING})
+@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_EMBEDDING, FunctionName.SPARSE_ENCODING, FunctionName.SPARSE_TOKENIZE})
 public class TextDocsMLInput extends MLInput {
     public static final String TEXT_DOCS_FIELD = "text_docs";
     public static final String RESULT_FILTER_FIELD = "result_filter";
