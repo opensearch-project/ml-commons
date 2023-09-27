@@ -88,6 +88,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
+                mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                 modelAccessControlHelper
                     .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                         if (!access) {

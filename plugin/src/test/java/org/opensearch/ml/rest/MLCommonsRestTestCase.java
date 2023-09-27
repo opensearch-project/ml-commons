@@ -831,10 +831,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return (modelProfile) -> {
             if (modelProfile.containsKey("model_state")) {
                 assertEquals(MLModelState.DEPLOYED.name(), modelProfile.get("model_state"));
-                assertTrue(
-                    ((String) modelProfile.get("predictor"))
-                        .startsWith("org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@")
-                );
+                assertTrue(((String) modelProfile.get("predictor")).startsWith("org.opensearch.ml.engine.algorithms.TextEmbeddingModel@"));
             }
             List<String> workNodes = (List) modelProfile.get("worker_nodes");
             assertTrue(workNodes.size() > 0);
