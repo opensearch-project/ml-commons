@@ -114,7 +114,11 @@ public class TextDocsMLInput extends MLInput {
                 case TEXT_DOCS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        docs.add(parser.text());
+                        if (parser.currentToken() == null || parser.currentToken() == XContentParser.Token.VALUE_NULL) {
+                            docs.add(null);
+                        } else {
+                            docs.add(parser.text());
+                        }
                     }
                     break;
                 case RESULT_FILTER_FIELD:
