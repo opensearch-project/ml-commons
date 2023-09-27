@@ -27,9 +27,9 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_HELPER;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_ZIP_FILE;
 import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
@@ -520,6 +520,7 @@ public class MLModelManager {
                 version,
                 registerModelInput.getUrl(),
                 registerModelInput.getHashValue(),
+                functionName,
                 ActionListener.wrap(result -> {
                     Long modelSizeInBytes = (Long) result.get(MODEL_SIZE_IN_BYTES);
                     if (modelSizeInBytes >= MODEL_FILE_SIZE_LIMIT) {

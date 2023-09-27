@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 
 @Getter
@@ -101,7 +102,7 @@ public abstract class AbstractConnector implements Connector {
             return;
         }
         if (response instanceof String && isJson((String)response)) {
-            Map<String, Object> data = StringUtils.fromJson((String) response, "response");
+            Map<String, Object> data = StringUtils.fromJson((String) response, ML_MAP_RESPONSE_KEY);
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(data).build());
         } else {
             Map<String, Object> map = new HashMap<>();
