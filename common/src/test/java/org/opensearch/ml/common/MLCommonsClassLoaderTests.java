@@ -149,19 +149,25 @@ public class MLCommonsClassLoaderTests {
         assertArrayEquals(new long[]{1, 2}, metrics);
     }
 
-    @Test
-    public void testClassLoader_MLInput() throws IOException {
-        assertTrue(MLCommonsClassLoader.canInitMLInput(FunctionName.TEXT_EMBEDDING));
+    private void testClassLoader_MLInput_DlModel(FunctionName functionName) throws IOException {
+        assertTrue(MLCommonsClassLoader.canInitMLInput(functionName));
 
         String jsonStr = "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}}";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
 
-        TextDocsMLInput mlInput = MLCommonsClassLoader.initMLInput(FunctionName.TEXT_EMBEDDING, new Object[]{parser, FunctionName.TEXT_EMBEDDING}, XContentParser.class, FunctionName.class);
+        TextDocsMLInput mlInput = MLCommonsClassLoader.initMLInput(functionName, new Object[]{parser, functionName}, XContentParser.class, FunctionName.class);
         assertNotNull(mlInput);
-        assertEquals(FunctionName.TEXT_EMBEDDING, mlInput.getFunctionName());
+        assertEquals(functionName, mlInput.getFunctionName());
         assertEquals(2, ((TextDocsInputDataSet)mlInput.getInputDataset()).getDocs().size());
+    }
+
+    @Test
+    public void testClassLoader_MLInput() throws IOException {
+        testClassLoader_MLInput_DlModel(FunctionName.TEXT_EMBEDDING);
+        testClassLoader_MLInput_DlModel(FunctionName.SPARSE_TOKENIZE);
+        testClassLoader_MLInput_DlModel(FunctionName.SPARSE_ENCODING);
     }
 
     public enum TestEnum {

@@ -239,7 +239,7 @@ GET /_plugins/_ml/profile/models/zwla5YUB1qmVrJFlwzXJ
             "models": {
                 "zwla5YUB1qmVrJFlwzXJ": { # model id
                     "model_state": "LOADED",
-                    "predictor": "org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel@1a0b0793",
+                    "predictor": "org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel@1a0b0793",
                     "target_worker_nodes": [ # plan to deploy model to these nodes
                         "0TLL4hHxRv6_G3n6y1l0BQ"
                     ],

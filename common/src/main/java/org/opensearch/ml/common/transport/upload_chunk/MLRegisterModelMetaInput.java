@@ -84,7 +84,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (modelContentHashValue == null) {
             throw new IllegalArgumentException("model content hash value is null");
         }
-        if (modelConfig == null) {
+        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model configuration. Currently, we only support one type of sparse model, which is pretrained, and it doesn't necessitate a model configuration.
             throw new IllegalArgumentException("model config is null");
         }
         if (totalChunks == null) {
