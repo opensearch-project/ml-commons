@@ -67,7 +67,7 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit_UrlFailure() {
         modelId = "url_failure_model_id";
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
@@ -76,7 +76,7 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
@@ -86,7 +86,7 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit_HashFailure() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, "wrong_hash_value", actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, "wrong_hash_value", FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(IllegalArgumentException.class, argumentCaptor.getValue().getClass());
@@ -95,7 +95,7 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit_Hash() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, actionListener);
+        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
@@ -105,7 +105,7 @@ public class ModelHelperTest {
     @Test
     public void testVerifyModelZipFile() throws IOException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString(), FunctionName.TEXT_EMBEDDING);
     }
 
     @Test
@@ -113,7 +113,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Model format is TORCH_SCRIPT, but find .onnx file");
         String modelUrl = getClass().getResource("traced_small_model_wrong_onnx.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString(), FunctionName.TEXT_EMBEDDING);
     }
 
     @Test
@@ -121,7 +121,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Model format is ONNX, but find .pt file");
         String modelUrl = getClass().getResource("traced_small_model_wrong_onnx.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(MLModelFormat.ONNX, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
+        modelHelper.verifyModelZipFile(MLModelFormat.ONNX, modelUrl, FunctionName.TEXT_EMBEDDING.toString(), FunctionName.TEXT_EMBEDDING);
     }
 
     @Test
@@ -129,7 +129,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Find multiple model files, but expected only one");
         String modelUrl = getClass().getResource("traced_small_model_duplicate_pt.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString(), FunctionName.TEXT_EMBEDDING);
     }
 
     @Test
@@ -137,7 +137,7 @@ public class ModelHelperTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No tokenizer file");
         String modelUrl = getClass().getResource("traced_small_model_missing_tokenizer.zip").toString().substring(5);
-        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString());
+        modelHelper.verifyModelZipFile(modelFormat, modelUrl, FunctionName.TEXT_EMBEDDING.toString(), FunctionName.TEXT_EMBEDDING);
     }
 
     @Test
