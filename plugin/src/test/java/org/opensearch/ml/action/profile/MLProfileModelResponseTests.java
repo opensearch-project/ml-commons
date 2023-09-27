@@ -106,7 +106,6 @@ public class MLProfileModelResponseTests extends OpenSearchTestCase {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String xContentString = TestHelper.xContentBuilderToString(builder);
-        System.out.println(xContentString);
     }
 
 }
