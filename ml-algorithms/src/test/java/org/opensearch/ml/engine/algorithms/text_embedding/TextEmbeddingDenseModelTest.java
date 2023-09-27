@@ -42,13 +42,13 @@ import java.util.UUID;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
 import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_HELPER;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.MODEL_ZIP_FILE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_HELPER;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_ZIP_FILE;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
 
 
-public class TextEmbeddingModelTest {
+public class TextEmbeddingDenseModelTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -62,7 +62,7 @@ public class TextEmbeddingModelTest {
     private MLModel model;
     private ModelHelper modelHelper;
     private Map<String, Object> params;
-    private TextEmbeddingModel textEmbeddingModel;
+    private TextEmbeddingDenseModel textEmbeddingDenseModel;
     private Path mlCachePath;
     private Path mlConfigPath;
     private TextDocsInputDataSet inputDataSet;
@@ -99,7 +99,7 @@ public class TextEmbeddingModelTest {
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
-        textEmbeddingModel = new TextEmbeddingModel();
+        textEmbeddingDenseModel = new TextEmbeddingDenseModel();
 
         inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("today is sunny", "That is a happy dog")).build();
     }
@@ -112,9 +112,9 @@ public class TextEmbeddingModelTest {
         params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
         MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
-        textEmbeddingModel.initModel(smallModel, params, encryptor);
+        textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -124,14 +124,14 @@ public class TextEmbeddingModelTest {
             assertEquals(1, mlModelTensors.size());
             assertEquals(modelConfig.getEmbeddingDimension().intValue(), mlModelTensors.get(position).getData().length);
         }
-        textEmbeddingModel.close();
+        textEmbeddingDenseModel.close();
     }
 
     @Test
     public void initModel_predict_TorchScript_SentenceTransformer() {
-        textEmbeddingModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -141,16 +141,16 @@ public class TextEmbeddingModelTest {
             assertEquals(4, mlModelTensors.size());
             assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
-        textEmbeddingModel.close();
+        textEmbeddingDenseModel.close();
     }
 
     @Test
     public void initModel_predict_TorchScript_SentenceTransformer_ResultFilter() {
-        textEmbeddingModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
         ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList(SENTENCE_EMBEDDING)).build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -160,7 +160,7 @@ public class TextEmbeddingModelTest {
             assertEquals(1, mlModelTensors.size());
             assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
-        textEmbeddingModel.close();
+        textEmbeddingDenseModel.close();
     }
 
     @Test
@@ -211,9 +211,9 @@ public class TextEmbeddingModelTest {
                 .modelMaxLength(modelMaxLength)
                 .build();
         MLModel mlModel = model.toBuilder().modelFormat(modelFormat).modelConfig(onnxModelConfig).build();
-        textEmbeddingModel.initModel(mlModel, params, encryptor);
+        textEmbeddingDenseModel.initModel(mlModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
-        ModelTensorOutput output = (ModelTensorOutput)textEmbeddingModel.predict(mlInput);
+        ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
         for (int i=0;i<mlModelOutputs.size();i++) {
@@ -223,7 +223,7 @@ public class TextEmbeddingModelTest {
             assertEquals(1, mlModelTensors.size());
             assertEquals(dimension, mlModelTensors.get(position).getData().length);
         }
-        textEmbeddingModel.close();
+        textEmbeddingDenseModel.close();
 
     }
 
@@ -233,7 +233,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model file is null");
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
-        textEmbeddingModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -242,7 +242,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model helper is null");
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
-        textEmbeddingModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -252,7 +252,7 @@ public class TextEmbeddingModelTest {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("all-MiniLM-L6-v2_onnx.zip").toURI()));
         params.put(MODEL_HELPER, modelHelper);
-        textEmbeddingModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -260,7 +260,7 @@ public class TextEmbeddingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model id is null");
         model.setModelId(null);
-        textEmbeddingModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
     }
 
     @Test
@@ -270,7 +270,7 @@ public class TextEmbeddingModelTest {
             params.put(MODEL_HELPER, modelHelper);
             params.put(MODEL_ZIP_FILE, new File(getClass().getResource("wrong_zip_with_2_pt_file.zip").toURI()));
             params.put(ML_ENGINE, mlEngine);
-            textEmbeddingModel.initModel(model, params, encryptor);
+            textEmbeddingDenseModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals(MLException.class, e.getClass());
             Throwable rootCause = ExceptionUtils.getRootCause(e);
@@ -284,14 +284,14 @@ public class TextEmbeddingModelTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("wrong function name");
         MLModel mlModel = model.toBuilder().algorithm(FunctionName.KMEANS).build();
-        textEmbeddingModel.initModel(mlModel, params, encryptor);
+        textEmbeddingDenseModel.initModel(mlModel, params, encryptor);
     }
 
     @Test
     public void predict_NullModelHelper() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
+        textEmbeddingDenseModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -300,34 +300,34 @@ public class TextEmbeddingModelTest {
         exceptionRule.expectMessage("model not deployed");
         model.setModelId(null);
         try {
-            textEmbeddingModel.initModel(model, params, encryptor);
+            textEmbeddingDenseModel.initModel(model, params, encryptor);
         } catch (Exception e) {
             assertEquals("model id is null", e.getMessage());
         }
-        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
+        textEmbeddingDenseModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void predict_AfterModelClosed() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("Failed to inference TEXT_EMBEDDING");
-        textEmbeddingModel.initModel(model, params, encryptor);
-        textEmbeddingModel.close();
-        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
+        textEmbeddingDenseModel.initModel(model, params, encryptor);
+        textEmbeddingDenseModel.close();
+        textEmbeddingDenseModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
     }
 
     @Test
     public void parseModelTensorOutput_NullOutput() {
         exceptionRule.expect(MLException.class);
         exceptionRule.expectMessage("No output generated");
-        textEmbeddingModel.parseModelTensorOutput(null, null);
+        textEmbeddingDenseModel.parseModelTensorOutput(null, null);
     }
 
     @Test
     public void predict_BeforeInitingModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        textEmbeddingModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
+        textEmbeddingDenseModel.predict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build(), model);
     }
 
     @After

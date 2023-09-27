@@ -18,7 +18,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import java.util.Collections;
 import java.util.List;
 
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingModel.SENTENCE_EMBEDDING;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
 
 public class HuggingfaceTextEmbeddingServingTranslator implements Translator<Input, Output> {
 
