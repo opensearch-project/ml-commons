@@ -24,6 +24,7 @@ import java.util.Map;
 public class StringUtils {
 
     public static final Gson gson;
+
     static {
         gson = new Gson();
     }
