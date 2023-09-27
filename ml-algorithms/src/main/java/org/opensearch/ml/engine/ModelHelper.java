@@ -15,7 +15,6 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-import org.opensearch.ml.common.utils.GsonUtil;
 
 import java.io.File;
 import java.io.FileReader;
@@ -73,7 +72,7 @@ public class ModelHelper {
 
                 Map<?, ?> config = null;
                 try (JsonReader reader = new JsonReader(new FileReader(configCacheFilePath))) {
-                    config = GsonUtil.fromJson(reader, Map.class);
+                    config = gson.fromJson(reader, Map.class);
                 }
 
                 if (config == null) {
@@ -171,7 +170,7 @@ public class ModelHelper {
 
                 List<?> config = null;
                 try (JsonReader reader = new JsonReader(new FileReader(cacheFilePath))) {
-                    config = GsonUtil.fromJson(reader, List.class);
+                    config = gson.fromJson(reader, List.class);
                 }
 
                 return config;
