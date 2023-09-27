@@ -93,6 +93,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -103,6 +104,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLExecutable;
@@ -222,30 +224,22 @@ public class MLModelManager {
                     GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
                     client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
                         if (modelGroup.isExists()) {
-                            Map<String, Object> source = modelGroup.getSourceAsMap();
-                            int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
-                            int newVersion = latestVersion + 1;
-                            source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
-                            source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-                            UpdateRequest updateModelGroupRequest = new UpdateRequest();
-                            long seqNo = modelGroup.getSeqNo();
-                            long primaryTerm = modelGroup.getPrimaryTerm();
-                            updateModelGroupRequest
-                                .index(ML_MODEL_GROUP_INDEX)
-                                .id(modelGroupId)
-                                .setIfSeqNo(seqNo)
-                                .setIfPrimaryTerm(primaryTerm)
-                                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                                .doc(source);
-                            client
-                                .update(
-                                    updateModelGroupRequest,
-                                    ActionListener
-                                        .wrap(r -> { uploadMLModelMeta(mlRegisterModelMetaInput, newVersion + "", listener); }, e -> {
-                                            log.error("Failed to update model group", e);
-                                            listener.onFailure(e);
-                                        })
-                                );
+                            Map<String, Object> modelGroupSource = modelGroup.getSourceAsMap();
+                            int updatedVersion = incrementLatestVersion(modelGroupSource);
+                            UpdateRequest updateModelGroupRequest = createUpdateModelGroupRequest(
+                                modelGroupSource,
+                                modelGroupId,
+                                modelGroup.getSeqNo(),
+                                modelGroup.getPrimaryTerm(),
+                                updatedVersion
+                            );
+
+                            client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
+                                uploadMLModelMeta(mlRegisterModelMetaInput, updatedVersion + "", listener);
+                            }, e -> {
+                                log.error("Failed to update model group", e);
+                                listener.onFailure(e);
+                            }));
                         } else {
                             log.error("Model group not found");
                             listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
@@ -313,6 +307,80 @@ public class MLModelManager {
     }
 
     /**
+     *
+     * @param mlRegisterModelInput  register model input for remote models
+     * @param mlTask  ML task
+     * @param listener action listener
+     */
+    public void registerMLRemoteModel(
+        MLRegisterModelInput mlRegisterModelInput,
+        MLTask mlTask,
+        ActionListener<MLRegisterModelResponse> listener
+    ) {
+        checkAndAddRunningTask(mlTask, maxRegisterTasksPerNode);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
+
+            String modelGroupId = mlRegisterModelInput.getModelGroupId();
+            GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
+            if (Strings.isBlank(modelGroupId)) {
+                indexRemoteModel(mlRegisterModelInput, mlTask, "1", listener);
+            }
+
+            client.get(getModelGroupRequest, ActionListener.wrap(getModelGroupResponse -> {
+                if (getModelGroupResponse.isExists()) {
+                    Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
+                    int updatedVersion = incrementLatestVersion(modelGroupSourceMap);
+                    UpdateRequest updateModelGroupRequest = createUpdateModelGroupRequest(
+                        modelGroupSourceMap,
+                        modelGroupId,
+                        getModelGroupResponse.getSeqNo(),
+                        getModelGroupResponse.getPrimaryTerm(),
+                        updatedVersion
+                    );
+                    client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
+                        indexRemoteModel(mlRegisterModelInput, mlTask, updatedVersion + "", listener);
+                    }, e -> {
+                        log.error("Failed to update model group " + modelGroupId, e);
+                        handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                        listener.onFailure(e);
+                    }));
+                } else {
+                    log.error("Model group response is empty");
+                    handleException(
+                        mlRegisterModelInput.getFunctionName(),
+                        mlTask.getTaskId(),
+                        new MLValidationException("Model group not found")
+                    );
+                    listener.onFailure(new MLResourceNotFoundException("Model Group Response is empty for " + modelGroupId));
+                }
+            }, error -> {
+                if (error instanceof IndexNotFoundException) {
+                    log.error("Model group Index is missing");
+                    handleException(
+                        mlRegisterModelInput.getFunctionName(),
+                        mlTask.getTaskId(),
+                        new MLResourceNotFoundException("Failed to get model group due to index missing")
+                    );
+                    listener.onFailure(error);
+                } else {
+                    log.error("Failed to get model group", error);
+                    handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), error);
+                    listener.onFailure(error);
+                }
+            }));
+        } catch (Exception e) {
+            log.error("Failed to register remote model", e);
+            handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), e);
+            listener.onFailure(e);
+        } finally {
+            mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
+        }
+    }
+
+    /**
      * Register model. Basically download model file, split into chunks and save into model index.
      *
      * @param registerModelInput register model input
@@ -334,25 +402,19 @@ public class MLModelManager {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
-                        Map<String, Object> source = modelGroup.getSourceAsMap();
-                        int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
-                        int newVersion = latestVersion + 1;
-                        source.put(MLModelGroup.LATEST_VERSION_FIELD, newVersion);
-                        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-                        UpdateRequest updateModelGroupRequest = new UpdateRequest();
-                        long seqNo = modelGroup.getSeqNo();
-                        long primaryTerm = modelGroup.getPrimaryTerm();
-                        updateModelGroupRequest
-                            .index(ML_MODEL_GROUP_INDEX)
-                            .id(modelGroupId)
-                            .setIfSeqNo(seqNo)
-                            .setIfPrimaryTerm(primaryTerm)
-                            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
-                            .doc(source);
+                        Map<String, Object> modelGroupSourceMap = modelGroup.getSourceAsMap();
+                        int updatedVersion = incrementLatestVersion(modelGroupSourceMap);
+                        UpdateRequest updateModelGroupRequest = createUpdateModelGroupRequest(
+                            modelGroupSourceMap,
+                            modelGroupId,
+                            modelGroup.getSeqNo(),
+                            modelGroup.getPrimaryTerm(),
+                            updatedVersion
+                        );
                         client
                             .update(
                                 updateModelGroupRequest,
-                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); }, e -> {
+                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, updatedVersion + ""); }, e -> {
                                     log.error("Failed to update model group", e);
                                     handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
                                 })
@@ -385,6 +447,95 @@ public class MLModelManager {
             handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
         } finally {
             mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).decrement();
+        }
+    }
+
+    private UpdateRequest createUpdateModelGroupRequest(
+        Map<String, Object> modelGroupSourceMap,
+        String modelGroupId,
+        long seqNo,
+        long primaryTerm,
+        int updatedVersion
+    ) {
+        modelGroupSourceMap.put(MLModelGroup.LATEST_VERSION_FIELD, updatedVersion);
+        modelGroupSourceMap.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        UpdateRequest updateModelGroupRequest = new UpdateRequest();
+
+        updateModelGroupRequest
+            .index(ML_MODEL_GROUP_INDEX)
+            .id(modelGroupId)
+            .setIfSeqNo(seqNo)
+            .setIfPrimaryTerm(primaryTerm)
+            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+            .doc(modelGroupSourceMap);
+
+        return updateModelGroupRequest;
+    }
+
+    private int incrementLatestVersion(Map<String, Object> modelGroupSourceMap) {
+        return (int) modelGroupSourceMap.get(MLModelGroup.LATEST_VERSION_FIELD) + 1;
+    }
+
+    private void indexRemoteModel(
+        MLRegisterModelInput registerModelInput,
+        MLTask mlTask,
+        String modelVersion,
+        ActionListener<MLRegisterModelResponse> listener
+    ) {
+        String taskId = mlTask.getTaskId();
+        FunctionName functionName = mlTask.getFunctionName();
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            String modelName = registerModelInput.getModelName();
+            String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
+            Instant now = Instant.now();
+            if (registerModelInput.getConnector() != null) {
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+            }
+
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
+                MLModel mlModelMeta = MLModel
+                    .builder()
+                    .name(modelName)
+                    .algorithm(functionName)
+                    .modelGroupId(registerModelInput.getModelGroupId())
+                    .version(version)
+                    .description(registerModelInput.getDescription())
+                    .modelFormat(registerModelInput.getModelFormat())
+                    .modelState(MLModelState.REGISTERED)
+                    .connector(registerModelInput.getConnector())
+                    .connectorId(registerModelInput.getConnectorId())
+                    .modelConfig(registerModelInput.getModelConfig())
+                    .createdTime(now)
+                    .lastUpdateTime(now)
+                    .build();
+
+                IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
+                indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+                // index remote model doc
+                ActionListener<IndexResponse> indexListener = ActionListener.wrap(modelMetaRes -> {
+                    String modelId = modelMetaRes.getId();
+                    mlTask.setModelId(modelId);
+                    log.info("create new model meta doc {} for upload task {}", modelId, taskId);
+                    mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    // if (registerModelInput.isDeployModel()) {
+                    // deployModelAfterRegistering(registerModelInput, modelId);
+                    // }
+                    listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name(), modelId));
+                }, e -> {
+                    log.error("Failed to index model meta doc", e);
+                    handleException(functionName, taskId, e);
+                    listener.onFailure(e);
+                });
+
+                client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, indexListener));
+            }, error -> {
+                // failed to initialize the model index
+                log.error("Failed to init model index", error);
+                handleException(functionName, taskId, error);
+                listener.onFailure(error);
+            }));
         }
     }
 
@@ -431,7 +582,6 @@ public class MLModelManager {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
                 });
-
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, indexListener));
             }, e -> {
                 log.error("Failed to init model index", e);
