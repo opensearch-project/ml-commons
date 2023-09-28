@@ -24,6 +24,7 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class TextDocsMLInputTest {
@@ -47,22 +48,22 @@ public class TextDocsMLInputTest {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        parseMLInput(jsonStr);
+        parseMLInput(jsonStr, 2);
     }
 
     @Test
     public void parseTextDocsMLInput_OldWay() throws IOException {
-        String jsonStr = "{\"text_docs\": [ \"doc1\", \"doc2\" ],\"return_number\": true, \"return_bytes\": true,\"target_response\": [ \"field1\" ], \"target_response_positions\": [2]}";
-        parseMLInput(jsonStr);
+        String jsonStr = "{\"text_docs\": [ \"doc1\", \"doc2\", null ],\"return_number\": true, \"return_bytes\": true,\"target_response\": [ \"field1\" ], \"target_response_positions\": [2]}";
+        parseMLInput(jsonStr, 3);
     }
 
     @Test
     public void parseTextDocsMLInput_NewWay() throws IOException {
         String jsonStr = "{\"text_docs\":[\"doc1\",\"doc2\"],\"result_filter\":{\"return_bytes\":true,\"return_number\":true,\"target_response\":[\"field1\"], \"target_response_positions\": [2]}}";
-        parseMLInput(jsonStr);
+        parseMLInput(jsonStr, 2);
     }
 
-    private void parseMLInput(String jsonStr) throws IOException {
+    private void parseMLInput(String jsonStr, int docSize) throws IOException {
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
@@ -72,9 +73,12 @@ public class TextDocsMLInputTest {
         assertEquals(input.getFunctionName(), parsedInput.getFunctionName());
         assertEquals(input.getInputDataset().getInputDataType(), parsedInput.getInputDataset().getInputDataType());
         TextDocsInputDataSet inputDataset = (TextDocsInputDataSet) parsedInput.getInputDataset();
-        assertEquals(2, inputDataset.getDocs().size());
+        assertEquals(docSize, inputDataset.getDocs().size());
         assertEquals("doc1", inputDataset.getDocs().get(0));
         assertEquals("doc2", inputDataset.getDocs().get(1));
+        if (inputDataset.getDocs().size() > 2) {
+            assertNull(inputDataset.getDocs().get(2));
+        }
         assertNotNull(inputDataset.getResultFilter());
         assertTrue(inputDataset.getResultFilter().isReturnBytes());
         assertTrue(inputDataset.getResultFilter().isReturnNumber());
