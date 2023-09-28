@@ -15,6 +15,7 @@ import org.opensearch.ml.common.annotation.InputDataSet;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,7 +41,11 @@ public class TextDocsInputDataSet extends MLInputDataset{
 
     public TextDocsInputDataSet(StreamInput streamInput) throws IOException {
         super(MLInputDataType.TEXT_DOCS);
-        docs = streamInput.readStringList();
+        docs = new ArrayList<>();
+        int size = streamInput.readInt();
+        for (int i=0; i<size; i++) {
+            docs.add(streamInput.readOptionalString());
+        }
         if (streamInput.readBoolean()) {
             resultFilter = new ModelResultFilter(streamInput);
         } else {
@@ -51,7 +56,10 @@ public class TextDocsInputDataSet extends MLInputDataset{
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
         super.writeTo(streamOutput);
-        streamOutput.writeStringCollection(docs);
+        streamOutput.writeInt(docs.size());
+        for (String doc : docs) {
+            streamOutput.writeOptionalString(doc);
+        }
         if (resultFilter != null) {
             streamOutput.writeBoolean(true);
             resultFilter.writeTo(streamOutput);
