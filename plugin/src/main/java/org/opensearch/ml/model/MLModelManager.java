@@ -519,9 +519,9 @@ public class MLModelManager {
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
                     mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
-                    // if (registerModelInput.isDeployModel()) {
-                    // deployModelAfterRegistering(registerModelInput, modelId);
-                    // }
+                    if (registerModelInput.isDeployModel()) {
+                        deployModelAfterRegistering(registerModelInput, modelId);
+                    }
                     listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name(), modelId));
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
