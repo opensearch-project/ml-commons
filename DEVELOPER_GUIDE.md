@@ -46,6 +46,10 @@ If you already have these installed or have your own preferences for installing 
 
 If you don't already have it installed (check with `git --version`) we recommend following [the `git` installation guide for your OS](https://git-scm.com/downloads).
 
+Resources to get started with git:
+- [Learn git branching](https://learngitbranching.js.org/)
+- [Contributing your first PR](https://gist.github.com/ashwin-pc/84ee8bd937caecd6a193e2a6a4c4fe34)
+
 #### Install `Java`
 
 You can install any version of Java starting from 17. [`Jenv`](https://www.jenv.be/) is a good option to use so that you can have multiple versions of Java.
