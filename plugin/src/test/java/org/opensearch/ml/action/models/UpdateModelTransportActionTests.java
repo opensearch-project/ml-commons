@@ -10,6 +10,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -56,7 +58,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-public class TransportUpdateModelActionTests extends OpenSearchTestCase {
+public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
@@ -99,7 +101,7 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
     UpdateResponse updateResponse;
-    TransportUpdateModelAction transportUpdateModelAction;
+    UpdateModelTransportAction transportUpdateModelAction;
     MLUpdateModelRequest updateLocalModelRequest;
     MLUpdateModelInput updateLocalModelInput;
     MLUpdateModelRequest updateRemoteModelRequest;
@@ -142,7 +144,7 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().build();
 
         transportUpdateModelAction = spy(
-            new TransportUpdateModelAction(
+            new UpdateModelTransportAction(
                 transportService,
                 actionFilters,
                 client,
@@ -184,6 +186,17 @@ public class TransportUpdateModelActionTests extends OpenSearchTestCase {
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateRequestDocIOException() throws IOException {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+        doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
     }
 
     @Test

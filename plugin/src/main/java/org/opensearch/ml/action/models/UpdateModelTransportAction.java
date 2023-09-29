@@ -52,14 +52,14 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-public class TransportUpdateModelAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
+public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
     NamedXContentRegistry xContentRegistry;
     ModelAccessControlHelper modelAccessControlHelper;
     ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Inject
-    public TransportUpdateModelAction(
+    public UpdateModelTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
@@ -103,34 +103,44 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                         if (r.getSource() != null && r.getSource().get(ALGORITHM_FIELD) != null) {
                             algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
                         } else {
-                            actionListener
-                                .onFailure(new RuntimeException("FUNCTION_NAME_FIELD not found for this model, model ID " + modelId));
+                            actionListener.onFailure(new RuntimeException("ALGORITHM_FIELD not found for this model, model ID " + modelId));
                         }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        modelAccessControlHelper
-                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                                if (Boolean.TRUE.equals(hasPermission)) {
-                                    updateRemoteOrTextEmbeddingModel(
-                                        modelId,
-                                        updateModelInput,
-                                        mlModel,
-                                        user,
-                                        updateRequest,
-                                        actionListener,
-                                        context
-                                    );
-                                } else {
-                                    actionListener
-                                        .onFailure(
-                                            new MLValidationException(
-                                                "User doesn't have privilege to perform this operation on this model, model ID " + modelId
-                                            )
+                        if (mlModel.getAlgorithm() == TEXT_EMBEDDING || mlModel.getAlgorithm() == REMOTE) {
+                            modelAccessControlHelper
+                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                                    if (Boolean.TRUE.equals(hasPermission)) {
+                                        updateRemoteOrTextEmbeddingModel(
+                                            modelId,
+                                            updateModelInput,
+                                            mlModel,
+                                            user,
+                                            updateRequest,
+                                            actionListener,
+                                            context
                                         );
-                                }
-                            }, exception -> {
-                                log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                                actionListener.onFailure(exception);
-                            }));
+                                    } else {
+                                        actionListener
+                                            .onFailure(
+                                                new MLValidationException(
+                                                    "User doesn't have privilege to perform this operation on this model, model ID "
+                                                        + modelId
+                                                )
+                                            );
+                                    }
+                                }, exception -> {
+                                    log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                                    actionListener.onFailure(exception);
+                                }));
+                        } else {
+                            actionListener
+                                .onFailure(
+                                    new MLValidationException(
+                                        "User doesn't have privilege to perform this operation on this function category: "
+                                            + mlModel.getAlgorithm().toString()
+                                    )
+                                );
+                        }
                     } catch (Exception e) {
                         log.error("Failed to update ML model for model ID {}. Details {}:", modelId, e);
                         actionListener.onFailure(e);
@@ -200,7 +210,8 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                 actionListener
                     .onFailure(new IllegalArgumentException("Trying to update the connector or connector_id field on a local model"));
             }
-        } else if (mlModel.getAlgorithm() == REMOTE) {
+        } else {
+            // mlModel.getAlgorithm() == REMOTE
             if (relinkConnectorId == null) {
                 updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
             } else {
@@ -215,14 +226,6 @@ public class TransportUpdateModelAction extends HandledTransportAction<ActionReq
                     context
                 );
             }
-        } else {
-            actionListener
-                .onFailure(
-                    new MLValidationException(
-                        "User doesn't have privilege to perform this operation on this function category: "
-                            + mlModel.getAlgorithm().toString()
-                    )
-                );
         }
     }
 
