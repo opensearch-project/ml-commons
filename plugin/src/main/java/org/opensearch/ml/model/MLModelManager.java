@@ -325,10 +325,6 @@ public class MLModelManager {
 
             String modelGroupId = mlRegisterModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (Strings.isBlank(modelGroupId)) {
-                indexRemoteModel(mlRegisterModelInput, mlTask, "1", listener);
-            }
-
             client.get(getModelGroupRequest, ActionListener.wrap(getModelGroupResponse -> {
                 if (getModelGroupResponse.isExists()) {
                     Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
@@ -396,9 +392,6 @@ public class MLModelManager {
 
             String modelGroupId = registerModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (Strings.isBlank(modelGroupId)) {
-                uploadModel(registerModelInput, mlTask, "1");
-            }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
@@ -730,7 +723,11 @@ public class MLModelManager {
                             handleException(functionName, taskId, e);
                             deleteFileQuietly(file);
                             // remove model doc as failed to upload model
-                            deleteModel(modelId);
+                            deleteModel(
+                                modelId,
+                                registerModelInput.getModelGroupId(),
+                                registerModelInput.getIsThisVersionCreatingModelGroup()
+                            );
                             semaphore.release();
                             deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                         }));
@@ -738,7 +735,7 @@ public class MLModelManager {
                 }, e -> {
                     log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-                    deleteModel(modelId);
+                    deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getIsThisVersionCreatingModelGroup());
                     handleException(functionName, taskId, e);
                 })
             );
@@ -805,7 +802,7 @@ public class MLModelManager {
         }, e -> {
             log.error("Failed to update model", e);
             handleException(functionName, taskId, e);
-            deleteModel(modelId);
+            deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getIsThisVersionCreatingModelGroup());
         }));
     }
 
@@ -818,7 +815,7 @@ public class MLModelManager {
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
     }
 
-    private void deleteModel(String modelId) {
+    private void deleteModel(String modelId, String modelGroupID, Boolean isThisVersionCreatingModelGroup) {
         DeleteRequest deleteRequest = new DeleteRequest();
         deleteRequest.index(ML_MODEL_INDEX).id(modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest);
@@ -827,6 +824,15 @@ public class MLModelManager {
             .setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN)
             .setAbortOnVersionConflict(false);
         client.execute(DeleteByQueryAction.INSTANCE, deleteChunksRequest);
+        if (isThisVersionCreatingModelGroup) {
+            deleteModelGroup(modelGroupID);
+        }
+    }
+
+    private void deleteModelGroup(String modelGroupID) {
+        DeleteRequest deleteModelGroupRequest = new DeleteRequest();
+        deleteModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupID).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        client.delete(deleteModelGroupRequest);
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {

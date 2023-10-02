@@ -52,7 +52,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String BACKEND_ROLES_FIELD = "backend_roles";
     public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
-
+    public static final String IS_THIS_VERSION_CREATING_MODEL_GROUP = "is_this_version_creating_model_group";
     private FunctionName functionName;
     private String modelName;
     private String modelGroupId;
@@ -72,6 +72,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private List<String> backendRoles;
     private Boolean addAllBackendRoles;
     private AccessMode accessMode;
+    private Boolean isThisVersionCreatingModelGroup;
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(FunctionName functionName,
@@ -89,7 +90,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 String connectorId,
                                 List<String> backendRoles,
                                 Boolean addAllBackendRoles,
-                                AccessMode accessMode
+                                AccessMode accessMode,
+                                Boolean isThisVersionCreatingModelGroup
     ) {
         if (functionName == null) {
             this.functionName = FunctionName.TEXT_EMBEDDING;
@@ -122,6 +124,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.backendRoles = backendRoles;
         this.addAllBackendRoles = addAllBackendRoles;
         this.accessMode = accessMode;
+        this.isThisVersionCreatingModelGroup = isThisVersionCreatingModelGroup;
     }
 
 
@@ -152,6 +155,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (in.readBoolean()) {
             this.accessMode = in.readEnum(AccessMode.class);
         }
+        this.isThisVersionCreatingModelGroup = in.readOptionalBoolean();
     }
 
     @Override
@@ -197,6 +201,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalBoolean(isThisVersionCreatingModelGroup);
     }
 
     @Override
@@ -244,6 +249,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (accessMode != null) {
             builder.field(ACCESS_MODE_FIELD, accessMode);
         }
+        if (isThisVersionCreatingModelGroup != null) {
+            builder.field(IS_THIS_VERSION_CREATING_MODEL_GROUP, isThisVersionCreatingModelGroup);
+        }
         builder.endObject();
         return builder;
     }
@@ -262,6 +270,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         List<String> backendRoles = new ArrayList<>();
         Boolean addAllBackendRoles = null;
         AccessMode accessMode = null;
+        Boolean isThisVersionCreatingModelGroup = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -313,12 +322,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case ACCESS_MODE_FIELD:
                     accessMode = AccessMode.from(parser.text());
                     break;
+                case IS_THIS_VERSION_CREATING_MODEL_GROUP:
+                    isThisVersionCreatingModelGroup = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode);
+        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, isThisVersionCreatingModelGroup);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -337,6 +349,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         List<String> backendRoles = new ArrayList<>();
         AccessMode accessMode = null;
         Boolean addAllBackendRoles = null;
+        Boolean isThisVersionCreatingModelGroup = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -395,11 +408,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case ACCESS_MODE_FIELD:
                     accessMode = AccessMode.from(parser.text());
                     break;
+                case IS_THIS_VERSION_CREATING_MODEL_GROUP:
+                    isThisVersionCreatingModelGroup = parser.booleanValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode);
+        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, isThisVersionCreatingModelGroup);
     }
 }

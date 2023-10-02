@@ -136,14 +136,51 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
-        User user = RestActionUtils.getUserContext(client);
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        if (registerModelInput.getModelGroupId() == null) {
+            mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
+                if (modelGroups != null
+                    && modelGroups.getHits().getTotalHits() != null
+                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
+                    registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
+                    checkUserAccess(registerModelInput, listener, true);
+                } else {
+                    checkUserAccess(registerModelInput, listener, false);
+                }
+            }, e -> {
+                log.error("Failed to search model group index", e);
+                listener.onFailure(e);
+            }));
+        } else {
+            checkUserAccess(registerModelInput, listener, false);
+        }
+    }
+
+    private void checkUserAccess(
+        MLRegisterModelInput registerModelInput,
+        ActionListener<MLRegisterModelResponse> listener,
+        Boolean isModelNameAlreadyExisting
+    ) {
+        User user = RestActionUtils.getUserContext(client);
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
                 if (!access) {
-                    log.error("You don't have permissions to perform this operation on this model.");
-                    listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+                    if (isModelNameAlreadyExisting) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "The name \""
+                                        + registerModelInput.getModelName()
+                                        + "\" you provided is already being used by another model group \""
+                                        + registerModelInput.getModelGroupId()
+                                        + "\" to which you do not have access. Please provide a different name."
+                                )
+                            );
+                    } else
+                        listener
+                            .onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
                 } else {
                     doRegister(registerModelInput, listener);
                 }
@@ -196,6 +233,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(registerModelInput);
             mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
                 registerModelInput.setModelGroupId(modelGroupId);
+                registerModelInput.setIsThisVersionCreatingModelGroup(true);
                 registerModel(registerModelInput, listener);
             }, e -> {
                 logException("Failed to create Model Group", e, log);
