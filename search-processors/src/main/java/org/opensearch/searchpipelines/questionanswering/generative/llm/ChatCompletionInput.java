@@ -17,13 +17,14 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import java.util.List;
+
+import org.opensearch.ml.common.conversation.Interaction;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.conversation.Interaction;
-
-import java.util.List;
 
 /**
  * Input for LLMs via HttpConnector

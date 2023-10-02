@@ -17,8 +17,12 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import com.google.common.annotations.VisibleForTesting;
-import lombok.extern.log4j.Log4j2;
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.ml.common.FunctionName;
@@ -30,11 +34,9 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.google.common.annotations.VisibleForTesting;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Wrapper for talking to LLMs via OpenSearch HttpConnector.
@@ -76,8 +78,14 @@ public class DefaultLlmImpl implements Llm {
 
         Map<String, String> inputParameters = new HashMap<>();
         inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
-        String messages = PromptUtil.getChatCompletionPrompt(chatCompletionInput.getSystemPrompt(), chatCompletionInput.getUserInstructions(),
-            chatCompletionInput.getQuestion(), chatCompletionInput.getChatHistory(), chatCompletionInput.getContexts());
+        String messages = PromptUtil
+            .getChatCompletionPrompt(
+                chatCompletionInput.getSystemPrompt(),
+                chatCompletionInput.getUserInstructions(),
+                chatCompletionInput.getQuestion(),
+                chatCompletionInput.getChatHistory(),
+                chatCompletionInput.getContexts()
+            );
         inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
         log.info("Messages to LLM: {}", messages);
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(inputParameters).build();
@@ -89,17 +97,12 @@ public class DefaultLlmImpl implements Llm {
         Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
         log.info("dataAsMap: {}", dataAsMap.toString());
 
-        // TODO dataAsMap can be null or can contain information such as throttling.  Handle non-happy cases.
+        // TODO dataAsMap can be null or can contain information such as throttling. Handle non-happy cases.
 
         List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
         List<Object> answers = null;
         List<String> errors = null;
         if (choices == null) {
-            /*
-             * error={message=This model's maximum context length is 4097 tokens. However, your messages resulted in 4456 tokens.
-             *                Please reduce the length of the messages.,
-             *        type=invalid_request_error, param=messages, code=context_length_exceeded}
-             */
             Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
             errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
         } else {

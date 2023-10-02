@@ -17,9 +17,10 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import org.opensearch.client.Client;
+
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import org.opensearch.client.Client;
 
 /**
  * Helper class for wiring LLMs based on the model ID.

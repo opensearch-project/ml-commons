@@ -17,26 +17,46 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import java.util.List;
+
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
-
-import java.util.List;
 
 /**
  * Helper class for creating inputs and outputs for different implementations of LLMs.
  */
 public class LlmIOUtil {
 
-    public static ChatCompletionInput createChatCompletionInput(String llmModel, String question, List<Interaction> chatHistory,
-        List<String> contexts, int timeoutInSeconds) {
+    public static ChatCompletionInput createChatCompletionInput(
+        String llmModel,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts,
+        int timeoutInSeconds
+    ) {
 
         // TODO pick the right subclass based on the modelId.
 
-        return createChatCompletionInput(PromptUtil.DEFAULT_SYSTEM_PROMPT, null, llmModel, question, chatHistory, contexts, timeoutInSeconds);
+        return createChatCompletionInput(
+            PromptUtil.DEFAULT_SYSTEM_PROMPT,
+            null,
+            llmModel,
+            question,
+            chatHistory,
+            contexts,
+            timeoutInSeconds
+        );
     }
 
-    public static ChatCompletionInput createChatCompletionInput(String systemPrompt, String userInstructions, String llmModel,
-        String question, List<Interaction> chatHistory, List<String> contexts, int timeoutInSeconds) {
+    public static ChatCompletionInput createChatCompletionInput(
+        String systemPrompt,
+        String userInstructions,
+        String llmModel,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts,
+        int timeoutInSeconds
+    ) {
 
         return new ChatCompletionInput(llmModel, question, chatHistory, contexts, timeoutInSeconds, systemPrompt, userInstructions);
     }

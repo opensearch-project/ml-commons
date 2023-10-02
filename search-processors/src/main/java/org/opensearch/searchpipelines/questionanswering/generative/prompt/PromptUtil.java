@@ -17,29 +17,22 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.apache.commons.text.StringEscapeUtils;
+import org.opensearch.core.common.Strings;
+import org.opensearch.ml.common.conversation.Interaction;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.apache.commons.text.StringEscapeUtils;
-import org.apache.commons.text.StringSubstitutor;
-import org.opensearch.core.common.Strings;
-import org.opensearch.ml.common.conversation.Interaction;
-import org.opensearch.ml.common.utils.StringUtils;
-import org.opensearch.script.Script;
-import org.opensearch.script.ScriptService;
-import org.opensearch.script.ScriptType;
-import org.opensearch.script.TemplateScript;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-import static java.util.Collections.singletonMap;
 
 /**
  * A utility class for producing prompts for LLMs.
@@ -69,7 +62,13 @@ public class PromptUtil {
         return getChatCompletionPrompt(DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
     }
 
-    public static String getChatCompletionPrompt(String systemPrompt, String userInstructions, String question, List<Interaction> chatHistory, List<String> contexts) {
+    public static String getChatCompletionPrompt(
+        String systemPrompt,
+        String userInstructions,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts
+    ) {
         return buildMessageParameter(systemPrompt, userInstructions, question, chatHistory, contexts);
     }
 
@@ -89,7 +88,13 @@ public class PromptUtil {
     }
 
     @VisibleForTesting
-    static String buildMessageParameter(String systemPrompt, String userInstructions, String question, List<Interaction> chatHistory, List<String> contexts) {
+    static String buildMessageParameter(
+        String systemPrompt,
+        String userInstructions,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts
+    ) {
 
         // TODO better prompt template management is needed here.
 
@@ -99,21 +104,13 @@ public class PromptUtil {
 
         JsonArray messageArray = new JsonArray();
 
-        /*
-        if (!Strings.isNullOrEmpty(systemPrompt)) {
-            messageArray.add(new Message(ChatRole.SYSTEM, systemPrompt).toJson());
-        }
-        if (!Strings.isNullOrEmpty(userInstructions)) {
-            messageArray.add(new Message(ChatRole.USER, userInstructions).toJson());
-        }*/
-
         messageArray.addAll(getPromptTemplateAsJsonArray(systemPrompt, userInstructions));
         for (int i = 0; i < contexts.size(); i++) {
-            messageArray.add(new Message(ChatRole.USER, "SEARCH RESULT " + (i+1) + ": " + contexts.get(i)).toJson());
+            messageArray.add(new Message(ChatRole.USER, "SEARCH RESULT " + (i + 1) + ": " + contexts.get(i)).toJson());
         }
         if (!chatHistory.isEmpty()) {
             // The oldest interaction first
-            //Collections.reverse(chatHistory);
+            // Collections.reverse(chatHistory);
             List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
             Collections.reverse(messages);
             messages.forEach(m -> messageArray.add(m.toJson()));
@@ -145,7 +142,6 @@ public class PromptUtil {
 
         @Getter
         private List<Message> messages = new ArrayList<>();
-        //private JsonArray jsonArray = new JsonArray();
 
         public Messages(final List<Message> messages) {
             addMessages(messages);
@@ -193,6 +189,7 @@ public class PromptUtil {
             json.remove(MESSAGE_FIELD_ROLE);
             json.add(MESSAGE_FIELD_ROLE, new JsonPrimitive(chatRole.getName()));
         }
+
         public void setContent(String content) {
             this.content = StringEscapeUtils.escapeJson(content);
             json.remove(MESSAGE_FIELD_CONTENT);

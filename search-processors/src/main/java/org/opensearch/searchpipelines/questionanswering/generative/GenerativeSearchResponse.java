@@ -17,13 +17,13 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import java.io.IOException;
+import java.util.Objects;
+
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
-import java.util.Objects;
 
 /**
  * This is an extension of SearchResponse that adds LLM-generated answers to search responses in a dedicated "ext" section.

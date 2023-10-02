@@ -17,33 +17,18 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.junit.Before;
-import org.opensearch.common.settings.ClusterSettings;
-import org.opensearch.common.settings.Settings;
-import org.opensearch.env.Environment;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
-import org.opensearch.ml.common.conversation.Interaction;
-import org.opensearch.script.MockScriptEngine;
-import org.opensearch.script.Script;
-import org.opensearch.script.ScriptContext;
-import org.opensearch.script.ScriptEngine;
-import org.opensearch.script.ScriptModule;
-import org.opensearch.script.ScriptService;
-import org.opensearch.script.StoredScriptSource;
-import org.opensearch.test.OpenSearchTestCase;
-
-import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.function.Function;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.test.OpenSearchTestCase;
 
 public class PromptUtilTests extends OpenSearchTestCase {
 
@@ -56,14 +41,35 @@ public class PromptUtilTests extends OpenSearchTestCase {
         String userInstructions = null;
         String question = "Who am I";
         List<String> contexts = new ArrayList<>();
-        List<Interaction> chatHistory = List.of(Interaction.fromMap("convo1", Map.of(
-                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
-                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 1",
-                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer1")),
-            Interaction.fromMap("convo1", Map.of(
-                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
-                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 2",
-                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer2")));
+        List<Interaction> chatHistory = List
+            .of(
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 1",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer1"
+                            )
+                    ),
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 2",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer2"
+                            )
+                    )
+            );
         contexts.add("context 1");
         contexts.add("context 2");
         String parameter = PromptUtil.buildMessageParameter(systemPrompt, userInstructions, question, chatHistory, contexts);

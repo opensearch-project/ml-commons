@@ -17,6 +17,14 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContent;
@@ -24,14 +32,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentGenerator;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 public class GenerativeQAParametersTests extends OpenSearchTestCase {
 
@@ -101,7 +101,14 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         int contextSize = 1;
         int interactionSize = 2;
         int timeout = 10;
-        GenerativeQAParameters parameters = new GenerativeQAParameters(conversationId, llmModel, llmQuestion, contextSize, interactionSize, timeout);
+        GenerativeQAParameters parameters = new GenerativeQAParameters(
+            conversationId,
+            llmModel,
+            llmQuestion,
+            contextSize,
+            interactionSize,
+            timeout
+        );
         StreamOutput output = new DummyStreamOutput();
         parameters.writeTo(output);
         List<String> actual = ((DummyStreamOutput) output).getList();
@@ -125,7 +132,7 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         assertEquals(parameters, new GenerativeQAParameters(conversationId, llmModel, llmQuestion, null, null, null));
         assertNotEquals(parameters, new GenerativeQAParameters("", llmModel, llmQuestion, null, null, null));
         assertNotEquals(parameters, new GenerativeQAParameters(conversationId, "", llmQuestion, null, null, null));
-        //assertNotEquals(parameters, new GenerativeQAParameters(conversationId, llmModel, "", null));
+        // assertNotEquals(parameters, new GenerativeQAParameters(conversationId, llmModel, "", null));
     }
 
     public void testToXConent() throws IOException {
@@ -148,7 +155,14 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         int contextSize = 1;
         int interactionSize = 2;
         int timeout = 10;
-        GenerativeQAParameters parameters = new GenerativeQAParameters(conversationId, llmModel, llmQuestion, contextSize, interactionSize, timeout);
+        GenerativeQAParameters parameters = new GenerativeQAParameters(
+            conversationId,
+            llmModel,
+            llmQuestion,
+            contextSize,
+            interactionSize,
+            timeout
+        );
         XContent xc = mock(XContent.class);
         OutputStream os = mock(OutputStream.class);
         XContentGenerator generator = mock(XContentGenerator.class);

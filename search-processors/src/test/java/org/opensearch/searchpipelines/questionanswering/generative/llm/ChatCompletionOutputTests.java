@@ -17,12 +17,12 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.test.OpenSearchTestCase;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ChatCompletionOutputTests extends OpenSearchTestCase {
 
