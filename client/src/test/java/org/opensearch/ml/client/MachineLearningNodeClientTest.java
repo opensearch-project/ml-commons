@@ -36,8 +36,6 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
@@ -57,6 +55,9 @@ import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
+import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
+import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -64,17 +65,22 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 
+import lombok.extern.log4j.Log4j2;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.input.Constants.ACTION;
 import static org.opensearch.ml.common.input.Constants.ALGORITHM;
@@ -85,6 +91,7 @@ import static org.opensearch.ml.common.input.Constants.RCF;
 import static org.opensearch.ml.common.input.Constants.TRAIN;
 import static org.opensearch.ml.common.input.Constants.TRAINANDPREDICT;
 
+@Log4j2
 public class MachineLearningNodeClientTest {
 
     @Mock(answer = RETURNS_DEEP_STUBS)
@@ -589,5 +596,11 @@ public class MachineLearningNodeClientTest {
                 ShardSearchFailure.EMPTY_ARRAY,
                 SearchResponse.Clusters.EMPTY
         );
+    }
+
+    @Test
+    public void memory() {
+        MemoryClient memoryClient = machineLearningNodeClient.memory();
+        assertNotNull(memoryClient);
     }
 }

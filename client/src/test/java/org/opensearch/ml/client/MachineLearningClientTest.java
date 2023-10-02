@@ -58,6 +58,9 @@ public class MachineLearningClientTest {
     @Mock
     SearchResponse searchResponse;
 
+    @Mock
+    MemoryClient memoryClient;
+
     private String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
@@ -131,6 +134,11 @@ public class MachineLearningClientTest {
             @Override
             public void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener) {
                 listener.onResponse(searchResponse);
+            }
+
+            @Override
+            public MemoryClient memory() {
+                return memoryClient;
             }
         };
     }
@@ -250,5 +258,10 @@ public class MachineLearningClientTest {
     @Test
     public void searchTask() {
         assertEquals(searchResponse, machineLearningClient.searchTask(new SearchRequest()).actionGet());
+    }
+
+    @Test
+    public void memory() {
+        assertEquals(memoryClient, machineLearningClient.memory());
     }
 }

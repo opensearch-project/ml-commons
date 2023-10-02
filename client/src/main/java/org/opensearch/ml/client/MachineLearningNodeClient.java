@@ -53,10 +53,16 @@ import static org.opensearch.ml.common.input.InputHelper.getAction;
 import static org.opensearch.ml.common.input.InputHelper.getFunctionName;
 
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-@RequiredArgsConstructor
 public class MachineLearningNodeClient implements MachineLearningClient {
 
     Client client;
+    MemoryClient memoryClient;
+
+    public MachineLearningNodeClient(Client client) {
+        this.client = client;
+        this.memoryClient = new MemoryNodeClient(client);
+    }
+
 
     @Override
     public void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
@@ -217,5 +223,10 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         if(requireInput && mlInput.getInputDataset() == null) {
             throw new IllegalArgumentException("input data set can't be null");
         }
+    }
+
+    @Override
+    public MemoryClient memory() {
+        return memoryClient;
     }
 }

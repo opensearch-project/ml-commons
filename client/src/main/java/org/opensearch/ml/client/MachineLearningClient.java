@@ -226,4 +226,10 @@ public interface MachineLearningClient {
      * @param listener action listener
      */
     void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
+
+    /**
+     * Get the memory client
+     * @return A Memory client for accessing conversation memory
+     */
+    MemoryClient memory();
 }
