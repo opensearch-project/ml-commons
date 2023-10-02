@@ -9,7 +9,9 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import java.io.IOException;
 import java.util.Map;
 
+import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.MLTaskState;
@@ -34,6 +36,9 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
     }
 
     public void testReDeployModel() throws InterruptedException, IOException {
+        // Skip test if running on Mac OS, https://github.com/opensearch-project/ml-commons/issues/844
+        Assume.assumeFalse(System.getProperty("os.name").startsWith("Mac OS X"));
+
         // Register Model
         String taskId = registerModel(TestHelper.toJsonString(registerModelInput));
         waitForTask(taskId, MLTaskState.COMPLETED);
