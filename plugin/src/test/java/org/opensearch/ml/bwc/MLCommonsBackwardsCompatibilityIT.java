@@ -10,6 +10,8 @@ import static org.opensearch.ml.common.input.parameter.clustering.KMeansParams.D
 
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.http.HttpEntity;
@@ -313,7 +315,13 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
     }
 
     private boolean isNewerVersion(String osVersion) {
-        return (Integer.parseInt(osVersion.substring(2, 3)) > 4) || (Integer.parseInt(osVersion.substring(0, 1)) > 2);
+        Pattern pattern = Pattern.compile("\\d+(?=\\.)");
+        Matcher matcher = pattern.matcher(osVersion);
+        if (matcher.groupCount() >= 2) {
+            return (Integer.parseInt(matcher.group(1)) > 4) || (Integer.parseInt(matcher.group(0)) > 2);
+        } else {
+            throw new IllegalArgumentException("osVersion is not valid, osVersion is: " + osVersion);
+        }
     }
 
     private void verifyMlResponse(String uri) throws Exception {
