@@ -32,7 +32,7 @@ public class SearchTaskTransportAction extends HandledTransportAction<SearchRequ
     @Override
     protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.search(request, actionListener);
+            client.search(request, ActionListener.runBefore(actionListener, () -> context.restore()));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);

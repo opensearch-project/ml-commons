@@ -57,6 +57,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             client.get(getRequest, ActionListener.wrap(r -> {
 
                 if (r != null && r.isExists()) {
@@ -72,24 +73,24 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
                                 @Override
                                 public void onResponse(DeleteResponse deleteResponse) {
                                     log.debug("Completed Delete Task Request, task id:{} deleted", taskId);
-                                    actionListener.onResponse(deleteResponse);
+                                    wrappedListener.onResponse(deleteResponse);
                                 }
 
                                 @Override
                                 public void onFailure(Exception e) {
                                     log.error("Failed to delete ML Task " + taskId, e);
-                                    actionListener.onFailure(e);
+                                    wrappedListener.onFailure(e);
                                 }
                             });
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ML task " + taskId, e);
-                        actionListener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
                 }
-            }, e -> { actionListener.onFailure(new MLResourceNotFoundException("Fail to find task")); }));
+            }, e -> { wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find task")); }));
         } catch (Exception e) {
             log.error("Failed to delete ml task " + taskId, e);
             actionListener.onFailure(e);
