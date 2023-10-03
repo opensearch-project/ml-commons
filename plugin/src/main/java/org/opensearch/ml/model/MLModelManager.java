@@ -293,7 +293,6 @@ public class MLModelManager {
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
                     log.debug("Index model meta doc successfully {}", modelName);
-                    mlStats.createModelCounterStatIfAbsent(response.getId(), REGISTER, ML_ACTION_REQUEST_COUNT).increment();
                     wrappedListener.onResponse(response.getId());
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
@@ -579,7 +578,6 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlStats.createModelCounterStatIfAbsent(modelId, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
                     mlTaskManager.updateMLTask(taskId, ImmutableMap.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
@@ -642,7 +640,6 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for register model task {}", modelId, taskId);
-                    mlStats.createModelCounterStatIfAbsent(modelId, REGISTER, ML_ACTION_REQUEST_COUNT).increment();
                     // model group id is not present in request body.
                     registerModel(registerModelInput, taskId, functionName, modelName, version, modelId);
                 }, e -> {
