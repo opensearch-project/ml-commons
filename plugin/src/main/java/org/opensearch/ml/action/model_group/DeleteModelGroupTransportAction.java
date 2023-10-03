@@ -72,9 +72,10 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
                 if (!access) {
-                    actionListener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
+                    wrappedListener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
                 } else {
                     BoolQueryBuilder query = new BoolQueryBuilder();
                     query.filter(new TermQueryBuilder(PARAMETER_MODEL_GROUP_ID, modelGroupId));
@@ -87,13 +88,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                                 @Override
                                 public void onResponse(DeleteResponse deleteResponse) {
                                     log.debug("Completed Delete Model Group Request, task id:{} deleted", modelGroupId);
-                                    actionListener.onResponse(deleteResponse);
+                                    wrappedListener.onResponse(deleteResponse);
                                 }
 
                                 @Override
                                 public void onFailure(Exception e) {
                                     log.error("Failed to delete ML Model Group " + modelGroupId, e);
-                                    actionListener.onFailure(e);
+                                    wrappedListener.onFailure(e);
                                 }
                             });
                         } else {
@@ -102,16 +103,16 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
                     }, e -> {
                         if (e instanceof IndexNotFoundException) {
-                            actionListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                         } else {
                             log.error("Failed to search models with the specified Model Group Id " + modelGroupId, e);
-                            actionListener.onFailure(e);
+                            wrappedListener.onFailure(e);
                         }
                     }));
                 }
             }, e -> {
                 log.error("Failed to validate Access for Model Group " + modelGroupId, e);
-                actionListener.onFailure(e);
+                wrappedListener.onFailure(e);
             }));
         }
     }

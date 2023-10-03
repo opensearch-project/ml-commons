@@ -116,12 +116,12 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         User user = RestActionUtils.getUserContext(client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
                 modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
             }, e -> {
                 log.error("Failed to find Model", e);
                 listener.onFailure(e);
-            }));
+            }), () -> context.restore()));
         } catch (Exception e) {
             log.error("Failed to undeploy ML model");
             listener.onFailure(e);

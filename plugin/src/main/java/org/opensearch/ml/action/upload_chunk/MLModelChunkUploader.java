@@ -68,6 +68,7 @@ public class MLModelChunkUploader {
         User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLUploadModelChunkResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
@@ -82,7 +83,7 @@ public class MLModelChunkUploader {
                             .validateModelGroupAccess(user, existingModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                                 if (!access) {
                                     log.error("You don't have permissions to perform this operation on this model.");
-                                    listener
+                                    wrappedListener
                                         .onFailure(
                                             new IllegalArgumentException(
                                                 "You don't have permissions to perform this operation on this model."
@@ -167,36 +168,36 @@ public class MLModelChunkUploader {
                                                 }, e -> {
                                                     log.error("Failed to update model state", e);
                                                     semaphore.release();
-                                                    listener.onFailure(e);
+                                                    wrappedListener.onFailure(e);
                                                 }));
                                             }
-                                            listener.onResponse(new MLUploadModelChunkResponse("Uploaded"));
+                                            wrappedListener.onResponse(new MLUploadModelChunkResponse("Uploaded"));
                                         }, e -> {
                                             log.error("Failed to upload chunk model", e);
-                                            listener.onFailure(e);
+                                            wrappedListener.onFailure(e);
                                         }));
                                     }, ex -> {
                                         log.error("Failed to init model index", ex);
-                                        listener.onFailure(ex);
+                                        wrappedListener.onFailure(ex);
                                     }));
                                 }
                             }, e -> {
                                 logException("Failed to validate model access", e, log);
-                                listener.onFailure(e);
+                                wrappedListener.onFailure(e);
                             }));
                     } catch (Exception e) {
                         log.error("Failed to parse ml model " + r.getId(), e);
-                        listener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 } else {
-                    listener.onFailure(new MLResourceNotFoundException("Failed to find model"));
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Failed to find model"));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    listener.onFailure(new MLResourceNotFoundException("Failed to find model"));
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Failed to find model"));
                 } else {
                     log.error("Failed to get ML model " + modelId, e);
-                    listener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 }
             }));
         } catch (Exception e) {
