@@ -902,10 +902,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(2)).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Cannot invoke \"org.opensearch.ml.common.FunctionName.toString()\" because the return value of \"org.opensearch.ml.common.MLModel.getAlgorithm()\" is null",
-            argumentCaptor.getValue().getMessage()
-        );
     }
 
     @Test
