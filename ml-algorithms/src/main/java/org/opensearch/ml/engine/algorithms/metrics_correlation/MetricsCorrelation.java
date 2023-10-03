@@ -225,14 +225,14 @@ public class MetricsCorrelation extends DLModelExecute {
             XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
             modelGroup.toXContent(builder, ToXContent.EMPTY_PARAMS);
             createModelGroupRequest.source(builder);
-            client.index(createModelGroupRequest, ActionListener.wrap(r -> {
+            client.index(createModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
                     log.error("Failed to Register Model", e);
                     listener.onFailure(e);
                 }));
             }, e-> {
                 listener.onFailure(e);
-            }));
+            }), () -> context.restore()));
         } catch (IOException e) {
             throw new MLException(e);
         }
