@@ -317,6 +317,7 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
     private boolean isNewerVersion(String osVersion) {
         Pattern pattern = Pattern.compile("\\d+(?=\\.)");
         Matcher matcher = pattern.matcher(osVersion);
+        assertEquals(matcher.groupCount(), 2);
         if (matcher.groupCount() >= 2) {
             return (Integer.parseInt(matcher.group(1)) > 4) || (Integer.parseInt(matcher.group(0)) > 2);
         } else {
