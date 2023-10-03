@@ -79,7 +79,8 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+            ActionListener<MLModelGetResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -90,7 +91,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                                 if (!access) {
-                                    actionListener
+                                    wrappedListener
                                         .onFailure(
                                             new MLValidationException("User Doesn't have privilege to perform this operation on this model")
                                         );
@@ -100,19 +101,19 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                                     if (connector != null) {
                                         connector.removeCredential();
                                     }
-                                    actionListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
+                                    wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                                 }
                             }, e -> {
                                 log.error("Failed to validate Access for Model Id " + modelId, e);
-                                actionListener.onFailure(e);
+                                wrappedListener.onFailure(e);
                             }));
 
                     } catch (Exception e) {
                         log.error("Failed to parse ml model " + r.getId(), e);
-                        actionListener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 } else {
-                    actionListener
+                    wrappedListener
                         .onFailure(
                             new OpenSearchStatusException(
                                 "Failed to find model with the provided model id: " + modelId,
@@ -122,12 +123,12 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find model"));
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model"));
                 } else {
                     log.error("Failed to get ML model " + modelId, e);
-                    actionListener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 }
-            }), () -> context.restore()));
+            }));
         } catch (Exception e) {
             log.error("Failed to get ML model " + modelId, e);
             actionListener.onFailure(e);

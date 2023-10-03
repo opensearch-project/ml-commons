@@ -57,7 +57,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.get(getRequest, ActionListener.wrap(r -> {
+            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 log.debug("Completed Get Task Request, id:{}", taskId);
 
                 if (r != null && r.isExists()) {
@@ -79,7 +79,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     log.error("Failed to get ML task " + taskId, e);
                     actionListener.onFailure(e);
                 }
-            }));
+            }), () -> context.restore()));
         } catch (Exception e) {
             log.error("Failed to get ML task " + taskId, e);
             actionListener.onFailure(e);
