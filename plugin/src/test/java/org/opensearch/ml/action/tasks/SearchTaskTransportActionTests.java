@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.tasks;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,6 +63,6 @@ public class SearchTaskTransportActionTests extends OpenSearchTestCase {
 
     public void test_DoExecute() {
         searchTaskTransportAction.doExecute(null, searchRequest, actionListener);
-        verify(client).search(searchRequest, actionListener);
+        verify(client).search(eq(searchRequest), any());
     }
 }
