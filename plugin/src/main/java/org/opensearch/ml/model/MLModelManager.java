@@ -219,6 +219,7 @@ public class MLModelManager {
                 uploadMLModelMeta(mlRegisterModelMetaInput, "1", listener);
             } else {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
                     GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
                     client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
                         if (modelGroup.isExists()) {
@@ -237,25 +238,22 @@ public class MLModelManager {
                                 .setIfPrimaryTerm(primaryTerm)
                                 .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
                                 .doc(source);
-                            client
-                                .update(
-                                    updateModelGroupRequest,
-                                    ActionListener
-                                        .wrap(r -> { uploadMLModelMeta(mlRegisterModelMetaInput, newVersion + "", listener); }, e -> {
-                                            log.error("Failed to update model group", e);
-                                            listener.onFailure(e);
-                                        })
-                                );
+                            client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
+                                uploadMLModelMeta(mlRegisterModelMetaInput, newVersion + "", wrappedListener);
+                            }, e -> {
+                                log.error("Failed to update model group", e);
+                                wrappedListener.onFailure(e);
+                            }));
                         } else {
                             log.error("Model group not found");
-                            listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                         }
                     }, e -> {
                         if (e instanceof IndexNotFoundException) {
-                            listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                         } else {
                             log.error("Failed to get model group", e);
-                            listener.onFailure(new MLValidationException("Failed to get model group"));
+                            wrappedListener.onFailure(new MLValidationException("Failed to get model group"));
                         }
                     }));
                 } catch (Exception e) {
@@ -272,6 +270,7 @@ public class MLModelManager {
     private void uploadMLModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, String version, ActionListener<String> listener) {
         FunctionName functionName = mlRegisterModelMetaInput.getFunctionName();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             String modelName = mlRegisterModelMetaInput.getName();
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
                 Instant now = Instant.now();
@@ -297,14 +296,14 @@ public class MLModelManager {
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
                     log.debug("Index model meta doc successfully {}", modelName);
-                    listener.onResponse(response.getId());
+                    wrappedListener.onResponse(response.getId());
                 }, e -> {
                     log.error("Failed to index model meta doc", e);
-                    listener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 }));
             }, ex -> {
                 log.error("Failed to init model index", ex);
-                listener.onFailure(ex);
+                wrappedListener.onFailure(ex);
             }));
         } catch (Exception e) {
             log.error("Failed to register model", e);
@@ -332,7 +331,7 @@ public class MLModelManager {
                 uploadModel(registerModelInput, mlTask, "1");
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
+                client.get(getModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
                         Map<String, Object> source = modelGroup.getSourceAsMap();
                         int latestVersion = (int) source.get(MLModelGroup.LATEST_VERSION_FIELD);
@@ -349,14 +348,16 @@ public class MLModelManager {
                             .setIfPrimaryTerm(primaryTerm)
                             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
                             .doc(source);
-                        client
-                            .update(
-                                updateModelGroupRequest,
-                                ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); }, e -> {
-                                    log.error("Failed to update model group", e);
-                                    handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
-                                })
-                            );
+                        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                            client
+                                .update(
+                                    updateModelGroupRequest,
+                                    ActionListener.wrap(r -> { uploadModel(registerModelInput, mlTask, newVersion + ""); }, e -> {
+                                        log.error("Failed to update model group", e);
+                                        handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
+                                    })
+                                );
+                        }
                     } else {
                         log.error("Model group not found");
                         handleException(
@@ -376,7 +377,7 @@ public class MLModelManager {
                         log.error("Failed to get model group", e);
                         handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
                     }
-                }));
+                }), () -> context.restore()));
             } catch (Exception e) {
                 log.error("Failed to register model", e);
                 handleException(registerModelInput.getFunctionName(), mlTask.getTaskId(), e);
@@ -399,7 +400,7 @@ public class MLModelManager {
             if (registerModelInput.getConnector() != null) {
                 registerModelInput.getConnector().encrypt(mlEngine::encrypt);
             }
-            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -436,7 +437,7 @@ public class MLModelManager {
             }, e -> {
                 log.error("Failed to init model index", e);
                 handleException(functionName, taskId, e);
-            }));
+            }), () -> context.restore()));
         } catch (Exception e) {
             logException("Failed to upload model", e, log);
             handleException(functionName, taskId, e);
@@ -461,7 +462,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             String modelGroupId = registerModelInput.getModelGroupId();
             Instant now = Instant.now();
-            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
                 MLModel mlModelMeta = MLModel
                     .builder()
                     .name(modelName)
@@ -497,7 +498,7 @@ public class MLModelManager {
             }, e -> {
                 log.error("Failed to init model index", e);
                 handleException(functionName, taskId, e);
-            }));
+            }), () -> context.restore()));
         } catch (Exception e) {
             logException("Failed to register model", e, log);
             handleException(functionName, taskId, e);
@@ -726,6 +727,7 @@ public class MLModelManager {
         }
         modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             checkAndAddRunningTask(mlTask, maxDeployTasksPerNode);
             this.getModel(modelId, threadedActionListener(DEPLOY_THREAD_POOL, ActionListener.wrap(mlModel -> {
                 if (FunctionName.REMOTE == mlModel.getAlgorithm()
@@ -747,7 +749,7 @@ public class MLModelManager {
                     // deploy remote model or model trained by built-in algorithm like kmeans
                     if (mlModel.getConnector() != null) {
                         setupPredictable(modelId, mlModel, params);
-                        listener.onResponse("successful");
+                        wrappedListener.onResponse("successful");
                         return;
                     }
                     log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
@@ -766,11 +768,11 @@ public class MLModelManager {
                                 Connector connector = Connector.createConnector(parser);
                                 mlModel.setConnector(connector);
                                 setupPredictable(modelId, mlModel, params);
-                                listener.onResponse("successful");
+                                wrappedListener.onResponse("successful");
                                 log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
                             }
                         }
-                    }, e -> { listener.onFailure(e); }));
+                    }, e -> { wrappedListener.onFailure(e); }));
 
                     return;
                 }
@@ -781,7 +783,7 @@ public class MLModelManager {
                     if (modelContentHash != null && !modelContentHash.equals(hash)) {
                         log.error("Model content hash can't match original hash value");
                         removeModel(modelId);
-                        listener.onFailure(new IllegalArgumentException("model content changed"));
+                        wrappedListener.onFailure(new IllegalArgumentException("model content changed"));
                         return;
                     }
                     log.debug("Model content matches original hash value, continue deploying");
@@ -793,11 +795,11 @@ public class MLModelManager {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
-                            listener.onResponse("successful");
+                            wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
                             mlExecutable.close();
-                            listener.onFailure(e);
+                            wrappedListener.onFailure(e);
                         }
 
                     } else {
@@ -811,20 +813,20 @@ public class MLModelManager {
                                 ? mlModel.getTotalChunks() * CHUNK_SIZE
                                 : modelContentSizeInBytes;
                             modelCacheHelper.setMemSizeEstimation(modelId, mlModel.getModelFormat(), contentSize);
-                            listener.onResponse("successful");
+                            wrappedListener.onResponse("successful");
                         } catch (Exception e) {
                             log.error("Failed to add predictor to cache", e);
                             predictable.close();
-                            listener.onFailure(e);
+                            wrappedListener.onFailure(e);
                         }
                     }
                 }, e -> {
                     log.error("Failed to retrieve model " + modelId, e);
-                    handleDeployModelException(modelId, functionName, listener, e);
+                    handleDeployModelException(modelId, functionName, wrappedListener, e);
                 }));
             }, e -> {
                 log.error("Failed to deploy model " + modelId, e);
-                handleDeployModelException(modelId, functionName, listener, e);
+                handleDeployModelException(modelId, functionName, wrappedListener, e);
             })));
         } catch (Exception e) {
             handleDeployModelException(modelId, functionName, listener, e);

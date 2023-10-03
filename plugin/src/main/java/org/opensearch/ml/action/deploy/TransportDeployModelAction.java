@@ -132,6 +132,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLDeployModelResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
@@ -139,7 +140,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 }
                 modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                     if (!access) {
-                        listener
+                        wrappedListener
                             .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
                     } else {
                         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
@@ -172,7 +173,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                 Set<String> difference = new HashSet<String>(Arrays.asList(workerNodes));
                                 difference.removeAll(Arrays.asList(targetNodeIds));
                                 if (difference.size() > 0) {
-                                    listener
+                                    wrappedListener
                                         .onFailure(
                                             new IllegalArgumentException(
                                                 "Model already deployed to these nodes: "
@@ -188,7 +189,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                             eligibleNodes.addAll(Arrays.asList(allEligibleNodes));
                         }
                         if (nodeIds.size() == 0) {
-                            listener.onFailure(new IllegalArgumentException("no eligible node found"));
+                            wrappedListener.onFailure(new IllegalArgumentException("no eligible node found"));
                             return;
                         }
 
@@ -215,7 +216,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                             mlTask.setTaskId(taskId);
                             try {
                                 mlTaskManager.add(mlTask, nodeIds);
-                                listener.onResponse(new MLDeployModelResponse(taskId, MLTaskState.CREATED.name()));
+                                wrappedListener.onResponse(new MLDeployModelResponse(taskId, MLTaskState.CREATED.name()));
                                 threadPool
                                     .executor(DEPLOY_THREAD_POOL)
                                     .execute(
@@ -238,20 +239,20 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                         TASK_SEMAPHORE_TIMEOUT,
                                         true
                                     );
-                                listener.onFailure(ex);
+                                wrappedListener.onFailure(ex);
                             }
                         }, exception -> {
                             log.error("Failed to create deploy model task for " + modelId, exception);
-                            listener.onFailure(exception);
+                            wrappedListener.onFailure(exception);
                         }));
                     }
                 }, e -> {
                     log.error("Failed to Validate Access for ModelId " + modelId, e);
-                    listener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 }));
             }, e -> {
                 log.error("Failed to deploy model " + modelId, e);
-                listener.onFailure(e);
+                wrappedListener.onFailure(e);
             }));
         } catch (Exception e) {
             log.error("Failed to get ML model " + modelId, e);
