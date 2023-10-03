@@ -51,6 +51,15 @@ public class MLModelStatsTests extends OpenSearchTestCase {
         assertEquals(failureCount, parsedMLActionStats.getActionStat(ML_ACTION_FAILURE_COUNT));
     }
 
+    public void testEmptySerializationDeserialization() throws IOException {
+
+        Map<ActionName, MLActionStats> modelStats = new HashMap<>();
+        MLModelStats mlModelEmptyStats = new MLModelStats(modelStats);
+        BytesStreamOutput output = new BytesStreamOutput();
+        mlModelEmptyStats.writeTo(output);
+        assertEquals(0, output.bytes().length());
+    }
+
     public void testToXContent() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         builder.startObject();
