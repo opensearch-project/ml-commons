@@ -17,6 +17,15 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.EOFException;
+import java.io.IOException;
+
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -26,20 +35,11 @@ import org.opensearch.core.xcontent.XContentHelper;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.test.OpenSearchTestCase;
 
-import java.io.EOFException;
-import java.io.IOException;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
     public void testCtor() throws IOException {
         GenerativeQAParamExtBuilder builder = new GenerativeQAParamExtBuilder();
-        GenerativeQAParameters parameters = new GenerativeQAParameters();
+        GenerativeQAParameters parameters = new GenerativeQAParameters("conversation_id", "model_id", "question", null, null, null);
         builder.setParams(parameters);
         assertEquals(parameters, builder.getParams());
 
@@ -79,8 +79,8 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testMiscMethods() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c");
-        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d");
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", null, null, null);
+        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d", null, null, null);
         GenerativeQAParamExtBuilder builder1 = new GenerativeQAParamExtBuilder();
         GenerativeQAParamExtBuilder builder2 = new GenerativeQAParamExtBuilder();
         builder1.setParams(param1);
@@ -105,7 +105,22 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c");
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", null, null, null);
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(param1);
+        XContentType xContentType = randomFrom(XContentType.values());
+        BytesReference serialized = XContentHelper.toXContent(extBuilder, xContentType, true);
+        XContentParser parser = createParser(xContentType.xContent(), serialized);
+        GenerativeQAParamExtBuilder deserialized = GenerativeQAParamExtBuilder.parse(parser);
+        assertEquals(extBuilder, deserialized);
+        GenerativeQAParameters parameters = deserialized.getParams();
+        assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getContextSize());
+        assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getInteractionSize());
+        assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getTimeout());
+    }
+
+    public void testXContentRoundTripAllValues() throws IOException {
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", 1, 2, 3);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());
@@ -116,7 +131,21 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testStreamRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c");
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", null, null, null);
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(param1);
+        BytesStreamOutput bso = new BytesStreamOutput();
+        extBuilder.writeTo(bso);
+        GenerativeQAParamExtBuilder deserialized = new GenerativeQAParamExtBuilder(bso.bytes().streamInput());
+        assertEquals(extBuilder, deserialized);
+        GenerativeQAParameters parameters = deserialized.getParams();
+        assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getContextSize());
+        assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getInteractionSize());
+        assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getTimeout());
+    }
+
+    public void testStreamRoundTripAllValues() throws IOException {
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", 1, 2, 3);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         BytesStreamOutput bso = new BytesStreamOutput();

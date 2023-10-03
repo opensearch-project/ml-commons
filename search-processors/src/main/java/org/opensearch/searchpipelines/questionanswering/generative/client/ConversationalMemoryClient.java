@@ -17,9 +17,9 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.client;
 
-import com.google.common.base.Preconditions;
-import lombok.AllArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
@@ -35,8 +35,10 @@ import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsRequest;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsResponse;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.google.common.base.Preconditions;
+
+import lombok.AllArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * An OpenSearch client wrapper for conversational memory related calls.
@@ -46,22 +48,36 @@ import java.util.List;
 public class ConversationalMemoryClient {
 
     private final static Logger logger = LogManager.getLogger();
+    private final static long DEFAULT_TIMEOUT_IN_MILLIS = 10_000l;
 
     private Client client;
 
     public String createConversation(String name) {
 
-        CreateConversationResponse response = client.execute(CreateConversationAction.INSTANCE, new CreateConversationRequest(name)).actionGet();
+        CreateConversationResponse response = client
+            .execute(CreateConversationAction.INSTANCE, new CreateConversationRequest(name))
+            .actionGet(DEFAULT_TIMEOUT_IN_MILLIS);
         log.info("createConversation: id: {}", response.getId());
         return response.getId();
     }
 
-    public String createInteraction(String conversationId, String input, String promptTemplate, String response, String origin, String additionalInfo) {
+    public String createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        String additionalInfo
+    ) {
         Preconditions.checkNotNull(conversationId);
         Preconditions.checkNotNull(input);
         Preconditions.checkNotNull(response);
-        CreateInteractionResponse res = client.execute(CreateInteractionAction.INSTANCE,
-            new CreateInteractionRequest(conversationId, input, promptTemplate, response, origin, additionalInfo)).actionGet();
+        CreateInteractionResponse res = client
+            .execute(
+                CreateInteractionAction.INSTANCE,
+                new CreateInteractionRequest(conversationId, input, promptTemplate, response, origin, additionalInfo)
+            )
+            .actionGet(DEFAULT_TIMEOUT_IN_MILLIS);
         log.info("createInteraction: interactionId: {}", res.getId());
         return res.getId();
     }
@@ -77,8 +93,9 @@ public class ConversationalMemoryClient {
         boolean allInteractionsFetched = false;
         int maxResults = lastN;
         do {
-            GetInteractionsResponse response =
-                client.execute(GetInteractionsAction.INSTANCE, new GetInteractionsRequest(conversationId, maxResults, from)).actionGet();
+            GetInteractionsResponse response = client
+                .execute(GetInteractionsAction.INSTANCE, new GetInteractionsRequest(conversationId, maxResults, from))
+                .actionGet(DEFAULT_TIMEOUT_IN_MILLIS);
             List<Interaction> list = response.getInteractions();
             if (list != null && !CollectionUtils.isEmpty(list)) {
                 interactions.addAll(list);
@@ -97,6 +114,4 @@ public class ConversationalMemoryClient {
 
         return interactions;
     }
-
-
 }
