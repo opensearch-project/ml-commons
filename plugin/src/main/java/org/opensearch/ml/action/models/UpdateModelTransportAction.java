@@ -188,8 +188,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             if (searchHits.length == 0) {
                 updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, updateRequest, actionListener, context);
             } else {
-                log.error("Models is deployed, please undeploy the models first!");
-                actionListener.onFailure(new MLValidationException("Models is deployed, please undeploy the models first!"));
+                log.error("ML Model " + modelId + " is deployed, please undeploy the models first!");
+                actionListener
+                    .onFailure(new MLValidationException("ML Model " + modelId + " is deployed, please undeploy the models first!"));
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {

@@ -49,6 +49,7 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -59,6 +60,7 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -181,14 +183,14 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
         SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
         searchResponse = new SearchResponse(
-                searchSections,
-                null,
-                1,
-                1,
-                0,
-                11,
-                ShardSearchFailure.EMPTY_ARRAY,
-                SearchResponse.Clusters.EMPTY
+            searchSections,
+            null,
+            1,
+            1,
+            0,
+            11,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
         );
 
         threadContext = new ThreadContext(settings);
@@ -229,6 +231,114 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateLocalModelSuccessWithSearchIndexNotFoundError() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException("Index not found!"));
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        verify(actionListener).onResponse(updateResponse);
+    }
+
+    @Test
+    public void testUpdateLocalModelWithSearchResponseNotEmpty() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(noneEmptySearchResponse());
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("ML Model test_model_id is deployed, please undeploy the models first!", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateLocalModelWithSearchResponseOtherException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running SearchResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        GetResponse getResponse = prepareGetResponse(localModel);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running SearchResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
@@ -933,5 +1043,27 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    private SearchResponse noneEmptySearchResponse() throws IOException {
+        String modelContent =
+            "{\"model_id\":\"test-model_id\",\"description\":\"description\",\"name\":\"name\",\"model_group_id\":\"modelGroupId\",\"model_config\":"
+                + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
+                + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
+        SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { model }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
+        SearchResponse searchResponse = new SearchResponse(
+            searchSections,
+            null,
+            1,
+            1,
+            0,
+            11,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
+
+        return searchResponse;
     }
 }
