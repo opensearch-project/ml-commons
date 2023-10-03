@@ -24,7 +24,7 @@ POST /_plugins/_ml/connectors/_create
       "headers": {
         "Authorization": "Bearer ${credential.cohere_key}"
       },
-      "request_body": "{ \"texts\": ${parameters.prompt}, \"truncate\": \"${parameters.truncate}\", \"model\": \"${parameters.model}\" }", 
+      "request_body": "{ \"texts\": ${parameters.texts}, \"truncate\": \"${parameters.truncate}\", \"model\": \"${parameters.model}\" }", 
       "pre_process_function": "connector.pre_process.cohere.embedding",
       "post_process_function": "connector.post_process.cohere.embedding"
     }
