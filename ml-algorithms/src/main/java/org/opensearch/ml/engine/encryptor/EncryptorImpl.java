@@ -110,7 +110,7 @@ public class EncryptorImpl implements Encryptor {
         if (clusterService.state().metadata().hasIndex(ML_CONFIG_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
-                client.get(getRequest, new LatchedActionListener(ActionListener.<GetResponse>wrap(r -> {
+                client.get(getRequest, ActionListener.runBefore(new LatchedActionListener(ActionListener.<GetResponse>wrap(r -> {
                     if (r.isExists()) {
                         String masterKey = (String) r.getSourceAsMap().get(MASTER_KEY);
                         this.masterKey = masterKey;
@@ -120,7 +120,7 @@ public class EncryptorImpl implements Encryptor {
                 }, e -> {
                     log.error("Failed to get ML encryption master key", e);
                     exceptionRef.set(e);
-                }), latch));
+                }), latch), () -> context.restore()));
             }
         } else {
             exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
