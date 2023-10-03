@@ -17,6 +17,7 @@ import java.io.IOException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
@@ -31,6 +32,9 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
@@ -40,8 +44,11 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -57,6 +64,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     NamedXContentRegistry xContentRegistry;
     ModelAccessControlHelper modelAccessControlHelper;
     ConnectorAccessControlHelper connectorAccessControlHelper;
+    MLModelManager mlModelManager;
 
     @Inject
     public UpdateModelTransportAction(
@@ -65,13 +73,15 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         Client client,
         NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLModelManager mlModelManager
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlModelManager = mlModelManager;
     }
 
     @Override
@@ -110,7 +120,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             modelAccessControlHelper
                                 .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                                     if (Boolean.TRUE.equals(hasPermission)) {
-                                        updateRemoteOrTextEmbeddingModel(
+                                        updateUndeployedModel(
                                             modelId,
                                             updateModelInput,
                                             mlModel,
@@ -154,6 +164,41 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             log.error("Failed to update ML model for " + modelId, e);
             actionListener.onFailure(e);
         }
+    }
+
+    private void updateUndeployedModel(
+        String modelId,
+        MLUpdateModelInput updateModelInput,
+        MLModel mlModel,
+        User user,
+        UpdateRequest updateRequest,
+        ActionListener<UpdateResponse> actionListener,
+        ThreadContext.StoredContext context
+    ) {
+        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder.must(QueryBuilders.matchQuery(MLModel.MODEL_ID_FIELD, modelId));
+        boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
+        sourceBuilder.query(boolQueryBuilder);
+        searchRequest.source(sourceBuilder);
+
+        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
+            if (searchHits.length == 0) {
+                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, updateRequest, actionListener, context);
+            } else {
+                log.error("Models is deployed, please undeploy the models first!");
+                actionListener.onFailure(new MLValidationException("Models is deployed, please undeploy the models first!"));
+            }
+        }, e -> {
+            if (e instanceof IndexNotFoundException) {
+                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, updateRequest, actionListener, context);
+                return;
+            }
+            log.error("Failed to update ML model for " + modelId, e);
+            actionListener.onFailure(e);
+        }));
     }
 
     private void updateModelWithRelinkStandAloneConnector(

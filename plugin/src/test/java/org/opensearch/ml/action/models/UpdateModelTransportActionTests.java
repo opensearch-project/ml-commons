@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -29,6 +30,10 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.SearchResponseSections;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
@@ -53,6 +58,10 @@ import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -93,6 +102,9 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     ClusterService clusterService;
 
     @Mock
+    MLModelManager mlModelManager;
+
+    @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
     @Mock
@@ -100,15 +112,26 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    UpdateResponse updateResponse;
-    UpdateModelTransportAction transportUpdateModelAction;
-    MLUpdateModelRequest updateLocalModelRequest;
-    MLUpdateModelInput updateLocalModelInput;
-    MLUpdateModelRequest updateRemoteModelRequest;
-    MLUpdateModelInput updateRemoteModelInput;
-    MLModel mlModelWithNullFunctionName;
-    ThreadContext threadContext;
+
     private ShardId shardId;
+
+    private SearchResponse searchResponse;
+
+    UpdateResponse updateResponse;
+
+    UpdateModelTransportAction transportUpdateModelAction;
+
+    MLUpdateModelRequest updateLocalModelRequest;
+
+    MLUpdateModelInput updateLocalModelInput;
+
+    MLUpdateModelRequest updateRemoteModelRequest;
+
+    MLUpdateModelInput updateRemoteModelInput;
+
+    MLModel mlModelWithNullFunctionName;
+
+    ThreadContext threadContext;
 
     @Before
     public void setup() throws IOException {
@@ -150,14 +173,28 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 client,
                 xContentRegistry,
                 connectorAccessControlHelper,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlModelManager
             )
+        );
+
+        SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
+        searchResponse = new SearchResponse(
+                searchSections,
+                null,
+                1,
+                1,
+                0,
+                11,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
         );
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-
+        when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
     }
@@ -169,6 +206,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -208,6 +251,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -235,6 +284,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -259,6 +314,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -292,6 +353,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -318,6 +385,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -354,6 +427,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -393,6 +472,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -428,6 +513,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -470,6 +561,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -505,6 +602,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 );
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -545,6 +648,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         })
             .when(modelAccessControlHelper)
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -592,6 +701,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -624,6 +739,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -648,6 +769,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -680,6 +807,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener.onResponse(updateResponse);
             return null;
@@ -706,6 +839,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(true);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
