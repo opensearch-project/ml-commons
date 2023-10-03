@@ -17,11 +17,11 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
+import java.util.List;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
-
-import java.util.List;
 
 public class GenerativeQAParamUtilTests extends OpenSearchTestCase {
 

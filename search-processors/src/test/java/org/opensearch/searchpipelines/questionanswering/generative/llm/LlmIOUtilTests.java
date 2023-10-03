@@ -17,9 +17,9 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import org.opensearch.test.OpenSearchTestCase;
-
 import java.util.Collections;
+
+import org.opensearch.test.OpenSearchTestCase;
 
 public class LlmIOUtilTests extends OpenSearchTestCase {
 
@@ -28,7 +28,8 @@ public class LlmIOUtilTests extends OpenSearchTestCase {
     }
 
     public void testChatCompletionInput() {
-        ChatCompletionInput input = LlmIOUtil.createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList());
+        ChatCompletionInput input = LlmIOUtil
+            .createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList(), 0);
         assertTrue(input instanceof ChatCompletionInput);
     }
 }

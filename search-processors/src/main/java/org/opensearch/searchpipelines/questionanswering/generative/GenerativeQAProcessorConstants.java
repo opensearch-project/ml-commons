@@ -36,6 +36,9 @@ public class GenerativeQAProcessorConstants {
     // The field in search results that contain the context to be sent to the LLM.
     public static final String CONFIG_NAME_CONTEXT_FIELD_LIST = "context_field_list";
 
+    public static final String CONFIG_NAME_SYSTEM_PROMPT = "system_prompt";
+    public static final String CONFIG_NAME_USER_INSTRUCTIONS = "user_instructions";
+
     public static final Setting<Boolean> RAG_PIPELINE_FEATURE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 

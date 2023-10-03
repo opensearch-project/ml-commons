@@ -17,13 +17,22 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.opensearch.common.action.ActionFuture;
 import org.opensearch.client.Client;
+import org.opensearch.common.action.ActionFuture;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -37,15 +46,6 @@ import org.opensearch.searchpipelines.questionanswering.generative.client.Machin
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 import org.opensearch.test.OpenSearchTestCase;
 
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 public class DefaultLlmImplTests extends OpenSearchTestCase {
 
     @Mock
@@ -57,14 +57,35 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         List<String> contexts = new ArrayList<>();
         contexts.add("context 1");
         contexts.add("context 2");
-        List<Interaction> chatHistory = List.of(Interaction.fromMap("convo1", Map.of(
-            ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
-            ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 1",
-                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer1")),
-            Interaction.fromMap("convo1", Map.of(
-            ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, Instant.now().toString(),
-            ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "message 2",
-                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, "answer2")));
+        List<Interaction> chatHistory = List
+            .of(
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 1",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer1"
+                            )
+                    ),
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 2",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer2"
+                            )
+                    )
+            );
         String parameter = PromptUtil.getChatCompletionPrompt(question, chatHistory, contexts);
         Map<String, String> parameters = Map.of("model", "foo", "messages", parameter);
         assertTrue(isJson(parameter));
@@ -81,14 +102,53 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
         ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
         ActionFuture<MLOutput> future = mock(ActionFuture.class);
-        when(future.actionGet()).thenReturn(mlOutput);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
         when(mlClient.predict(any(), any())).thenReturn(future);
-        ChatCompletionInput input = new ChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList());
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions"
+        );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
         MLInput mlInput = captor.getValue();
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
         assertEquals("answer", (String) output.getAnswers().get(0));
+    }
+
+    public void testChatCompletionThrowingError() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        String errorMessage = "throttled";
+        Map<String, String> messageMap = Map.of("message", errorMessage);
+        Map<String, ?> dataAsMap = Map.of("error", messageMap);
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions"
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals(errorMessage, (String) output.getErrors().get(0));
     }
 
     private boolean isJson(String Json) {
