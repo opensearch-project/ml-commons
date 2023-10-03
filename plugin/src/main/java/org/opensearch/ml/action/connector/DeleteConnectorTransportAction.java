@@ -68,7 +68,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
                     sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
                     searchRequest.source(sourceBuilder);
-                    client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+                    client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                         SearchHit[] searchHits = searchResponse.getHits().getHits();
                         if (searchHits.length == 0) {
                             deleteConnector(deleteRequest, connectorId, actionListener);
@@ -92,7 +92,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                         }
                         log.error("Failed to delete ML connector: " + connectorId, e);
                         actionListener.onFailure(e);
-                    }));
+                    }), () -> context.restore()));
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);
                     actionListener.onFailure(e);
@@ -108,7 +108,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
 
     private void deleteConnector(DeleteRequest deleteRequest, String connectorId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.delete(deleteRequest, new ActionListener<>() {
+            client.delete(deleteRequest, ActionListener.runBefore(new ActionListener<>() {
                 @Override
                 public void onResponse(DeleteResponse deleteResponse) {
                     if (deleteResponse.getResult() == DocWriteResponse.Result.NOT_FOUND) {
@@ -125,7 +125,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     log.error("Failed to delete ML connector: " + connectorId, e);
                     actionListener.onFailure(e);
                 }
-            });
+            }, () -> context.restore()));
         } catch (Exception e) {
             log.error("Failed to delete ML connector: " + connectorId, e);
             actionListener.onFailure(e);

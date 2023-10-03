@@ -60,6 +60,7 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
     private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -78,11 +79,11 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
             );
             request.source().fetchSource(rebuiltFetchSourceContext);
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
-                client.search(request, actionListener);
+                client.search(request, wrappedListener);
             } else {
                 SearchSourceBuilder sourceBuilder = connectorAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 request.source(sourceBuilder);
-                client.search(request, actionListener);
+                client.search(request, wrappedListener);
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);
