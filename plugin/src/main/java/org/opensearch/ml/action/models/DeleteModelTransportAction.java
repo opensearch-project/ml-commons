@@ -99,6 +99,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
@@ -113,7 +114,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
                                 if (!access) {
-                                    actionListener
+                                    wrappedListener
                                         .onFailure(
                                             new MLValidationException("User doesn't have privilege to perform this operation on this model")
                                         );
@@ -125,7 +126,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                         || mlModelState.equals(MLModelState.DEPLOYED)
                                         || mlModelState.equals(MLModelState.DEPLOYING)
                                         || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
-                                        actionListener
+                                        wrappedListener
                                             .onFailure(
                                                 new Exception(
                                                     "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
@@ -140,27 +141,27 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 && response.getHits().getTotalHits().value == 1) {
                                                 isLastModelOfGroup = true;
                                             }
-                                            deleteModel(modelId, mlModel.getModelGroupId(), isLastModelOfGroup, actionListener);
+                                            deleteModel(modelId, mlModel.getModelGroupId(), isLastModelOfGroup, wrappedListener);
                                         }, e -> {
                                             log.error("Failed to Search Model index " + modelId, e);
-                                            actionListener.onFailure(e);
+                                            wrappedListener.onFailure(e);
                                         }));
                                     } else {
-                                        deleteModel(modelId, mlModel.getModelGroupId(), false, actionListener);
+                                        deleteModel(modelId, mlModel.getModelGroupId(), false, wrappedListener);
                                     }
                                 }
                             }, e -> {
                                 log.error("Failed to validate Access for Model Id " + modelId, e);
-                                actionListener.onFailure(e);
+                                wrappedListener.onFailure(e);
                             }));
                     } catch (Exception e) {
                         log.error("Failed to parse ml model " + r.getId(), e);
-                        actionListener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 } else {
-                    actionListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                    wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                 }
-            }, e -> { actionListener.onFailure(e); }));
+            }, e -> { wrappedListener.onFailure(e); }));
         } catch (Exception e) {
             log.error("Failed to delete ML model " + modelId, e);
             actionListener.onFailure(e);

@@ -79,6 +79,7 @@ public class MLSearchHandler {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -97,9 +98,9 @@ public class MLSearchHandler {
             );
             request.source().fetchSource(rebuiltFetchSourceContext);
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
-                client.search(request, listener);
+                client.search(request, wrappedListener);
             } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
-                client.search(request, listener);
+                client.search(request, wrappedListener);
             } else {
                 SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
                 SearchRequest modelGroupSearchRequest = new SearchRequest();
@@ -118,15 +119,15 @@ public class MLSearchHandler {
                         Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
 
                         request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
-                        client.search(request, listener);
+                        client.search(request, wrappedListener);
                     } else {
                         log.debug("No model group found");
                         request.source().query(rewriteQueryBuilder(request.source().query(), null));
-                        client.search(request, listener);
+                        client.search(request, wrappedListener);
                     }
                 }, e -> {
                     log.error("Fail to search model groups!", e);
-                    actionListener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 });
                 client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
             }

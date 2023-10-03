@@ -93,6 +93,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
                 client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
                         try (
@@ -102,17 +103,17 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
                             validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                            updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener, user);
+                            updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, wrappedListener, user);
                         }
                     } else {
-                        listener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
+                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
                     }
                 }, e -> {
                     if (e instanceof IndexNotFoundException) {
-                        listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                        wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                     } else {
                         logException("Failed to get model group", e, log);
-                        listener.onFailure(e);
+                        wrappedListener.onFailure(e);
                     }
                 }));
             } catch (Exception e) {
@@ -186,15 +187,16 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         UpdateRequest updateModelGroupRequest = new UpdateRequest();
         updateModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId).doc(source);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             client
                 .update(
                     updateModelGroupRequest,
-                    ActionListener.wrap(r -> { listener.onResponse(new MLUpdateModelGroupResponse("Updated")); }, e -> {
+                    ActionListener.wrap(r -> { wrappedListener.onResponse(new MLUpdateModelGroupResponse("Updated")); }, e -> {
                         if (e instanceof IndexNotFoundException) {
-                            listener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                         } else {
                             log.error("Failed to update model group", e, log);
-                            listener.onFailure(new MLValidationException("Failed to update Model Group"));
+                            wrappedListener.onFailure(new MLValidationException("Failed to update Model Group"));
                         }
                     })
                 );
