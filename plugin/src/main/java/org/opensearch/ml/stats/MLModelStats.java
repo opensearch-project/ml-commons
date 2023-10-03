@@ -36,7 +36,9 @@ public class MLModelStats implements ToXContentFragment, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeMap(modelStats, (stream, v) -> stream.writeEnum(v), (stream, stats) -> stats.writeTo(stream));
+        if (modelStats != null && modelStats.size() > 0) {
+            out.writeMap(modelStats, (stream, v) -> stream.writeEnum(v), (stream, stats) -> stats.writeTo(stream));
+        }
     }
 
     @Override

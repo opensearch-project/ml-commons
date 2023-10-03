@@ -33,7 +33,7 @@ public class MLStatsNodeResponse extends BaseNodeResponse implements ToXContentF
      */
     private Map<FunctionName, MLAlgoStats> algorithmStats;
     /**
-     * Model stats which includes stats level stats.
+     * Model stats which includes model level stats.
      *
      * Example: {model_id: { predict: { request_count: 1} }}
      */
