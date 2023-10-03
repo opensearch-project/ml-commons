@@ -17,9 +17,10 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import org.opensearch.client.Client;
+
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import org.opensearch.client.Client;
 
 /**
  * Helper class for wiring LLMs based on the model ID.
@@ -30,6 +31,7 @@ import org.opensearch.client.Client;
 public class ModelLocator {
 
     public static Llm getLlm(String modelId, Client client) {
+
         return new DefaultLlmImpl(modelId, client);
     }
 

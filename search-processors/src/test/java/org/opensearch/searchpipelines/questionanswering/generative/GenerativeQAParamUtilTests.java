@@ -1,5 +1,10 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.SearchExtBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -7,11 +12,6 @@ import org.opensearch.searchpipelines.questionanswering.generative.ext.Generativ
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamUtil;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
 import org.opensearch.test.OpenSearchTestCase;
-
-import java.util.List;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class GenerativeQAParamUtilTests extends OpenSearchTestCase {
 

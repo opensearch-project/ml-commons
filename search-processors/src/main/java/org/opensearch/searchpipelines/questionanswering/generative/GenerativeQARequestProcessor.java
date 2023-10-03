@@ -17,15 +17,15 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import java.util.Map;
+import java.util.function.BooleanSupplier;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
-
-import java.util.Map;
-import java.util.function.BooleanSupplier;
 
 /**
  * Defines the request processor for generative QA search pipelines.
@@ -35,7 +35,13 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
     private String modelId;
     private final BooleanSupplier featureFlagSupplier;
 
-    protected GenerativeQARequestProcessor(String tag, String description, boolean ignoreFailure, String modelId, BooleanSupplier supplier) {
+    protected GenerativeQARequestProcessor(
+        String tag,
+        String description,
+        boolean ignoreFailure,
+        String modelId,
+        BooleanSupplier supplier
+    ) {
         super(tag, description, ignoreFailure);
         this.modelId = modelId;
         this.featureFlagSupplier = supplier;
@@ -76,12 +82,17 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
             PipelineContext pipelineContext
         ) throws Exception {
             if (featureFlagSupplier.getAsBoolean()) {
-                return new GenerativeQARequestProcessor(tag, description, ignoreFailure,
-                    ConfigurationUtils.readStringProperty(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
-                        tag,
-                        config,
-                        GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID
-                    ),
+                return new GenerativeQARequestProcessor(
+                    tag,
+                    description,
+                    ignoreFailure,
+                    ConfigurationUtils
+                        .readStringProperty(
+                            GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
+                            tag,
+                            config,
+                            GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID
+                        ),
                     this.featureFlagSupplier
                 );
             } else {

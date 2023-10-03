@@ -17,12 +17,13 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
+import java.util.Optional;
+
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.SearchExtBuilder;
 
-import java.util.Optional;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 /**
  * Utility class for extracting generative QA search pipeline parameters from search requests.
@@ -33,7 +34,12 @@ public class GenerativeQAParamUtil {
     public static GenerativeQAParameters getGenerativeQAParameters(SearchRequest request) {
         GenerativeQAParamExtBuilder builder = null;
         if (request.source() != null && request.source().ext() != null && !request.source().ext().isEmpty()) {
-            Optional<SearchExtBuilder> b = request.source().ext().stream().filter(bldr -> GenerativeQAParamExtBuilder.PARAMETER_NAME.equals(bldr.getWriteableName())).findFirst();
+            Optional<SearchExtBuilder> b = request
+                .source()
+                .ext()
+                .stream()
+                .filter(bldr -> GenerativeQAParamExtBuilder.PARAMETER_NAME.equals(bldr.getWriteableName()))
+                .findFirst();
             if (b.isPresent()) {
                 builder = (GenerativeQAParamExtBuilder) b.get();
             }
