@@ -65,6 +65,7 @@ public class MLModelGroupManager {
             String modelName = input.getName();
             User user = RestActionUtils.getUserContext(client);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
                 validateUniqueModelGroupName(input.getName(), ActionListener.wrap(modelGroups -> {
                     if (modelGroups != null
                         && modelGroups.getHits().getTotalHits() != null
@@ -72,7 +73,7 @@ public class MLModelGroupManager {
                         Iterator<SearchHit> iterator = modelGroups.getHits().iterator();
                         while (iterator.hasNext()) {
                             String id = iterator.next().getId();
-                            listener
+                            wrappedListener
                                 .onFailure(
                                     new IllegalArgumentException(
                                         "The name you provided is already being used by a model group with ID: " + id + "."
@@ -117,19 +118,19 @@ public class MLModelGroupManager {
 
                             client.index(indexRequest, ActionListener.wrap(r -> {
                                 log.debug("Indexed model group doc successfully {}", modelName);
-                                listener.onResponse(r.getId());
+                                wrappedListener.onResponse(r.getId());
                             }, e -> {
                                 log.error("Failed to index model group doc", e);
-                                listener.onFailure(e);
+                                wrappedListener.onFailure(e);
                             }));
                         }, ex -> {
                             log.error("Failed to init model group index", ex);
-                            listener.onFailure(ex);
+                            wrappedListener.onFailure(ex);
                         }));
                     }
                 }, e -> {
                     log.error("Failed to search model group index", e);
-                    listener.onFailure(e);
+                    wrappedListener.onFailure(e);
                 }));
             } catch (Exception e) {
                 log.error("Failed to create model group doc", e);

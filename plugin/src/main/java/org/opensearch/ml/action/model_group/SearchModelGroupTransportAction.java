@@ -57,13 +57,14 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<Sear
 
     private void preProcessRoleAndPerformSearch(SearchRequest request, User user, ActionListener<SearchResponse> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
             if (modelAccessControlHelper.skipModelAccessControl(user)) {
-                client.search(request, listener);
+                client.search(request, wrappedListener);
             } else {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by " + user.getBackendRoles());
-                client.search(request, listener);
+                client.search(request, wrappedListener);
             }
         } catch (Exception e) {
             log.error("Failed to search", e);
