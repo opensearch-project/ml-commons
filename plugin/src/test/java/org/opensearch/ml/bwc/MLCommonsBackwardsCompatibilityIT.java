@@ -9,7 +9,11 @@ import static org.junit.Assert.*;
 import static org.opensearch.ml.common.input.parameter.clustering.KMeansParams.DistanceType.COSINE;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -317,9 +321,12 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
     private boolean isNewerVersion(String osVersion) {
         Pattern pattern = Pattern.compile("\\d+(?=\\.)");
         Matcher matcher = pattern.matcher(osVersion);
-        assertEquals(matcher.groupCount(), 2);
-        if (matcher.groupCount() >= 2) {
-            return (Integer.parseInt(matcher.group(1)) > 4) || (Integer.parseInt(matcher.group(0)) > 2);
+        ArrayList<Integer> osVersionArrayList = new ArrayList<>();
+        while (matcher.find()) {
+            osVersionArrayList.add(Integer.parseInt(matcher.group()));
+        }
+        if (osVersionArrayList.size() >= 2) {
+            return (osVersionArrayList.get(0) > 2 || osVersionArrayList.get(1) > 4);
         } else {
             throw new IllegalArgumentException("osVersion is not valid, osVersion is: " + osVersion);
         }
