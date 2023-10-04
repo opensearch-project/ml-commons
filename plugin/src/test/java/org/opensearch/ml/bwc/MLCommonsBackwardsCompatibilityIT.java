@@ -9,7 +9,13 @@ import static org.junit.Assert.*;
 import static org.opensearch.ml.common.input.parameter.clustering.KMeansParams.DistanceType.COSINE;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.http.HttpEntity;
@@ -312,8 +318,26 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
         return modelIdSet.iterator().next().toString();
     }
 
+    /**
+     * This method compares our current ML plugin version
+     * to the older ML plugin version used in the BWC test,
+     * which is 2.4.0 at this time.
+     */
     private boolean isNewerVersion(String osVersion) {
-        return (Integer.parseInt(osVersion.substring(2, 3)) > 4) || (Integer.parseInt(osVersion.substring(0, 1)) > 2);
+        Integer olderMajorVersion = 2;
+        Integer olderMinorVersion = 4;
+        Pattern pattern = Pattern.compile("\\d+(?=\\.)");
+        Matcher matcher = pattern.matcher(osVersion);
+        // e.g. If current OS Version is "2.11.0", the osVersionArrayList will be like [2, 11].
+        ArrayList<Integer> osVersionArrayList = new ArrayList<>();
+        while (matcher.find()) {
+            osVersionArrayList.add(Integer.parseInt(matcher.group()));
+        }
+        if (osVersionArrayList.size() >= 2) {
+            return (osVersionArrayList.get(0) > olderMajorVersion || osVersionArrayList.get(1) > olderMinorVersion);
+        } else {
+            throw new IllegalArgumentException("osVersion is not valid, osVersion is: " + osVersion);
+        }
     }
 
     private void verifyMlResponse(String uri) throws Exception {
