@@ -20,6 +20,8 @@ package org.opensearch.ml.memory;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
@@ -203,5 +205,35 @@ public interface ConversationalMemoryHandler {
      * @return ActionFuture for whether the conversationMeta object and all of its interactions were deleted. i.e. false => the ConvoMeta or a subset of its Interactions were not deleted
      */
     public ActionFuture<Boolean> deleteConversation(String conversationId);
+
+    /**
+     * Search over conversations index
+     * @param request search request over the conversations index
+     * @param listener receives the search response
+     */
+    public void searchConversations(SearchRequest request, ActionListener<SearchResponse> listener);
+
+    /**
+     * Search over conversations index
+     * @param request search request over the conversations index
+     * @return ActionFuture for the search response
+     */
+    public ActionFuture<SearchResponse> searchConversations(SearchRequest request);
+
+    /**
+     * Search over interactions of a conversation
+     * @param conversationId id of the conversation to search through
+     * @param request search request over the interactions
+     * @param listener receives the search response
+     */
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener);
+
+    /**
+     * Search over interactions of a conversation
+     * @param conversationId id of the conversation to search through
+     * @param request search request over the interactions
+     * @return ActionFuture for the search response
+     */
+    public ActionFuture<SearchResponse> searchInteractions(String conversationId, SearchRequest request);
 
 }
