@@ -363,7 +363,9 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param request search request over the interactions
      * @param listener receives the search response
      */
-    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener);
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        interactionsIndex.searchInteractions(conversationId, request, listener);
+    }
 
     /**
      * Search over interactions of a conversation

@@ -327,14 +327,19 @@ public class ConversationMetaIndex {
         BoolQueryBuilder newQuery = new BoolQueryBuilder();
         newQuery.must(originalQuery);
         String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-        if (user != null) {
+        if (userstr != null) {
+            String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
             newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, user));
         }
         request.source().query(newQuery);
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
-            client.search(request, internalListener);
+            client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> {
+                client.search(request, internalListener);
+            }, e -> {
+                log.error("Failed to refresh conversations index during search conversations ", e);
+                internalListener.onFailure(e);
+            }));
         } catch (Exception e) {
             listener.onFailure(e);
         }
