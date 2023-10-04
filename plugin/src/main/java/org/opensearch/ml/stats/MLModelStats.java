@@ -27,7 +27,9 @@ public class MLModelStats implements ToXContentFragment, Writeable {
     private Map<ActionName, MLActionStats> modelStats;
 
     public MLModelStats(StreamInput in) throws IOException {
-        this.modelStats = in.readMap(stream -> stream.readEnum(ActionName.class), MLActionStats::new);
+        if (in.readBoolean()) {
+            this.modelStats = in.readMap(stream -> stream.readEnum(ActionName.class), MLActionStats::new);
+        }
     }
 
     public MLModelStats(Map<ActionName, MLActionStats> modelStats) {
@@ -37,7 +39,10 @@ public class MLModelStats implements ToXContentFragment, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         if (modelStats != null && modelStats.size() > 0) {
+            out.writeBoolean(true);
             out.writeMap(modelStats, (stream, v) -> stream.writeEnum(v), (stream, stats) -> stats.writeTo(stream));
+        } else {
+            out.writeBoolean(false);
         }
     }
 

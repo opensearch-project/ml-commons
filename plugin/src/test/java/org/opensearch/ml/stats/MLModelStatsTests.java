@@ -57,7 +57,10 @@ public class MLModelStatsTests extends OpenSearchTestCase {
         MLModelStats mlModelEmptyStats = new MLModelStats(modelStats);
         BytesStreamOutput output = new BytesStreamOutput();
         mlModelEmptyStats.writeTo(output);
-        assertEquals(0, output.bytes().length());
+        MLModelStats parsedMLModelStats = new MLModelStats(output.bytes().streamInput());
+        MLActionStats parsedMLActionStats = parsedMLModelStats.getActionStats(ActionName.PREDICT);
+        assertNull(parsedMLActionStats);
+        // assertEquals(0, output.bytes().length());
     }
 
     public void testToXContent() throws IOException {
