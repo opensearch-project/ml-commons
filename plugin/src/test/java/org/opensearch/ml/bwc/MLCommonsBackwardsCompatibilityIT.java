@@ -318,15 +318,23 @@ public class MLCommonsBackwardsCompatibilityIT extends MLCommonsBackwardsCompati
         return modelIdSet.iterator().next().toString();
     }
 
+    /**
+     * This method compares our current ML plugin version
+     * to the older ML plugin version used in the BWC test,
+     * which is 2.4.0 at this time.
+     */
     private boolean isNewerVersion(String osVersion) {
+        Integer olderMajorVersion = 2;
+        Integer olderMinorVersion = 4;
         Pattern pattern = Pattern.compile("\\d+(?=\\.)");
         Matcher matcher = pattern.matcher(osVersion);
+        // e.g. If current OS Version is "2.11.0", the osVersionArrayList will be like [2, 11].
         ArrayList<Integer> osVersionArrayList = new ArrayList<>();
         while (matcher.find()) {
             osVersionArrayList.add(Integer.parseInt(matcher.group()));
         }
         if (osVersionArrayList.size() >= 2) {
-            return (osVersionArrayList.get(0) > 2 || osVersionArrayList.get(1) > 4);
+            return (osVersionArrayList.get(0) > olderMajorVersion || osVersionArrayList.get(1) > olderMinorVersion);
         } else {
             throw new IllegalArgumentException("osVersion is not valid, osVersion is: " + osVersion);
         }
