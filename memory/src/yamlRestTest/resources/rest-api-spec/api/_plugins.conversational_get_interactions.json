@@ -1,0 +1,29 @@
+{
+    "_plugins.conversational_get_interactions": {
+        "stability": "stable",
+        "url": {
+            "paths": [
+                {
+                    "path": "/_plugins/ml/conversational/memory/{conversationId}",
+                    "methods": ["GET"],
+                    "parts": {
+                        "conversationId": {
+                            "type": "string",
+                            "description": "ID of conversation to get interactions from"
+                        }
+                    }
+                }
+            ]
+        },
+        "params": {
+            "maxResults": {
+                "type": "number",
+                "description": "[optional] number of results to return (defaults to 10)"
+            },
+            "nextToken": {
+                "type": "number",
+                "description": "[optional] token pointing to the next page of results"
+            }
+        }
+    }
+}

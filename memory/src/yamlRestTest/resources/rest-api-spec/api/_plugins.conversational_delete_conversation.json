@@ -1,0 +1,19 @@
+{
+    "_plugins.conversational_delete_conversation": {
+        "stability": "stable",
+        "url": {
+            "paths": [
+                {
+                    "path": "/_plugins/ml/conversational/memory/{conversationId}",
+                    "methods": ["DELETE"],
+                    "parts": {
+                        "conversationId": {
+                            "type": "string",
+                            "description": "id of the conversation to be deleted"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
