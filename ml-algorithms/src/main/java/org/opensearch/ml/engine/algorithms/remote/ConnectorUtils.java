@@ -95,6 +95,8 @@ public class ConnectorUtils {
             for (String doc : inputDataSet.getDocs()) {
                 if (doc != null) {
                     String gsonString = gson.toJson(doc);
+                    // in 2.9, user will add  " before and after string
+                    // gson.toString(string) will add extra " before after string, so need to remove
                     docs.add(gsonString.substring(1, gsonString.length() - 1));
                 } else {
                     docs.add(null);
