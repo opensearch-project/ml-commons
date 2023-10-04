@@ -340,4 +340,7 @@ public class InteractionsIndex {
         }
     }
 
+    public void searchInteractions(String conversationId, SearchRequest request, ActionListener<SearchResponse> listener) {
+        
+    }
 }
