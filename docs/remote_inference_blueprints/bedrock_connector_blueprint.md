@@ -15,8 +15,42 @@ PUT /_cluster/settings
 
 2. Create connector for Amazon Bedrock:
 
+If you are using self-managed Opensearch, you should supply AWS credentials:
+
 ```json
-POST /_plugins/_ml/model_groups/_register
+POST /_plugins/_ml/connectors/_create
+{
+    "name": "Amazon Bedrock",
+    "description": "Test connector for Amazon Bedrock",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "credential": {
+        "access_key": "<PLEASE ADD YOUR AWS ACCESS KEY HERE>",
+        "secret_key": "<PLEASE ADD YOUR AWS SECRET KEY HERE>",
+        "session_token": "<PLEASE ADD YOUR AWS SECURITY TOKEN HERE>"
+    },
+    "parameters": {
+        "region": "<PLEASE ADD YOUR AWS REGION HERE>",
+        "service_name": "bedrock"
+    },
+    "actions": [
+        {
+            "action_type": "predict",
+            "method": "POST",
+            "headers": {
+                "content-type": "application/json"
+            },
+            "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke",
+            "request_body": "{\"prompt\":\"\\n\\nHuman: ${parameters.inputs}\\n\\nAssistant:\",\"max_tokens_to_sample\":300,\"temperature\":0.5,\"top_k\":250,\"top_p\":1,\"stop_sequences\":[\"\\\\n\\\\nHuman:\"]}"
+        }
+    ]
+}
+```
+
+If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service:
+
+```json
+POST /_plugins/_ml/connectors/_create
 {
     "name": "Amazon Bedrock",
     "description": "Test connector for Amazon Bedrock",
