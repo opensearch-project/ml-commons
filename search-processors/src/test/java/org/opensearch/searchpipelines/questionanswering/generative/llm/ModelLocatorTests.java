@@ -17,10 +17,10 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import static org.mockito.Mockito.mock;
+
 import org.opensearch.client.Client;
 import org.opensearch.test.OpenSearchTestCase;
-
-import static org.mockito.Mockito.mock;
 
 public class ModelLocatorTests extends OpenSearchTestCase {
 

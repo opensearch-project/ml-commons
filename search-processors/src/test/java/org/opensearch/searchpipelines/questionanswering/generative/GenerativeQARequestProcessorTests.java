@@ -17,6 +17,12 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
+import static org.mockito.Mockito.mock;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
+
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.search.SearchRequest;
@@ -24,12 +30,6 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.test.OpenSearchTestCase;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.BooleanSupplier;
-
-import static org.mockito.Mockito.mock;
 
 public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
 
@@ -42,8 +42,8 @@ public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
 
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
-        SearchRequestProcessor processor =
-            new GenerativeQARequestProcessor.Factory(alwaysOn).create(null, "tag", "desc", true, config, null);
+        SearchRequestProcessor processor = new GenerativeQARequestProcessor.Factory(alwaysOn)
+            .create(null, "tag", "desc", true, config, null);
         assertTrue(processor instanceof GenerativeQARequestProcessor);
     }
 
@@ -65,16 +65,16 @@ public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
         exceptionRule.expectMessage(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
-        Processor processor =
-            new GenerativeQARequestProcessor.Factory(()->false).create(null, "tag", "desc", true, config, null);
+        Processor processor = new GenerativeQARequestProcessor.Factory(() -> false).create(null, "tag", "desc", true, config, null);
     }
 
     // Only to be used for the following test case.
     private boolean featureFlag001 = false;
+
     public void testProcessorFeatureFlagOffOnOff() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
-        Processor.Factory factory = new GenerativeQARequestProcessor.Factory(()->featureFlag001);
+        Processor.Factory factory = new GenerativeQARequestProcessor.Factory(() -> featureFlag001);
         boolean firstExceptionThrown = false;
         try {
             factory.create(null, "tag", "desc", true, config, null);
