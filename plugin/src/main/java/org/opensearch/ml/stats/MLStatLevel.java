@@ -9,6 +9,7 @@ public enum MLStatLevel {
     CLUSTER,
     NODE,
     ALGORITHM,
+    MODEL,
     ACTION;
 
     public static MLStatLevel from(String value) {
