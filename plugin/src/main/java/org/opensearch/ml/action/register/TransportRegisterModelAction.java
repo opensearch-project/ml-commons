@@ -166,24 +166,47 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         User user = RestActionUtils.getUserContext(client);
         modelAccessControlHelper
             .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-                if (!access) {
-                    if (isModelNameAlreadyExisting) {
+                if (access) {
+                    doRegister(registerModelInput, listener);
+                    return;
+                }
+                // if the user does not have access, we need to check three more conditions before throwing exception.
+                // if we are checking the access based on the name provided in the input, we let user know the name is already used by a
+                // model group they do not have access to.
+                if (isModelNameAlreadyExisting) {
+                    // This case handles when user is using the same pre-trained model already registered by another user on the cluster.
+                    // The only way here is for the user to first create model group and use its ID in the request
+                    if (registerModelInput.getModelGroupId() != null
+                        && (registerModelInput.getUrl() == null
+                            && registerModelInput.getFunctionName() != FunctionName.REMOTE
+                            && registerModelInput.getConnectorId() == null)) {
                         listener
                             .onFailure(
                                 new IllegalArgumentException(
-                                    "The name \""
+                                    "Without a model group ID, the system will use the model name {"
                                         + registerModelInput.getModelName()
-                                        + "\" you provided is already being used by another model group \""
+                                        + "} to create a new model group. However, this name is taken by another group {"
                                         + registerModelInput.getModelGroupId()
-                                        + "\" to which you do not have access. Please provide a different name."
+                                        + "} you can't access. To register this pre-trained model, create a new model group and use its ID in your request."
                                 )
                             );
-                    } else
+                    } else {
                         listener
-                            .onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
-                } else {
-                    doRegister(registerModelInput, listener);
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "The name {"
+                                        + registerModelInput.getModelName()
+                                        + "} you provided is unavailable because it is used by another model group {"
+                                        + registerModelInput.getModelGroupId()
+                                        + "} to which you do not have access. Please provide a different name."
+                                )
+                            );
+                    }
+                    return;
                 }
+                // if user does not have access to the model group ID provided in the input, we let user know they do not have access to the
+                // specified model group
+                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
             }, listener::onFailure));
     }
 
@@ -233,7 +256,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(registerModelInput);
             mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
                 registerModelInput.setModelGroupId(modelGroupId);
-                registerModelInput.setIsThisVersionCreatingModelGroup(true);
+                registerModelInput.setDoesVersionCreateModelGroup(true);
                 registerModel(registerModelInput, listener);
             }, e -> {
                 logException("Failed to create Model Group", e, log);

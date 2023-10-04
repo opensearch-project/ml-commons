@@ -105,6 +105,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                             validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
                         }
                         updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, listener, user);
+                    } catch (Exception e) {
+                        log.error("Failed to parse ml model group" + modelGroup.getId(), e);
+                        listener.onFailure(e);
                     }
                 } else {
                     listener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));

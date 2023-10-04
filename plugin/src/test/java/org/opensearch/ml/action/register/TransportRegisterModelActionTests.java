@@ -529,7 +529,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name \"Test Model\" you provided is already being used by another model group \"model_group_ID\" to which you do not have access. Please provide a different name.",
+            "The name {Test Model} you provided is unavailable because it is used by another model group {model_group_ID} to which you do not have access. Please provide a different name.",
             argumentCaptor.getValue().getMessage()
         );
     }

@@ -723,11 +723,7 @@ public class MLModelManager {
                             handleException(functionName, taskId, e);
                             deleteFileQuietly(file);
                             // remove model doc as failed to upload model
-                            deleteModel(
-                                modelId,
-                                registerModelInput.getModelGroupId(),
-                                registerModelInput.getIsThisVersionCreatingModelGroup()
-                            );
+                            deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getDoesVersionCreateModelGroup());
                             semaphore.release();
                             deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                         }));
@@ -735,7 +731,7 @@ public class MLModelManager {
                 }, e -> {
                     log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-                    deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getIsThisVersionCreatingModelGroup());
+                    deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getDoesVersionCreateModelGroup());
                     handleException(functionName, taskId, e);
                 })
             );
@@ -802,7 +798,7 @@ public class MLModelManager {
         }, e -> {
             log.error("Failed to update model", e);
             handleException(functionName, taskId, e);
-            deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getIsThisVersionCreatingModelGroup());
+            deleteModel(modelId, registerModelInput.getModelGroupId(), registerModelInput.getDoesVersionCreateModelGroup());
         }));
     }
 
@@ -815,7 +811,7 @@ public class MLModelManager {
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
     }
 
-    private void deleteModel(String modelId, String modelGroupID, Boolean isThisVersionCreatingModelGroup) {
+    private void deleteModel(String modelId, String modelGroupID, Boolean doesVersionCreateModelGroup) {
         DeleteRequest deleteRequest = new DeleteRequest();
         deleteRequest.index(ML_MODEL_INDEX).id(modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest);
@@ -824,7 +820,9 @@ public class MLModelManager {
             .setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN)
             .setAbortOnVersionConflict(false);
         client.execute(DeleteByQueryAction.INSTANCE, deleteChunksRequest);
-        if (isThisVersionCreatingModelGroup) {
+        // This checks if model group is created when registering the version and deletes the model group since the version registration had
+        // failed
+        if (doesVersionCreateModelGroup) {
             deleteModelGroup(modelGroupID);
         }
     }
