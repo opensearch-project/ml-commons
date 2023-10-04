@@ -5,23 +5,7 @@
 
 package org.opensearch.ml.action.register;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
-import static org.opensearch.ml.utils.TestHelper.clusterSetting;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-
+import com.google.common.collect.ImmutableList;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
@@ -72,7 +56,22 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Rule
@@ -493,6 +492,36 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", null), actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
+    public void test_FailureWhenPreBuildModelNameAlreadyExists() throws IOException {
+        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+                .builder()
+                .modelName("huggingface/sentence-transformers/all-MiniLM-L12-v2")
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .version("1")
+                .build();
+
+        transportRegisterModelAction.doExecute(task, new MLRegisterModelRequest(registerModelInput), actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "Without a model group ID, the system will use the model name {huggingface/sentence-transformers/all-MiniLM-L12-v2} to create a new model group. However, this name is taken by another group {model_group_ID} you can't access. To register this pre-trained model, create a new model group and use its ID in your request.",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_FailureWhenSearchingModelGroupName() throws IOException {

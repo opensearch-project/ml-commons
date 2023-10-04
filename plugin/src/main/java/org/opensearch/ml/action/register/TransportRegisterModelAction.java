@@ -5,18 +5,9 @@
 
 package org.opensearch.ml.action.register;
 
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
-import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
-import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.regex.Pattern;
-
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import lombok.extern.log4j.Log4j2;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
@@ -63,10 +54,17 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
+import java.util.regex.Pattern;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 @Log4j2
 public class TransportRegisterModelAction extends HandledTransportAction<ActionRequest, MLRegisterModelResponse> {
@@ -176,10 +174,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 if (isModelNameAlreadyExisting) {
                     // This case handles when user is using the same pre-trained model already registered by another user on the cluster.
                     // The only way here is for the user to first create model group and use its ID in the request
-                    if (registerModelInput.getModelGroupId() != null
-                        && (registerModelInput.getUrl() == null
+                    if (registerModelInput.getUrl() == null
                             && registerModelInput.getFunctionName() != FunctionName.REMOTE
-                            && registerModelInput.getConnectorId() == null)) {
+                            && registerModelInput.getConnectorId() == null) {
                         listener
                             .onFailure(
                                 new IllegalArgumentException(
