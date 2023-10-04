@@ -865,6 +865,7 @@ public class MLModelManager {
         mlStats.createCounterStatIfAbsent(functionName, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
+        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.DEPLOY, ML_ACTION_REQUEST_COUNT).increment();
         List<String> workerNodes = mlTask.getWorkerNodes();
         if (modelCacheHelper.isModelDeployed(modelId)) {
             if (workerNodes != null && workerNodes.size() > 0) {
@@ -1210,6 +1211,7 @@ public class MLModelManager {
                     mlStats
                         .createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT)
                         .increment();
+                    mlStats.createModelCounterStatIfAbsent(modelId, ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 } else {
                     modelUndeployStatus.put(modelId, NOT_FOUND);
                 }
@@ -1221,6 +1223,7 @@ public class MLModelManager {
                 modelUndeployStatus.put(modelId, UNDEPLOYED);
                 mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).decrement();
                 mlStats.createCounterStatIfAbsent(getModelFunctionName(modelId), ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
+                mlStats.createModelCounterStatIfAbsent(modelId, ActionName.UNDEPLOY, ML_ACTION_REQUEST_COUNT).increment();
                 removeModel(modelId);
             }
         }

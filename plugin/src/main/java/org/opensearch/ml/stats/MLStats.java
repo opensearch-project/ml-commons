@@ -22,6 +22,7 @@ public class MLStats {
     @Getter
     private Map<Enum, MLStat<?>> stats;
     private Map<FunctionName, Map<ActionName, Map<MLActionLevelStat, MLStat>>> algoStats;// {"kmeans":{"train":{"request_count":10}}}
+    private Map<String, Map<ActionName, Map<MLActionLevelStat, MLStat>>> modelStats;// {"model_id":{"train":{"request_count":10}}}
 
     /**
      * Constructor
@@ -31,6 +32,7 @@ public class MLStats {
     public MLStats(Map<Enum, MLStat<?>> stats) {
         this.stats = stats;
         this.algoStats = new ConcurrentHashMap<>();
+        this.modelStats = new ConcurrentHashMap<>();
     }
 
     /**
@@ -58,6 +60,12 @@ public class MLStats {
 
     public MLStat<?> createCounterStatIfAbsent(FunctionName algoName, ActionName action, MLActionLevelStat stat) {
         Map<ActionName, Map<MLActionLevelStat, MLStat>> actionStats = algoStats.computeIfAbsent(algoName, it -> new ConcurrentHashMap<>());
+        Map<MLActionLevelStat, MLStat> algoActionStats = actionStats.computeIfAbsent(action, it -> new ConcurrentHashMap<>());
+        return createAlgoStatIfAbsent(algoActionStats, stat, () -> new MLStat<>(false, new CounterSupplier()));
+    }
+
+    public MLStat<?> createModelCounterStatIfAbsent(String modelId, ActionName action, MLActionLevelStat stat) {
+        Map<ActionName, Map<MLActionLevelStat, MLStat>> actionStats = modelStats.computeIfAbsent(modelId, it -> new ConcurrentHashMap<>());
         Map<MLActionLevelStat, MLStat> algoActionStats = actionStats.computeIfAbsent(action, it -> new ConcurrentHashMap<>());
         return createAlgoStatIfAbsent(algoActionStats, stat, () -> new MLStat<>(false, new CounterSupplier()));
     }
@@ -130,7 +138,27 @@ public class MLStats {
         return algoActionStats;
     }
 
+    public Map<ActionName, MLActionStats> getModelStats(String modelId) {
+        if (!modelStats.containsKey(modelId)) {
+            return null;
+        }
+        Map<ActionName, MLActionStats> modelActionStats = new HashMap<>();
+
+        for (Map.Entry<ActionName, Map<MLActionLevelStat, MLStat>> entry : modelStats.get(modelId).entrySet()) {
+            Map<MLActionLevelStat, Object> statsMap = new HashMap<>();
+            for (Map.Entry<MLActionLevelStat, MLStat> state : entry.getValue().entrySet()) {
+                statsMap.put(state.getKey(), state.getValue().getValue());
+            }
+            modelActionStats.put(entry.getKey(), new MLActionStats(statsMap));
+        }
+        return modelActionStats;
+    }
+
     public FunctionName[] getAllAlgorithms() {
         return algoStats.keySet().toArray(new FunctionName[0]);
+    }
+
+    public String[] getAllModels() {
+        return modelStats.keySet().toArray(new String[0]);
     }
 }
