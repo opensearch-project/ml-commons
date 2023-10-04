@@ -94,7 +94,8 @@ public class ConnectorUtils {
             List<String> docs = new ArrayList<>();
             for (String doc : inputDataSet.getDocs()) {
                 if (doc != null) {
-                    docs.add(gson.toJson(doc));
+                    String gsonString = gson.toJson(doc);
+                    docs.add(gsonString.substring(1, gsonString.length() - 1));
                 } else {
                     docs.add(null);
                 }
