@@ -221,6 +221,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     mlModelGroupManager.getModelGroup(newModelGroupId, ActionListener.wrap(newModelGroup -> {
                         String updatedVersion = incrementLatestVersion(newModelGroup);
                         updateModelInput.setVersion(updatedVersion);
+                        newModelGroup.setLatestVersion(Integer.parseInt(updatedVersion));
                         updateRequestConstructor(modelId, updateRequest, updateModelInput, actionListener);
                     },
                         exception -> actionListener
