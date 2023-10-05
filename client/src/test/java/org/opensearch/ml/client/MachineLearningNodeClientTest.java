@@ -74,9 +74,7 @@ import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
@@ -650,7 +648,8 @@ public class MachineLearningNodeClientTest {
         ArgumentCaptor<MLCreateConnectorResponse> argumentCaptor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
 
         Map<String, String> params = Map.ofEntries(Map.entry("endpoint", "endpoint"), Map.entry("temp", "7"));
-        Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "key1"), Map.entry("key2", "key2"));
+        Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "value1"), Map.entry("key2", "value2"));
+        List<String> backendRoles = Arrays.asList("IT", "HR");
 
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.builder()
                 .name("test")
@@ -660,7 +659,7 @@ public class MachineLearningNodeClientTest {
                 .parameters(params)
                 .credential(credentials)
                 .actions(null)
-                .backendRoles(null)
+                .backendRoles(backendRoles)
                 .addAllBackendRoles(false)
                 .access(AccessMode.from("private"))
                 .dryRun(false)
