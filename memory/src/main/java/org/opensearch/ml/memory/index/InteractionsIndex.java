@@ -392,7 +392,12 @@ public class InteractionsIndex {
                     newQuery.must(originalQuery);
                     newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId));
                     request.source().query(newQuery);
-                    client.search(request, internalListener);
+                    client.admin().indices().refresh(Requests.refreshRequest(indexName), ActionListener.wrap(refreshResponse -> {
+                        client.search(request, internalListener);
+                    }, e -> {
+                        log.error("Failed to refresh interactions index during search interactions ", e);
+                        internalListener.onFailure(e);
+                    }));
                 } catch (Exception e) {
                     listener.onFailure(e);
                 }
