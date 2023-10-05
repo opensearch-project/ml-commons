@@ -495,6 +495,42 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    public void test_DoesVersionCreateModelGroupFieldSetToTrueByUserByMistake() throws IOException {
+        when(node1.getId()).thenReturn("NodeId1");
+        when(node2.getId()).thenReturn("NodeId2");
+        MLForwardResponse forwardResponse = Mockito.mock(MLForwardResponse.class);
+        doAnswer(invocation -> {
+            ActionListenerResponseHandler<MLForwardResponse> handler = invocation.getArgument(3);
+            handler.handleResponse(forwardResponse);
+            return null;
+        }).when(transportService).sendRequest(any(), any(), any(), any());
+
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+                .builder()
+                .functionName(FunctionName.BATCH_RCF)
+                .modelGroupId("model_group_ID")
+                .modelName("Test Model")
+                .modelConfig(
+                        new TextEmbeddingModelConfig(
+                                "CUSTOM",
+                                123,
+                                TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+                                "all config",
+                                TextEmbeddingModelConfig.PoolingMode.MEAN,
+                                true,
+                                512
+                        )
+                )
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .url("http://test_url")
+                .doesVersionCreateModelGroup(true)
+                .build();
+
+        transportRegisterModelAction.doExecute(task, new MLRegisterModelRequest(registerModelInput), actionListener);
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+    }
+
     public void test_FailureWhenPreBuildModelNameAlreadyExists() throws IOException {
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {

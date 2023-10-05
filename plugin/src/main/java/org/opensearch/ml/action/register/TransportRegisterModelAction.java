@@ -262,6 +262,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 listener.onFailure(e);
             }));
         } else {
+            registerModelInput.setDoesVersionCreateModelGroup(false);
             registerModel(registerModelInput, listener);
         }
     }
