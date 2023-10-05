@@ -30,6 +30,8 @@ import java.util.List;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationMeta;
@@ -59,7 +61,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(0);
             al.onResponse("cid");
             return null;
-        }).when(conversationMetaIndex).createConversation(any(ActionListener.class));
+        }).when(conversationMetaIndex).createConversation(any());
         ActionFuture<String> result = cmHandler.createConversation();
         assert (result.actionGet(200).equals("cid"));
     }
@@ -240,5 +242,30 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         }).when(interactionsIndex).deleteConversation(anyString(), any());
         ActionFuture<Boolean> result = cmHandler.deleteConversation("cid");
         assert (result.actionGet(200));
+    }
+
+    public void testSearchConversations_Future() {
+        SearchRequest request = mock(SearchRequest.class);
+        SearchResponse response = mock(SearchResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(conversationMetaIndex).searchConversations(any(), any());
+        ActionFuture<SearchResponse> result = cmHandler.searchConversations(request);
+        assert (result.actionGet().equals(response));
+    }
+
+    public void testSearchInteractions_Future() {
+        SearchRequest request = mock(SearchRequest.class);
+        SearchResponse response = mock(SearchResponse.class);
+        String cid = "cid";
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(response);
+            return null;
+        }).when(interactionsIndex).searchInteractions(any(), any(), any());
+        ActionFuture<SearchResponse> result = cmHandler.searchInteractions(cid, request);
+        assert (result.actionGet().equals(response));
     }
 }
