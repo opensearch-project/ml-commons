@@ -289,6 +289,8 @@ public class ConversationMetaIndex {
                 if (!(getResponse.isExists() && getResponse.getId().equals(conversationId))) {
                     throw new ResourceNotFoundException("Conversation [" + conversationId + "] not found");
                 }
+                log.info(userstr);
+                log.info(User.parse(userstr));
                 // If security is off - User doesn't exist - you have permission
                 if (userstr == null || User.parse(userstr) == null) {
                     internalListener.onResponse(true);

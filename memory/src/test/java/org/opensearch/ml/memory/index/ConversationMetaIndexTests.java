@@ -40,6 +40,7 @@ import org.opensearch.action.admin.indices.refresh.RefreshResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
@@ -52,7 +53,9 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.conversation.ConversationMeta;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.SendRequestTransportException;
@@ -132,6 +135,13 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
             tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userstr);
             return tc;
         }).when(threadPool).getThreadContext();
+    }
+
+    private SearchRequest dummyRequest() {
+        SearchRequest request = new SearchRequest();
+        request.source(new SearchSourceBuilder());
+        request.source().query(new MatchAllQueryBuilder());
+        return request;
     }
 
     public void testInit_DoesNotCreateIndex() {
@@ -402,6 +412,18 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getMessage().equals("Test Fail in Delete"));
     }
 
+    public void testDelete_ClientFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        blanketGrantAccess();
+        doThrow(new RuntimeException("Client Fail in Delete")).when(client).delete(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> deleteConversationListener = mock(ActionListener.class);
+        conversationMetaIndex.deleteConversation("test-id", deleteConversationListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(deleteConversationListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Client Fail in Delete"));
+    }
+
     public void testCheckAccess_DoesNotExist_ThenFail() {
         setupUser("user");
         setupRefreshSuccess();
@@ -464,7 +486,7 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         setupUser("user");
         setupRefreshSuccess();
         doReturn(true).when(metadata).hasIndex(anyString());
-        doThrow(new RuntimeException("Client Test Fail")).when(client).get(any(), any());
+        doThrow(new RuntimeException("Client Test Fail")).when(client).admin();
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> accessListener = mock(ActionListener.class);
         conversationMetaIndex.checkAccess("test id", accessListener);
@@ -475,11 +497,65 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
 
     public void testCheckAccess_EmptyStringUser_ThenReturnTrue() {
         setupUser(null);
+        setupRefreshSuccess();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        final String id = "test_id";
+        GetResponse dummyGetResponse = mock(GetResponse.class);
+        doReturn(true).when(dummyGetResponse).isExists();
+        doReturn(id).when(dummyGetResponse).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(dummyGetResponse);
+            return null;
+        }).when(client).get(any(), any());
         @SuppressWarnings("unchecked")
         ActionListener<Boolean> accessListener = mock(ActionListener.class);
-        conversationMetaIndex.checkAccess("test id", accessListener);
+        conversationMetaIndex.checkAccess(id, accessListener);
         ArgumentCaptor<Boolean> argCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(accessListener, times(1)).onResponse(argCaptor.capture());
         assert (argCaptor.getValue());
+    }
+
+    public void testCheckAccess_RefreshFails_ThenFail() {
+        setupUser("user");
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Refresh Exception"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<Boolean> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.checkAccess("test id", accessListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(accessListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Exception"));
+    }
+
+    public void testSearchConversations_RefreshFails_ThenFail() {
+        SearchRequest request = dummyRequest();
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Refresh Exception"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<SearchResponse> searchConversationsListener = mock(ActionListener.class);
+        conversationMetaIndex.searchConversations(request, searchConversationsListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(searchConversationsListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Exception"));
+    }
+
+    public void testSearchConversations_ClientFails_ThenFail() {
+        SearchRequest request = dummyRequest();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Client Test Fail")).when(client).admin();
+        @SuppressWarnings("unchecked")
+        ActionListener<SearchResponse> accessListener = mock(ActionListener.class);
+        conversationMetaIndex.searchConversations(request, accessListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(accessListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Client Test Fail"));
     }
 }
