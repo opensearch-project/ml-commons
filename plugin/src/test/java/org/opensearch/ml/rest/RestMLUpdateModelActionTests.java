@@ -95,7 +95,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/models/{model_id}/_update", route.getPath());
+        assertEquals("/_plugins/_ml/models/_update/{model_id}", route.getPath());
     }
 
     @Test
@@ -133,7 +133,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         params.put("model_id", "test_modelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/models/{model_id}/_update")
+            .withPath("/_plugins/_ml/models/_update/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -146,7 +146,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         params.put("model_id", "test_modelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
-            .withPath("/_plugins/_ml/models/{model_id}/_update")
+            .withPath("/_plugins/_ml/models/_update/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();

@@ -37,7 +37,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_update", ML_BASE_URI, PARAMETER_MODEL_ID)));
+            .of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/_update/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
     }
 
     @Override
@@ -61,7 +61,10 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLUpdateModelInput input = MLUpdateModelInput.parse(parser, modelId);
+        MLUpdateModelInput input = MLUpdateModelInput.parse(parser);
+        // Model ID can only be set here. Model version can only be set automatically.
+        input.setModelId(modelId);
+        input.setVersion(null);
         return new MLUpdateModelRequest(input);
     }
 }

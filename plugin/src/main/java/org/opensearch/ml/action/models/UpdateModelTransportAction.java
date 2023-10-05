@@ -5,19 +5,14 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
-import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.io.IOException;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
@@ -29,27 +24,21 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
-import org.opensearch.ml.common.transport.model.MLModelGetRequest;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.search.SearchHit;
-import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -61,27 +50,27 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
-    NamedXContentRegistry xContentRegistry;
     ModelAccessControlHelper modelAccessControlHelper;
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelManager mlModelManager;
+    MLModelGroupManager mlModelGroupManager;
 
     @Inject
     public UpdateModelTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        MLModelGroupManager mlModelGroupManager
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
-        this.xContentRegistry = xContentRegistry;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
+        this.mlModelGroupManager = mlModelGroupManager;
     }
 
     @Override
@@ -89,134 +78,115 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelRequest updateModelRequest = MLUpdateModelRequest.fromActionRequest(request);
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
-        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
-
-        try {
-            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
-        } catch (IOException e) {
-            log.error("Failed to construct the update request with the input.", e);
-            actionListener.onFailure(e);
-        }
-        updateRequest.docAsUpsert(true);
         User user = RestActionUtils.getUserContext(client);
 
-        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false);
-        FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
-        GetRequest getModelRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
+        String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.get(getModelRequest, ActionListener.wrap(r -> {
-                if (r != null && r.isExists()) {
-                    try (XContentParser parser = MLNodeUtils.createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                        String algorithmName = "";
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        if (r.getSource() != null && r.getSource().get(ALGORITHM_FIELD) != null) {
-                            algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
-                        } else {
-                            actionListener.onFailure(new RuntimeException("ALGORITHM_FIELD not found for this model, model ID " + modelId));
-                        }
-                        MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        if (mlModel.getAlgorithm() == TEXT_EMBEDDING || mlModel.getAlgorithm() == REMOTE) {
-                            modelAccessControlHelper
-                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                                    if (Boolean.TRUE.equals(hasPermission)) {
-                                        updateUndeployedModel(
-                                            modelId,
-                                            updateModelInput,
-                                            mlModel,
-                                            user,
-                                            updateRequest,
-                                            actionListener,
-                                            context
+            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+                FunctionName functionName = mlModel.getAlgorithm();
+                MLModelState mlModelState = mlModel.getModelState();
+                if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
+                    modelAccessControlHelper
+                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                            if (hasPermission) {
+                                if (!mlModelState.equals(MLModelState.LOADED)
+                                    && !mlModelState.equals(MLModelState.LOADING)
+                                    && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+                                    && !mlModelState.equals(MLModelState.DEPLOYED)
+                                    && !mlModelState.equals(MLModelState.DEPLOYING)
+                                    && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
+                                    updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener);
+                                } else {
+                                    actionListener
+                                        .onFailure(
+                                            new MLValidationException(
+                                                "ML Model "
+                                                    + modelId
+                                                    + " is in deploying or deployed state, please undeploy the models first!"
+                                            )
                                         );
-                                    } else {
-                                        actionListener
-                                            .onFailure(
-                                                new MLValidationException(
-                                                    "User doesn't have privilege to perform this operation on this model, model ID "
-                                                        + modelId
-                                                )
-                                            );
-                                    }
-                                }, exception -> {
-                                    log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                                    actionListener.onFailure(exception);
-                                }));
-                        } else {
-                            actionListener
-                                .onFailure(
-                                    new MLValidationException(
-                                        "User doesn't have privilege to perform this operation on this function category: "
-                                            + mlModel.getAlgorithm().toString()
-                                    )
-                                );
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to update ML model for model ID {}. Details {}:", modelId, e);
-                        actionListener.onFailure(e);
-                    }
+                                }
+                            } else {
+                                actionListener
+                                    .onFailure(
+                                        new MLValidationException(
+                                            "User doesn't have privilege to perform this operation on this model, model ID " + modelId
+                                        )
+                                    );
+                            }
+                        }, exception -> {
+                            log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                            actionListener.onFailure(exception);
+                        }));
                 } else {
                     actionListener
-                        .onFailure(new IllegalArgumentException("Failed to find model to update with the provided model id: " + modelId));
+                        .onFailure(
+                            new MLValidationException(
+                                "User doesn't have privilege to perform this operation on this function category: "
+                                    + functionName.toString()
+                            )
+                        );
                 }
-            }, e -> actionListener.onFailure(new MLResourceNotFoundException("Fail to find model"))));
+            },
+                e -> actionListener
+                    .onFailure(new MLResourceNotFoundException("Failed to find model to update with the provided model id: " + modelId))
+            ), () -> context.restore()));
         } catch (Exception e) {
             log.error("Failed to update ML model for " + modelId, e);
             actionListener.onFailure(e);
         }
     }
 
-    private void updateUndeployedModel(
+    private void updateRemoteOrTextEmbeddingModel(
         String modelId,
         MLUpdateModelInput updateModelInput,
         MLModel mlModel,
         User user,
-        UpdateRequest updateRequest,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ActionListener<UpdateResponse> actionListener
     ) {
-        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.must(QueryBuilders.matchQuery(MLModel.MODEL_ID_FIELD, modelId));
-        boolQueryBuilder.must(QueryBuilders.idsQuery().addIds(mlModelManager.getAllModelIds()));
-        sourceBuilder.query(boolQueryBuilder);
-        searchRequest.source(sourceBuilder);
+        String newModelGroupId = Strings.hasLength(updateModelInput.getModelGroupId()) ? updateModelInput.getModelGroupId() : null;
+        String relinkConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
 
-        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-            SearchHit[] searchHits = searchResponse.getHits().getHits();
-            if (searchHits.length == 0) {
-                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, updateRequest, actionListener, context);
+        if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
+            if (relinkConnectorId == null) {
+                updateModelWithRegisteringNewModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
             } else {
-                log.error("ML Model " + modelId + " is deployed, please undeploy the models first!");
                 actionListener
-                    .onFailure(new MLValidationException("ML Model " + modelId + " is deployed, please undeploy the models first!"));
+                    .onFailure(new IllegalArgumentException("Trying to update the connector or connector_id field on a local model"));
             }
-        }, e -> {
-            if (e instanceof IndexNotFoundException) {
-                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, updateRequest, actionListener, context);
-                return;
+        } else {
+            // mlModel.getAlgorithm() == REMOTE
+            if (relinkConnectorId == null) {
+                updateModelWithRegisteringNewModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
+            } else {
+                updateModelWithRelinkStandAloneConnector(
+                    modelId,
+                    newModelGroupId,
+                    relinkConnectorId,
+                    mlModel,
+                    user,
+                    updateModelInput,
+                    actionListener
+                );
             }
-            log.error("Failed to update ML model for " + modelId, e);
-            actionListener.onFailure(e);
-        }));
+        }
     }
 
     private void updateModelWithRelinkStandAloneConnector(
         String modelId,
-        String relinkModelGroupId,
+        String newModelGroupId,
         String relinkConnectorId,
         MLModel mlModel,
         User user,
-        UpdateRequest updateRequest,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        MLUpdateModelInput updateModelInput,
+        ActionListener<UpdateResponse> actionListener
     ) {
         if (Strings.hasLength(mlModel.getConnectorId())) {
             connectorAccessControlHelper
                 .validateConnectorAccess(client, relinkConnectorId, ActionListener.wrap(hasRelinkConnectorPermission -> {
-                    if (Boolean.TRUE.equals(hasRelinkConnectorPermission)) {
-                        updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
+                    if (hasRelinkConnectorPermission) {
+                        updateModelWithRegisteringNewModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
                     } else {
                         actionListener
                             .onFailure(
@@ -237,62 +207,36 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
-    private void updateRemoteOrTextEmbeddingModel(
+    private void updateModelWithRegisteringNewModelGroup(
         String modelId,
+        String newModelGroupId,
+        User user,
         MLUpdateModelInput updateModelInput,
-        MLModel mlModel,
-        User user,
-        UpdateRequest updateRequest,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ActionListener<UpdateResponse> actionListener
     ) {
-        String relinkModelGroupId = Strings.hasLength(updateModelInput.getModelGroupId()) ? updateModelInput.getModelGroupId() : null;
-        String relinkConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
-
-        if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
-            if (relinkConnectorId == null) {
-                updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
-            } else {
-                actionListener
-                    .onFailure(new IllegalArgumentException("Trying to update the connector or connector_id field on a local model"));
-            }
-        } else {
-            // mlModel.getAlgorithm() == REMOTE
-            if (relinkConnectorId == null) {
-                updateModelWithOrWithoutRelinkModelGroup(modelId, relinkModelGroupId, user, updateRequest, actionListener, context);
-            } else {
-                updateModelWithRelinkStandAloneConnector(
-                    modelId,
-                    relinkModelGroupId,
-                    relinkConnectorId,
-                    mlModel,
-                    user,
-                    updateRequest,
-                    actionListener,
-                    context
-                );
-            }
-        }
-    }
-
-    private void updateModelWithOrWithoutRelinkModelGroup(
-        String modelId,
-        String relinkModelGroupId,
-        User user,
-        UpdateRequest updateRequest,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
-    ) {
-        if (relinkModelGroupId != null) {
-            modelAccessControlHelper.validateModelGroupAccess(user, relinkModelGroupId, client, ActionListener.wrap(hasRelinkPermission -> {
-                if (Boolean.TRUE.equals(hasRelinkPermission)) {
-                    client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
+        if (newModelGroupId != null) {
+            modelAccessControlHelper.validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasRelinkPermission -> {
+                if (hasRelinkPermission) {
+                    mlModelGroupManager.getModelGroup(newModelGroupId, ActionListener.wrap(newModelGroup -> {
+                        String updatedVersion = incrementLatestVersion(newModelGroup);
+                        updateModelInput.setVersion(updatedVersion);
+                        updateRequestConstructor(modelId, updateRequest, updateModelInput, actionListener);
+                    },
+                        exception -> actionListener
+                            .onFailure(
+                                new MLResourceNotFoundException(
+                                    "Failed to find the model group with the provided model group id in the update model input, MODEL_GROUP_ID: "
+                                        + newModelGroupId
+                                )
+                            )
+                    ));
                 } else {
                     actionListener
                         .onFailure(
                             new MLValidationException(
                                 "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
-                                    + relinkModelGroupId
+                                    + newModelGroupId
                             )
                         );
                 }
@@ -301,16 +245,28 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 actionListener.onFailure(exception);
             }));
         } else {
-            client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+            updateRequestConstructor(modelId, updateRequest, updateModelInput, actionListener);
         }
     }
 
-    private ActionListener<UpdateResponse> getUpdateResponseListener(
+    private void updateRequestConstructor(
         String modelId,
-        ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        UpdateRequest updateRequest,
+        MLUpdateModelInput updateModelInput,
+        ActionListener<UpdateResponse> actionListener
     ) {
-        return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
+        try {
+            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.docAsUpsert(true);
+            client.update(updateRequest, getUpdateResponseListener(modelId, actionListener));
+        } catch (IOException e) {
+            log.error("Failed to build update request.");
+            actionListener.onFailure(e);
+        }
+    }
+
+    private ActionListener<UpdateResponse> getUpdateResponseListener(String modelId, ActionListener<UpdateResponse> actionListener) {
+        return ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
                 log.info("Model id:{} failed update", modelId);
                 actionListener.onResponse(updateResponse);
@@ -321,6 +277,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         }, exception -> {
             log.error("Failed to update ML model: " + modelId, exception);
             actionListener.onFailure(exception);
-        }), context::restore);
+        });
+    }
+
+    private String incrementLatestVersion(MLModelGroup mlModelGroup) {
+        return Integer.toString(mlModelGroup.getLatestVersion() + 1);
     }
 }

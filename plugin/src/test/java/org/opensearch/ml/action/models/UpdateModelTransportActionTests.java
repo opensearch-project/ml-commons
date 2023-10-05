@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
@@ -13,13 +12,11 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 
-import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -28,42 +25,28 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.search.SearchResponseSections;
-import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.utils.TestHelper;
-import org.opensearch.search.SearchHit;
-import org.opensearch.search.SearchHits;
-import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -89,22 +72,22 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     ActionListener<UpdateResponse> actionListener;
 
     @Mock
-    GetResponse getResponse;
-
-    @Mock
     MLUpdateModelInput mockUpdateModelInput;
 
     @Mock
     MLUpdateModelRequest mockUpdateModelRequest;
 
     @Mock
-    NamedXContentRegistry xContentRegistry;
+    MLModel mockModel;
 
     @Mock
-    ClusterService clusterService;
+    MLModelGroup mockModelGroup;
 
     @Mock
     MLModelManager mlModelManager;
+
+    @Mock
+    MLModelGroupManager mlModelGroupManager;
 
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
@@ -116,8 +99,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     public ExpectedException exceptionRule = ExpectedException.none();
 
     private ShardId shardId;
-
-    private SearchResponse searchResponse;
 
     UpdateResponse updateResponse;
 
@@ -159,8 +140,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
         mlModelWithNullFunctionName = MLModel
             .builder()
-            .name("test_name")
             .modelId("test_model_id")
+            .name("test_name")
             .modelGroupId("test_model_group_id")
             .description("test_description")
             .modelState(MLModelState.REGISTERED)
@@ -173,47 +154,41 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
-                xContentRegistry,
                 connectorAccessControlHelper,
                 modelAccessControlHelper,
-                mlModelManager
+                mlModelManager,
+                mlModelGroupManager
             )
         );
 
-        SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
-        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
-        searchResponse = new SearchResponse(
-            searchSections,
-            null,
-            1,
-            1,
-            0,
-            11,
-            ShardSearchFailure.EMPTY_ARRAY,
-            SearchResponse.Clusters.EMPTY
-        );
-
+        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
-    }
 
-    @Test
-    public void testUpdateLocalModelSuccess() throws IOException {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("test_model_group_id"), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
             return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        })
+            .when(modelAccessControlHelper)
+            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(2);
+            listener.onResponse(true);
+            return null;
+        })
+            .when(connectorAccessControlHelper)
+            .validateConnectorAccess(any(Client.class), eq("updated_test_connector_id"), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -221,254 +196,204 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(localModel);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
+        doAnswer(invocation -> {
+            ActionListener<MLModelGroup> listener = invocation.getArgument(1);
+            listener.onResponse(mockModelGroup);
+            return null;
+        }).when(mlModelGroupManager).getModelGroup(eq("updated_test_model_group_id"), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testUpdateLocalModelSuccess() {
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testUpdateLocalModelSuccessWithSearchIndexNotFoundError() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+    public void testUpdateModelStateLoadedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new IndexNotFoundException("Index not found!"));
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
             return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
 
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.LOADED).when(mockModel).getModelState();
 
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateResponse);
-    }
-
-    @Test
-    public void testUpdateLocalModelWithSearchResponseNotEmpty() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(noneEmptySearchResponse());
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("ML Model test_model_id is deployed, please undeploy the models first!", argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void testUpdateLocalModelWithSearchResponseOtherException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener
-                .onFailure(
-                    new RuntimeException(
-                        "Any other Exception occurred during running SearchResponseListener. Please check log for more details."
-                    )
-                );
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "Any other Exception occurred during running SearchResponseListener. Please check log for more details.",
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
             argumentCaptor.getValue().getMessage()
         );
     }
 
     @Test
-    public void testUpdateRequestDocIOException() throws IOException {
+    public void testUpdateModelStateLoadingException() {
         doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
         doReturn("mockId").when(mockUpdateModelInput).getModelId();
-        doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.LOADING).when(mockModel).getModelState();
+
         transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test
-    public void testUpdateModelWithoutRelinkModelGroupSuccess() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+    public void testUpdateModelStatePartiallyLoadedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
             return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.PARTIALLY_LOADED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelStateDeployedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
 
         doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
             return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
 
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.DEPLOYED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelStateDeployingException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
 
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.DEPLOYING).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelStatePartiallyDeployedException() {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.PARTIALLY_DEPLOYED).when(mockModel).getModelState();
+
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "ML Model mockId is in deploying or deployed state, please undeploy the models first!",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testUpdateModelWithoutRegisterToNewModelGroupSuccess() {
         updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testUpdateRemoteModelWithLocalInformationSuccess() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
+    public void testUpdateRemoteModelWithLocalInformationSuccess() {
         MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
-        GetResponse getResponse = prepareGetResponse(remoteModel);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(remoteModel);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testUpdateRemoteModelWithRemoteInformationSuccess() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
+    public void testUpdateRemoteModelWithRemoteInformationSuccess() {
         MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
-        GetResponse getResponse = prepareGetResponse(remoteModel);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(remoteModel);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
-            listener.onResponse(true);
-            return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
         verify(actionListener).onResponse(updateResponse);
     }
 
     @Test
-    public void testGetUpdateResponseListenerWrongStatus() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
+    public void testGetUpdateResponseListenerWrongStatus() {
         UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -476,32 +401,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         verify(actionListener).onResponse(updateWrongResponse);
     }
 
     @Test
-    public void testGetUpdateResponseListenerOtherException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
+    public void testGetUpdateResponseListenerOtherException() {
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
             listener
@@ -513,14 +418,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -531,38 +428,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateRemoteModelWithNoStandAloneConnectorFound() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
+    public void testUpdateRemoteModelWithNoStandAloneConnectorFound() {
         MLModel remoteModelWithInternalConnector = prepareUnsupportedMLModel(FunctionName.REMOTE);
-        GetResponse getResponse = prepareGetResponse(remoteModelWithInternalConnector);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(remoteModelWithInternalConnector);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
-            listener.onResponse(true);
-            return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(String.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -574,32 +446,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlNoPermission() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
+    public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlNoPermission() {
         MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
-        GetResponse getResponse = prepareGetResponse(remoteModel);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(remoteModel);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -617,32 +470,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlOtherException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
+    public void testUpdateRemoteModelWithRemoteInformationWithConnectorAccessControlOtherException() {
         MLModel remoteModel = prepareMLModel(FunctionName.REMOTE);
-        GetResponse getResponse = prepareGetResponse(remoteModel);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(remoteModel);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -663,33 +497,12 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithModelAccessControlNoPermission() throws IOException {
+    public void testUpdateModelWithModelAccessControlNoPermission() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -701,7 +514,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithModelAccessControlOtherException() throws IOException {
+    public void testUpdateModelWithModelAccessControlOtherException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener
@@ -713,27 +526,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -744,13 +536,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithRelinkModelGroupModelAccessControlNoPermission() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("test_model_group_id"), any(), isA(ActionListener.class));
-
+    public void testUpdateModelWithRegisterToNewModelGroupModelAccessControlNoPermission() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
@@ -758,27 +544,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         })
             .when(modelAccessControlHelper)
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -790,13 +555,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithRelinkModelGroupModelAccessControlOtherException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("test_model_group_id"), any(), isA(ActionListener.class));
-
+    public void testUpdateModelWithRegisterToNewModelGroupModelAccessControlOtherException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener
@@ -810,27 +569,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             .when(modelAccessControlHelper)
             .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), isA(ActionListener.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -841,30 +579,29 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithModelNotFound() throws IOException {
+    public void testUpdateModelWithRegisterToNewModelGroupNotFound() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
+            ActionListener<MLModelGroup> listener = invocation.getArgument(1);
+            listener.onFailure(new MLResourceNotFoundException("Model group not found with MODEL_GROUP_ID: updated_test_model_group_id"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelGroupManager).getModelGroup(eq("updated_test_model_group_id"), isA(ActionListener.class));
 
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Failed to find the model group with the provided model group id in the update model input, MODEL_GROUP_ID: updated_test_model_group_id",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
 
+    @Test
+    public void testUpdateModelWithModelNotFound() {
         doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(null);
             return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -873,65 +610,20 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateModelWithFunctionNameFieldNotFound() throws IOException {
+    public void testUpdateModelWithFunctionNameFieldNotFound() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModelWithNullFunctionName);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        GetResponse getResponse = prepareGetResponse(mlModelWithNullFunctionName);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener, times(2)).onFailure(argumentCaptor.capture());
+        verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
     @Test
-    public void testUpdateLocalModelWithRemoteInformation() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
-        GetResponse getResponse = prepareGetResponse(localModel);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
-
+    public void testUpdateLocalModelWithRemoteInformation() {
         transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -939,32 +631,13 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testUpdateLocalModelWithUnsupportedFunction() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
+    public void testUpdateLocalModelWithUnsupportedFunction() {
         MLModel localModelWithUnsupportedFunction = prepareUnsupportedMLModel(FunctionName.KMEANS);
-        GetResponse getResponse = prepareGetResponse(localModelWithUnsupportedFunction);
         doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(localModelWithUnsupportedFunction);
             return null;
-        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateRemoteModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -973,6 +646,64 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             "User doesn't have privilege to perform this operation on this function category: KMEANS",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    @Test
+    public void testUpdateRequestDocIOException() throws IOException {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.REGISTERED).when(mockModel).getModelState();
+
+        doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testUpdateRequestDocInRegisterToNewModelGroupIOException() throws IOException {
+        doReturn(mockUpdateModelInput).when(mockUpdateModelRequest).getUpdateModelInput();
+        doReturn("mockId").when(mockUpdateModelInput).getModelId();
+
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mockModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("mockId"), any(), any(), isA(ActionListener.class));
+
+        doReturn("test_model_group_id").when(mockModel).getModelGroupId();
+        doReturn(FunctionName.TEXT_EMBEDDING).when(mockModel).getAlgorithm();
+        doReturn(MLModelState.REGISTERED).when(mockModel).getModelState();
+
+        doReturn("mockUpdateModelGroupId").when(mockUpdateModelInput).getModelGroupId();
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), eq("mockUpdateModelGroupId"), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLModelGroup> listener = invocation.getArgument(1);
+            listener.onResponse(mockModelGroup);
+            return null;
+        }).when(mlModelGroupManager).getModelGroup(eq("mockUpdateModelGroupId"), isA(ActionListener.class));
+
+        doThrow(new IOException("Exception occurred during building update request.")).when(mockUpdateModelInput).toXContent(any(), any());
+        transportUpdateModelAction.doExecute(task, mockUpdateModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
     }
 
     private MLModel prepareMLModel(FunctionName functionName) throws IllegalArgumentException {
@@ -1014,6 +745,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                     .builder()
                     .name("test_name")
                     .modelId("test_model_id")
+                    .modelGroupId("test_model_group_id")
                     .description("test_description")
                     .modelState(MLModelState.REGISTERED)
                     .algorithm(FunctionName.REMOTE)
@@ -1025,6 +757,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                     .builder()
                     .name("test_name")
                     .modelId("test_model_id")
+                    .modelGroupId("test_model_group_id")
                     .modelState(MLModelState.REGISTERED)
                     .algorithm(FunctionName.KMEANS)
                     .build();
@@ -1032,34 +765,5 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             default:
                 throw new IllegalArgumentException("Please choose from FunctionName.REMOTE and FunctionName.KMEANS");
         }
-    }
-
-    private GetResponse prepareGetResponse(MLModel mlModel) throws IOException {
-        XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
-        BytesReference bytesReference = BytesReference.bytes(content);
-        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        return new GetResponse(getResult);
-    }
-
-    private SearchResponse noneEmptySearchResponse() throws IOException {
-        String modelContent =
-            "{\"model_id\":\"test-model_id\",\"description\":\"description\",\"name\":\"name\",\"model_group_id\":\"modelGroupId\",\"model_config\":"
-                + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
-                + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
-        SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
-        SearchHits hits = new SearchHits(new SearchHit[] { model }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
-        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, false, false, null, 1);
-        SearchResponse searchResponse = new SearchResponse(
-            searchSections,
-            null,
-            1,
-            1,
-            0,
-            11,
-            ShardSearchFailure.EMPTY_ARRAY,
-            SearchResponse.Clusters.EMPTY
-        );
-
-        return searchResponse;
     }
 }

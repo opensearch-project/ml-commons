@@ -35,10 +35,13 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 public class MLUpdateModelInputTest {
 
     private MLUpdateModelInput updateModelInput;
-    private final String expectedInputStr = "{\"model_id\":\"test-model_id\",\"description\":\"description\",\"name\":\"name\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+    private final String expectedInputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":\"2\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
-    private final String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"description\":\"description\",\"name\":\"name\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+    private final String expectedOutputStr = "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":\"2\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
+            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
+            "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\"}";
+    private final String expectedInputStrWithIllegalField = "{\"model_id\":\"test-model_id\",\"description\":\"description\",\"model_version\":\"2\",\"name\":\"name\",\"model_group_id\":\"modelGroupId\",\"model_config\":" +
             "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"" +
             "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"connector_id\":\"test-connector_id\",\"illegal_field\":\"This field need to be skipped.\"}";
 
@@ -55,6 +58,7 @@ public class MLUpdateModelInputTest {
         updateModelInput = MLUpdateModelInput.builder()
                 .modelId("test-model_id")
                 .modelGroupId("modelGroupId")
+                .version("2")
                 .name("name")
                 .description("description")
                 .modelConfig(config)
@@ -65,6 +69,7 @@ public class MLUpdateModelInputTest {
     @Test
     public void readInputStream_Success() throws IOException {
         readInputStream(updateModelInput, parsedInput -> {
+            assertEquals("test-model_id", parsedInput.getModelId());
             assertEquals(updateModelInput.getName(), parsedInput.getName());
         });
     }
@@ -88,6 +93,7 @@ public class MLUpdateModelInputTest {
         String expectedIncompleteInputStr =
                 "{\"model_id\":\"test-model_id\"}";
         updateModelInput.setDescription(null);
+        updateModelInput.setVersion(null);
         updateModelInput.setName(null);
         updateModelInput.setModelGroupId(null);
         updateModelInput.setModelConfig(null);
@@ -97,16 +103,9 @@ public class MLUpdateModelInputTest {
     }
 
     @Test
-    public void parse_WithModel() throws Exception {
-        testParseFromJsonString("modelIdInsideTest", expectedInputStr, parsedInput -> {
-            assertEquals("modelIdInsideTest", parsedInput.getModelId());
-        });
-    }
-
-    @Test
-    public void parse_WithoutModel() throws Exception {
-        testParseFromJsonString( expectedInputStr, parsedInput -> {
-            assertEquals("test-model_id", parsedInput.getModelId());
+    public void parse_Success() throws Exception {
+        testParseFromJsonString(expectedInputStr, parsedInput -> {
+            assertEquals("name", parsedInput.getName());
         });
     }
 
@@ -114,19 +113,11 @@ public class MLUpdateModelInputTest {
     public void parse_WithIllegalFieldWithoutModel() throws Exception {
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
-                assertEquals(expectedInputStr, serializationWithToXContent(parsedInput));
+                assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         });
-    }
-
-    private void testParseFromJsonString(String modelId, String expectedInputStr, Consumer<MLUpdateModelInput> verify) throws Exception {
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), LoggingDeprecationHandler.INSTANCE, expectedInputStr);
-        parser.nextToken();
-        MLUpdateModelInput parsedInput = MLUpdateModelInput.parse(parser, modelId);
-        verify.accept(parsedInput);
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLUpdateModelInput> verify) throws Exception {
