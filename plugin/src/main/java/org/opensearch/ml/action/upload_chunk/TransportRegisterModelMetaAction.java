@@ -121,12 +121,14 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
             MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(mlUploadInput);
             mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
                 mlUploadInput.setModelGroupId(modelGroupId);
+                mlUploadInput.setDoesVersionCreateModelGroup(true);
                 registerModelMeta(mlUploadInput, listener);
             }, e -> {
                 logException("Failed to create Model Group", e, log);
                 listener.onFailure(e);
             }));
         } else {
+            mlUploadInput.setDoesVersionCreateModelGroup(false);
             registerModelMeta(mlUploadInput, listener);
         }
     }
