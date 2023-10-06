@@ -296,6 +296,11 @@ public class MLModelManager {
                     log.debug("Index model meta doc successfully {}", modelName);
                     wrappedListener.onResponse(response.getId());
                 }, e -> {
+                    deleteOrUpdateModelGroup(
+                        mlRegisterModelMetaInput.getModelGroupId(),
+                        mlRegisterModelMetaInput.getDoesVersionCreateModelGroup(),
+                        version
+                    );
                     log.error("Failed to index model meta doc", e);
                     wrappedListener.onFailure(e);
                 }));
@@ -328,10 +333,6 @@ public class MLModelManager {
 
             String modelGroupId = mlRegisterModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (Strings.isBlank(modelGroupId)) {
-                indexRemoteModel(mlRegisterModelInput, mlTask, "1", listener);
-            }
-
             client.get(getModelGroupRequest, ActionListener.wrap(getModelGroupResponse -> {
                 if (getModelGroupResponse.isExists()) {
                     Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
@@ -399,9 +400,6 @@ public class MLModelManager {
 
             String modelGroupId = registerModelInput.getModelGroupId();
             GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            if (Strings.isBlank(modelGroupId)) {
-                uploadModel(registerModelInput, mlTask, "1");
-            }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.get(getModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(modelGroup -> {
                     if (modelGroup.isExists()) {
@@ -723,7 +721,8 @@ public class MLModelManager {
                                     modelId,
                                     modelSizeInBytes,
                                     chunkFiles,
-                                    hashValue
+                                    hashValue,
+                                    version
                                 );
                             } else {
                                 deleteFileQuietly(file);
@@ -735,7 +734,7 @@ public class MLModelManager {
                             handleException(functionName, taskId, e);
                             deleteFileQuietly(file);
                             // remove model doc as failed to upload model
-                            deleteModel(modelId);
+                            deleteModel(modelId, registerModelInput, version);
                             semaphore.release();
                             deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
                         }));
@@ -743,7 +742,7 @@ public class MLModelManager {
                 }, e -> {
                     log.error("Failed to index chunk file", e);
                     deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
-                    deleteModel(modelId);
+                    deleteModel(modelId, registerModelInput, version);
                     handleException(functionName, taskId, e);
                 })
             );
@@ -792,7 +791,8 @@ public class MLModelManager {
         String modelId,
         Long modelSizeInBytes,
         List<String> chunkFiles,
-        String hashValue
+        String hashValue,
+        String version
     ) {
         FunctionName functionName = registerModelInput.getFunctionName();
         deleteFileQuietly(mlEngine.getRegisterModelPath(modelId));
@@ -818,7 +818,7 @@ public class MLModelManager {
         }, e -> {
             log.error("Failed to update model", e);
             handleException(functionName, taskId, e);
-            deleteModel(modelId);
+            deleteModel(modelId, registerModelInput, version);
         }));
     }
 
@@ -831,7 +831,7 @@ public class MLModelManager {
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
     }
 
-    private void deleteModel(String modelId) {
+    private void deleteModel(String modelId, MLRegisterModelInput registerModelInput, String modelVersion) {
         DeleteRequest deleteRequest = new DeleteRequest();
         deleteRequest.index(ML_MODEL_INDEX).id(modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest);
@@ -840,6 +840,38 @@ public class MLModelManager {
             .setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN)
             .setAbortOnVersionConflict(false);
         client.execute(DeleteByQueryAction.INSTANCE, deleteChunksRequest);
+        deleteOrUpdateModelGroup(registerModelInput.getModelGroupId(), registerModelInput.getDoesVersionCreateModelGroup(), modelVersion);
+    }
+
+    private void deleteOrUpdateModelGroup(String modelGroupID, Boolean doesVersionCreateModelGroup, String modelVersion) {
+        // This checks if model group is created when registering the version. If yes, model group is deleted since the version registration
+        // had failed. Else model group latest version is decremented by 1
+        if (doesVersionCreateModelGroup) {
+            DeleteRequest deleteModelGroupRequest = new DeleteRequest();
+            deleteModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupID).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            client.delete(deleteModelGroupRequest);
+        } else {
+            updateLatestVersionInModelGroup(
+                modelGroupID,
+                Integer.parseInt(modelVersion) - 1,
+                ActionListener
+                    .wrap(r -> log.debug("model group updated, response {}", r), e -> log.error("Failed to update model group", e))
+            );
+        }
+    }
+
+    private void updateLatestVersionInModelGroup(String modelGroupID, Integer latestVersion, ActionListener<UpdateResponse> listener) {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put(MLModelGroup.LATEST_VERSION_FIELD, latestVersion);
+        updatedFields.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_GROUP_INDEX, modelGroupID);
+        updateRequest.doc(updatedFields);
+        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.update(updateRequest, ActionListener.runBefore(listener, () -> context.restore()));
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     private void handleException(FunctionName functionName, String taskId, Exception e) {

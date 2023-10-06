@@ -256,12 +256,14 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(registerModelInput);
             mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
                 registerModelInput.setModelGroupId(modelGroupId);
+                registerModelInput.setDoesVersionCreateModelGroup(true);
                 registerModel(registerModelInput, listener);
             }, e -> {
                 logException("Failed to create Model Group", e, log);
                 listener.onFailure(e);
             }));
         } else {
+            registerModelInput.setDoesVersionCreateModelGroup(false);
             registerModel(registerModelInput, listener);
         }
     }
