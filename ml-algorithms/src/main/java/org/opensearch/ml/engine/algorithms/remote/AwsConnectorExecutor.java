@@ -82,6 +82,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
             HttpExecuteResponse response = AccessController.doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> {
                 return httpClient.prepareRequest(executeRequest).call();
             });
+            int statusCode = response.httpResponse().statusCode();
 
             AbortableInputStream body = null;
             if (response.responseBody().isPresent()) {
@@ -102,6 +103,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
             String modelResponse = responseBuilder.toString();
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
+            tensors.setStatusCode(statusCode);
             tensorOutputs.add(tensors);
         } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
