@@ -19,6 +19,7 @@ package org.opensearch.searchpipelines.questionanswering.generative;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +38,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversation.Interaction;
@@ -102,8 +104,8 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             alwaysOn
         ).create(null, "tag", "desc", true, config, null);
 
-        SearchRequest request = new SearchRequest(); // mock(SearchRequest.class);
-        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder(); // mock(SearchSourceBuilder.class);
+        SearchRequest request = new SearchRequest();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         GenerativeQAParameters params = new GenerativeQAParameters("12345", "llm_model", "You are kind.", null, null, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(params);
@@ -122,14 +124,20 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         Llm llm = mock(Llm.class);
         ChatCompletionOutput output = mock(ChatCompletionOutput.class);
-        when(llm.doChatCompletion(any())).thenReturn(output);
+        doAnswer(
+            invocation -> {
+                ((ActionListener<ChatCompletionOutput>) invocation.getArguments()[2]).onResponse(output);
+                return null;
+            }
+        ).when(llm).doChatCompletion(any(), any());
+        //when(llm.doChatCompletion(any())).thenReturn(output);
         when(output.getAnswers()).thenReturn(List.of("foo"));
         processor.setLlm(llm);
 
         ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
         boolean errorThrown = false;
         try {
-            SearchResponse res = processor.processResponse(request, response);
+            processor.asyncProcessResponse(request, response, ActionListener.wrap(r->{}, e->{}));
         } catch (Exception e) {
             errorThrown = true;
         }
@@ -148,8 +156,14 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
-        when(memoryClient.getInteractions(any(), anyInt()))
-            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}")));
+        List<Interaction> chatHistory = List.of(
+            new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}"));
+        doAnswer(
+            invocation -> {
+                ((ActionListener<List<Interaction>>) invocation.getArguments()[2]).onResponse(chatHistory);
+                return null;
+            }
+        ).when(memoryClient).getInteractions(any(), anyInt(), any());
         processor.setMemoryClient(memoryClient);
 
         SearchRequest request = new SearchRequest();
@@ -180,20 +194,26 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         Llm llm = mock(Llm.class);
         ChatCompletionOutput output = mock(ChatCompletionOutput.class);
-        when(llm.doChatCompletion(any())).thenReturn(output);
+        doAnswer(invocation -> {
+            ((ActionListener<ChatCompletionOutput>) invocation.getArguments()[1]).onResponse(output);
+            return null;
+        }).when(llm).doChatCompletion(any(), any());
         when(output.getAnswers()).thenReturn(List.of("foo"));
         processor.setLlm(llm);
 
         ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
-        SearchResponse res = processor.processResponse(request, response);
-        verify(llm).doChatCompletion(captor.capture());
+        processor.asyncProcessResponse(request, response, ActionListener.wrap(
+            r -> {
+                assertTrue(r instanceof GenerativeSearchResponse);
+            }, e -> {}
+            ));
+        verify(llm).doChatCompletion(captor.capture(), any());
         ChatCompletionInput input = captor.getValue();
         assertTrue(input instanceof ChatCompletionInput);
-        List<String> passages = ((ChatCompletionInput) input).getContexts();
+        List<String> passages = input.getContexts();
         assertEquals("passage0", passages.get(0));
         assertEquals("passage1", passages.get(1));
         assertEquals(numHits, passages.size());
-        assertTrue(res instanceof GenerativeSearchResponse);
     }
 
     public void testProcessResponseSmallerContextSize() throws Exception {
@@ -208,8 +228,14 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
-        when(memoryClient.getInteractions(any(), anyInt()))
-            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}")));
+        List<Interaction> chatHistory = List.of(
+            new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}"));
+        doAnswer(
+            invocation -> {
+                ((ActionListener<List<Interaction>>) invocation.getArguments()[2]).onResponse(chatHistory);
+                return null;
+            }
+        ).when(memoryClient).getInteractions(any(), anyInt(), any());
         processor.setMemoryClient(memoryClient);
 
         SearchRequest request = new SearchRequest();
@@ -241,20 +267,26 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         Llm llm = mock(Llm.class);
         ChatCompletionOutput output = mock(ChatCompletionOutput.class);
-        when(llm.doChatCompletion(any())).thenReturn(output);
+        doAnswer(invocation -> {
+            ((ActionListener<ChatCompletionOutput>) invocation.getArguments()[1]).onResponse(output);
+            return null;
+        }).when(llm).doChatCompletion(any(), any());
         when(output.getAnswers()).thenReturn(List.of("foo"));
         processor.setLlm(llm);
 
         ArgumentCaptor<ChatCompletionInput> captor = ArgumentCaptor.forClass(ChatCompletionInput.class);
-        SearchResponse res = processor.processResponse(request, response);
-        verify(llm).doChatCompletion(captor.capture());
+        processor.asyncProcessResponse(request, response, ActionListener.wrap(
+            r -> {
+                assertTrue(r instanceof GenerativeSearchResponse);
+            }, e -> {}
+        ));
+        verify(llm).doChatCompletion(captor.capture(), any());
         ChatCompletionInput input = captor.getValue();
         assertTrue(input instanceof ChatCompletionInput);
         List<String> passages = ((ChatCompletionInput) input).getContexts();
         assertEquals("passage0", passages.get(0));
         assertEquals("passage1", passages.get(1));
         assertEquals(contextSize, passages.size());
-        assertTrue(res instanceof GenerativeSearchResponse);
     }
 
     public void testProcessResponseMissingContextField() throws Exception {
@@ -269,8 +301,14 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
-        when(memoryClient.getInteractions(any(), anyInt()))
-            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}")));
+        List<Interaction> chatHistory = List.of(
+            new Interaction("0", Instant.now(), "1", "question", "", "answer", "foo", "{}"));
+        doAnswer(
+            invocation -> {
+                ((ActionListener<List<Interaction>>) invocation.getArguments()[2]).onResponse(chatHistory);
+                return null;
+            }
+        ).when(memoryClient).getInteractions(any(), anyInt(), any());
         processor.setMemoryClient(memoryClient);
 
         SearchRequest request = new SearchRequest();
@@ -301,14 +339,17 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         Llm llm = mock(Llm.class);
         ChatCompletionOutput output = mock(ChatCompletionOutput.class);
-        when(llm.doChatCompletion(any())).thenReturn(output);
+        doAnswer(invocation -> {
+            ((ActionListener<ChatCompletionOutput>) invocation.getArguments()[1]).onResponse(output);
+            return null;
+        }).when(llm).doChatCompletion(any(), any());
         when(output.getAnswers()).thenReturn(List.of("foo"));
         processor.setLlm(llm);
 
         boolean exceptionThrown = false;
 
         try {
-            SearchResponse res = processor.processResponse(request, response);
+            processor.asyncProcessResponse(request, response, ActionListener.wrap(r->{}, e->{}));
         } catch (Exception e) {
             exceptionThrown = true;
         }
@@ -357,7 +398,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         featureEnabled001 = false;
         boolean secondExceptionThrown = false;
         try {
-            processor.processResponse(mock(SearchRequest.class), mock(SearchResponse.class));
+            processor.asyncProcessResponse(mock(SearchRequest.class), mock(SearchResponse.class), ActionListener.wrap(r->{}, e->{}));
         } catch (MLException e) {
             assertEquals(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG, e.getMessage());
             secondExceptionThrown = true;

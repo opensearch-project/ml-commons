@@ -33,6 +33,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -113,11 +114,26 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions"
         );
-        ChatCompletionOutput output = connector.doChatCompletion(input);
-        verify(mlClient, times(1)).predict(any(), captor.capture());
+        doAnswer(
+            invocation -> {
+                ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+                return null;
+            }
+        ).when(mlClient).predict(any(), any(), any());
+        connector.doChatCompletion(input, new ActionListener<ChatCompletionOutput>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertEquals("answer", (String) output.getAnswers().get(0));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+            }
+        });
+        verify(mlClient, times(1)).predict(any(), captor.capture(), any());
         MLInput mlInput = captor.getValue();
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
-        assertEquals("answer", (String) output.getAnswers().get(0));
     }
 
     public void testChatCompletionThrowingError() throws Exception {
@@ -143,12 +159,28 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions"
         );
-        ChatCompletionOutput output = connector.doChatCompletion(input);
-        verify(mlClient, times(1)).predict(any(), captor.capture());
+
+        doAnswer(
+            invocation -> {
+                ((ActionListener<MLOutput>) invocation.getArguments()[2]).onResponse(mlOutput);
+                return null;
+            }
+        ).when(mlClient).predict(any(), any(), any());
+        connector.doChatCompletion(input, new ActionListener<ChatCompletionOutput>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                assertTrue(output.isErrorOccurred());
+                assertEquals(errorMessage, (String) output.getErrors().get(0));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+            }
+        });
+        verify(mlClient, times(1)).predict(any(), captor.capture(), any());
         MLInput mlInput = captor.getValue();
         assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
-        assertTrue(output.isErrorOccurred());
-        assertEquals(errorMessage, (String) output.getErrors().get(0));
     }
 
     private boolean isJson(String Json) {

@@ -22,7 +22,6 @@ import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
@@ -30,6 +29,8 @@ import java.util.function.BooleanSupplier;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.exception.MLException;
@@ -40,6 +41,7 @@ import org.opensearch.search.pipeline.SearchResponseProcessor;
 import org.opensearch.searchpipelines.questionanswering.generative.client.ConversationalMemoryClient;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamUtil;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParameters;
+import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionInput;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionOutput;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
@@ -62,8 +64,6 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     private static final int DEFAULT_CHAT_HISTORY_WINDOW = 10;
 
     private static final int DEFAULT_PROCESSOR_TIME_IN_SECONDS = 30;
-
-    // TODO Add "interaction_count". This is how far back in chat history we want to go back when calling LLM.
 
     private final String llmModel;
     private final List<String> contextFields;
@@ -104,8 +104,13 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     }
 
     @Override
-    public SearchResponse processResponse(SearchRequest request, SearchResponse response) throws Exception {
+    public SearchResponse processResponse(SearchRequest searchRequest, SearchResponse searchResponse) {
+        // Synchronous call is no longer supported because this execution can occur on a transport thread.
+        throw new UnsupportedOperationException();
+    }
 
+    @Override
+    public void asyncProcessResponse(SearchRequest request, SearchResponse response, ActionListener<SearchResponse> responseListener) {
         log.info("Entering processResponse.");
 
         if (!this.featureFlagSupplier.getAsBoolean()) {
@@ -114,10 +119,12 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
 
         GenerativeQAParameters params = GenerativeQAParamUtil.getGenerativeQAParameters(request);
 
-        Integer timeout = params.getTimeout();
-        if (timeout == null || timeout == GenerativeQAParameters.SIZE_NULL_VALUE) {
-            timeout = DEFAULT_PROCESSOR_TIME_IN_SECONDS;
+        //final Integer timeout;
+        Integer t = params.getTimeout();
+        if (t == null || t == GenerativeQAParameters.SIZE_NULL_VALUE) {
+            t = DEFAULT_PROCESSOR_TIME_IN_SECONDS;
         }
+        final int timeout = t;
         log.info("Timeout for this request: {} seconds.", timeout);
 
         String llmQuestion = params.getLlmQuestion();
@@ -126,17 +133,17 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             throw new IllegalArgumentException("llm_model cannot be null.");
         }
         String conversationId = params.getConversationId();
+        if (conversationId != null && !Strings.hasText(conversationId)) {
+            throw new IllegalArgumentException("Empty conversation_id is not allowed.");
+        }
         log.info("LLM question: {}, LLM model {}, conversation id: {}", llmQuestion, llmModel, conversationId);
         Instant start = Instant.now();
         Integer interactionSize = params.getInteractionSize();
         if (interactionSize == null || interactionSize == GenerativeQAParameters.SIZE_NULL_VALUE) {
             interactionSize = DEFAULT_CHAT_HISTORY_WINDOW;
         }
+
         log.info("Using interaction size of {}", interactionSize);
-        List<Interaction> chatHistory = (conversationId == null)
-            ? Collections.emptyList()
-            : memoryClient.getInteractions(conversationId, interactionSize);
-        log.info("Retrieved chat history. ({})", getDuration(start));
 
         Integer topN = params.getContextSize();
         if (topN == null) {
@@ -146,42 +153,76 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
 
         log.info("system_prompt: {}", systemPrompt);
         log.info("user_instructions: {}", userInstructions);
-        start = Instant.now();
-        ChatCompletionOutput output = llm
-            .doChatCompletion(
-                LlmIOUtil
-                    .createChatCompletionInput(systemPrompt, userInstructions, llmModel, llmQuestion, chatHistory, searchResults, timeout)
-            );
-        log.info("doChatCompletion complete. ({})", getDuration(start));
 
-        String answer = null;
-        String errorMessage = null;
-        String interactionId = null;
-        if (output.isErrorOccurred()) {
-            errorMessage = output.getErrors().get(0);
+        final List<Interaction> chatHistory = new ArrayList<>();
+        if (conversationId == null) {
+            doChatCompletion(
+                LlmIOUtil.createChatCompletionInput(
+                    systemPrompt, userInstructions, llmModel, llmQuestion, chatHistory, searchResults, timeout
+                ),
+                null, llmQuestion, searchResults,
+                response, responseListener);
         } else {
-            answer = (String) output.getAnswers().get(0);
+            final Instant memoryStart = Instant.now();
+            memoryClient.getInteractions(conversationId, interactionSize,
+                ActionListener.wrap(r -> {
+                    log.info("getInteractions complete. ({})", getDuration(memoryStart));
+                    chatHistory.addAll(r);
+                    doChatCompletion(
+                        LlmIOUtil.createChatCompletionInput(
+                            systemPrompt, userInstructions, llmModel, llmQuestion, chatHistory, searchResults, timeout
+                        ),
+                        conversationId, llmQuestion, searchResults,
+                        response, responseListener);
+            }, responseListener::onFailure));
+        }
+    }
 
-            if (conversationId != null) {
-                start = Instant.now();
-                interactionId = memoryClient
-                    .createInteraction(
-                        conversationId,
+    private void doChatCompletion(ChatCompletionInput input, String conversationId, String llmQuestion, List<String> searchResults,
+        SearchResponse response, ActionListener<SearchResponse> responseListener) {
+
+        final Instant chatStart = Instant.now();
+        llm.doChatCompletion(input, new ActionListener<>() {
+            @Override
+            public void onResponse(ChatCompletionOutput output) {
+                log.info("doChatCompletion complete. ({})", getDuration(chatStart));
+
+                final String answer = getAnswer(output);
+                final String errorMessage = getError(output);
+
+                if (conversationId != null) {
+                    final Instant memoryStart = Instant.now();
+                    memoryClient.createInteraction(conversationId,
                         llmQuestion,
                         PromptUtil.getPromptTemplate(systemPrompt, userInstructions),
                         answer,
                         GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
-                        jsonArrayToString(searchResults)
+                        jsonArrayToString(searchResults),
+                        ActionListener.wrap(r -> {
+                            responseListener.onResponse(insertAnswer(response, answer, errorMessage, r));
+                            log.info("Created a new interaction: {} ({})", r, getDuration(memoryStart));
+                        }, responseListener::onFailure)
                     );
-                log.info("Created a new interaction: {} ({})", interactionId, getDuration(start));
+
+                } else {
+                    responseListener.onResponse(insertAnswer(response, answer, errorMessage, null));
+                }
+
             }
-        }
 
-        return insertAnswer(response, answer, errorMessage, interactionId);
-    }
+            @Override
+            public void onFailure(Exception e) {
+                responseListener.onFailure(e);
+            }
 
-    long getDuration(Instant start) {
-        return Duration.between(start, Instant.now()).toMillis();
+            private String getError(ChatCompletionOutput output) {
+                return output.isErrorOccurred() ? output.getErrors().get(0) : null;
+            }
+
+            private String getAnswer(ChatCompletionOutput output) {
+                return output.isErrorOccurred() ? null : (String) output.getAnswers().get(0);
+            }
+        });
     }
 
     @Override
@@ -189,9 +230,11 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         return GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE;
     }
 
-    private SearchResponse insertAnswer(SearchResponse response, String answer, String errorMessage, String interactionId) {
+    private long getDuration(Instant start) {
+        return Duration.between(start, Instant.now()).toMillis();
+    }
 
-        // TODO return the interaction id in the response.
+    private SearchResponse insertAnswer(SearchResponse response, String answer, String errorMessage, String interactionId) {
 
         return new GenerativeSearchResponse(
             answer,
@@ -218,9 +261,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             for (String contextField : contextFields) {
                 Object context = docSourceMap.get(contextField);
                 if (context == null) {
-                    log.error("Context " + contextField + " not found in search hit " + hits[i]);
-                    // TODO throw a more meaningful error here?
-                    throw new RuntimeException();
+                    throw new RuntimeException("Context " + contextField + " not found in search hit " + hits[i]);
                 }
                 searchResults.add(context.toString());
             }

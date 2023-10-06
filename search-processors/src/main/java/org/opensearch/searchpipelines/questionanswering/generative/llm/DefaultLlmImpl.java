@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.client.Client;
-import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -74,8 +74,7 @@ public class DefaultLlmImpl implements Llm {
      * @return
      */
     @Override
-    public ChatCompletionOutput doChatCompletion(ChatCompletionInput chatCompletionInput) {
-
+    public void doChatCompletion(ChatCompletionInput chatCompletionInput, ActionListener<ChatCompletionOutput> listener) {
         Map<String, String> inputParameters = new HashMap<>();
         inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
         String messages = PromptUtil
@@ -90,28 +89,34 @@ public class DefaultLlmImpl implements Llm {
         log.info("Messages to LLM: {}", messages);
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(inputParameters).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
-        ActionFuture<MLOutput> future = mlClient.predict(this.openSearchModelId, mlInput);
-        ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet(chatCompletionInput.getTimeoutInSeconds() * 1000);
+        mlClient.predict(this.openSearchModelId, mlInput, new ActionListener<>() {
+            @Override
+            public void onResponse(MLOutput mlOutput) {
+                // Response from a remote model
+                Map<String, ?> dataAsMap = ((ModelTensorOutput) mlOutput).getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+                log.info("dataAsMap: {}", dataAsMap.toString());
 
-        // Response from a remote model
-        Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        log.info("dataAsMap: {}", dataAsMap.toString());
+                List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
+                List<Object> answers = null;
+                List<String> errors = null;
+                if (choices == null) {
+                    Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
+                    errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
+                } else {
+                    Map firstChoiceMap = (Map) choices.get(0);
+                    log.info("Choices: {}", firstChoiceMap.toString());
+                    Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
+                    log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+                    answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+                }
 
-        // TODO dataAsMap can be null or can contain information such as throttling. Handle non-happy cases.
+                listener.onResponse(new ChatCompletionOutput(answers, errors));
+            }
 
-        List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
-        List<Object> answers = null;
-        List<String> errors = null;
-        if (choices == null) {
-            Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
-            errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
-        } else {
-            Map firstChoiceMap = (Map) choices.get(0);
-            log.info("Choices: {}", firstChoiceMap.toString());
-            Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
-            log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
-            answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
-        }
-        return new ChatCompletionOutput(answers, errors);
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 }
