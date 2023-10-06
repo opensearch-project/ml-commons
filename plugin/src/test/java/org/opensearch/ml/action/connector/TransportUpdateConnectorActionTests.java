@@ -21,6 +21,7 @@ import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -152,6 +153,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
     }
 
+    @Test
     public void test_execute_connectorAccessControl_success() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -175,6 +177,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(updateResponse);
     }
 
+    @Test
     public void test_execute_connectorAccessControl_NoPermission() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -191,6 +194,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_execute_connectorAccessControl_AccessError() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -204,6 +208,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("Connector Access Control Error", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_connectorAccessControl_Exception() {
         doThrow(new RuntimeException("exception in access control"))
             .when(connectorAccessControlHelper)
@@ -215,6 +220,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("exception in access control", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_UpdateWrongStatus() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -239,6 +245,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(updateResponse);
     }
 
+    @Test
     public void test_execute_UpdateException() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -264,6 +271,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("update document failure", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_SearchResponseNotEmpty() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -283,6 +291,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("1 models are still using this connector, please undeploy the models first!", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_SearchResponseError() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
@@ -302,6 +311,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("Error in Search Request", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_SearchIndexNotFoundError() {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(2);
