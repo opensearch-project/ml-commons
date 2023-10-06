@@ -6,14 +6,12 @@
 package org.opensearch.ml.action.models;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
-import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
@@ -21,8 +19,6 @@ import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -34,8 +30,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -48,7 +42,6 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -110,6 +103,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                             algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
                         }
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
+                        MLModelState mlModelState = mlModel.getModelState();
 
                         modelAccessControlHelper
                             .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
@@ -118,37 +112,20 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                         .onFailure(
                                             new MLValidationException("User doesn't have privilege to perform this operation on this model")
                                         );
+                                } else if (mlModelState.equals(MLModelState.LOADED)
+                                    || mlModelState.equals(MLModelState.LOADING)
+                                    || mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+                                    || mlModelState.equals(MLModelState.DEPLOYED)
+                                    || mlModelState.equals(MLModelState.DEPLOYING)
+                                    || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new Exception(
+                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
+                                            )
+                                        );
                                 } else {
-                                    MLModelState mlModelState = mlModel.getModelState();
-                                    if (mlModelState.equals(MLModelState.LOADED)
-                                        || mlModelState.equals(MLModelState.LOADING)
-                                        || mlModelState.equals(MLModelState.PARTIALLY_LOADED)
-                                        || mlModelState.equals(MLModelState.DEPLOYED)
-                                        || mlModelState.equals(MLModelState.DEPLOYING)
-                                        || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
-                                        wrappedListener
-                                            .onFailure(
-                                                new Exception(
-                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete"
-                                                )
-                                            );
-                                    } else if (StringUtils.isNotEmpty(mlModel.getModelGroupId())) {
-                                        searchModel(mlModel.getModelGroupId(), ActionListener.wrap(response -> {
-                                            boolean isLastModelOfGroup = false;
-                                            if (response != null
-                                                && response.getHits() != null
-                                                && response.getHits().getTotalHits() != null
-                                                && response.getHits().getTotalHits().value == 1) {
-                                                isLastModelOfGroup = true;
-                                            }
-                                            deleteModel(modelId, mlModel.getModelGroupId(), isLastModelOfGroup, wrappedListener);
-                                        }, e -> {
-                                            log.error("Failed to Search Model index " + modelId, e);
-                                            wrappedListener.onFailure(e);
-                                        }));
-                                    } else {
-                                        deleteModel(modelId, mlModel.getModelGroupId(), false, wrappedListener);
-                                    }
+                                    deleteModel(modelId, actionListener);
                                 }
                             }, e -> {
                                 log.error("Failed to validate Access for Model Id " + modelId, e);
@@ -166,18 +143,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             log.error("Failed to delete ML model " + modelId, e);
             actionListener.onFailure(e);
         }
-    }
-
-    private void searchModel(String modelGroupId, ActionListener<SearchResponse> listener) {
-        BoolQueryBuilder query = new BoolQueryBuilder();
-        query.filter(new TermQueryBuilder(MLModel.MODEL_GROUP_ID_FIELD, modelGroupId));
-
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
-        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
-        client.search(searchRequest, ActionListener.wrap(response -> { listener.onResponse(response); }, e -> {
-            log.error("Failed to search Model index", e);
-            listener.onFailure(e);
-        }));
     }
 
     @VisibleForTesting
@@ -218,19 +183,11 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void deleteModel(
-        String modelId,
-        String modelGroupId,
-        boolean isLastModelOfGroup,
-        ActionListener<DeleteResponse> actionListener
-    ) {
+    private void deleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId);
         client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {
-                if (isLastModelOfGroup) {
-                    deleteModelGroup(modelGroupId);
-                }
                 deleteModelChunks(modelId, deleteResponse, actionListener);
             }
 
@@ -241,21 +198,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                     deleteModelChunks(modelId, null, actionListener);
                 }
                 actionListener.onFailure(e);
-            }
-        });
-    }
-
-    private void deleteModelGroup(String modelGroupId) {
-        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
-        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-            @Override
-            public void onResponse(DeleteResponse deleteResponse) {
-                log.debug("Completed Delete Model Group for modelGroupId:{}", modelGroupId);
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                log.error("Failed to delete ML Model Group with Id:{} " + modelGroupId, e);
             }
         });
     }
