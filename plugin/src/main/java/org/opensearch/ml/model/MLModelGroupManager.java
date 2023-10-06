@@ -146,15 +146,13 @@ public class MLModelGroupManager {
         AccessMode modelAccessMode = input.getModelAccessMode();
         Boolean isAddAllBackendRoles = input.getIsAddAllBackendRoles();
         if (modelAccessMode == null) {
-            if (modelAccessMode == null) {
-                if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
-                    throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
-                } else if (Boolean.TRUE.equals(isAddAllBackendRoles) || !CollectionUtils.isEmpty(input.getBackendRoles())) {
-                    input.setModelAccessMode(AccessMode.RESTRICTED);
-                    modelAccessMode = AccessMode.RESTRICTED;
-                } else {
-                    input.setModelAccessMode(AccessMode.PRIVATE);
-                }
+            if (!CollectionUtils.isEmpty(input.getBackendRoles()) && Boolean.TRUE.equals(isAddAllBackendRoles)) {
+                throw new IllegalArgumentException("You cannot specify backend roles and add all backend roles at the same time.");
+            } else if (Boolean.TRUE.equals(isAddAllBackendRoles) || !CollectionUtils.isEmpty(input.getBackendRoles())) {
+                input.setModelAccessMode(AccessMode.RESTRICTED);
+                modelAccessMode = AccessMode.RESTRICTED;
+            } else {
+                input.setModelAccessMode(AccessMode.PRIVATE);
             }
         }
         if ((AccessMode.PUBLIC == modelAccessMode || AccessMode.PRIVATE == modelAccessMode)
@@ -184,20 +182,29 @@ public class MLModelGroupManager {
     }
 
     public void validateUniqueModelGroupName(String name, ActionListener<SearchResponse> listener) throws IllegalArgumentException {
-        BoolQueryBuilder query = new BoolQueryBuilder();
-        query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            BoolQueryBuilder query = new BoolQueryBuilder();
+            query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
 
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
-        SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
+            SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
 
-        client.search(searchRequest, ActionListener.wrap(modelGroups -> { listener.onResponse(modelGroups); }, e -> {
-            if (e instanceof IndexNotFoundException) {
-                listener.onResponse(null);
-            } else {
-                log.error("Failed to search model group index", e);
-                listener.onFailure(e);
-            }
-        }));
+            client
+                .search(
+                    searchRequest,
+                    ActionListener.runBefore(ActionListener.wrap(modelGroups -> { listener.onResponse(modelGroups); }, e -> {
+                        if (e instanceof IndexNotFoundException) {
+                            listener.onResponse(null);
+                        } else {
+                            log.error("Failed to search model group index", e);
+                            listener.onFailure(e);
+                        }
+                    }), () -> context.restore())
+                );
+        } catch (Exception e) {
+            log.error("Failed to search model group index", e);
+            listener.onFailure(e);
+        }
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {
