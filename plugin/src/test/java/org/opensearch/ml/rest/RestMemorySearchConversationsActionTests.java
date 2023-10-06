@@ -24,23 +24,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.util.List;
-import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.core.common.bytes.BytesArray;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.test.rest.FakeRestRequest;
 
 import com.google.gson.Gson;
 
@@ -64,9 +60,7 @@ public class RestMemorySearchConversationsActionTests extends OpenSearchTestCase
 
     public void testPreprareRequest() throws Exception {
         RestMemorySearchConversationsAction action = new RestMemorySearchConversationsAction();
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withContent(new BytesArray(gson.toJson(Map.of("query", Map.of("match_all", Map.of())))), MediaTypeRegistry.JSON)
-            .build();
+        RestRequest request = TestHelper.getSearchAllRestRequest();
 
         NodeClient client = mock(NodeClient.class);
         RestChannel channel = mock(RestChannel.class);
