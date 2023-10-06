@@ -9,7 +9,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
@@ -90,39 +89,41 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         MLUpdateModelGroupInput updateModelGroupInput = updateModelGroupRequest.getUpdateModelGroupInput();
         String modelGroupId = updateModelGroupInput.getModelGroupID();
         User user = RestActionUtils.getUserContext(client);
-        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-            GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
-                client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
-                    if (modelGroup.isExists()) {
-                        try (
-                            XContentParser parser = MLNodeUtils
-                                .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, modelGroup.getSourceAsBytesRef())
-                        ) {
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+        GetRequest getModelGroupRequest = new GetRequest(ML_MODEL_GROUP_INDEX).id(modelGroupId);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            client.get(getModelGroupRequest, ActionListener.wrap(modelGroup -> {
+                if (modelGroup.isExists()) {
+                    try (
+                        XContentParser parser = MLNodeUtils
+                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, modelGroup.getSourceAsBytesRef())
+                    ) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
+                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                            updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, wrappedListener, user);
+                        } else {
+                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
                         }
-                    } else {
-                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
-                    }
-                }, e -> {
-                    if (e instanceof IndexNotFoundException) {
-                        wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
-                    } else {
-                        logException("Failed to get model group", e, log);
+                        updateModelGroup(modelGroupId, modelGroup.getSource(), updateModelGroupInput, wrappedListener, user);
+                    } catch (Exception e) {
+                        log.error("Failed to parse ml model group" + modelGroup.getId(), e);
                         wrappedListener.onFailure(e);
                     }
-                }));
-            } catch (Exception e) {
-                logException("Failed to Update model group", e, log);
-                listener.onFailure(e);
-            }
-        } else {
-            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
-            updateModelGroup(modelGroupId, new HashMap<>(), updateModelGroupInput, listener, user);
+                } else {
+                    wrappedListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
+                }
+            }, e -> {
+                if (e instanceof IndexNotFoundException) {
+                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                } else {
+                    logException("Failed to get model group", e, log);
+                    wrappedListener.onFailure(e);
+                }
+            }));
+        } catch (Exception e) {
+            logException("Failed to Update model group", e, log);
+            listener.onFailure(e);
         }
     }
 
