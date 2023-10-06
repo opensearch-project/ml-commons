@@ -191,7 +191,11 @@ public class MLModel implements ToXContentObject {
             modelContentSizeInBytes = input.readOptionalLong();
             modelContentHash = input.readOptionalString();
             if (input.readBoolean()) {
-                modelConfig = new TextEmbeddingModelConfig(input);
+                if (algorithm.equals(FunctionName.METRICS_CORRELATION)) {
+                    modelConfig = new MetricsCorrelationModelConfig(input);
+                } else {
+                    modelConfig = new TextEmbeddingModelConfig(input);
+                }
             }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();

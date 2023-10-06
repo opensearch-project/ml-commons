@@ -8,6 +8,7 @@ package org.opensearch.ml.common.model;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -26,6 +27,10 @@ public class MetricsCorrelationModelConfig extends MLModelConfig {
     @Builder(toBuilder = true)
     public MetricsCorrelationModelConfig(String modelType, String allConfig) {
         super(modelType, allConfig);
+    }
+
+    public MetricsCorrelationModelConfig(StreamInput in) throws IOException{
+        super(in);
     }
 
     @Override
