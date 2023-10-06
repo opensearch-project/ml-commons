@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.client.Client;
-import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -75,20 +75,36 @@ public class DefaultLlmImpl implements Llm {
      * @return
      */
     @Override
-    public ChatCompletionOutput doChatCompletion(ChatCompletionInput chatCompletionInput) {
 
+    public void doChatCompletion(ChatCompletionInput chatCompletionInput, ActionListener<ChatCompletionOutput> listener) {
         MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(getInputParameters(chatCompletionInput)).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
-        ActionFuture<MLOutput> future = mlClient.predict(this.openSearchModelId, mlInput);
-        ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet(chatCompletionInput.getTimeoutInSeconds() * 1000);
+        mlClient.predict(this.openSearchModelId, mlInput, new ActionListener<>() {
+            @Override
+            public void onResponse(MLOutput mlOutput) {
+                // Response from a remote model
+                Map<String, ?> dataAsMap = ((ModelTensorOutput) mlOutput)
+                    .getMlModelOutputs()
+                    .get(0)
+                    .getMlModelTensors()
+                    .get(0)
+                    .getDataAsMap();
+                // log.info("dataAsMap: {}", dataAsMap.toString());
+                listener
+                    .onResponse(
+                        buildChatCompletionOutput(
+                            chatCompletionInput.getModelProvider(),
+                            dataAsMap,
+                            chatCompletionInput.getLlmResponseField()
+                        )
+                    );
+            }
 
-        // Response from a remote model
-        Map<String, ?> dataAsMap = modelOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        // log.info("dataAsMap: {}", dataAsMap.toString());
-
-        // TODO dataAsMap can be null or can contain information such as throttling. Handle non-happy cases.
-
-        return buildChatCompletionOutput(chatCompletionInput.getModelProvider(), dataAsMap, chatCompletionInput.getLlmResponseField());
+            @Override
+            public void onFailure(Exception e) {
+                listener.onFailure(e);
+            }
+        });
     }
 
     protected Map<String, String> getInputParameters(ChatCompletionInput chatCompletionInput) {

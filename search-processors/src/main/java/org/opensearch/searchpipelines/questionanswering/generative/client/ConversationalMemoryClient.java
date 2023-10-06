@@ -24,6 +24,7 @@ import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
@@ -83,6 +84,33 @@ public class ConversationalMemoryClient {
         return res.getId();
     }
 
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        ActionListener<String> listener
+    ) {
+        client
+            .execute(
+                CreateInteractionAction.INSTANCE,
+                new CreateInteractionRequest(conversationId, input, promptTemplate, response, origin, additionalInfo),
+                new ActionListener<CreateInteractionResponse>() {
+                    @Override
+                    public void onResponse(CreateInteractionResponse createInteractionResponse) {
+                        listener.onResponse(createInteractionResponse.getId());
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        listener.onFailure(e);
+                    }
+                }
+            );
+    }
+
     public List<Interaction> getInteractions(String conversationId, int lastN) {
 
         Preconditions.checkArgument(lastN > 0, "lastN must be at least 1.");
@@ -112,5 +140,24 @@ public class ConversationalMemoryClient {
         } while (from < lastN && !allInteractionsFetched);
 
         return interactions;
+    }
+
+    public void getInteractions(String conversationId, int lastN, ActionListener<List<Interaction>> listener) {
+        client
+            .execute(
+                GetInteractionsAction.INSTANCE,
+                new GetInteractionsRequest(conversationId, lastN, 0),
+                new ActionListener<GetInteractionsResponse>() {
+                    @Override
+                    public void onResponse(GetInteractionsResponse getInteractionsResponse) {
+                        listener.onResponse(getInteractionsResponse.getInteractions());
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        listener.onFailure(e);
+                    }
+                }
+            );
     }
 }
