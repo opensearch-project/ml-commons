@@ -18,6 +18,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
@@ -137,7 +138,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             this.modelFormat = in.readEnum(MLModelFormat.class);
         }
         if (in.readBoolean()) {
-            this.modelConfig = new TextEmbeddingModelConfig(in);
+            if (this.functionName.equals(FunctionName.METRICS_CORRELATION)) {
+                this.modelConfig = new MetricsCorrelationModelConfig(in);
+            } else {
+                this.modelConfig = new TextEmbeddingModelConfig(in);
+            }
         }
         this.deployModel = in.readBoolean();
         this.modelNodeIds = in.readOptionalStringArray();

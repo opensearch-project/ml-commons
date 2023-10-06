@@ -121,7 +121,7 @@ public class MetricsCorrelation extends DLModelExecute {
 
         if (modelId == null) {
             boolean hasModelGroupIndex = clusterService.state().getMetadata().hasIndex(ML_MODEL_GROUP_INDEX);
-            if (!hasModelGroupIndex) { // Create model group index if doesn't exist
+            if (!hasModelGroupIndex) { // Create model group index if it doesn't exist
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX).mapping(ML_MODEL_GROUP_INDEX_MAPPING);
                     CreateIndexResponse createIndexResponse = client.admin().indices().create(request).actionGet(1000);
@@ -175,8 +175,10 @@ public class MetricsCorrelation extends DLModelExecute {
                                     )
                             );
                         }
-                    }, e -> { log.error("Failed to get model", e); });
-                    client.get(getModelRequest, ActionListener.runBefore(listener, () -> context.restore()));
+                    }, e-> {
+                        log.error("Failed to get model", e);
+                    });
+                    client.get(getModelRequest, ActionListener.runBefore(listener, context::restore));
                 }
             }
         } else {
@@ -197,10 +199,17 @@ public class MetricsCorrelation extends DLModelExecute {
         waitUntil(() -> {
             if (modelId != null) {
                 MLModelState modelState = getModel(modelId).getModelState();
-                return modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED;
+                if (modelState == MLModelState.DEPLOYED || modelState == MLModelState.PARTIALLY_DEPLOYED){
+                    log.info("Model deployed: " + modelState);
+                    return true;
+                } else if (modelState == MLModelState.UNDEPLOYED || modelState == MLModelState.DEPLOY_FAILED) {
+                    log.info("Model not deployed: " + modelState);
+                    deployModel(modelId, ActionListener.wrap(deployModelResponse -> modelId = getTask(deployModelResponse.getTaskId()).getModelId(), e -> log.error("Metrics correlation model didn't get deployed to the index successfully", e)));
+                    return false;
+                }
             }
             return false;
-        }, 10, TimeUnit.SECONDS);
+        }, 120, TimeUnit.SECONDS);
 
         Output djlOutput;
         try {
@@ -253,7 +262,7 @@ public class MetricsCorrelation extends DLModelExecute {
                     log.error("Failed to Register Model", e);
                     listener.onFailure(e);
                 }));
-            }, e -> { listener.onFailure(e); }), () -> context.restore()));
+            }, listener::onFailure), context::restore));
         } catch (IOException e) {
             throw new MLException(e);
         }
@@ -322,6 +331,8 @@ public class MetricsCorrelation extends DLModelExecute {
             }
             sum += timeInMillis;
             timeInMillis = Math.min(AWAIT_BUSY_THRESHOLD, timeInMillis * 2);
+
+            log.info("Waiting... Time elapsed: " + sum + "ms");
         }
         timeInMillis = maxTimeInMillis - sum;
         try {
