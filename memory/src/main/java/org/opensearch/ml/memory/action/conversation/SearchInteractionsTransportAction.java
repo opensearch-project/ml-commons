@@ -31,7 +31,7 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 public class SearchInteractionsTransportAction extends HandledTransportAction<SearchInteractionsRequest, SearchResponse> {
-    
+
     private ConversationalMemoryHandler cmHandler;
 
     private volatile boolean featureIsEnabled;
@@ -61,7 +61,7 @@ public class SearchInteractionsTransportAction extends HandledTransportAction<Se
 
     @Override
     public void doExecute(Task task, SearchInteractionsRequest request, ActionListener<SearchResponse> actionListener) {
-        if(!featureIsEnabled) {
+        if (!featureIsEnabled) {
             actionListener
                 .onFailure(
                     new OpenSearchException(

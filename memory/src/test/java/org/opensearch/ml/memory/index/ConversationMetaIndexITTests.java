@@ -510,7 +510,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
                 cdl.countDown();
                 assert (response.getHits().getAt(0).getId().equals(convo2.result()));
                 assert (search1.result().getHits().getHits().length == 0);
-                while(!contextStack.isEmpty()) {
+                while (!contextStack.isEmpty()) {
                     contextStack.pop().close();
                 }
             }, onFail);

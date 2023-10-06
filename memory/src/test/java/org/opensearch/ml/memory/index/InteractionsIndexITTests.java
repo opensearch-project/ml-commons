@@ -446,37 +446,35 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
                     assert (false);
                 }
             );
-        
-        StepListener<SearchResponse> searchListener = new StepListener<>();
-        iid4.whenComplete(
-            r -> {
-                SearchRequest request = new SearchRequest();
-                request.source(new SearchSourceBuilder());
-                request.source().query(new MatchQueryBuilder(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "fish input"));
-                index.searchInteractions(conversation1, request, searchListener);
-            }, e -> {
-                cdl.countDown();
-                log.error(e);
-                assert (false);
-            });
 
-        searchListener.whenComplete(
-            response -> {
-                cdl.countDown();
-                assert (response.getHits().getHits().length == 3);
-                // BM25 was being a little unpredictable here so I don't assert ordering
-                List<String> ids = new ArrayList<>(3);
-                for (SearchHit hit : response.getHits()) {
-                    ids.add(hit.getId());
-                }
-                assert (ids.contains(iid1.result()));
-                assert (ids.contains(iid2.result()));
-                assert (ids.contains(iid4.result()));
-            }, e -> {
-                cdl.countDown();
-                log.error(e);
-                assert (false);
-            });
+        StepListener<SearchResponse> searchListener = new StepListener<>();
+        iid4.whenComplete(r -> {
+            SearchRequest request = new SearchRequest();
+            request.source(new SearchSourceBuilder());
+            request.source().query(new MatchQueryBuilder(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, "fish input"));
+            index.searchInteractions(conversation1, request, searchListener);
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        searchListener.whenComplete(response -> {
+            cdl.countDown();
+            assert (response.getHits().getHits().length == 3);
+            // BM25 was being a little unpredictable here so I don't assert ordering
+            List<String> ids = new ArrayList<>(3);
+            for (SearchHit hit : response.getHits()) {
+                ids.add(hit.getId());
+            }
+            assert (ids.contains(iid1.result()));
+            assert (ids.contains(iid2.result()));
+            assert (ids.contains(iid4.result()));
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         try {
             cdl.await();
