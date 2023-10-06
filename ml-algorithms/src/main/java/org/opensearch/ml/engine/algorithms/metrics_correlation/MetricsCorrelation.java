@@ -306,7 +306,7 @@ public class MetricsCorrelation extends DLModelExecute {
             sum += timeInMillis;
             timeInMillis = Math.min(AWAIT_BUSY_THRESHOLD, timeInMillis * 2);
 
-            System.out.println("Waiting... Time elapsed: " + sum + "ms");
+            log.info("Waiting... Time elapsed: " + sum + "ms");
         }
         timeInMillis = maxTimeInMillis - sum;
         try {
