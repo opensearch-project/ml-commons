@@ -48,7 +48,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class SearchInteractionsTransportActionsTests extends OpenSearchTestCase {
-    
+
     @Mock
     ThreadPool threadPool;
 

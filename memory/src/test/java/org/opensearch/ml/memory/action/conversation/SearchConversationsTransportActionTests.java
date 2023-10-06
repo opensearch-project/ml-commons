@@ -49,7 +49,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class SearchConversationsTransportActionTests extends OpenSearchTestCase {
-    
+
     @Mock
     ThreadPool threadPool;
 

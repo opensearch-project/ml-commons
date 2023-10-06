@@ -31,7 +31,6 @@ import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
-
 public class SearchInteractionsRequestTests extends OpenSearchTestCase {
 
     protected NamedWriteableRegistry namedWriteableRegistry;
@@ -45,7 +44,7 @@ public class SearchInteractionsRequestTests extends OpenSearchTestCase {
         entries.addAll(searchModule.getNamedWriteables());
         namedWriteableRegistry = new NamedWriteableRegistry(entries);
     }
-    
+
     public void testConstructorsAndStreaming() throws IOException {
         SearchRequest original = new SearchRequest();
         original.source(new SearchSourceBuilder());
