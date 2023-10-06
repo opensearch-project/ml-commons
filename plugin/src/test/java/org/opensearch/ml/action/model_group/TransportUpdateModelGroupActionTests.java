@@ -38,6 +38,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
@@ -367,6 +368,20 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("Failed to get model group", argumentCaptor.getValue().getMessage());
     }
 
+    public void test_ModelGroupIndexNotFoundException() {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException("Fail to find model group"));
+            return null;
+        }).when(client).get(any(), any());
+
+        MLUpdateModelGroupRequest actionRequest = prepareRequest(null, AccessMode.RESTRICTED, null);
+        transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Fail to find model group", argumentCaptor.getValue().getMessage());
+    }
+
     public void test_FailedToUpdatetModelGroupException() {
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
@@ -414,15 +429,16 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     }
 
     public void test_ExceptionSecurityDisabledCluster() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule
-            .expectMessage(
-                "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster."
-            );
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, true);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "You cannot specify model access control parameters because the Security plugin or model access control is disabled on your cluster.",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     private MLUpdateModelGroupRequest prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
