@@ -94,7 +94,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.POST, route.getMethod());
+        assertEquals(RestRequest.Method.PUT, route.getMethod());
         assertEquals("/_plugins/_ml/models/_update/{model_id}", route.getPath());
     }
 
@@ -126,7 +126,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequest() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         final Map<String, Object> modelContent = Map.of("name", "testModelName", "description", "This is test description");
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
@@ -141,7 +141,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequestWithEmptyContent() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
@@ -154,7 +154,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     }
 
     private RestRequest getRestRequestWithNullModelId() {
-        RestRequest.Method method = RestRequest.Method.POST;
+        RestRequest.Method method = RestRequest.Method.PUT;
         final Map<String, Object> modelContent = Map.of("name", "testModelName", "description", "This is test description");
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();

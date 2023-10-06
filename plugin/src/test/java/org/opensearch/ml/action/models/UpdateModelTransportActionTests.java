@@ -393,41 +393,6 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetUpdateResponseListenerWrongStatus() {
-        UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onResponse(updateWrongResponse);
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        verify(actionListener).onResponse(updateWrongResponse);
-    }
-
-    @Test
-    public void testGetUpdateResponseListenerOtherException() {
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener
-                .onFailure(
-                    new RuntimeException(
-                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
-                    )
-                );
-            return null;
-        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
-
-        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    @Test
     public void testUpdateRemoteModelWithNoStandAloneConnectorFound() {
         MLModel remoteModelWithInternalConnector = prepareUnsupportedMLModel(FunctionName.REMOTE);
         doAnswer(invocation -> {
@@ -704,6 +669,76 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(IOException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Exception occurred during building update request.", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testGetUpdateResponseListenerWithVersionBumpWrongStatus() {
+        UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateWrongResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        verify(actionListener).onResponse(updateWrongResponse);
+    }
+
+    @Test
+    public void testGetUpdateResponseListenerWithVersionBumpOtherException() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    @Test
+    public void testGetUpdateResponseListenerWrongStatus() {
+        UpdateResponse updateWrongResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.CREATED);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateWrongResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        verify(actionListener).onResponse(updateWrongResponse);
+    }
+
+    @Test
+    public void testGetUpdateResponseListenerOtherException() {
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener
+                .onFailure(
+                    new RuntimeException(
+                        "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details."
+                    )
+                );
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+        updateLocalModelRequest.getUpdateModelInput().setModelGroupId(null);
+        transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during running getUpdateResponseListener. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     private MLModel prepareMLModel(FunctionName functionName) throws IllegalArgumentException {

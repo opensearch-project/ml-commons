@@ -150,7 +150,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
 
         if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
             if (relinkConnectorId == null) {
-                updateModelWithRegisteringNewModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
+                updateModelWithRegisteringToAnotherModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
             } else {
                 actionListener
                     .onFailure(new IllegalArgumentException("Trying to update the connector or connector_id field on a local model"));
@@ -158,7 +158,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         } else {
             // mlModel.getAlgorithm() == REMOTE
             if (relinkConnectorId == null) {
-                updateModelWithRegisteringNewModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
+                updateModelWithRegisteringToAnotherModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
             } else {
                 updateModelWithRelinkStandAloneConnector(
                     modelId,
@@ -186,7 +186,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             connectorAccessControlHelper
                 .validateConnectorAccess(client, relinkConnectorId, ActionListener.wrap(hasRelinkConnectorPermission -> {
                     if (hasRelinkConnectorPermission) {
-                        updateModelWithRegisteringNewModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
+                        updateModelWithRegisteringToAnotherModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener);
                     } else {
                         actionListener
                             .onFailure(
@@ -207,7 +207,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
-    private void updateModelWithRegisteringNewModelGroup(
+    private void updateModelWithRegisteringToAnotherModelGroup(
         String modelId,
         String newModelGroupId,
         User user,
@@ -219,10 +219,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             modelAccessControlHelper.validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasRelinkPermission -> {
                 if (hasRelinkPermission) {
                     mlModelGroupManager.getModelGroup(newModelGroupId, ActionListener.wrap(newModelGroup -> {
-                        String updatedVersion = incrementLatestVersion(newModelGroup);
-                        updateModelInput.setVersion(updatedVersion);
-                        newModelGroup.setLatestVersion(Integer.parseInt(updatedVersion));
-                        updateRequestConstructor(modelId, updateRequest, updateModelInput, actionListener);
+                        updateRequestConstructor(modelId, updateRequest, updateModelInput, newModelGroup, actionListener);
                     },
                         exception -> actionListener
                             .onFailure(
@@ -266,6 +263,25 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
+    private void updateRequestConstructor(
+        String modelId,
+        UpdateRequest updateRequest,
+        MLUpdateModelInput updateModelInput,
+        MLModelGroup newModelGroup,
+        ActionListener<UpdateResponse> actionListener
+    ) {
+        String updatedVersion = incrementLatestVersion(newModelGroup);
+        updateModelInput.setVersion(updatedVersion);
+        try {
+            updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
+            updateRequest.docAsUpsert(true);
+            client.update(updateRequest, getUpdateResponseListener(modelId, newModelGroup, updatedVersion, actionListener));
+        } catch (IOException e) {
+            log.error("Failed to build update request.");
+            actionListener.onFailure(e);
+        }
+    }
+
     private ActionListener<UpdateResponse> getUpdateResponseListener(String modelId, ActionListener<UpdateResponse> actionListener) {
         return ActionListener.wrap(updateResponse -> {
             if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
@@ -274,6 +290,27 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 return;
             }
             log.info("Completed Update Model Request, model id:{} updated", modelId);
+            actionListener.onResponse(updateResponse);
+        }, exception -> {
+            log.error("Failed to update ML model: " + modelId, exception);
+            actionListener.onFailure(exception);
+        });
+    }
+
+    private ActionListener<UpdateResponse> getUpdateResponseListener(
+        String modelId,
+        MLModelGroup newModelGroup,
+        String updatedVersion,
+        ActionListener<UpdateResponse> actionListener
+    ) {
+        return ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                log.info("Model id:{} failed update", modelId);
+                actionListener.onResponse(updateResponse);
+                return;
+            }
+            log.info("Completed Update Model Request, model id:{} updated", modelId);
+            newModelGroup.setLatestVersion(Integer.parseInt(updatedVersion));
             actionListener.onResponse(updateResponse);
         }, exception -> {
             log.error("Failed to update ML model: " + modelId, exception);
