@@ -237,9 +237,7 @@ public class MetricsCorrelation extends DLModelExecute {
                     log.error("Failed to Register Model", e);
                     listener.onFailure(e);
                 }));
-            }, e-> {
-                listener.onFailure(e);
-            }), () -> context.restore()));
+            }, listener::onFailure), context::restore));
         } catch (IOException e) {
             throw new MLException(e);
         }
