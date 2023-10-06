@@ -53,6 +53,7 @@ import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
+import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
@@ -100,6 +101,7 @@ import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
@@ -166,6 +168,7 @@ import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
+import org.opensearch.ml.rest.RestMLUpdateModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
@@ -282,6 +285,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLUndeployModelsAction.INSTANCE, TransportUndeployModelsAction.class),
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
+                new ActionHandler<>(MLUpdateModelAction.INSTANCE, UpdateModelTransportAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
                 new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),
@@ -537,6 +541,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
         RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
         RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
@@ -558,6 +563,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLGetModelAction,
                 restMLDeleteModelAction,
                 restMLSearchModelAction,
+                restMLUpdateModelAction,
                 restMLGetTaskAction,
                 restMLDeleteTaskAction,
                 restMLSearchTaskAction,
