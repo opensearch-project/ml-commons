@@ -130,7 +130,8 @@ public final class MLCommonsSettings {
                 .of(
                     "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
-                    "^https://api\\.cohere\\.ai/.*$"
+                    "^https://api\\.cohere\\.ai/.*$",
+                    "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
                 ),
             Function.identity(),
             Setting.Property.NodeScope,
