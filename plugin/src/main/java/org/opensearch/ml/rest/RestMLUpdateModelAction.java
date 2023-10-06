@@ -37,7 +37,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/models/_update/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
+            .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/models/{%s}", ML_BASE_URI, PARAMETER_MODEL_ID)));
     }
 
     @Override
