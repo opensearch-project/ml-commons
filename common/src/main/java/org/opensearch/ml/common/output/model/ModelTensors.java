@@ -7,6 +7,7 @@ package org.opensearch.ml.common.output.model;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -24,7 +25,10 @@ import java.util.List;
 @Getter
 public class ModelTensors implements Writeable, ToXContentObject {
     public static final String OUTPUT_FIELD = "output";
+    public static final String STATUS_CODE_FIELD = "status_code";
     private List<ModelTensor> mlModelTensors;
+    @Setter
+    private Integer statusCode;
 
     @Builder
     public ModelTensors(List<ModelTensor> mlModelTensors) {
@@ -41,6 +45,9 @@ public class ModelTensors implements Writeable, ToXContentObject {
             }
             builder.endArray();
         }
+        if (statusCode != null) {
+            builder.field(STATUS_CODE_FIELD, statusCode);
+        }
         builder.endObject();
         return builder;
     }
@@ -53,6 +60,7 @@ public class ModelTensors implements Writeable, ToXContentObject {
                 mlModelTensors.add(new ModelTensor(in));
             }
         }
+        statusCode = in.readOptionalInt();
     }
 
     @Override
@@ -66,6 +74,7 @@ public class ModelTensors implements Writeable, ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalInt(statusCode);
     }
 
     public void filter(ModelResultFilter resultFilter) {
