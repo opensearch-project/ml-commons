@@ -64,7 +64,6 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isUpdateConnectorEnabled()).thenReturn(true);
         restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
