@@ -272,7 +272,7 @@ public interface MachineLearningClient {
 
     /**
      * Create connector for remote model
-     * @param mlCreateConnectorInput Create Connector Input
+     * @param mlCreateConnectorInput Create Connector Input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/extensibility/connectors/
      * @return the result future
      */
     default ActionFuture<MLCreateConnectorResponse> createConnector(MLCreateConnectorInput mlCreateConnectorInput) {

@@ -235,9 +235,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
-        client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, ActionListener.wrap(listener::onResponse, e -> {
-            listener.onFailure(e);
-        }));
+        client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, listener);
     }
 
     private ActionListener<MLTaskResponse> getMlPredictionTaskResponseActionListener(ActionListener<MLOutput> listener) {
