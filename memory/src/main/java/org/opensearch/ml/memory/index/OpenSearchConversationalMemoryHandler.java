@@ -395,4 +395,47 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
 
         conversationMetaIndex.updateConversation(updateRequest, listener);
     }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @param listener receives the conversationMeta object
+     */
+    public void getConversation(String conversationId, ActionListener<ConversationMeta> listener) {
+        conversationMetaIndex.getConversation(conversationId, listener);
+    }
+
+    /**
+     * Get a single ConversationMeta object
+     * @param conversationId id of the conversation to get
+     * @return ActionFuture for the conversationMeta object
+     */
+    public ActionFuture<ConversationMeta> getConversation(String conversationId) {
+        PlainActionFuture<ConversationMeta> fut = PlainActionFuture.newFuture();
+        getConversation(conversationId, fut);
+        return fut;
+    }
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @param listener receives the interaction
+     */
+    public void getInteraction(String conversationId, String interactionId, ActionListener<Interaction> listener) {
+        interactionsIndex.getInteraction(conversationId, interactionId, listener);
+    }
+
+    /**
+     * Get a single interaction
+     * @param conversationId id of the conversation this interaction belongs to
+     * @param interactionId id of this interaction
+     * @return ActionFuture for the interaction
+     */
+    public ActionFuture<Interaction> getInteraction(String conversationId, String interactionId) {
+        PlainActionFuture<Interaction> fut = PlainActionFuture.newFuture();
+        getInteraction(conversationId, interactionId, fut);
+        return fut;
+    }
+
 }

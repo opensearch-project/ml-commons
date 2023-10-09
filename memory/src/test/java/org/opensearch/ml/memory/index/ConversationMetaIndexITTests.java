@@ -528,4 +528,108 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
         }
     }
 
+    public void testCanGetAConversationById() {
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> cid1 = new StepListener<>();
+        index.createConversation("convo1", cid1);
+
+        StepListener<String> cid2 = new StepListener<>();
+        cid1.whenComplete(cid -> { index.createConversation("convo2", cid2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<ConversationMeta> get1 = new StepListener<>();
+        cid2.whenComplete(cid -> { index.getConversation(cid1.result(), get1); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        StepListener<ConversationMeta> get2 = new StepListener<>();
+        get1.whenComplete(convo1 -> { index.getConversation(cid2.result(), get2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        get2.whenComplete(convo2 -> {
+            assert (cid1.result().equals(get1.result().getId()));
+            assert (cid2.result().equals(get2.result().getId()));
+            assert (get1.result().getName().equals("convo1"));
+            assert (get2.result().getName().equals("convo2"));
+            cdl.countDown();
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
+
+    public void testCanGetAConversationByIdSecurely() {
+        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+            CountDownLatch cdl = new CountDownLatch(1);
+            Stack<StoredContext> contextStack = new Stack<>();
+            Consumer<Exception> onFail = e -> {
+                while (!contextStack.empty()) {
+                    contextStack.pop().close();
+                }
+                cdl.countDown();
+                log.error(e);
+                threadContext.restore();
+                assert (false);
+            };
+
+            final String user1 = "Austin";
+            final String user2 = "Yaliang";
+            contextStack.push(setUser(user1));
+
+            StepListener<String> cid1 = new StepListener<>();
+            index.createConversation("Austin Convo", cid1);
+
+            StepListener<String> cid2 = new StepListener<>();
+            cid1.whenComplete(cid -> {
+                contextStack.push(setUser(user2));
+                index.createConversation("Yaliang Convo", cid2);
+            }, onFail);
+
+            StepListener<ConversationMeta> get2 = new StepListener<>();
+            cid2.whenComplete(cid -> { index.getConversation(cid2.result(), get2); }, onFail);
+
+            StepListener<ConversationMeta> get1 = new StepListener<>();
+            get2.whenComplete(convo -> { index.getConversation(cid1.result(), get1); }, onFail);
+
+            get1.whenComplete(convo -> {
+                while (!contextStack.isEmpty()) {
+                    contextStack.pop().close();
+                }
+                cdl.countDown();
+                assert (false);
+            }, e -> {
+                cdl.countDown();
+                assert (e.getMessage().startsWith("User [Yaliang] does not have access to conversation"));
+                assert (get2.result().getName().equals("Yaliang Convo"));
+                assert (get2.result().getId().equals(cid2.result()));
+            });
+
+            try {
+                cdl.await();
+                threadContext.restore();
+            } catch (InterruptedException e) {
+                log.error(e);
+                threadContext.restore();
+            }
+
+        } catch (Exception e) {
+            log.error(e);
+        }
+    }
+
 }

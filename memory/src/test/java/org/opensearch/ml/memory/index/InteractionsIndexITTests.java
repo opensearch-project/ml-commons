@@ -512,4 +512,67 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
             log.error(e);
         }
     }
+
+    public void testGetInteractionById() {
+        final String conversation = "test-conversation";
+        CountDownLatch cdl = new CountDownLatch(1);
+        StepListener<String> iid1 = new StepListener<>();
+        index
+            .createInteraction(
+                conversation,
+                "test input",
+                "pt",
+                "test response",
+                "test origin",
+                Collections.singletonMap("metadata", "some meta"),
+                iid1
+            );
+
+        StepListener<String> iid2 = new StepListener<>();
+        iid1.whenComplete(iid -> {
+            index
+                .createInteraction(
+                    conversation,
+                    "test input2",
+                    "pt",
+                    "test response",
+                    "test origin",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid2
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert false;
+        });
+
+        StepListener<Interaction> get1 = new StepListener<>();
+        iid2.whenComplete(iid -> { index.getInteraction(conversation, iid1.result(), get1); }, e -> {
+            cdl.countDown();
+            log.error(e);
+        });
+
+        StepListener<Interaction> get2 = new StepListener<>();
+        get1.whenComplete(interaction1 -> { index.getInteraction(conversation, iid2.result(), get2); }, e -> {
+            cdl.countDown();
+            log.error(e);
+        });
+
+        get2.whenComplete(interaction2 -> {
+            assert (get1.result().getId().equals(iid1.result()));
+            assert (get1.result().getInput().equals("test input"));
+            assert (get2.result().getId().equals(iid2.result()));
+            assert (get2.result().getInput().equals("test input2"));
+            cdl.countDown();
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+        });
+
+        try {
+            cdl.await();
+        } catch (InterruptedException e) {
+            log.error(e);
+        }
+    }
 }

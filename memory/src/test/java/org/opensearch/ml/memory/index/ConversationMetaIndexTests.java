@@ -558,4 +558,80 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
         verify(accessListener, times(1)).onFailure(argCaptor.capture());
         assert (argCaptor.getValue().getMessage().equals("Client Test Fail"));
     }
+
+    public void testGetConversation_NoIndex_ThenFail() {
+        doReturn(false).when(metadata).hasIndex(anyString());
+        @SuppressWarnings("unchecked")
+        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversation("tester_id", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor
+            .getValue()
+            .getMessage()
+            .equals("no such index [.plugins-ml-memory-meta] and cannot get conversation since the conversation index does not exist"));
+    }
+
+    public void testGetConversation_ResponseNotExist_ThenFail() {
+        setupRefreshSuccess();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        GetResponse response = mock(GetResponse.class);
+        doReturn(false).when(response).isExists();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversation("tester_id", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Conversation [tester_id] not found"));
+    }
+
+    public void testGetConversation_WrongId_ThenFail() {
+        setupRefreshSuccess();
+        doReturn(true).when(metadata).hasIndex(anyString());
+        GetResponse response = mock(GetResponse.class);
+        doReturn(true).when(response).isExists();
+        doReturn("wrong id").when(response).getId();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> al = invocation.getArgument(1);
+            al.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversation("tester_id", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Conversation [tester_id] not found"));
+    }
+
+    public void testGetConversation_RefreshFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doAnswer(invocation -> {
+            ActionListener<RefreshResponse> al = invocation.getArgument(1);
+            al.onFailure(new Exception("Refresh Exception"));
+            return null;
+        }).when(indicesAdminClient).refresh(any(), any());
+        @SuppressWarnings("unchecked")
+        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversation("tester_id", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Refresh Exception"));
+    }
+
+    public void testGetConversation_ClientFails_ThenFail() {
+        doReturn(true).when(metadata).hasIndex(anyString());
+        doThrow(new RuntimeException("Clietn Failure")).when(client).admin();
+        @SuppressWarnings("unchecked")
+        ActionListener<ConversationMeta> getListener = mock(ActionListener.class);
+        conversationMetaIndex.getConversation("tester_id", getListener);
+        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getListener, times(1)).onFailure(argCaptor.capture());
+        assert (argCaptor.getValue().getMessage().equals("Clietn Failure"));
+    }
 }
