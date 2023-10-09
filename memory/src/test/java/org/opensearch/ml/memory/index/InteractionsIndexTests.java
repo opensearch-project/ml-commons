@@ -64,9 +64,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.SendRequestTransportException;
 
-import lombok.extern.log4j.Log4j2;
-
-@Log4j2
 public class InteractionsIndexTests extends OpenSearchTestCase {
     @Mock
     Client client;
