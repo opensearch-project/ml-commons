@@ -119,6 +119,36 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
+    public void executePredict_RemoteInferenceInput_InvalidToken() throws IOException {
+        exceptionRule.expect(OpenSearchStatusException.class);
+        exceptionRule.expectMessage("{\"message\":\"The security token included in the request is invalid\"}");
+        String jsonString = "{\"message\":\"The security token included in the request is invalid\"}";
+        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
+        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
+        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
+        when(httpRequest.call()).thenReturn(response);
+        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
+        when(httpResponse.statusCode()).thenReturn(403);
+        when(response.httpResponse()).thenReturn(httpResponse);
+        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
+
+        ConnectorAction predictAction = ConnectorAction.builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
+        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+    }
+
+    @Test
     public void executePredict_RemoteInferenceInput() throws IOException {
         String jsonString = "{\"key\":\"value\"}";
         InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
@@ -176,7 +206,7 @@ public class AwsConnectorExecutorTest {
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
 
-        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
