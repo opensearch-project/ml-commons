@@ -933,8 +933,8 @@ public class MLModelManager {
                             CLUSTER_SERVICE,
                             clusterService
                         );
-                    // deploy remote model or model trained by built-in algorithm like kmeans
-                    if (mlModel.getConnector() != null) {
+                    // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
+                    if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
                         setupPredictable(modelId, mlModel, params);
                         wrappedListener.onResponse("successful");
                         return;
@@ -943,6 +943,7 @@ public class MLModelManager {
                     GetRequest getConnectorRequest = new GetRequest();
                     FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
                     getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
+                    // get connector and deploy remote model with standalone connector
                     client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
                         if (getResponse != null && getResponse.isExists()) {
                             try (

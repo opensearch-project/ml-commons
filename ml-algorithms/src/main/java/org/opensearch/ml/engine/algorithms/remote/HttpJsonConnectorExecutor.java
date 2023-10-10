@@ -16,6 +16,8 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
@@ -103,9 +105,13 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                 return null;
             });
             String modelResponse = responseRef.get();
+            Integer statusCode = statusCodeRef.get();
+            if (statusCode < 200 || statusCode >= 300) {
+                throw new OpenSearchStatusException(modelResponse, RestStatus.fromCode(statusCode));
+            }
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
-            tensors.setStatusCode(statusCodeRef.get());
+            tensors.setStatusCode(statusCode);
             tensorOutputs.add(tensors);
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);
