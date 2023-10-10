@@ -436,7 +436,10 @@ public class MLModelCacheHelper {
     }
 
     public MLModel getModelInfo(String modelId) {
-        MLModelCache mlModelCache = getExistingModelCache(modelId);
+        MLModelCache mlModelCache = modelCaches.get(modelId);
+        if (mlModelCache == null) {
+            return null;
+        }
         return mlModelCache.getCachedModelInfo();
     }
 
