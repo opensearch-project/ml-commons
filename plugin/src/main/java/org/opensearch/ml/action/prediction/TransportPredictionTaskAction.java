@@ -92,6 +92,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             ActionListener<MLModel> modelActionListener = new ActionListener<>() {
                 @Override
                 public void onResponse(MLModel mlModel) {
+                    context.restore();
                     modelCacheHelper.setModelInfo(modelId, mlModel);
                     FunctionName functionName = mlModel.getAlgorithm();
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
