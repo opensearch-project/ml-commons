@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.cluster.ClusterStateTaskConfig;
 import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.FunctionName;
@@ -124,6 +125,28 @@ public class HttpJsonConnectorExecutorTest {
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
         Assert.assertEquals("test result", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void executePredict_TextDocsInput_LimitExceed() throws IOException {
+        exceptionRule.expect(OpenSearchStatusException.class);
+        exceptionRule.expectMessage("{\"message\": \"Too many requests\"}");
+        ConnectorAction predictAction = ConnectorAction.builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": ${parameters.input}}")
+                .build();
+        when(httpClient.execute(any())).thenReturn(response);
+        HttpEntity entity = new StringEntity("{\"message\": \"Too many requests\"}");
+        when(response.getEntity()).thenReturn(entity);
+        StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 429, "OK");
+        when(response.getStatusLine()).thenReturn(statusLine);
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        when(executor.getHttpClient()).thenReturn(httpClient);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
     }
 
     @Test
