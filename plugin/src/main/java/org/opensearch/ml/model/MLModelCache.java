@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.DoubleStream;
 
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
@@ -34,6 +35,7 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLExecutable executor;
     private final Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
+    private MLModel modelInfo;
     private final Queue<Double> modelInferenceDurationQueue;
     private final Queue<Double> predictRequestDurationQueue;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Long memSizeEstimationCPU;
@@ -77,12 +79,16 @@ public class MLModelCache {
      * @param isFromUndeploy
      */
     public void removeWorkerNode(String nodeId, boolean isFromUndeploy) {
-        if ((deployToAllNodes != null && deployToAllNodes) || isFromUndeploy) {
+        if (this.isDeployToAllNodes() || isFromUndeploy) {
             targetWorkerNodes.remove(nodeId);
         }
         if (isFromUndeploy)
             deployToAllNodes = false;
         workerNodes.remove(nodeId);
+        // when the model is not deployed to any node, we should remove the modelInfo from cache
+        if (targetWorkerNodes.isEmpty() || workerNodes.isEmpty()) {
+            modelInfo = null;
+        }
     }
 
     public void removeWorkerNodes(Set<String> removedNodes, boolean isFromUndeploy) {
@@ -92,6 +98,9 @@ public class MLModelCache {
         if (isFromUndeploy)
             deployToAllNodes = false;
         workerNodes.removeAll(removedNodes);
+        if (targetWorkerNodes.isEmpty() || workerNodes.isEmpty()) {
+            modelInfo = null;
+        }
     }
 
     /**
@@ -112,6 +121,14 @@ public class MLModelCache {
         return workerNodes.toArray(new String[0]);
     }
 
+    public void setModelInfo(MLModel modelInfo) {
+        this.modelInfo = modelInfo;
+    }
+
+    public MLModel getCachedModelInfo() {
+        return modelInfo;
+    }
+
     public void syncWorkerNode(Set<String> workerNodes) {
         this.workerNodes.clear();
         this.workerNodes.addAll(workerNodes);
@@ -129,6 +146,7 @@ public class MLModelCache {
         modelState = null;
         functionName = null;
         workerNodes.clear();
+        modelInfo = null;
         modelInferenceDurationQueue.clear();
         predictRequestDurationQueue.clear();
         if (predictor != null) {
