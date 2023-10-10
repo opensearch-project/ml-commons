@@ -206,7 +206,7 @@ public class AwsConnectorExecutorTest {
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
 
-        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
