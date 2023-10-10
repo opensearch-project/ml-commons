@@ -102,7 +102,7 @@ public class ConnectorUtils {
                     docs.add(null);
                 }
             }
-            if (preProcessFunction.contains("${parameters")) {
+            if (preProcessFunction.contains("${parameters.")) {
                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 preProcessFunction = substitutor.replace(preProcessFunction);
             }
