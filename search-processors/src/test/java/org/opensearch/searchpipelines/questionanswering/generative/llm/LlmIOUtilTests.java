@@ -32,4 +32,10 @@ public class LlmIOUtilTests extends OpenSearchTestCase {
             .createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList(), 0);
         assertTrue(input instanceof ChatCompletionInput);
     }
+
+    public void testChatCompletionInputForBedrock() {
+        ChatCompletionInput input = LlmIOUtil
+            .createChatCompletionInput("bedrock/model", "question", Collections.emptyList(), Collections.emptyList(), 0);
+        assertTrue(input instanceof ChatCompletionInput);
+    }
 }
