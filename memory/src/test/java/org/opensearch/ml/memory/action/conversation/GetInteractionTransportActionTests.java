@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Set;
 
 import org.junit.Before;
@@ -112,7 +113,7 @@ public class GetInteractionTransportActionTests extends OpenSearchTestCase {
             "pt",
             "test-response",
             "test-origin",
-            "metadata"
+            Collections.singletonMap("meta", "some meta")
         );
         doAnswer(invocation -> {
             ActionListener<Interaction> listener = invocation.getArgument(2);
