@@ -17,7 +17,6 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -42,7 +41,9 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TestHelper;
@@ -101,6 +102,8 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
 
     private SearchResponse searchResponse;
 
+    private MLEngine mlEngine;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
         .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
 
@@ -123,7 +126,12 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         String connector_id = "test_connector_id";
-        Map<String, Object> updateContent = Map.of("version", "2", "description", "updated description");
+        MLCreateConnectorInput updateContent = MLCreateConnectorInput
+            .builder()
+            .updateConnector(true)
+            .version("2")
+            .description("updated description")
+            .build();
         when(updateRequest.getConnectorId()).thenReturn(connector_id);
         when(updateRequest.getUpdateContent()).thenReturn(updateContent);
 
@@ -145,7 +153,10 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
             actionFilters,
             client,
             connectorAccessControlHelper,
-            mlModelManager
+            mlModelManager,
+            settings,
+            clusterService,
+            mlEngine
         );
 
         when(mlModelManager.getAllModelIds()).thenReturn(new String[] {});

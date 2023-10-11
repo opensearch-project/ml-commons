@@ -8,6 +8,10 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
@@ -77,11 +81,16 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                                 .error(
                                     searchHits.length + " models are still using this connector, please delete or update the models first!"
                                 );
+                            List<String> modelIds = new ArrayList<>();
+                            for (SearchHit hit : searchHits) {
+                                modelIds.add(hit.getId());
+                            }
                             actionListener
                                 .onFailure(
                                     new MLValidationException(
                                         searchHits.length
-                                            + " models are still using this connector, please delete or update the models first!"
+                                            + " models are still using this connector, please delete or update the models first: "
+                                            + Arrays.toString(modelIds.toArray(new String[0]))
                                     )
                                 );
                         }

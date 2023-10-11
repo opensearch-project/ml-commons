@@ -21,7 +21,7 @@ public class MLExceptionUtils {
     public static final String REMOTE_INFERENCE_DISABLED_ERR_MSG =
         "Remote Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.remote_inference_enabled\" to true.";
     public static final String UPDATE_CONNECTOR_DISABLED_ERR_MSG =
-        "Update connector API is currently disabled. To enable it, update the setting \"plugins.ml_commons.update_connector_enabled\" to true.";
+        "Update connector API is currently disabled. To enable it, update the setting \"plugins.ml_commons.update_connector.enabled\" to true.";
 
     public static String getRootCauseMessage(final Throwable throwable) {
         String message = ExceptionUtils.getRootCauseMessage(throwable);
