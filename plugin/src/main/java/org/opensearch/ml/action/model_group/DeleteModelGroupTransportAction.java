@@ -5,10 +5,9 @@
 
 package org.opensearch.ml.action.model_group;
 
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
-
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
@@ -25,7 +24,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
@@ -35,9 +33,9 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -84,26 +82,14 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                     SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
                     client.search(searchRequest, ActionListener.wrap(mlModels -> {
                         if (mlModels == null || mlModels.getHits().getTotalHits() == null || mlModels.getHits().getTotalHits().value == 0) {
-                            client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
-                                @Override
-                                public void onResponse(DeleteResponse deleteResponse) {
-                                    log.debug("Completed Delete Model Group Request, task id:{} deleted", modelGroupId);
-                                    wrappedListener.onResponse(deleteResponse);
-                                }
-
-                                @Override
-                                public void onFailure(Exception e) {
-                                    log.error("Failed to delete ML Model Group " + modelGroupId, e);
-                                    wrappedListener.onFailure(e);
-                                }
-                            });
+                            deleteModelGroup(deleteRequest, modelGroupId, wrappedListener);
                         } else {
                             throw new MLValidationException("Cannot delete the model group when it has associated model versions");
                         }
 
                     }, e -> {
                         if (e instanceof IndexNotFoundException) {
-                            wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
+                            deleteModelGroup(deleteRequest, modelGroupId, wrappedListener);
                         } else {
                             log.error("Failed to search models with the specified Model Group Id " + modelGroupId, e);
                             wrappedListener.onFailure(e);
@@ -115,5 +101,21 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 wrappedListener.onFailure(e);
             }));
         }
+    }
+
+    private void deleteModelGroup(DeleteRequest deleteRequest, String modelGroupId, ActionListener<DeleteResponse> actionListener) {
+        client.delete(deleteRequest, new ActionListener<DeleteResponse>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                log.debug("Completed Delete Model Group Request, task id:{} deleted", modelGroupId);
+                actionListener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.error("Failed to delete ML Model Group " + modelGroupId, e);
+                actionListener.onFailure(e);
+            }
+        });
     }
 }
