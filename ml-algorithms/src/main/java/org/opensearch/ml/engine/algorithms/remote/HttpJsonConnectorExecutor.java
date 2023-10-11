@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
@@ -107,7 +108,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             String modelResponse = responseRef.get();
             Integer statusCode = statusCodeRef.get();
             if (statusCode < 200 || statusCode >= 300) {
-                throw new OpenSearchStatusException(modelResponse, RestStatus.fromCode(statusCode));
+                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
             }
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
