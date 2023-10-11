@@ -137,9 +137,16 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String requestId = mlPredictionTaskRequest.getRequestID();
         log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
         long startTime = System.nanoTime();
+        // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
+        // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
+        // from model cache first.
+        FunctionName functionName = modelCacheHelper
+            .getOptionalFunctionName(modelId)
+            .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
         mlPredictTaskRunner
             .run(
-                mlPredictionTaskRequest.getMlInput().getAlgorithm(),
+                // This is by design to NOT use mlPredictionTaskRequest.getMlInput().getAlgorithm() here
+                functionName,
                 mlPredictionTaskRequest,
                 transportService,
                 ActionListener.runAfter(wrappedListener, () -> {
