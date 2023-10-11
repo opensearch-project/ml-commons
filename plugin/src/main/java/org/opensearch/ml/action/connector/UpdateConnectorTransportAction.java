@@ -7,6 +7,11 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
@@ -16,9 +21,14 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
@@ -26,6 +36,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.search.SearchHit;
@@ -38,12 +49,14 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateConnectorTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelManager mlModelManager;
+    MLEngine mlEngine;
+    volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject
     public UpdateConnectorTransportAction(
@@ -51,25 +64,35 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         ActionFilters actionFilters,
         Client client,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        Settings settings,
+        ClusterService clusterService,
+        MLEngine mlEngine
     ) {
         super(MLUpdateConnectorAction.NAME, transportService, actionFilters, MLUpdateConnectorRequest::new);
         this.client = client;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
+        this.mlEngine = mlEngine;
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> listener) {
         MLUpdateConnectorRequest mlUpdateConnectorAction = MLUpdateConnectorRequest.fromActionRequest(request);
         String connectorId = mlUpdateConnectorAction.getConnectorId();
-        UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
-        updateRequest.doc(mlUpdateConnectorAction.getUpdateContent());
-        updateRequest.docAsUpsert(true);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            connectorAccessControlHelper.validateConnectorAccess(client, connectorId, ActionListener.wrap(hasPermission -> {
+            connectorAccessControlHelper.getConnector(client, connectorId, ActionListener.wrap(connector -> {
+                boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
                 if (Boolean.TRUE.equals(hasPermission)) {
+                    connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
+                    connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                    UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
+                    updateRequest.doc(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                     updateUndeployedConnector(connectorId, updateRequest, listener, context);
                 } else {
                     listener
@@ -107,10 +130,16 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                 client.update(updateRequest, getUpdateResponseListener(connectorId, listener, context));
             } else {
                 log.error(searchHits.length + " models are still using this connector, please undeploy the models first!");
+                List<String> modelIds = new ArrayList<>();
+                for (SearchHit hit : searchHits) {
+                    modelIds.add(hit.getId());
+                }
                 listener
                     .onFailure(
                         new MLValidationException(
-                            searchHits.length + " models are still using this connector, please undeploy the models first!"
+                            searchHits.length
+                                + " models are still using this connector, please undeploy the models first: "
+                                + Arrays.toString(modelIds.toArray(new String[0]))
                         )
                     );
             }

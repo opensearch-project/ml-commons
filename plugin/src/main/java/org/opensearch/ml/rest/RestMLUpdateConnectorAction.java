@@ -44,12 +44,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(
-                new Route(
-                    RestRequest.Method.POST,
-                    String.format(Locale.ROOT, "%s/connectors/_update/{%s}", ML_BASE_URI, PARAMETER_CONNECTOR_ID)
-                )
-            );
+            .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/connectors/{%s}", ML_BASE_URI, PARAMETER_CONNECTOR_ID)));
     }
 
     @Override

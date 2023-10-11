@@ -7,38 +7,37 @@ package org.opensearch.ml.common.transport.connector;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchModule;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Map;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.mockito.Mockito.when;
+import static org.junit.Assert.assertTrue;
 
 public class MLUpdateConnectorRequestTests {
     private String connectorId;
-    private Map<String, Object> updateContent;
+    private MLCreateConnectorInput updateContent;
     private MLUpdateConnectorRequest mlUpdateConnectorRequest;
-
-    @Mock
-    XContentParser parser;
 
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         this.connectorId = "test-connector_id";
-        this.updateContent = Map.of("description", "new description");
+        this.updateContent = MLCreateConnectorInput.builder().description("new description").updateConnector(true).build();
         mlUpdateConnectorRequest = MLUpdateConnectorRequest.builder()
             .connectorId(connectorId)
             .updateContent(updateContent)
@@ -64,18 +63,20 @@ public class MLUpdateConnectorRequestTests {
         MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.builder().build();
         Exception exception = updateConnectorRequest.validate();
 
-        assertEquals("Validation Failed: 1: ML connector id can't be null;", exception.getMessage());
+        assertEquals("Validation Failed: 1: ML connector id can't be null;2: Update connector content can't be null;", exception.getMessage());
     }
 
     @Test
     public void parse_success() throws IOException {
-        RestRequest.Method method = RestRequest.Method.POST;
-        final Map<String, Object> updatefields = Map.of("version", "new version", "description", "new description");
-        when(parser.map()).thenReturn(updatefields);
-
+        String jsonStr = "{\"version\":\"new version\",\"description\":\"new description\"}";
+        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
+                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        parser.nextToken();
         MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.parse(parser, connectorId);
         assertEquals(updateConnectorRequest.getConnectorId(), connectorId);
-        assertEquals(updateConnectorRequest.getUpdateContent(), updatefields);
+        assertTrue(updateConnectorRequest.getUpdateContent().isUpdateConnector());
+        assertEquals("new version", updateConnectorRequest.getUpdateContent().getVersion());
+        assertEquals("new description", updateConnectorRequest.getUpdateContent().getDescription());
     }
 
     @Test
