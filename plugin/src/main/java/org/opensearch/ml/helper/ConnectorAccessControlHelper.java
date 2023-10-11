@@ -69,7 +69,7 @@ public class ConnectorAccessControlHelper {
             getConnector(client, connectorId, ActionListener.wrap(connector -> {
                 boolean hasPermission = hasPermission(user, connector);
                 wrappedListener.onResponse(hasPermission);
-            }, e -> { wrappedListener.onFailure(new IllegalStateException("Fail to get connector:" + connectorId)); }));
+            }, e -> { wrappedListener.onFailure(e); }));
         } catch (Exception e) {
             log.error("Failed to validate Access for connector:" + connectorId, e);
             listener.onFailure(e);
