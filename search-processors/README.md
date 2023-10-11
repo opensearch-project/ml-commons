@@ -51,6 +51,8 @@ GET /<index>/_search\?search_pipeline\=<search pipeline name>
 
 To use this with Bedrock models, use "bedrock/" as a prefix for the "llm_model" parameters, e.g. "bedrock/anthropic".
 
+The latest RAG processor has been tested with OpenAI's GPT 3.5 and 4 models and Bedrock's Anthropic Claude (v2) model only.
+
 ## Retrieval Augmented Generation response
 ```
 {
