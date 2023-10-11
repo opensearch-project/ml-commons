@@ -104,8 +104,11 @@ public class PromptUtil {
         }
 
         StringBuilder bldr = new StringBuilder();
-        bldr.append(systemPrompt);
-        bldr.append(NEWLINE);
+
+        if (!Strings.isNullOrEmpty(systemPrompt)) {
+            bldr.append(systemPrompt);
+            bldr.append(NEWLINE);
+        }
         if (!Strings.isNullOrEmpty(userInstructions)) {
             bldr.append(userInstructions);
             bldr.append(NEWLINE);
