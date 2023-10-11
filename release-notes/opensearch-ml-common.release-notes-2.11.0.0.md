@@ -33,6 +33,9 @@ Compatible with OpenSearch 2.11.0
 * fix model group auto-deletion when last version is deleted ([#1444](https://github.com/opensearch-project/ml-commons/pull/1444))
 * fixing metrics correlation algorithm ([#1448](https://github.com/opensearch-project/ml-commons/pull/1448))
 * throw exception if remote model doesn't return 2xx status code; fix predict runner ([#1477](https://github.com/opensearch-project/ml-commons/pull/1477))
+* fix no worker node exception for remote embedding model ([#1482](https://github.com/opensearch-project/ml-commons/pull/1482))
+* fix for delete model group API throwing incorrect error when model index not created ([#1485](https://github.com/opensearch-project/ml-commons/pull/1485))
+* fix no worker node error on multi-node cluster ([#1487](https://github.com/opensearch-project/ml-commons/pull/1487))
 
 
 ### Documentation
