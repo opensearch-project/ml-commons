@@ -431,8 +431,10 @@ public class MLModelCacheHelper {
     }
 
     public void setModelInfo(String modelId, MLModel mlModel) {
-        MLModelCache mlModelCache = getExistingModelCache(modelId);
-        mlModelCache.setModelInfo(mlModel);
+        MLModelCache mlModelCache = modelCaches.get(modelId);
+        if (mlModelCache != null) {
+            mlModelCache.setModelInfo(mlModel);
+        }
     }
 
     public MLModel getModelInfo(String modelId) {
