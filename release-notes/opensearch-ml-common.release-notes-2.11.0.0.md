@@ -36,6 +36,7 @@ Compatible with OpenSearch 2.11.0
 * fix no worker node exception for remote embedding model ([#1482](https://github.com/opensearch-project/ml-commons/pull/1482))
 * fix for delete model group API throwing incorrect error when model index not created ([#1485](https://github.com/opensearch-project/ml-commons/pull/1485))
 * fix no worker node error on multi-node cluster ([#1487](https://github.com/opensearch-project/ml-commons/pull/1487))
+* Fix prompt passing for Bedrock by passing a single string prompt for Bedrock models. ([#1490](https://github.com/opensearch-project/ml-commons/pull/1490))
 
 
 ### Documentation
