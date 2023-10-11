@@ -44,6 +44,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -180,7 +181,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(MLValidationException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "1 models are still using this connector, please delete or update the models first!",
+            "1 models are still using this connector, please delete or update the models first: [model_ID]",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -291,8 +292,17 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         return searchResponse;
     }
 
-    private SearchResponse getNonEmptySearchResponse() {
+    private SearchResponse getNonEmptySearchResponse() throws IOException {
         SearchHit[] hits = new SearchHit[1];
+        String modelContent = "{\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"last_updated_time\": 1684981986069,\n"
+            + "                    \"_id\": \"model_ID\",\n"
+            + "                    \"name\": \"test_model\",\n"
+            + "                    \"description\": \"This is an example description\"\n"
+            + "                }";
+        SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        hits[0] = model;
         SearchHits searchHits = new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
         SearchResponseSections searchSections = new SearchResponseSections(
             searchHits,
