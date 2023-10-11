@@ -27,6 +27,8 @@ import org.opensearch.searchpipelines.questionanswering.generative.prompt.Prompt
  */
 public class LlmIOUtil {
 
+    private static final String BEDROCK_PROVIDER_PREFIX = "bedrock/";
+
     public static ChatCompletionInput createChatCompletionInput(
         String llmModel,
         String question,
@@ -57,7 +59,19 @@ public class LlmIOUtil {
         List<String> contexts,
         int timeoutInSeconds
     ) {
-
-        return new ChatCompletionInput(llmModel, question, chatHistory, contexts, timeoutInSeconds, systemPrompt, userInstructions);
+        Llm.ModelProvider provider = Llm.ModelProvider.OPENAI;
+        if (llmModel != null && llmModel.startsWith(BEDROCK_PROVIDER_PREFIX)) {
+            provider = Llm.ModelProvider.BEDROCK;
+        }
+        return new ChatCompletionInput(
+            llmModel,
+            question,
+            chatHistory,
+            contexts,
+            timeoutInSeconds,
+            systemPrompt,
+            userInstructions,
+            provider
+        );
     }
 }
