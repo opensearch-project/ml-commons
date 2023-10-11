@@ -22,5 +22,11 @@ package org.opensearch.searchpipelines.questionanswering.generative.llm;
  */
 public interface Llm {
 
+    // TODO Ensure the current implementation works with all models supported by Bedrock.
+    enum ModelProvider {
+        OPENAI,
+        BEDROCK
+    }
+
     ChatCompletionOutput doChatCompletion(ChatCompletionInput input);
 }

@@ -77,6 +77,46 @@ public class PromptUtilTests extends OpenSearchTestCase {
         assertTrue(isJson(parameter));
     }
 
+    public void testBuildBedrockInputParameter() {
+        String systemPrompt = "You are the best.";
+        String userInstructions = null;
+        String question = "Who am I";
+        List<String> contexts = new ArrayList<>();
+        List<Interaction> chatHistory = List
+            .of(
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 1",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer1"
+                            )
+                    ),
+                Interaction
+                    .fromMap(
+                        "convo1",
+                        Map
+                            .of(
+                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
+                                Instant.now().toString(),
+                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
+                                "message 2",
+                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
+                                "answer2"
+                            )
+                    )
+            );
+        contexts.add("context 1");
+        contexts.add("context 2");
+        String parameter = PromptUtil.buildSingleStringPrompt(systemPrompt, userInstructions, question, chatHistory, contexts);
+        assertTrue(parameter.contains(systemPrompt));
+    }
+
     private boolean isJson(String Json) {
         try {
             new JSONObject(Json);

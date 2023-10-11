@@ -42,4 +42,5 @@ public class ChatCompletionInput {
     private int timeoutInSeconds;
     private String systemPrompt;
     private String userInstructions;
+    private Llm.ModelProvider modelProvider;
 }
