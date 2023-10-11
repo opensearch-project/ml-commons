@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.model;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -251,6 +253,7 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.syncWorkerNodes(modelWorkerNodes);
         assertEquals(2, cacheHelper.getAllModels().length);
         assertEquals(0, cacheHelper.getWorkerNodes(modelId2).length);
+        assertNull(cacheHelper.getModelInfo(modelId2));
         assertArrayEquals(new String[] { newNodeId }, cacheHelper.getWorkerNodes(modelId));
     }
 
@@ -323,6 +326,15 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.removeWorkerNodes(ImmutableSet.of(nodeId), false);
         cacheHelper.removeWorkerNode(modelId, nodeId, false);
         assertEquals(0, cacheHelper.getWorkerNodes(modelId).length);
+        assertNull(cacheHelper.getModelInfo(modelId));
+    }
+
+    public void test_setModelInfo_success() {
+        cacheHelper.initModelState(modelId, MLModelState.DEPLOYED, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
+        MLModel model = mock(MLModel.class);
+        when(model.getModelId()).thenReturn("mockId");
+        cacheHelper.setModelInfo(modelId, model);
+        assertEquals("mockId", cacheHelper.getModelInfo(modelId).getModelId());
     }
 
 }

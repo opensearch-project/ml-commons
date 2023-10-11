@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -427,6 +428,19 @@ public class MLModelCacheHelper {
     public boolean getDeployToAllNodes(String modelId) {
         MLModelCache mlModelCache = getExistingModelCache(modelId);
         return mlModelCache.isDeployToAllNodes();
+    }
+
+    public void setModelInfo(String modelId, MLModel mlModel) {
+        MLModelCache mlModelCache = getExistingModelCache(modelId);
+        mlModelCache.setModelInfo(mlModel);
+    }
+
+    public MLModel getModelInfo(String modelId) {
+        MLModelCache mlModelCache = modelCaches.get(modelId);
+        if (mlModelCache == null) {
+            return null;
+        }
+        return mlModelCache.getCachedModelInfo();
     }
 
     private MLModelCache getExistingModelCache(String modelId) {
