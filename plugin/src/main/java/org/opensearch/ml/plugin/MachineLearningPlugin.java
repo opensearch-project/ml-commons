@@ -139,8 +139,12 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionAction;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionTransportAction;
 import org.opensearch.ml.memory.action.conversation.DeleteConversationAction;
 import org.opensearch.ml.memory.action.conversation.DeleteConversationTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationAction;
+import org.opensearch.ml.memory.action.conversation.GetConversationTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationsTransportAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
+import org.opensearch.ml.memory.action.conversation.GetInteractionTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
@@ -181,7 +185,9 @@ import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
 import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
 import org.opensearch.ml.rest.RestMemoryDeleteConversationAction;
+import org.opensearch.ml.rest.RestMemoryGetConversationAction;
 import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
+import org.opensearch.ml.rest.RestMemoryGetInteractionAction;
 import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
 import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
@@ -313,7 +319,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class),
                 new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
                 new ActionHandler<>(SearchInteractionsAction.INSTANCE, SearchInteractionsTransportAction.class),
-                new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class)
+                new ActionHandler<>(SearchConversationsAction.INSTANCE, SearchConversationsTransportAction.class),
+                new ActionHandler<>(GetConversationAction.INSTANCE, GetConversationTransportAction.class),
+                new ActionHandler<>(GetInteractionAction.INSTANCE, GetInteractionTransportAction.class)
             );
     }
 
@@ -567,6 +575,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
         RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction();
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
+        RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
+        RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -603,7 +613,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restDeleteConversationAction,
                 restMLUpdateConnectorAction,
                 restSearchConversationsAction,
-                restSearchInteractionsAction
+                restSearchInteractionsAction,
+                restGetConversationAction,
+                restGetInteractionAction
             );
     }
 
