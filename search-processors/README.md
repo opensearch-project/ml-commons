@@ -49,6 +49,8 @@ GET /<index>/_search\?search_pipeline\=<search pipeline name>
 }
 ```
 
+To use this with Bedrock models, use "bedrock/" as a prefix for the "llm_model" parameters, e.g. "bedrock/anthropic".
+
 ## Retrieval Augmented Generation response
 ```
 {

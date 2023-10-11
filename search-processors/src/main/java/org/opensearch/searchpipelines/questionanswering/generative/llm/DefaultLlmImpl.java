@@ -95,27 +95,35 @@ public class DefaultLlmImpl implements Llm {
 
         if (chatCompletionInput.getModelProvider() == ModelProvider.OPENAI) {
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
-            String messages = PromptUtil.getChatCompletionPrompt(
-                chatCompletionInput.getSystemPrompt(),
-                chatCompletionInput.getUserInstructions(),
-                chatCompletionInput.getQuestion(),
-                chatCompletionInput.getChatHistory(),
-                chatCompletionInput.getContexts()
-            );
+            String messages = PromptUtil
+                .getChatCompletionPrompt(
+                    chatCompletionInput.getSystemPrompt(),
+                    chatCompletionInput.getUserInstructions(),
+                    chatCompletionInput.getQuestion(),
+                    chatCompletionInput.getChatHistory(),
+                    chatCompletionInput.getContexts()
+                );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
             log.info("Messages to LLM: {}", messages);
         } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK) {
-            inputParameters.put("inputs", PromptUtil.buildSingleStringPrompt(chatCompletionInput.getSystemPrompt(),
-                chatCompletionInput.getUserInstructions(),
-                chatCompletionInput.getQuestion(),
-                chatCompletionInput.getChatHistory(),
-                chatCompletionInput.getContexts()));
+            inputParameters
+                .put(
+                    "inputs",
+                    PromptUtil
+                        .buildSingleStringPrompt(
+                            chatCompletionInput.getSystemPrompt(),
+                            chatCompletionInput.getUserInstructions(),
+                            chatCompletionInput.getQuestion(),
+                            chatCompletionInput.getChatHistory(),
+                            chatCompletionInput.getContexts()
+                        )
+                );
         } else {
             throw new IllegalArgumentException("Unknown/unsupported model provider: " + chatCompletionInput.getModelProvider());
         }
 
         log.info("LLM input parameters: {}", inputParameters.toString());
-        return  inputParameters;
+        return inputParameters;
     }
 
     protected ChatCompletionOutput buildChatCompletionOutput(ModelProvider provider, Map<String, ?> dataAsMap) {
@@ -132,7 +140,12 @@ public class DefaultLlmImpl implements Llm {
                 Map firstChoiceMap = (Map) choices.get(0);
                 log.info("Choices: {}", firstChoiceMap.toString());
                 Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
-                log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+                log
+                    .info(
+                        "role: {}, content: {}",
+                        message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE),
+                        message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT)
+                    );
                 answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
             }
         } else if (provider == ModelProvider.BEDROCK) {
@@ -140,7 +153,12 @@ public class DefaultLlmImpl implements Llm {
             if (response != null) {
                 answers = List.of(response);
             } else {
-                // Error
+                Map error = (Map) dataAsMap.get("error");
+                if (error != null) {
+                    errors = List.of((String) error.get("message"));
+                } else {
+                    errors = List.of("Unknown error or response.");
+                }
             }
         } else {
             throw new IllegalArgumentException("Unknown/unsupported model provider: " + provider);

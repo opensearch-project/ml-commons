@@ -55,6 +55,8 @@ public class PromptUtil {
 
     private static final String roleUser = "user";
 
+    private static final String NEWLINE = "\\n";
+
     public static String getQuestionRephrasingPrompt(String originalQuestion, List<Interaction> chatHistory) {
         return null;
     }
@@ -63,8 +65,8 @@ public class PromptUtil {
         return getChatCompletionPrompt(DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
     }
 
-    // TODO Currently, this is OpenAI specific.  Change this to indicate as such or address it as part of
-    //      future prompt template management work.
+    // TODO Currently, this is OpenAI specific. Change this to indicate as such or address it as part of
+    // future prompt template management work.
     public static String getChatCompletionPrompt(
         String systemPrompt,
         String userInstructions,
@@ -90,9 +92,7 @@ public class PromptUtil {
         }
     }
 
-    static final String NEWLINE = "\\n";
-
-    public static String buildSingleStringPrompt (
+    public static String buildSingleStringPrompt(
         String systemPrompt,
         String userInstructions,
         String question,
@@ -103,31 +103,32 @@ public class PromptUtil {
             systemPrompt = DEFAULT_SYSTEM_PROMPT;
         }
 
-            StringBuilder bldr = new StringBuilder();
-            bldr.append(systemPrompt);
-            bldr.append(NEWLINE);
+        StringBuilder bldr = new StringBuilder();
+        bldr.append(systemPrompt);
+        bldr.append(NEWLINE);
+        if (!Strings.isNullOrEmpty(userInstructions)) {
             bldr.append(userInstructions);
             bldr.append(NEWLINE);
+        }
 
-            for (int i = 0; i < contexts.size(); i++) {
-                bldr.append("SEARCH RESULT " + (i + 1) + ": " + contexts.get(i));
-                bldr.append(NEWLINE);
-            }
-            if (!chatHistory.isEmpty()) {
-                // The oldest interaction first
-                // Collections.reverse(chatHistory);
-                List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
-                Collections.reverse(messages);
-                messages.forEach(m -> {
-                    bldr.append(m.toString());
-                    bldr.append(NEWLINE);
-                });
-
-            }
-            bldr.append("QUESTION: " + question);
+        for (int i = 0; i < contexts.size(); i++) {
+            bldr.append("SEARCH RESULT " + (i + 1) + ": " + contexts.get(i));
             bldr.append(NEWLINE);
+        }
+        if (!chatHistory.isEmpty()) {
+            // The oldest interaction first
+            List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
+            Collections.reverse(messages);
+            messages.forEach(m -> {
+                bldr.append(m.toString());
+                bldr.append(NEWLINE);
+            });
 
-            return bldr.toString();
+        }
+        bldr.append("QUESTION: " + question);
+        bldr.append(NEWLINE);
+
+        return bldr.toString();
     }
 
     @VisibleForTesting
@@ -153,7 +154,6 @@ public class PromptUtil {
         }
         if (!chatHistory.isEmpty()) {
             // The oldest interaction first
-            // Collections.reverse(chatHistory);
             List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
             Collections.reverse(messages);
             messages.forEach(m -> messageArray.add(m.toJson()));
@@ -206,8 +206,8 @@ public class PromptUtil {
         }
     }
 
-    // TODO This is OpenAI specific.  Either change this to OpenAiMessage or have it handle
-    //      vendor specific messages.
+    // TODO This is OpenAI specific. Either change this to OpenAiMessage or have it handle
+    // vendor specific messages.
     static class Message {
 
         private final static String MESSAGE_FIELD_ROLE = "role";
@@ -231,6 +231,7 @@ public class PromptUtil {
         }
 
         public void setChatRole(ChatRole chatRole) {
+            this.chatRole = chatRole;
             json.remove(MESSAGE_FIELD_ROLE);
             json.add(MESSAGE_FIELD_ROLE, new JsonPrimitive(chatRole.getName()));
         }

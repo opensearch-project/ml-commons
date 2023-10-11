@@ -121,6 +121,36 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
         assertEquals("answer", (String) output.getAnswers().get(0));
     }
 
+    public void testChatCompletionApiForBedrock() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        Map<String, String> messageMap = Map.of("role", "agent", "content", "answer");
+        Map<String, ?> dataAsMap = Map.of("completion", "answer");
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "bedrock/model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertEquals("answer", (String) output.getAnswers().get(0));
+    }
+
     public void testChatCompletionThrowingError() throws Exception {
         MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
         ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
@@ -144,6 +174,38 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             "prompt",
             "instructions",
             Llm.ModelProvider.OPENAI
+        );
+        ChatCompletionOutput output = connector.doChatCompletion(input);
+        verify(mlClient, times(1)).predict(any(), captor.capture());
+        MLInput mlInput = captor.getValue();
+        assertTrue(mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet);
+        assertTrue(output.isErrorOccurred());
+        assertEquals(errorMessage, (String) output.getErrors().get(0));
+    }
+
+    public void testChatCompletionBedrockThrowingError() throws Exception {
+        MachineLearningInternalClient mlClient = mock(MachineLearningInternalClient.class);
+        ArgumentCaptor<MLInput> captor = ArgumentCaptor.forClass(MLInput.class);
+        DefaultLlmImpl connector = new DefaultLlmImpl("model_id", client);
+        connector.setMlClient(mlClient);
+
+        String errorMessage = "throttled";
+        Map<String, String> messageMap = Map.of("message", errorMessage);
+        Map<String, ?> dataAsMap = Map.of("error", messageMap);
+        ModelTensor tensor = new ModelTensor("tensor", new Number[0], new long[0], MLResultDataType.STRING, null, null, dataAsMap);
+        ModelTensorOutput mlOutput = new ModelTensorOutput(List.of(new ModelTensors(List.of(tensor))));
+        ActionFuture<MLOutput> future = mock(ActionFuture.class);
+        when(future.actionGet(anyLong())).thenReturn(mlOutput);
+        when(mlClient.predict(any(), any())).thenReturn(future);
+        ChatCompletionInput input = new ChatCompletionInput(
+            "model",
+            "question",
+            Collections.emptyList(),
+            Collections.emptyList(),
+            0,
+            "prompt",
+            "instructions",
+            Llm.ModelProvider.BEDROCK
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
