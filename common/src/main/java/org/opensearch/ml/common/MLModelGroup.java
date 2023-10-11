@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -58,10 +59,7 @@ public class MLModelGroup implements ToXContentObject {
                         String modelGroupId,
                         Instant createdTime,
                         Instant lastUpdatedTime) {
-        if (name == null) {
-            throw new IllegalArgumentException("model group name is null");
-        }
-        this.name = name;
+        this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
         this.latestVersion = latestVersion;
         this.backendRoles = backendRoles;
