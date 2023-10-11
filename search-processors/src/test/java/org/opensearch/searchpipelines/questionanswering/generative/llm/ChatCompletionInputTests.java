@@ -41,7 +41,8 @@ public class ChatCompletionInputTests extends OpenSearchTestCase {
             Collections.emptyList(),
             0,
             systemPrompt,
-            userInstructions
+            userInstructions,
+            Llm.ModelProvider.OPENAI
         );
 
         assertNotNull(input);
@@ -70,7 +71,16 @@ public class ChatCompletionInputTests extends OpenSearchTestCase {
                     )
             );
         List<String> contexts = List.of("result1", "result2");
-        ChatCompletionInput input = new ChatCompletionInput(model, question, history, contexts, 0, systemPrompt, userInstructions);
+        ChatCompletionInput input = new ChatCompletionInput(
+            model,
+            question,
+            history,
+            contexts,
+            0,
+            systemPrompt,
+            userInstructions,
+            Llm.ModelProvider.OPENAI
+        );
         assertEquals(model, input.getModel());
         assertEquals(question, input.getQuestion());
         assertEquals(history.get(0).getConversationId(), input.getChatHistory().get(0).getConversationId());
