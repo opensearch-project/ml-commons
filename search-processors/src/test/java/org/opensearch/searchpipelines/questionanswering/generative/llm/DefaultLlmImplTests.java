@@ -111,7 +111,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             Collections.emptyList(),
             0,
             "prompt",
-            "instructions"
+            "instructions",
+            Llm.ModelProvider.OPENAI
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
@@ -141,7 +142,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             Collections.emptyList(),
             0,
             "prompt",
-            "instructions"
+            "instructions",
+            Llm.ModelProvider.OPENAI
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());

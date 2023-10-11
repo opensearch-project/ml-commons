@@ -63,7 +63,7 @@ public class DefaultLlmImpl implements Llm {
     }
 
     @VisibleForTesting
-    void setMlClient(MachineLearningInternalClient mlClient) {
+    protected void setMlClient(MachineLearningInternalClient mlClient) {
         this.mlClient = mlClient;
     }
 
@@ -76,19 +76,7 @@ public class DefaultLlmImpl implements Llm {
     @Override
     public ChatCompletionOutput doChatCompletion(ChatCompletionInput chatCompletionInput) {
 
-        Map<String, String> inputParameters = new HashMap<>();
-        inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
-        String messages = PromptUtil
-            .getChatCompletionPrompt(
-                chatCompletionInput.getSystemPrompt(),
-                chatCompletionInput.getUserInstructions(),
-                chatCompletionInput.getQuestion(),
-                chatCompletionInput.getChatHistory(),
-                chatCompletionInput.getContexts()
-            );
-        inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
-        log.info("Messages to LLM: {}", messages);
-        MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(inputParameters).build();
+        MLInputDataset dataset = RemoteInferenceInputDataSet.builder().parameters(getInputParameters(chatCompletionInput)).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataset).build();
         ActionFuture<MLOutput> future = mlClient.predict(this.openSearchModelId, mlInput);
         ModelTensorOutput modelOutput = (ModelTensorOutput) future.actionGet(chatCompletionInput.getTimeoutInSeconds() * 1000);
@@ -99,19 +87,65 @@ public class DefaultLlmImpl implements Llm {
 
         // TODO dataAsMap can be null or can contain information such as throttling. Handle non-happy cases.
 
-        List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
+        return buildChatCompletionOutput(chatCompletionInput.getModelProvider(), dataAsMap);
+    }
+
+    protected Map<String, String> getInputParameters(ChatCompletionInput chatCompletionInput) {
+        Map<String, String> inputParameters = new HashMap<>();
+
+        if (chatCompletionInput.getModelProvider() == ModelProvider.OPENAI) {
+            inputParameters.put(CONNECTOR_INPUT_PARAMETER_MODEL, chatCompletionInput.getModel());
+            String messages = PromptUtil.getChatCompletionPrompt(
+                chatCompletionInput.getSystemPrompt(),
+                chatCompletionInput.getUserInstructions(),
+                chatCompletionInput.getQuestion(),
+                chatCompletionInput.getChatHistory(),
+                chatCompletionInput.getContexts()
+            );
+            inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
+            log.info("Messages to LLM: {}", messages);
+        } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK) {
+            inputParameters.put("inputs", PromptUtil.buildSingleStringPrompt(chatCompletionInput.getSystemPrompt(),
+                chatCompletionInput.getUserInstructions(),
+                chatCompletionInput.getQuestion(),
+                chatCompletionInput.getChatHistory(),
+                chatCompletionInput.getContexts()));
+        } else {
+            throw new IllegalArgumentException("Unknown/unsupported model provider: " + chatCompletionInput.getModelProvider());
+        }
+
+        log.info("LLM input parameters: {}", inputParameters.toString());
+        return  inputParameters;
+    }
+
+    protected ChatCompletionOutput buildChatCompletionOutput(ModelProvider provider, Map<String, ?> dataAsMap) {
+
         List<Object> answers = null;
         List<String> errors = null;
-        if (choices == null) {
-            Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
-            errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
+
+        if (provider == ModelProvider.OPENAI) {
+            List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
+            if (choices == null) {
+                Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
+                errors = List.of((String) error.get(CONNECTOR_OUTPUT_MESSAGE));
+            } else {
+                Map firstChoiceMap = (Map) choices.get(0);
+                log.info("Choices: {}", firstChoiceMap.toString());
+                Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
+                log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+                answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+            }
+        } else if (provider == ModelProvider.BEDROCK) {
+            String response = (String) dataAsMap.get("completion");
+            if (response != null) {
+                answers = List.of(response);
+            } else {
+                // Error
+            }
         } else {
-            Map firstChoiceMap = (Map) choices.get(0);
-            log.info("Choices: {}", firstChoiceMap.toString());
-            Map message = (Map) firstChoiceMap.get(CONNECTOR_OUTPUT_MESSAGE);
-            log.info("role: {}, content: {}", message.get(CONNECTOR_OUTPUT_MESSAGE_ROLE), message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
-            answers = List.of(message.get(CONNECTOR_OUTPUT_MESSAGE_CONTENT));
+            throw new IllegalArgumentException("Unknown/unsupported model provider: " + provider);
         }
+
         return new ChatCompletionOutput(answers, errors);
     }
 }

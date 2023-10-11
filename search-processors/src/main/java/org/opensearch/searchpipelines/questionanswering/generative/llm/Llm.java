@@ -22,5 +22,10 @@ package org.opensearch.searchpipelines.questionanswering.generative.llm;
  */
 public interface Llm {
 
+    enum ModelProvider {
+        OPENAI,
+        BEDROCK
+    }
+
     ChatCompletionOutput doChatCompletion(ChatCompletionInput input);
 }

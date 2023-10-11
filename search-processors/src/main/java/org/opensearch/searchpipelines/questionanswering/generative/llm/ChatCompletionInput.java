@@ -18,7 +18,9 @@
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
 import java.util.List;
+import java.util.Map;
 
+import lombok.Builder;
 import org.opensearch.ml.common.conversation.Interaction;
 
 import lombok.AllArgsConstructor;
@@ -42,4 +44,5 @@ public class ChatCompletionInput {
     private int timeoutInSeconds;
     private String systemPrompt;
     private String userInstructions;
+    private Llm.ModelProvider modelProvider;
 }

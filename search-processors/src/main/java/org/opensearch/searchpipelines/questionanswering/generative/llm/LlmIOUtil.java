@@ -17,7 +17,9 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
@@ -26,6 +28,14 @@ import org.opensearch.searchpipelines.questionanswering.generative.prompt.Prompt
  * Helper class for creating inputs and outputs for different implementations of LLMs.
  */
 public class LlmIOUtil {
+
+    private static final String CONNECTOR_INPUT_PARAMETER_MODEL = "model";
+    private static final String CONNECTOR_INPUT_PARAMETER_MESSAGES = "messages";
+    private static final String CONNECTOR_OUTPUT_CHOICES = "choices";
+    private static final String CONNECTOR_OUTPUT_MESSAGE = "message";
+    private static final String CONNECTOR_OUTPUT_MESSAGE_ROLE = "role";
+    private static final String CONNECTOR_OUTPUT_MESSAGE_CONTENT = "content";
+    private static final String CONNECTOR_OUTPUT_ERROR = "error";
 
     public static ChatCompletionInput createChatCompletionInput(
         String llmModel,
@@ -57,7 +67,10 @@ public class LlmIOUtil {
         List<String> contexts,
         int timeoutInSeconds
     ) {
-
-        return new ChatCompletionInput(llmModel, question, chatHistory, contexts, timeoutInSeconds, systemPrompt, userInstructions);
+        Llm.ModelProvider provider = Llm.ModelProvider.OPENAI;
+        if (llmModel != null && llmModel.startsWith("bedrock/")) {
+            provider = Llm.ModelProvider.BEDROCK;
+        }
+        return new ChatCompletionInput(llmModel, question, chatHistory, contexts, timeoutInSeconds, systemPrompt, userInstructions, provider);
     }
 }

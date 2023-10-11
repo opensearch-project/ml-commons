@@ -20,6 +20,7 @@ package org.opensearch.searchpipelines.questionanswering.generative.prompt;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import org.apache.commons.text.StringEscapeUtils;
 import org.opensearch.core.common.Strings;
@@ -62,6 +63,8 @@ public class PromptUtil {
         return getChatCompletionPrompt(DEFAULT_SYSTEM_PROMPT, null, question, chatHistory, contexts);
     }
 
+    // TODO Currently, this is OpenAI specific.  Change this to indicate as such or address it as part of
+    //      future prompt template management work.
     public static String getChatCompletionPrompt(
         String systemPrompt,
         String userInstructions,
@@ -85,6 +88,46 @@ public class PromptUtil {
         ChatRole(String name) {
             this.name = name;
         }
+    }
+
+    static final String NEWLINE = "\\n";
+
+    public static String buildSingleStringPrompt (
+        String systemPrompt,
+        String userInstructions,
+        String question,
+        List<Interaction> chatHistory,
+        List<String> contexts
+    ) {
+        if (Strings.isNullOrEmpty(systemPrompt) && Strings.isNullOrEmpty(userInstructions)) {
+            systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        }
+
+            StringBuilder bldr = new StringBuilder();
+            bldr.append(systemPrompt);
+            bldr.append(NEWLINE);
+            bldr.append(userInstructions);
+            bldr.append(NEWLINE);
+
+            for (int i = 0; i < contexts.size(); i++) {
+                bldr.append("SEARCH RESULT " + (i + 1) + ": " + contexts.get(i));
+                bldr.append(NEWLINE);
+            }
+            if (!chatHistory.isEmpty()) {
+                // The oldest interaction first
+                // Collections.reverse(chatHistory);
+                List<Message> messages = Messages.fromInteractions(chatHistory).getMessages();
+                Collections.reverse(messages);
+                messages.forEach(m -> {
+                    bldr.append(m.toString());
+                    bldr.append(NEWLINE);
+                });
+
+            }
+            bldr.append("QUESTION: " + question);
+            bldr.append(NEWLINE);
+
+            return bldr.toString();
     }
 
     @VisibleForTesting
@@ -163,6 +206,8 @@ public class PromptUtil {
         }
     }
 
+    // TODO This is OpenAI specific.  Either change this to OpenAiMessage or have it handle
+    //      vendor specific messages.
     static class Message {
 
         private final static String MESSAGE_FIELD_ROLE = "role";
@@ -198,6 +243,11 @@ public class PromptUtil {
 
         public JsonObject toJson() {
             return json;
+        }
+
+        @Override
+        public String toString() {
+            return String.format(Locale.ROOT, "%s: %s", chatRole.getName(), content);
         }
     }
 }
