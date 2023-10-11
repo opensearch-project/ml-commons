@@ -99,8 +99,8 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/connectors/_update/{connector_id}", route.getPath());
+        assertEquals(RestRequest.Method.PUT, route.getMethod());
+        assertEquals("/_plugins/_ml/connectors/{connector_id}", route.getPath());
     }
 
     public void testUpdateConnectorRequest() throws Exception {
@@ -110,8 +110,8 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLUpdateConnectorAction.INSTANCE), argumentCaptor.capture(), any());
         MLUpdateConnectorRequest updateConnectorRequest = argumentCaptor.getValue();
         assertEquals("test_connectorId", updateConnectorRequest.getConnectorId());
-        assertEquals("This is test description", updateConnectorRequest.getUpdateContent().get("description"));
-        assertEquals("2", updateConnectorRequest.getUpdateContent().get("version"));
+        assertEquals("This is test description", updateConnectorRequest.getUpdateContent().getDescription());
+        assertEquals("2", updateConnectorRequest.getUpdateContent().getVersion());
     }
 
     public void testUpdateConnectorRequestWithEmptyContent() throws Exception {
