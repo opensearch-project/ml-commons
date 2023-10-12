@@ -115,7 +115,7 @@ public class ConnectorUtils {
                     docs.add(null);
                 }
             }
-            if (preProcessFunction.contains("${parameters")) {
+            if (preProcessFunction.contains("${parameters.")) {
                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 preProcessFunction = substitutor.replace(preProcessFunction);
             }
@@ -186,7 +186,7 @@ public class ConnectorUtils {
         // execute user defined painless script.
         Optional<String> processedResponse = executePostProcessFunction(scriptService, postProcessFunction, modelResponse);
         String response = processedResponse.orElse(modelResponse);
-        boolean scriptReturnModelTensor = postProcessFunction != null && processedResponse.isPresent();
+        boolean scriptReturnModelTensor = postProcessFunction != null && processedResponse.isPresent() && org.opensearch.ml.common.utils.StringUtils.isJson(response);
         if (responseFilter == null) {
             connector.parseResponse(response, modelTensors, scriptReturnModelTensor);
         } else {
