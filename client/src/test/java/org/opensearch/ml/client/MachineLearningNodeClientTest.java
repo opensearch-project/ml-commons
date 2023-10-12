@@ -5,6 +5,29 @@
 
 package org.opensearch.ml.client;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Answers.RETURNS_DEEP_STUBS;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.input.Constants.ACTION;
+import static org.opensearch.ml.common.input.Constants.ALGORITHM;
+import static org.opensearch.ml.common.input.Constants.KMEANS;
+import static org.opensearch.ml.common.input.Constants.MODELID;
+import static org.opensearch.ml.common.input.Constants.PREDICT;
+import static org.opensearch.ml.common.input.Constants.RCF;
+import static org.opensearch.ml.common.input.Constants.TRAIN;
+import static org.opensearch.ml.common.input.Constants.TRAINANDPREDICT;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
@@ -14,24 +37,24 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -56,6 +79,10 @@ import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
@@ -77,20 +104,6 @@ import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Answers.RETURNS_DEEP_STUBS;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.common.input.Constants.*;
 
 public class MachineLearningNodeClientTest {
 
@@ -136,6 +149,9 @@ public class MachineLearningNodeClientTest {
     @Mock
     ActionListener<MLCreateConnectorResponse> createConnectorActionListener;
 
+    @Mock
+    ActionListener<MLRegisterModelGroupResponse> registerModelGroupResponseActionListener;
+
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
 
@@ -151,36 +167,30 @@ public class MachineLearningNodeClientTest {
     public void predict() {
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
-                    .status("Success")
-                    .predictionResult(output)
-                    .taskId("taskId")
-                    .build();
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(predictionOutput)
-                    .build());
+            MLPredictionOutput predictionOutput = MLPredictionOutput
+                .builder()
+                .status("Success")
+                .predictionResult(output)
+                .taskId("taskId")
+                .build();
+            actionListener.onResponse(MLTaskResponse.builder().output(predictionOutput).build());
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(input).build();
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
 
         verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class), any());
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
-        assertEquals(output, ((MLPredictionOutput)dataFrameArgumentCaptor.getValue()).getPredictionResult());
+        assertEquals(output, ((MLPredictionOutput) dataFrameArgumentCaptor.getValue()).getPredictionResult());
     }
 
     @Test
     public void predict_Exception_WithNullAlgorithm() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("algorithm can't be null");
-        MLInput mlInput = MLInput.builder()
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().inputDataset(input).build();
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
 
@@ -188,9 +198,7 @@ public class MachineLearningNodeClientTest {
     public void predict_Exception_WithNullDataSet() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("input data set can't be null");
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
         machineLearningNodeClient.predict(null, mlInput, dataFrameActionListener);
     }
 
@@ -200,36 +208,26 @@ public class MachineLearningNodeClientTest {
         String status = "InProgress";
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            MLTrainingOutput output = MLTrainingOutput.builder()
-                    .status(status)
-                    .modelId(modelId)
-                    .build();
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(output)
-                    .build());
+            MLTrainingOutput output = MLTrainingOutput.builder().status(status).modelId(modelId).build();
+            actionListener.onResponse(MLTaskResponse.builder().output(output).build());
             return null;
         }).when(client).execute(eq(MLTrainingTaskAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(input).build();
         machineLearningNodeClient.train(mlInput, false, trainingActionListener);
 
         verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(modelId, ((MLTrainingOutput)argumentCaptor.getValue()).getModelId());
-        assertEquals(status, ((MLTrainingOutput)argumentCaptor.getValue()).getStatus());
+        assertEquals(modelId, ((MLTrainingOutput) argumentCaptor.getValue()).getModelId());
+        assertEquals(status, ((MLTrainingOutput) argumentCaptor.getValue()).getStatus());
     }
 
     @Test
     public void train_Exception_WithNullDataSet() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("input data set can't be null");
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
         machineLearningNodeClient.train(mlInput, false, trainingActionListener);
     }
 
@@ -244,28 +242,24 @@ public class MachineLearningNodeClientTest {
     public void trainAndPredict() {
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
-                    .status(MLTaskState.COMPLETED.name())
-                    .predictionResult(output)
-                    .taskId("taskId")
-                    .build();
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(predictionOutput)
-                    .build());
+            MLPredictionOutput predictionOutput = MLPredictionOutput
+                .builder()
+                .status(MLTaskState.COMPLETED.name())
+                .predictionResult(output)
+                .taskId("taskId")
+                .build();
+            actionListener.onResponse(MLTaskResponse.builder().output(predictionOutput).build());
             return null;
         }).when(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(input).build();
         machineLearningNodeClient.trainAndPredict(mlInput, trainingActionListener);
 
         verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(MLTaskState.COMPLETED.name(), ((MLPredictionOutput)argumentCaptor.getValue()).getStatus());
-        assertEquals(output, ((MLPredictionOutput)argumentCaptor.getValue()).getPredictionResult());
+        assertEquals(MLTaskState.COMPLETED.name(), ((MLPredictionOutput) argumentCaptor.getValue()).getStatus());
+        assertEquals(output, ((MLPredictionOutput) argumentCaptor.getValue()).getPredictionResult());
     }
 
     @Test
@@ -290,27 +284,23 @@ public class MachineLearningNodeClientTest {
     private void execute_predict(Map<String, Object> args) {
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
-                    .status("Success")
-                    .predictionResult(output)
-                    .taskId("taskId")
-                    .build();
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(predictionOutput)
-                    .build());
+            MLPredictionOutput predictionOutput = MLPredictionOutput
+                .builder()
+                .status("Success")
+                .predictionResult(output)
+                .taskId("taskId")
+                .build();
+            actionListener.onResponse(MLTaskResponse.builder().output(predictionOutput).build());
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.SAMPLE_ALGO)
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(input).build();
         machineLearningNodeClient.run(mlInput, args, dataFrameActionListener);
 
         verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), isA(MLPredictionTaskRequest.class), any());
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
-        assertEquals(output, ((MLPredictionOutput)dataFrameArgumentCaptor.getValue()).getPredictionResult());
+        assertEquals(output, ((MLPredictionOutput) dataFrameArgumentCaptor.getValue()).getPredictionResult());
     }
 
     @Test
@@ -319,13 +309,8 @@ public class MachineLearningNodeClientTest {
         String status = "InProgress";
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            MLTrainingOutput output = MLTrainingOutput.builder()
-                    .status(status)
-                    .modelId(modelId)
-                    .build();
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(output)
-                    .build());
+            MLTrainingOutput output = MLTrainingOutput.builder().status(status).modelId(modelId).build();
+            actionListener.onResponse(MLTaskResponse.builder().output(output).build());
             return null;
         }).when(client).execute(eq(MLTrainingTaskAction.INSTANCE), any(), any());
 
@@ -333,16 +318,13 @@ public class MachineLearningNodeClientTest {
         Map<String, Object> args = new HashMap<>();
         args.put(ACTION, TRAIN);
         args.put(ALGORITHM, KMEANS);
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.SAMPLE_ALGO)
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(input).build();
         machineLearningNodeClient.run(mlInput, args, trainingActionListener);
 
         verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(modelId, ((MLTrainingOutput)argumentCaptor.getValue()).getModelId());
-        assertEquals(status, ((MLTrainingOutput)argumentCaptor.getValue()).getStatus());
+        assertEquals(modelId, ((MLTrainingOutput) argumentCaptor.getValue()).getModelId());
+        assertEquals(status, ((MLTrainingOutput) argumentCaptor.getValue()).getStatus());
     }
 
     @Test
@@ -412,28 +394,24 @@ public class MachineLearningNodeClientTest {
     private void execute_trainandpredict(Map<String, Object> args) {
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
-            MLPredictionOutput predictionOutput = MLPredictionOutput.builder()
-                    .status(MLTaskState.COMPLETED.name())
-                    .predictionResult(output)
-                    .taskId("taskId")
-                    .build();
-            actionListener.onResponse(MLTaskResponse.builder()
-                    .output(predictionOutput)
-                    .build());
+            MLPredictionOutput predictionOutput = MLPredictionOutput
+                .builder()
+                .status(MLTaskState.COMPLETED.name())
+                .predictionResult(output)
+                .taskId("taskId")
+                .build();
+            actionListener.onResponse(MLTaskResponse.builder().output(predictionOutput).build());
             return null;
         }).when(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        MLInput mlInput = MLInput.builder()
-                .algorithm(FunctionName.SAMPLE_ALGO)
-                .inputDataset(input)
-                .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(input).build();
         machineLearningNodeClient.run(mlInput, args, trainingActionListener);
 
         verify(client).execute(eq(MLTrainAndPredictionTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(MLTaskState.COMPLETED.name(), ((MLPredictionOutput)argumentCaptor.getValue()).getStatus());
-        assertEquals(output, ((MLPredictionOutput)argumentCaptor.getValue()).getPredictionResult());
+        assertEquals(MLTaskState.COMPLETED.name(), ((MLPredictionOutput) argumentCaptor.getValue()).getStatus());
+        assertEquals(output, ((MLPredictionOutput) argumentCaptor.getValue()).getPredictionResult());
     }
 
     @Test
@@ -441,14 +419,8 @@ public class MachineLearningNodeClientTest {
         String modelContent = "test content";
         doAnswer(invocation -> {
             ActionListener<MLModelGetResponse> actionListener = invocation.getArgument(2);
-            MLModel mlModel = MLModel.builder()
-                    .algorithm(FunctionName.KMEANS)
-                    .name("test")
-                    .content(modelContent)
-                    .build();
-            MLModelGetResponse output = MLModelGetResponse.builder()
-                    .mlModel(mlModel)
-                    .build();
+            MLModel mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("test").content(modelContent).build();
+            MLModelGetResponse output = MLModelGetResponse.builder().mlModel(mlModel).build();
             actionListener.onResponse(output);
             return null;
         }).when(client).execute(eq(MLModelGetAction.INSTANCE), any(), any());
@@ -486,11 +458,7 @@ public class MachineLearningNodeClientTest {
         String modelContent = "test content";
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(2);
-            MLModel mlModel = MLModel.builder()
-                    .algorithm(FunctionName.KMEANS)
-                    .name("test")
-                    .content(modelContent)
-                    .build();
+            MLModel mlModel = MLModel.builder().algorithm(FunctionName.KMEANS).name("test").content(modelContent).build();
             SearchResponse output = createSearchResponse(mlModel);
             actionListener.onResponse(output);
             return null;
@@ -507,19 +475,47 @@ public class MachineLearningNodeClientTest {
     }
 
     @Test
+    public void registerModelGroup() {
+
+        String modelGroupId = "modeGroupId";
+        String status = MLTaskState.CREATED.name();
+
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelGroupResponse> actionListener = invocation.getArgument(2);
+            MLRegisterModelGroupResponse output = new MLRegisterModelGroupResponse(modelGroupId, status);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLRegisterModelGroupAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLRegisterModelGroupResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelGroupResponse.class);
+
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+
+        MLRegisterModelGroupInput mlRegisterModelGroupInput = MLRegisterModelGroupInput
+            .builder()
+            .name("test")
+            .description("description")
+            .backendRoles(backendRoles)
+            .modelAccessMode(AccessMode.from("public"))
+            .isAddAllBackendRoles(false)
+            .build();
+
+        machineLearningNodeClient.registerModelGroup(mlRegisterModelGroupInput, registerModelGroupResponseActionListener);
+
+        verify(client).execute(eq(MLRegisterModelGroupAction.INSTANCE), isA(MLRegisterModelGroupRequest.class), any());
+        verify(registerModelGroupResponseActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(modelGroupId, (argumentCaptor.getValue().getModelGroupId()));
+        assertEquals(status, (argumentCaptor.getValue().getStatus()));
+    }
+
+    @Test
     public void getTask() {
         String taskId = "taskId";
         String modelId = "modelId";
         doAnswer(invocation -> {
             ActionListener<MLTaskGetResponse> actionListener = invocation.getArgument(2);
-            MLTask mlTask = MLTask.builder()
-                    .taskId(taskId)
-                    .modelId(modelId)
-                    .functionName(FunctionName.KMEANS)
-                    .build();
-            MLTaskGetResponse output = MLTaskGetResponse.builder()
-                    .mlTask(mlTask)
-                    .build();
+            MLTask mlTask = MLTask.builder().taskId(taskId).modelId(modelId).functionName(FunctionName.KMEANS).build();
+            MLTaskGetResponse output = MLTaskGetResponse.builder().mlTask(mlTask).build();
             actionListener.onResponse(output);
             return null;
         }).when(client).execute(eq(MLTaskGetAction.INSTANCE), any(), any());
@@ -559,11 +555,7 @@ public class MachineLearningNodeClientTest {
         String modelId = "modelId";
         doAnswer(invocation -> {
             ActionListener<SearchResponse> actionListener = invocation.getArgument(2);
-            MLTask mlTask = MLTask.builder()
-                    .taskId(taskId)
-                    .modelId(modelId)
-                    .functionName(FunctionName.KMEANS)
-                    .build();
+            MLTask mlTask = MLTask.builder().taskId(taskId).modelId(modelId).functionName(FunctionName.KMEANS).build();
             SearchResponse output = createSearchResponse(mlTask);
             actionListener.onResponse(output);
             return null;
@@ -594,23 +586,25 @@ public class MachineLearningNodeClientTest {
         }).when(client).execute(eq(MLRegisterModelAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-        MLModelConfig config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(100)
-                .build();
-        MLRegisterModelInput mlInput = MLRegisterModelInput.builder()
-                .functionName(functionName)
-                .modelName("testModelName")
-                .version("testModelVersion")
-                .modelGroupId("modelGroupId")
-                .url("url")
-                .modelFormat(MLModelFormat.ONNX)
-                .modelConfig(config)
-                .deployModel(true)
-                .modelNodeIds(new String[]{"modelNodeIds" })
-                .build();
+        MLModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+        MLRegisterModelInput mlInput = MLRegisterModelInput
+            .builder()
+            .functionName(functionName)
+            .modelName("testModelName")
+            .version("testModelVersion")
+            .modelGroupId("modelGroupId")
+            .url("url")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
         machineLearningNodeClient.register(mlInput, registerModelActionListener);
 
         verify(client).execute(eq(MLRegisterModelAction.INSTANCE), isA(MLRegisterModelRequest.class), any());
@@ -644,7 +638,6 @@ public class MachineLearningNodeClientTest {
     @Test
     public void createConnector() {
 
-
         String connectorId = "connectorId";
 
         doAnswer(invocation -> {
@@ -660,19 +653,20 @@ public class MachineLearningNodeClientTest {
         Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "value1"), Map.entry("key2", "value2"));
         List<String> backendRoles = Arrays.asList("IT", "HR");
 
-        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.builder()
-                .name("test")
-                .description("description")
-                .version("testModelVersion")
-                .protocol("testProtocol")
-                .parameters(params)
-                .credential(credentials)
-                .actions(null)
-                .backendRoles(backendRoles)
-                .addAllBackendRoles(false)
-                .access(AccessMode.from("private"))
-                .dryRun(false)
-                .build();
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .description("description")
+            .version("testModelVersion")
+            .protocol("testProtocol")
+            .parameters(params)
+            .credential(credentials)
+            .actions(null)
+            .backendRoles(backendRoles)
+            .addAllBackendRoles(false)
+            .access(AccessMode.from("private"))
+            .dryRun(false)
+            .build();
 
         machineLearningNodeClient.createConnector(mlCreateConnectorInput, createConnectorActionListener);
 
@@ -689,22 +683,22 @@ public class MachineLearningNodeClientTest {
         hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
 
         return new SearchResponse(
-                new InternalSearchResponse(
-                        new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
-                        InternalAggregations.EMPTY,
-                        new Suggest(Collections.emptyList()),
-                        new SearchProfileShardResults(Collections.emptyMap()),
-                        false,
-                        false,
-                        1
-                ),
-                "",
-                5,
-                5,
-                0,
-                100,
-                ShardSearchFailure.EMPTY_ARRAY,
-                SearchResponse.Clusters.EMPTY
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            5,
+            5,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
         );
     }
 }
