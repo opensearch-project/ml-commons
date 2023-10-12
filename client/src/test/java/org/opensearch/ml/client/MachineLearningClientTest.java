@@ -5,42 +5,6 @@
 
 package org.opensearch.ml.client;
 
-
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
-import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataset.DataFrameInputDataset;
-import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.common.MLTask;
-import org.opensearch.ml.common.output.MLTrainingOutput;
-import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
-import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
-import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
-import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
-import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
-import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
-
-import java.util.HashMap;
-import java.util.Map;
-
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.input.Constants.ACTION;
@@ -75,6 +39,8 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
@@ -371,19 +337,20 @@ public class MachineLearningClientTest {
         Map<String, String> params = Map.ofEntries(Map.entry("endpoint", "endpoint"), Map.entry("temp", "7"));
         Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "key1"), Map.entry("key2", "key2"));
 
-        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.builder()
-                .name("test")
-                .description("description")
-                .version("testModelVersion")
-                .protocol("testProtocol")
-                .parameters(params)
-                .credential(credentials)
-                .actions(null)
-                .backendRoles(null)
-                .addAllBackendRoles(false)
-                .access(AccessMode.from("private"))
-                .dryRun(false)
-                .build();
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .description("description")
+            .version("testModelVersion")
+            .protocol("testProtocol")
+            .parameters(params)
+            .credential(credentials)
+            .actions(null)
+            .backendRoles(null)
+            .addAllBackendRoles(false)
+            .access(AccessMode.from("private"))
+            .dryRun(false)
+            .build();
 
         assertEquals(createConnectorResponse, machineLearningClient.createConnector(mlCreateConnectorInput).actionGet());
     }

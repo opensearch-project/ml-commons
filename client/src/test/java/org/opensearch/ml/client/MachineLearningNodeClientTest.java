@@ -55,7 +55,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -106,23 +105,6 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 
-<<<<<<< HEAD
-import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Answers.RETURNS_DEEP_STUBS;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.opensearch.ml.common.input.Constants.*;
-
-=======
->>>>>>> bdc9ce0 (Added register model group API for MLClient)
 public class MachineLearningNodeClientTest {
 
     @Mock(answer = RETURNS_DEEP_STUBS)
@@ -604,26 +586,6 @@ public class MachineLearningNodeClientTest {
         }).when(client).execute(eq(MLRegisterModelAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-<<<<<<< HEAD
-        MLModelConfig config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(100)
-                .build();
-        MLRegisterModelInput mlInput = MLRegisterModelInput.builder()
-                .functionName(functionName)
-                .modelName("testModelName")
-                .version("testModelVersion")
-                .modelGroupId("modelGroupId")
-                .url("url")
-                .modelFormat(MLModelFormat.ONNX)
-                .modelConfig(config)
-                .deployModel(true)
-                .modelNodeIds(new String[]{"modelNodeIds" })
-                .build();
-        machineLearningNodeClient.register(mlInput, registerModelActionListener);
-=======
         MLModelConfig config = TextEmbeddingModelConfig
             .builder()
             .modelType("testModelType")
@@ -643,8 +605,7 @@ public class MachineLearningNodeClientTest {
             .deployModel(true)
             .modelNodeIds(new String[] { "modelNodeIds" })
             .build();
-        machineLearningNodeClient.register(mlInput, RegisterModelActionListener);
->>>>>>> bdc9ce0 (Added register model group API for MLClient)
+        machineLearningNodeClient.register(mlInput, registerModelActionListener);
 
         verify(client).execute(eq(MLRegisterModelAction.INSTANCE), isA(MLRegisterModelRequest.class), any());
         verify(registerModelActionListener).onResponse(argumentCaptor.capture());
@@ -677,7 +638,6 @@ public class MachineLearningNodeClientTest {
     @Test
     public void createConnector() {
 
-
         String connectorId = "connectorId";
 
         doAnswer(invocation -> {
@@ -693,19 +653,20 @@ public class MachineLearningNodeClientTest {
         Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "value1"), Map.entry("key2", "value2"));
         List<String> backendRoles = Arrays.asList("IT", "HR");
 
-        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.builder()
-                .name("test")
-                .description("description")
-                .version("testModelVersion")
-                .protocol("testProtocol")
-                .parameters(params)
-                .credential(credentials)
-                .actions(null)
-                .backendRoles(backendRoles)
-                .addAllBackendRoles(false)
-                .access(AccessMode.from("private"))
-                .dryRun(false)
-                .build();
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name("test")
+            .description("description")
+            .version("testModelVersion")
+            .protocol("testProtocol")
+            .parameters(params)
+            .credential(credentials)
+            .actions(null)
+            .backendRoles(backendRoles)
+            .addAllBackendRoles(false)
+            .access(AccessMode.from("private"))
+            .dryRun(false)
+            .build();
 
         machineLearningNodeClient.createConnector(mlCreateConnectorInput, createConnectorActionListener);
 
