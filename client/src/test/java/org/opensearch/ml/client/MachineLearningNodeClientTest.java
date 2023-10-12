@@ -31,6 +31,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -42,6 +43,10 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -77,6 +82,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
@@ -121,10 +128,13 @@ public class MachineLearningNodeClientTest {
     ActionListener<SearchResponse> searchTaskActionListener;
 
     @Mock
-    ActionListener<MLRegisterModelResponse> RegisterModelActionListener;
+    ActionListener<MLRegisterModelResponse> registerModelActionListener;
 
     @Mock
-    ActionListener<MLDeployModelResponse> DeployModelActionListener;
+    ActionListener<MLDeployModelResponse> deployModelActionListener;
+
+    @Mock
+    ActionListener<MLCreateConnectorResponse> createConnectorActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -601,10 +611,10 @@ public class MachineLearningNodeClientTest {
                 .deployModel(true)
                 .modelNodeIds(new String[]{"modelNodeIds" })
                 .build();
-        machineLearningNodeClient.register(mlInput, RegisterModelActionListener);
+        machineLearningNodeClient.register(mlInput, registerModelActionListener);
 
         verify(client).execute(eq(MLRegisterModelAction.INSTANCE), isA(MLRegisterModelRequest.class), any());
-        verify(RegisterModelActionListener).onResponse(argumentCaptor.capture());
+        verify(registerModelActionListener).onResponse(argumentCaptor.capture());
         assertEquals(taskId, (argumentCaptor.getValue()).getTaskId());
         assertEquals(status, (argumentCaptor.getValue()).getStatus());
     }
@@ -615,7 +625,6 @@ public class MachineLearningNodeClientTest {
         String status = MLTaskState.CREATED.name();
         MLTaskType mlTaskType = MLTaskType.DEPLOY_MODEL;
         String modelId = "modelId";
-        FunctionName functionName = FunctionName.KMEANS;
         doAnswer(invocation -> {
             ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
             MLDeployModelResponse output = new MLDeployModelResponse(taskId, mlTaskType, status);
@@ -624,12 +633,53 @@ public class MachineLearningNodeClientTest {
         }).when(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
 
         ArgumentCaptor<MLDeployModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLDeployModelResponse.class);
-        machineLearningNodeClient.deploy(modelId, DeployModelActionListener);
+        machineLearningNodeClient.deploy(modelId, deployModelActionListener);
 
         verify(client).execute(eq(MLDeployModelAction.INSTANCE), isA(MLDeployModelRequest.class), any());
-        verify(DeployModelActionListener).onResponse(argumentCaptor.capture());
+        verify(deployModelActionListener).onResponse(argumentCaptor.capture());
         assertEquals(taskId, (argumentCaptor.getValue()).getTaskId());
         assertEquals(status, (argumentCaptor.getValue()).getStatus());
+    }
+
+    @Test
+    public void createConnector() {
+
+
+        String connectorId = "connectorId";
+
+        doAnswer(invocation -> {
+            ActionListener<MLCreateConnectorResponse> actionListener = invocation.getArgument(2);
+            MLCreateConnectorResponse output = new MLCreateConnectorResponse(connectorId);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLCreateConnectorResponse> argumentCaptor = ArgumentCaptor.forClass(MLCreateConnectorResponse.class);
+
+        Map<String, String> params = Map.ofEntries(Map.entry("endpoint", "endpoint"), Map.entry("temp", "7"));
+        Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "value1"), Map.entry("key2", "value2"));
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.builder()
+                .name("test")
+                .description("description")
+                .version("testModelVersion")
+                .protocol("testProtocol")
+                .parameters(params)
+                .credential(credentials)
+                .actions(null)
+                .backendRoles(backendRoles)
+                .addAllBackendRoles(false)
+                .access(AccessMode.from("private"))
+                .dryRun(false)
+                .build();
+
+        machineLearningNodeClient.createConnector(mlCreateConnectorInput, createConnectorActionListener);
+
+        verify(client).execute(eq(MLCreateConnectorAction.INSTANCE), isA(MLCreateConnectorRequest.class), any());
+        verify(createConnectorActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(connectorId, (argumentCaptor.getValue()).getConnectorId());
+
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
