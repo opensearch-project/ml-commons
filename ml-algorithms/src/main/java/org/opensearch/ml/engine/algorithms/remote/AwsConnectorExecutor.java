@@ -34,6 +34,7 @@ import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
@@ -102,7 +103,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
             }
             String modelResponse = responseBuilder.toString();
             if (statusCode < 200 || statusCode >= 300) {
-                throw new OpenSearchStatusException(modelResponse, RestStatus.fromCode(statusCode));
+                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
             }
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);

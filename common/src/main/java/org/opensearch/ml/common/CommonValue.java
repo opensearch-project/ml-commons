@@ -18,6 +18,7 @@ import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.POOLING_MO
 public class CommonValue {
 
     public static Integer NO_SCHEMA_VERSION = 0;
+    public static final String REMOTE_SERVICE_ERROR = "Error from remote service: ";
     public static final String USER = "user";
     public static final String META = "_meta";
     public static final String SCHEMA_VERSION_FIELD = "schema_version";
