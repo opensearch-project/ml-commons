@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -39,10 +40,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable{
 
     @Builder(toBuilder = true)
     public MLRegisterModelGroupInput(String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
-        if (name == null) {
-            throw new IllegalArgumentException("model group name is null");
-        }
-        this.name = name;
+        this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
         this.backendRoles = backendRoles;
         this.modelAccessMode = modelAccessMode;
