@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
-
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
@@ -37,6 +34,10 @@ import org.opensearch.script.ScriptService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 @Log4j2
 @ConnectorExecutor(HTTP)
@@ -108,7 +109,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             String modelResponse = responseRef.get();
             Integer statusCode = statusCodeRef.get();
             if (statusCode < 200 || statusCode >= 300) {
-                throw new OpenSearchStatusException(modelResponse, RestStatus.fromCode(statusCode));
+                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
             }
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
