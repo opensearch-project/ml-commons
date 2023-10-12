@@ -173,6 +173,7 @@ public class ConversationMetaIndex {
     public void getConversations(int from, int maxResults, ActionListener<List<ConversationMeta>> listener) {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
             listener.onResponse(List.of());
+            return;
         }
         SearchRequest request = Requests.searchRequest(indexName);
         String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
@@ -226,6 +227,7 @@ public class ConversationMetaIndex {
     public void deleteConversation(String conversationId, ActionListener<Boolean> listener) {
         if (!clusterService.state().metadata().hasIndex(indexName)) {
             listener.onResponse(true);
+            return;
         }
         DeleteRequest delRequest = Requests.deleteRequest(indexName).id(conversationId);
         String userstr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
