@@ -78,6 +78,9 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
 
+        if (!RestActionUtils.isAdminDN(clusterService, client)) {
+            actionListener.onFailure(new OpenSearchStatusException("You don't have permission to access this model", RestStatus.FORBIDDEN));
+        }
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModelGetResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             client.get(getRequest, ActionListener.wrap(r -> {
