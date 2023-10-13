@@ -29,13 +29,13 @@ public class LlmIOUtilTests extends OpenSearchTestCase {
 
     public void testChatCompletionInput() {
         ChatCompletionInput input = LlmIOUtil
-            .createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList(), 0);
+            .createChatCompletionInput("model", "question", Collections.emptyList(), Collections.emptyList(), 0, null);
         assertTrue(input instanceof ChatCompletionInput);
     }
 
     public void testChatCompletionInputForBedrock() {
         ChatCompletionInput input = LlmIOUtil
-            .createChatCompletionInput("bedrock/model", "question", Collections.emptyList(), Collections.emptyList(), 0);
+            .createChatCompletionInput("bedrock/model", "question", Collections.emptyList(), Collections.emptyList(), 0, null);
         assertTrue(input instanceof ChatCompletionInput);
     }
 }

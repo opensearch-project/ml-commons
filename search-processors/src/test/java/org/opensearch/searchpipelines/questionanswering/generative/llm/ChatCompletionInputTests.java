@@ -42,7 +42,8 @@ public class ChatCompletionInputTests extends OpenSearchTestCase {
             0,
             systemPrompt,
             userInstructions,
-            Llm.ModelProvider.OPENAI
+            Llm.ModelProvider.OPENAI,
+            null
         );
 
         assertNotNull(input);
@@ -79,7 +80,8 @@ public class ChatCompletionInputTests extends OpenSearchTestCase {
             0,
             systemPrompt,
             userInstructions,
-            Llm.ModelProvider.OPENAI
+            Llm.ModelProvider.OPENAI,
+            null
         );
         assertEquals(model, input.getModel());
         assertEquals(question, input.getQuestion());

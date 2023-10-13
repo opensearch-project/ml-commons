@@ -87,7 +87,7 @@ public class DefaultLlmImpl implements Llm {
 
         // TODO dataAsMap can be null or can contain information such as throttling. Handle non-happy cases.
 
-        return buildChatCompletionOutput(chatCompletionInput.getModelProvider(), dataAsMap);
+        return buildChatCompletionOutput(chatCompletionInput.getModelProvider(), dataAsMap, chatCompletionInput.getLlmResponseField());
     }
 
     protected Map<String, String> getInputParameters(ChatCompletionInput chatCompletionInput) {
@@ -105,7 +105,9 @@ public class DefaultLlmImpl implements Llm {
                 );
             inputParameters.put(CONNECTOR_INPUT_PARAMETER_MESSAGES, messages);
             // log.info("Messages to LLM: {}", messages);
-        } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK) {
+        } else if (chatCompletionInput.getModelProvider() == ModelProvider.BEDROCK
+            || chatCompletionInput.getModelProvider() == ModelProvider.COHERE
+            || chatCompletionInput.getLlmResponseField() != null) {
             inputParameters
                 .put(
                     "inputs",
@@ -126,12 +128,24 @@ public class DefaultLlmImpl implements Llm {
         return inputParameters;
     }
 
-    protected ChatCompletionOutput buildChatCompletionOutput(ModelProvider provider, Map<String, ?> dataAsMap) {
+    protected ChatCompletionOutput buildChatCompletionOutput(ModelProvider provider, Map<String, ?> dataAsMap, String llmResponseField) {
 
         List<Object> answers = null;
         List<String> errors = null;
 
-        if (provider == ModelProvider.OPENAI) {
+        if (llmResponseField != null) {
+            String response = (String) dataAsMap.get(llmResponseField);
+            if (response != null) {
+                answers = List.of(response);
+            } else {
+                Map error = (Map) dataAsMap.get("error");
+                if (error != null) {
+                    errors = List.of((String) error.get("message"));
+                } else {
+                    errors = List.of("Unknown error or response.");
+                }
+            }
+        } else if (provider == ModelProvider.OPENAI) {
             List choices = (List) dataAsMap.get(CONNECTOR_OUTPUT_CHOICES);
             if (choices == null) {
                 Map error = (Map) dataAsMap.get(CONNECTOR_OUTPUT_ERROR);
@@ -159,6 +173,19 @@ public class DefaultLlmImpl implements Llm {
                     errors = List.of((String) error.get("message"));
                 } else {
                     errors = List.of("Unknown error or response.");
+                }
+            }
+        } else if (provider == ModelProvider.COHERE) {
+            String response = (String) dataAsMap.get("text");
+            if (response != null) {
+                answers = List.of(response);
+            } else {
+                Map error = (Map) dataAsMap.get("error");
+                if (error != null) {
+                    errors = List.of((String) error.get("message"));
+                } else {
+                    errors = List.of("Unknown error or response.");
+                    log.error("{}", dataAsMap);
                 }
             }
         } else {

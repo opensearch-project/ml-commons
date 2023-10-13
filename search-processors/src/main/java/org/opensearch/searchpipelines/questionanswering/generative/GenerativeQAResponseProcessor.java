@@ -165,7 +165,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                             llmQuestion,
                             chatHistory,
                             searchResults,
-                            timeout
+                            timeout,
+                            params.getLlmResponseField()
                         )
                 );
             log.info("doChatCompletion complete. ({})", getDuration(start));

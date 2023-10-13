@@ -112,7 +112,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             0,
             "prompt",
             "instructions",
-            Llm.ModelProvider.OPENAI
+            Llm.ModelProvider.OPENAI,
+            null
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
@@ -142,7 +143,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             0,
             "prompt",
             "instructions",
-            Llm.ModelProvider.BEDROCK
+            Llm.ModelProvider.BEDROCK,
+            null
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
@@ -173,7 +175,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             0,
             "prompt",
             "instructions",
-            Llm.ModelProvider.OPENAI
+            Llm.ModelProvider.OPENAI,
+            null
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
@@ -205,7 +208,8 @@ public class DefaultLlmImplTests extends OpenSearchTestCase {
             0,
             "prompt",
             "instructions",
-            Llm.ModelProvider.BEDROCK
+            Llm.ModelProvider.BEDROCK,
+            null
         );
         ChatCompletionOutput output = connector.doChatCompletion(input);
         verify(mlClient, times(1)).predict(any(), captor.capture());
