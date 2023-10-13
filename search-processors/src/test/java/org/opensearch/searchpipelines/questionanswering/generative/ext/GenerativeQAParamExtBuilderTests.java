@@ -39,7 +39,16 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
     public void testCtor() throws IOException {
         GenerativeQAParamExtBuilder builder = new GenerativeQAParamExtBuilder();
-        GenerativeQAParameters parameters = new GenerativeQAParameters("conversation_id", "model_id", "question", null, null, null);
+        GenerativeQAParameters parameters = new GenerativeQAParameters(
+            "conversation_id",
+            "model_id",
+            "question",
+            "system_promtp",
+            "user_instructions",
+            null,
+            null,
+            null
+        );
         builder.setParams(parameters);
         assertEquals(parameters, builder.getParams());
 
@@ -79,8 +88,8 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testMiscMethods() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", null, null, null);
-        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d", null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null);
+        GenerativeQAParameters param2 = new GenerativeQAParameters("a", "b", "d", "s", "u", null, null, null);
         GenerativeQAParamExtBuilder builder1 = new GenerativeQAParamExtBuilder();
         GenerativeQAParamExtBuilder builder2 = new GenerativeQAParamExtBuilder();
         builder1.setParams(param1);
@@ -92,7 +101,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
         StreamOutput so = mock(StreamOutput.class);
         builder1.writeTo(so);
-        verify(so, times(2)).writeOptionalString(any());
+        verify(so, times(4)).writeOptionalString(any());
         verify(so, times(1)).writeString(any());
     }
 
@@ -105,7 +114,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());
@@ -120,7 +129,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testXContentRoundTripAllValues() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", 1, 2, 3);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         XContentType xContentType = randomFrom(XContentType.values());
@@ -131,7 +140,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testStreamRoundTrip() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", null, null, null);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         BytesStreamOutput bso = new BytesStreamOutput();
@@ -145,7 +154,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
     }
 
     public void testStreamRoundTripAllValues() throws IOException {
-        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", 1, 2, 3);
+        GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
         BytesStreamOutput bso = new BytesStreamOutput();
