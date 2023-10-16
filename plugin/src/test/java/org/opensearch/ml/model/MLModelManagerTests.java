@@ -837,6 +837,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testRegisterModelMeta() {
         setupForModelMeta();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        mock_client_index(client, modelId);
         MLRegisterModelMetaInput registerModelMetaInput = prepareRequest();
         modelManager.registerModelMeta(registerModelMetaInput, actionListener);
         ArgumentCaptor<String> argumentCaptor = ArgumentCaptor.forClass(String.class);

@@ -23,6 +23,7 @@ import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLActionStats;
 import org.opensearch.ml.stats.MLAlgoStats;
+import org.opensearch.ml.stats.MLModelStats;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
@@ -33,7 +34,9 @@ import com.google.common.collect.ImmutableSet;
 public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     private MLStatsNodeResponse response;
     private DiscoveryNode node;
-    private long totalRequestCount = 100l;
+    private final long totalRequestCount = 100l;
+
+    private final String modelId = "model_id";
 
     @Before
     public void setup() {
@@ -63,39 +66,48 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         assertEquals("{\"ml_request_count\":100}", taskContent);
     }
 
-    public void testToXContent_AlgorithmStats() throws IOException {
+    public void testToXContent_AlgorithmAndModelStats() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         builder.startObject();
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(null);
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(null);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":100}}}}", taskContent);
+        assertEquals(
+            "{\"algorithms\":{\"kmeans\":{\"predict\":{\"ml_action_request_count\":100}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":100}}}}",
+            taskContent
+        );
     }
 
     public void testWriteTo_AlgoStats() throws IOException {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(null);
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(null);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
         MLStatsNodeResponse newResponse = new MLStatsNodeResponse(output.bytes().streamInput());
         assertEquals(0, newResponse.getNodeLevelStatSize());
         assertEquals(1, newResponse.getAlgorithmStatSize());
         assertTrue(newResponse.hasAlgorithmStats(FunctionName.KMEANS));
-        MLActionStats stats = newResponse.getAlgorithmStats(FunctionName.KMEANS).getActionStats(ActionName.TRAIN);
+        assertTrue(newResponse.hasModelStats(modelId));
+        MLActionStats stats = newResponse.getAlgorithmStats(FunctionName.KMEANS).getActionStats(ActionName.PREDICT);
+        MLActionStats mlStats = newResponse.getModelStats(modelId).getActionStats(ActionName.PREDICT);
         assertEquals(totalRequestCount, stats.getActionStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
+        assertEquals(totalRequestCount, mlStats.getActionStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
     }
 
-    private MLStatsNodeResponse createResponseWithDefaultAlgoStats(Map<MLNodeLevelStat, Object> nodeStats) {
+    private MLStatsNodeResponse createResponseWithDefaultAlgoAndModelStats(Map<MLNodeLevelStat, Object> nodeStats) {
         Map<FunctionName, MLAlgoStats> algoStats = new HashMap<>();
         Map<MLActionLevelStat, Object> actionStats = ImmutableMap.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, totalRequestCount);
-        Map<ActionName, MLActionStats> stats = ImmutableMap.of(ActionName.TRAIN, new MLActionStats(actionStats));
+        Map<ActionName, MLActionStats> stats = ImmutableMap.of(ActionName.PREDICT, new MLActionStats(actionStats));
         algoStats.put(FunctionName.KMEANS, new MLAlgoStats(stats));
 
-        MLStatsNodeResponse response = new MLStatsNodeResponse(node, nodeStats, algoStats);
+        Map<String, MLModelStats> modelStats = new HashMap<>();
+        modelStats.put(modelId, new MLModelStats(stats));
+
+        MLStatsNodeResponse response = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
         return response;
     }
 
-    public void testToXContent_WithAlgoStats() throws IOException {
+    public void testToXContent_WithAlgoAndModelStats() throws IOException {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         builder.startObject();
         DiscoveryNode node = new DiscoveryNode("node0", buildNewFakeTransportAddress(), Version.CURRENT);
@@ -108,14 +120,23 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         algoActionStatMap.put(MLActionLevelStat.ML_ACTION_FAILURE_COUNT, 22);
         algoActionStats.put(ActionName.TRAIN, new MLActionStats(algoActionStatMap));
         algoStats.put(FunctionName.KMEANS, new MLAlgoStats(algoActionStats));
-        response = new MLStatsNodeResponse(node, statsToValues, algoStats);
+
+        Map<String, MLModelStats> modelStats = new HashMap<>();
+        Map<ActionName, MLActionStats> modelActionStats = new HashMap<>();
+        Map<MLActionLevelStat, Object> modelActionStatMap = new HashMap<>();
+        modelActionStatMap.put(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, 111);
+        modelActionStatMap.put(MLActionLevelStat.ML_ACTION_FAILURE_COUNT, 22);
+        modelActionStats.put(ActionName.PREDICT, new MLActionStats(modelActionStatMap));
+        modelStats.put(modelId, new MLModelStats(modelActionStats));
+
+        response = new MLStatsNodeResponse(node, statsToValues, algoStats, modelStats);
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         builder.endObject();
         String taskContent = TestHelper.xContentBuilderToString(builder);
         Set<String> validResult = ImmutableSet
             .of(
-                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
-                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_failure_count\":22,\"ml_action_request_count\":111}}}}",
+                "{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}},\"models\":{\"model_id\":{\"predict\":{\"ml_action_request_count\":111,\"ml_action_failure_count\":22}}}}"
             );
         assertTrue(validResult.contains(taskContent));
     }
@@ -129,12 +150,12 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testIsEmpty_NullNodeStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(null);
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(null);
         assertFalse(response.isEmpty());
     }
 
     public void testIsEmpty_EmptyNodeStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(ImmutableMap.of());
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(ImmutableMap.of());
         assertFalse(response.isEmpty());
     }
 
@@ -142,14 +163,18 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
         assertFalse(response.isEmpty());
     }
 
-    public void testIsEmpty_EmptyAlgoStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(ImmutableMap.of());
+    public void testIsEmpty_EmptyAlgoAndModelStats() {
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(ImmutableMap.of());
+        assertEquals(1, response.getAlgorithmStatSize());
+        assertEquals(1, response.getModelStatSize());
         response.removeAlgorithmStats(FunctionName.KMEANS);
-        assertTrue(response.isEmpty());
+        response.removeModelStats(modelId);
+        assertEquals(0, response.getAlgorithmStatSize());
+        assertEquals(0, response.getModelStatSize());
     }
 
     public void testIsEmpty_NonEmptyNodeAndAlgoStats() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(
             ImmutableMap.of(MLNodeLevelStat.ML_REQUEST_COUNT, totalRequestCount)
         );
         assertFalse(response.isEmpty());
@@ -176,13 +201,13 @@ public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     }
 
     public void testGetAlgorithmLevelStat_EmptyAlgoStats() {
-        MLStatsNodeResponse response = new MLStatsNodeResponse(node, null, ImmutableMap.of());
+        MLStatsNodeResponse response = new MLStatsNodeResponse(node, null, ImmutableMap.of(), ImmutableMap.of());
         assertNull(response.getAlgorithmStats(FunctionName.BATCH_RCF));
         assertEquals(0, response.getNodeLevelStatSize());
     }
 
     public void testGetAlgorithmLevelStat_NonExistingAlgo() {
-        MLStatsNodeResponse response = createResponseWithDefaultAlgoStats(null);
+        MLStatsNodeResponse response = createResponseWithDefaultAlgoAndModelStats(null);
         assertEquals(0, response.getNodeLevelStatSize());
         assertEquals(1, response.getAlgorithmStatSize());
         assertNotNull(response.getAlgorithmStats(FunctionName.KMEANS));

@@ -26,6 +26,8 @@ public class MLStatsTests extends OpenSearchTestCase {
     private MLClusterLevelStat clusterStatName1;
     private MLNodeLevelStat nodeStatName1;
 
+    private String modelID = "model_id";
+
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
 
@@ -113,6 +115,11 @@ public class MLStatsTests extends OpenSearchTestCase {
         assertNull(algorithmStats);
     }
 
+    public void testGetModelStats_Empty() {
+        Map<ActionName, MLActionStats> modelStats = mlStats.getModelStats(modelID);
+        assertNull(modelStats);
+    }
+
     public void testGetAlgorithmStats() {
         MLStats stats = new MLStats(statsMap);
         MLStat<?> statCounter = stats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, ML_ACTION_REQUEST_COUNT);
@@ -122,9 +129,23 @@ public class MLStatsTests extends OpenSearchTestCase {
         assertEquals(1l, algorithmStats.get(ActionName.TRAIN).getActionStat(ML_ACTION_REQUEST_COUNT));
     }
 
+    public void testGetModelStats() {
+        MLStats stats = new MLStats(statsMap);
+        MLStat<?> statCounter = stats.createModelCounterStatIfAbsent(modelID, ActionName.TRAIN, ML_ACTION_REQUEST_COUNT);
+        statCounter.increment();
+        Map<ActionName, MLActionStats> modelStats = stats.getModelStats(modelID);
+        assertNotNull(modelStats);
+        assertEquals(1l, modelStats.get(ActionName.TRAIN).getActionStat(ML_ACTION_REQUEST_COUNT));
+    }
+
     public void testGetAllAlgorithms_Empty() {
         FunctionName[] allAlgorithms = mlStats.getAllAlgorithms();
         assertEquals(0, allAlgorithms.length);
+    }
+
+    public void testGetAllModels_Empty() {
+        String[] allModels = mlStats.getAllModels();
+        assertEquals(0, allModels.length);
     }
 
     public void testGetAllAlgorithms() {
@@ -133,5 +154,13 @@ public class MLStatsTests extends OpenSearchTestCase {
         statCounter.increment();
         FunctionName[] allAlgorithms = stats.getAllAlgorithms();
         assertArrayEquals(new FunctionName[] { FunctionName.KMEANS }, allAlgorithms);
+    }
+
+    public void testGetAllModels() {
+        MLStats stats = new MLStats(statsMap);
+        MLStat<?> statCounter = stats.createModelCounterStatIfAbsent(modelID, ActionName.PREDICT, ML_ACTION_REQUEST_COUNT);
+        statCounter.increment();
+        String[] allModels = stats.getAllModels();
+        assertArrayEquals(new String[] { modelID }, allModels);
     }
 }
