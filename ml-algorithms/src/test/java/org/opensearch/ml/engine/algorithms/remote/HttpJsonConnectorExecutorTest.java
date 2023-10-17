@@ -79,6 +79,22 @@ public class HttpJsonConnectorExecutorTest {
     }
 
     @Test
+    public void invokeRemoteModel_GETMethodErrorPath() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Failed to create http request for remote model");
+
+        ConnectorAction predictAction = ConnectorAction.builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("get")
+                .url("wrong url")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.invokeRemoteModel(null, null, null, null);
+    }
+
+    @Test
     public void invokeRemoteModel_WrongHttpMethod() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("unsupported http method");
