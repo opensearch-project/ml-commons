@@ -257,7 +257,6 @@ jacocoTestReport {
         xml.getRequired().set(true)
         csv.getRequired().set(false)
         html.getRequired().set(true)
-        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
     }
 
     dependsOn test
