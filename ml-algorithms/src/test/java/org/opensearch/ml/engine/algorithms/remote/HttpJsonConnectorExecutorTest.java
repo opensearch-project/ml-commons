@@ -37,6 +37,7 @@ import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.script.ScriptService;
@@ -59,6 +60,22 @@ public class HttpJsonConnectorExecutorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    public void invokeRemoteModel_POSTMethodErrorPath() {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Failed to create http request for remote model");
+
+        ConnectorAction predictAction = ConnectorAction.builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("post")
+                .url("wrong url")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.invokeRemoteModel(null, null, null, null);
     }
 
     @Test
