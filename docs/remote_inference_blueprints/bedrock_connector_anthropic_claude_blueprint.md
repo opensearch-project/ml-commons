@@ -47,7 +47,8 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service:
+If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
+Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
 ```json
 POST /_plugins/_ml/connectors/_create
