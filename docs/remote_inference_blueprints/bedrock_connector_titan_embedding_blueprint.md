@@ -87,8 +87,7 @@ POST /_plugins/_ml/connectors/_create
 Response:
 ```json
 {
-  "model_group_id": "rqR9PIsBQRofe4CScErR",
-  "status": "CREATED"
+  "connector_id": "nzh9PIsBnGXNcxYpPEcv"
 }
 ```
 
@@ -139,7 +138,7 @@ Deploy model, in this demo the model id is `sKR9PIsBQRofe4CSlUov`
 POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_deploy
 ```
 
-6. Test model inference
+5. Test model inference
 
 ```json
 POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict
