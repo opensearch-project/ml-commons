@@ -30,6 +30,7 @@ import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLActionStats;
 import org.opensearch.ml.stats.MLAlgoStats;
 import org.opensearch.ml.stats.MLClusterLevelStat;
+import org.opensearch.ml.stats.MLModelStats;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStatLevel;
@@ -49,6 +50,8 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     private MLClusterLevelStat clusterStatName1;
     private MLNodeLevelStat nodeStatName1;
     private Environment environment;
+
+    private final String modelId = "model_id";
 
     @Override
     @Before
@@ -100,6 +103,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         StreamInput in = out.bytes().streamInput();
         MLStatsNodeResponse newStatsNodeResponse = action.newNodeResponse(in);
         Assert.assertEquals(statsNodeResponse.getNodeLevelStatSize(), newStatsNodeResponse.getAlgorithmStatSize());
+        Assert.assertEquals(statsNodeResponse.getNodeLevelStatSize(), newStatsNodeResponse.getModelStatSize());
     }
 
     public void testNodeOperation() {
@@ -131,7 +135,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
 
     public void testNodeOperation_NoNodeLevelStat() {
         String nodeId = clusterService().localNode().getId();
-        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM)).build();
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, mlStatsInput);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
@@ -142,6 +146,7 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
     public void testNodeOperation_NoNodeLevelStat_AlgoStat() {
         MLStats mlStats = new MLStats(statsMap);
         mlStats.createCounterStatIfAbsent(FunctionName.KMEANS, ActionName.TRAIN, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+        mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
 
         MLStatsNodesTransportAction action = new MLStatsNodesTransportAction(
             client().threadPool(),
@@ -153,16 +158,23 @@ public class MLStatsNodesTransportActionTests extends OpenSearchIntegTestCase {
         );
 
         String nodeId = clusterService().localNode().getId();
-        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM)).build();
+        MLStatsInput mlStatsInput = MLStatsInput.builder().targetStatLevels(EnumSet.of(MLStatLevel.ALGORITHM, MLStatLevel.MODEL)).build();
         MLStatsNodesRequest mlStatsNodesRequest = new MLStatsNodesRequest(new String[] { nodeId }, mlStatsInput);
 
         MLStatsNodeResponse response = action.nodeOperation(new MLStatsNodeRequest(mlStatsNodesRequest));
 
         assertEquals(0, response.getNodeLevelStatSize());
         assertEquals(1, response.getAlgorithmStatSize());
+        assertEquals(1, response.getModelStatSize());
         MLAlgoStats algorithmStats = response.getAlgorithmStats(FunctionName.KMEANS);
         assertNotNull(algorithmStats);
         MLActionStats actionStats = algorithmStats.getActionStats(ActionName.TRAIN);
+        assertNotNull(actionStats);
+        assertEquals(1l, actionStats.getActionStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
+
+        MLModelStats modelStats = response.getModelStats(modelId);
+        assertNotNull(modelStats);
+        actionStats = modelStats.getActionStats(ActionName.PREDICT);
         assertNotNull(actionStats);
         assertEquals(1l, actionStats.getActionStat(MLActionLevelStat.ML_ACTION_REQUEST_COUNT));
     }

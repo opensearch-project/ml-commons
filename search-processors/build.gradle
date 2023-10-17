@@ -1,0 +1,85 @@
+/*
+ * Copyright 2023 Aryn
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+plugins {
+    id 'java'
+    id 'jacoco'
+    id "io.freefair.lombok"
+    id 'com.diffplug.spotless' version '6.18.0'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+
+    compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
+    compileOnly group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
+    implementation 'org.apache.commons:commons-lang3:3.12.0'
+    //implementation project(':opensearch-ml-client')
+    implementation project(':opensearch-ml-common')
+    implementation project(':opensearch-ml-memory')
+    implementation group: 'org.opensearch', name: 'common-utils', version: "${common_utils_version}"
+    // https://mvnrepository.com/artifact/org.apache.httpcomponents.core5/httpcore5
+    implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: '5.2.2'
+    implementation("com.google.guava:guava:32.0.1-jre")
+    implementation group: 'org.json', name: 'json', version: '20230227'
+    implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    testImplementation "org.opensearch.test:framework:${opensearch_version}"
+}
+
+test {
+    include '**/*Tests.class'
+    systemProperty 'tests.security.manager', 'false'
+}
+
+jacocoTestReport {
+    dependsOn /*integTest,*/ test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.8
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.8
+            }
+        }
+    }
+    dependsOn jacocoTestReport
+}
+
+check.dependsOn jacocoTestCoverageVerification
+
+spotless {
+    java {
+        removeUnusedImports()
+        importOrder 'java', 'javax', 'org', 'com'
+
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    }
+}

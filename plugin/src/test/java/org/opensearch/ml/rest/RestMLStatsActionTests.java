@@ -61,6 +61,7 @@ import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLActionStats;
 import org.opensearch.ml.stats.MLAlgoStats;
 import org.opensearch.ml.stats.MLClusterLevelStat;
+import org.opensearch.ml.stats.MLModelStats;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStatLevel;
@@ -107,6 +108,8 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
     long mlConnectorCount = 2;
     long nodeTotalRequestCount = 100;
     long kmeansTrainRequestCount = 20;
+
+    String modelId = "model_id";
 
     @Before
     public void setup() throws IOException {
@@ -209,7 +212,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
                 )
         );
     }
@@ -226,7 +229,12 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
                     new MLActionStats(ImmutableMap.of(MLActionLevelStat.ML_ACTION_REQUEST_COUNT, kmeansTrainRequestCount))
                 );
             algoStats.put(FunctionName.KMEANS, new MLAlgoStats(actionStats));
-            MLStatsNodeResponse nodeResponse = new MLStatsNodeResponse(node, nodeStats, algoStats);
+
+            Map<String, MLModelStats> modelStats = new HashMap<>();
+
+            modelStats.put(modelId, new MLModelStats(actionStats));
+
+            MLStatsNodeResponse nodeResponse = new MLStatsNodeResponse(node, nodeStats, algoStats, modelStats);
             nodes.add(nodeResponse);
             MLStatsNodesResponse statsResponse = new MLStatsNodesResponse(clusterName, nodes, ImmutableList.of());
             actionListener.onResponse(statsResponse);
@@ -299,7 +307,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
                 )
         );
     }
@@ -334,7 +342,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             content
                 .utf8ToString()
                 .contains(
-                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}"
+                    "\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}"
                 )
         );
     }
@@ -360,7 +368,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
         assertEquals(RestStatus.OK, restResponse.status());
         BytesReference content = restResponse.content();
         assertEquals(
-            "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
+            "{\"nodes\":{\"node\":{\"ml_request_count\":100,\"algorithms\":{\"kmeans\":{\"train\":{\"ml_action_request_count\":20}}},\"models\":{\"model_id\":{\"train\":{\"ml_action_request_count\":20}}}}}}",
             content.utf8ToString()
         );
     }

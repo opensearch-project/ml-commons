@@ -81,7 +81,6 @@ public class ConnectorUtils {
         return inputData;
     }
     private static RemoteInferenceInputDataSet processTextDocsInput(TextDocsInputDataSet inputDataSet, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
-        List<String> docs = new ArrayList<>(inputDataSet.getDocs());
         Optional<ConnectorAction> predictAction = connector.findPredictAction();
         if (predictAction.isEmpty()) {
             throw new IllegalArgumentException("no predict action found");
@@ -89,9 +88,20 @@ public class ConnectorUtils {
         String preProcessFunction = predictAction.get().getPreProcessFunction();
         preProcessFunction = preProcessFunction == null ? MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT : preProcessFunction;
         if (MLPreProcessFunction.contains(preProcessFunction)) {
-            Map<String, Object> buildInFunctionResult = MLPreProcessFunction.get(preProcessFunction).apply(docs);
+            Map<String, Object> buildInFunctionResult = MLPreProcessFunction.get(preProcessFunction).apply(inputDataSet.getDocs());
             return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(buildInFunctionResult)).build();
         } else {
+            List<String> docs = new ArrayList<>();
+            for (String doc : inputDataSet.getDocs()) {
+                if (doc != null) {
+                    String gsonString = gson.toJson(doc);
+                    // in 2.9, user will add  " before and after string
+                    // gson.toString(string) will add extra " before after string, so need to remove
+                    docs.add(gsonString.substring(1, gsonString.length() - 1));
+                } else {
+                    docs.add(null);
+                }
+            }
             if (preProcessFunction.contains("${parameters")) {
                 StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 preProcessFunction = substitutor.replace(preProcessFunction);

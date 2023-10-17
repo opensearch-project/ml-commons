@@ -1,0 +1,17 @@
+---
+"Test creating a conversation":
+  - do:
+      _plugins.conversational_create_conversation:
+        body: null
+
+  - match:
+      $body.conversationId: /^.{10,}$/
+---
+"Test creating a conversation with a name":
+  - do: 
+      _plugins.conversational_create_conversation:
+        body: 
+          name: Test
+  
+  - match: 
+      $body.conversationId: /^.{10,}$/
