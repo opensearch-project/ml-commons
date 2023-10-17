@@ -124,7 +124,7 @@ GET /_plugins/_ml/tasks/SnDo-ooB0wiuGR4SfMNS
 POST /_plugins/_ml/models/S3Do-ooB0wiuGR4SfcNv/_deploy
 ```
 
-6. Test model inference
+5. Test model inference
 
 ```json
 POST /_plugins/_ml/models/S3Do-ooB0wiuGR4SfcNv/_predict
