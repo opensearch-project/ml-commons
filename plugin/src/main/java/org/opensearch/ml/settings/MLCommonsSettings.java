@@ -168,6 +168,15 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    public static final Setting<Long> ML_COMMONS_DISK_SHORTAGE_THRESHOLD = Setting
+            .longSetting(
+                "plugins.ml_commons.disk_shortage_threshold",
+                5L,
+                1L,
+                10L,
+                Setting.Property.NodeScope,
+                Setting.Property.Dynamic
+            );
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
 
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
