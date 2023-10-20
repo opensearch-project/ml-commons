@@ -26,6 +26,7 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
@@ -37,6 +38,9 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -180,6 +184,18 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     ) {
         MLRegisterModelGroupRequest mlRegisterModelGroupRequest = new MLRegisterModelGroupRequest(mlRegisterModelGroupInput);
         client.execute(MLRegisterModelGroupAction.INSTANCE, mlRegisterModelGroupRequest, listener);
+    }
+
+    /**
+     * Execute metrics correlation algorithm
+     * @param name Function name
+     * @param metricsCorrelationInput metrics correlation input
+     * @param listener a listener to be notified of the result
+     */
+    @Override
+    public void executeAlgorithm(FunctionName name, Input metricsCorrelationInput, ActionListener<MLExecuteTaskResponse> listener) {
+        MLExecuteTaskRequest mlExecuteTaskRequest = new MLExecuteTaskRequest(name, metricsCorrelationInput);
+        client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, listener);
     }
 
     @Override
