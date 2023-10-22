@@ -11,9 +11,9 @@ import java.io.File;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import org.opensearch.common.settings.Settings;
-import org.opensearch.cluster.service.ClusterService;
 
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.exception.MLException;
 
 /**
@@ -36,6 +36,7 @@ public class DiskCircuitBreaker extends ThresholdCircuitBreaker<Long> {
         super(threshold);
         this.diskDir = diskDir;
     }
+
     public DiskCircuitBreaker(Settings settings, ClusterService clusterService, String diskDir) {
         super(DEFAULT_DISK_SHORTAGE_THRESHOLD);
         this.diskDir = diskDir;
