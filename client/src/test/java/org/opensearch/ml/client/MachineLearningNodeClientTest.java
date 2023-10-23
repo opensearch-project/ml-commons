@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.input.Constants.TRAIN;
 import static org.opensearch.ml.common.input.Constants.TRAINANDPREDICT;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,13 +59,19 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
+import org.opensearch.ml.common.output.Output;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrelationOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -73,6 +80,9 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -151,6 +161,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLRegisterModelGroupResponse> registerModelGroupResponseActionListener;
+
+    @Mock
+    ActionListener<MLExecuteTaskResponse> executeTaskResponseActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -674,6 +687,84 @@ public class MachineLearningNodeClientTest {
         verify(createConnectorActionListener).onResponse(argumentCaptor.capture());
         assertEquals(connectorId, (argumentCaptor.getValue()).getConnectorId());
 
+    }
+
+    @Test
+    public void executeMetricsCorrelation() {
+        Output metricsCorrelationOutput;
+        List<MCorrModelTensors> outputs = new ArrayList<>();
+        MCorrModelTensor mCorrModelTensor = MCorrModelTensor
+            .builder()
+            .event_pattern(new float[] { 1.0f, 2.0f, 3.0f })
+            .event_window(new float[] { 4.0f, 5.0f, 6.0f })
+            .suspected_metrics(new long[] { 1, 2 })
+            .build();
+        List<MCorrModelTensor> mlModelTensors = Arrays.asList(mCorrModelTensor);
+        MCorrModelTensors modelTensors = MCorrModelTensors.builder().mCorrModelTensors(mlModelTensors).build();
+        outputs.add(modelTensors);
+        metricsCorrelationOutput = MetricsCorrelationOutput.builder().modelOutput(outputs).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            MLExecuteTaskResponse output = new MLExecuteTaskResponse(FunctionName.METRICS_CORRELATION, metricsCorrelationOutput);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLExecuteTaskResponse> argumentCaptor = ArgumentCaptor.forClass(MLExecuteTaskResponse.class);
+
+        List<float[]> inputData = new ArrayList<>(
+            Arrays
+                .asList(
+                    new float[] {
+                        0.89451003f,
+                        4.2006273f,
+                        0.3697659f,
+                        2.2458954f,
+                        -4.671612f,
+                        -1.5076426f,
+                        1.635445f,
+                        -1.1394824f,
+                        -0.7503817f,
+                        0.98424894f,
+                        -0.38896716f,
+                        1.0328646f,
+                        1.9543738f,
+                        -0.5236269f,
+                        0.14298044f,
+                        3.2963762f,
+                        8.1641035f,
+                        5.717064f,
+                        7.4869685f,
+                        2.5987444f,
+                        11.018798f,
+                        9.151356f,
+                        5.7354255f,
+                        6.862203f,
+                        3.0524514f,
+                        4.431755f,
+                        5.1481285f,
+                        7.9548607f,
+                        7.4519925f,
+                        6.09533f,
+                        7.634116f,
+                        8.898271f,
+                        3.898491f,
+                        9.447067f,
+                        8.197385f,
+                        5.8284273f,
+                        5.804283f,
+                        7.089733f,
+                        9.140584f }
+                )
+        );
+        Input metricsCorrelationInput = MetricsCorrelationInput.builder().inputData(inputData).build();
+
+        machineLearningNodeClient.execute(FunctionName.METRICS_CORRELATION, metricsCorrelationInput, executeTaskResponseActionListener);
+
+        verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), isA(MLExecuteTaskRequest.class), any());
+        verify(executeTaskResponseActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(FunctionName.METRICS_CORRELATION, argumentCaptor.getValue().getFunctionName());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
