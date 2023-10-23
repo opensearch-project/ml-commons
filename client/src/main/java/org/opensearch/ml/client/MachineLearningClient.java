@@ -392,7 +392,6 @@ public interface MachineLearningClient {
 
     void deleteAgent(String agentId, ActionListener<DeleteResponse> listener);
 
-
     /**
      * Get a list of ToolMetadata and return ActionFuture.
      * For more info on list tools, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#list-tools

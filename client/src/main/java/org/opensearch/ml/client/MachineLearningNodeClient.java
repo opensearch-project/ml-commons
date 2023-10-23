@@ -221,6 +221,19 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, listener);
     }
 
+    /**
+     * Execute an algorithm
+     *
+     * @param name     function name
+     * @param input    an algorithm input
+     * @param listener a listener to be notified of the result
+     */
+    @Override
+    public void execute(FunctionName name, Input input, ActionListener<MLExecuteTaskResponse> listener) {
+        MLExecuteTaskRequest mlExecuteTaskRequest = new MLExecuteTaskRequest(name, input);
+        client.execute(MLExecuteTaskAction.INSTANCE, mlExecuteTaskRequest, listener);
+    }
+
     @Override
     public void getTask(String taskId, ActionListener<MLTask> listener) {
         MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
