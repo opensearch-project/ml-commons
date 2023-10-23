@@ -56,7 +56,7 @@ public class MLEngineTest {
     @Before
     public void setUp() {
         Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        MLEngine mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
     @Test
