@@ -24,7 +24,6 @@ jobs:
     strategy:
       matrix:
         java: [11]
-        #java: [11, 17, 20]
 
     name: Build and Test MLCommons Plugin
     if: github.repository == 'opensearch-project/ml-commons'
