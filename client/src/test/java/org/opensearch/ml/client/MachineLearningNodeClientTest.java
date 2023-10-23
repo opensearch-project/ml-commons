@@ -6,6 +6,7 @@
 package org.opensearch.ml.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -765,6 +766,7 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), isA(MLExecuteTaskRequest.class), any());
         verify(executeTaskResponseActionListener).onResponse(argumentCaptor.capture());
         assertEquals(FunctionName.METRICS_CORRELATION, argumentCaptor.getValue().getFunctionName());
+        assertTrue(argumentCaptor.getValue().getOutput() instanceof MetricsCorrelationOutput);
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
