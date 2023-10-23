@@ -11,6 +11,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.MLModel;
@@ -19,9 +20,11 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -32,6 +35,12 @@ import static org.mockito.Mockito.when;
 
 public class RemoteModelTest {
 
+    @InjectMocks
+    RemoteModel remoteModel;
+
+    @Mock
+    RemoteConnectorExecutor remoteConnectorExecutor;
+
     @Mock
     MLInput mlInput;
 
@@ -41,7 +50,6 @@ public class RemoteModelTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    RemoteModel remoteModel;
     Encryptor encryptor;
 
     @Before
@@ -63,6 +71,15 @@ public class RemoteModelTest {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("Model not ready yet");
         remoteModel.predict(mlInput);
+    }
+
+    @Test
+    public void predict_ModelPredictSuccess() {
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        Assert.assertTrue(remoteModel.isModelReady());
+        when(remoteConnectorExecutor.executePredict(mlInput)).thenReturn(new ModelTensorOutput(new ArrayList<>()));
     }
 
     @Test

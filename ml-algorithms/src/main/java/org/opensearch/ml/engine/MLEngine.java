@@ -199,5 +199,4 @@ public class MLEngine {
     public String encrypt(String credential) {
         return encryptor.encrypt(credential);
     }
-
 }
