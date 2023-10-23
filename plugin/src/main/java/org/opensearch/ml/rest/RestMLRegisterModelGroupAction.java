@@ -17,12 +17,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 public class RestMLRegisterModelGroupAction extends BaseRestHandler {
     private static final String ML_REGISTER_MODEL_GROUP_ACTION = "ml_register_model_group_action";

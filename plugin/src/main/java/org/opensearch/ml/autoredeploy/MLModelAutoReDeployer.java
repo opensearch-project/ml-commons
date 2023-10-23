@@ -37,6 +37,8 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -44,9 +46,6 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.Builder;
 import lombok.Data;

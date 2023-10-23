@@ -43,11 +43,10 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 

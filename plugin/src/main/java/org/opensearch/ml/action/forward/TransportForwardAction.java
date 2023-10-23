@@ -43,12 +43,11 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableMap;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;

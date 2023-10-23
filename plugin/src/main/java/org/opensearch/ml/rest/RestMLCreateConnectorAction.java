@@ -18,13 +18,12 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 public class RestMLCreateConnectorAction extends BaseRestHandler {
     private static final String ML_CREATE_CONNECTOR_ACTION = "ml_create_connector_action";

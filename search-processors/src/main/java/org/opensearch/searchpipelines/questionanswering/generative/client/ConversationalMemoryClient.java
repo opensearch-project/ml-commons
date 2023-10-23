@@ -34,8 +34,7 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsRequest;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsResponse;
-
-import com.google.common.base.Preconditions;
+import org.opensearch.ml.repackage.com.google.common.base.Preconditions;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;

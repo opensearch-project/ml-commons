@@ -25,9 +25,8 @@ import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 import org.opensearch.ml.stats.MLNodeLevelStat;
-
-import com.google.common.collect.ImmutableSet;
 
 import lombok.extern.log4j.Log4j2;
 

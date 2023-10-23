@@ -16,12 +16,11 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 public class RestMLGetTaskAction extends BaseRestHandler {
     private static final String ML_GET_Task_ACTION = "ml_get_task_action";

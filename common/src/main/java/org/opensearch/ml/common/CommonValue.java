@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common;
 
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
 
 import static org.opensearch.ml.common.model.MLModelConfig.ALL_CONFIG_FIELD;
@@ -44,6 +45,9 @@ public class CommonValue {
     public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
     public static final Integer ML_CONFIG_INDEX_SCHEMA_VERSION = 2;
     public static final String ML_MAP_RESPONSE_KEY = "response";
+    public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
+    public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
+
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
             + "\": {\n"
@@ -320,6 +324,39 @@ public class CommonValue {
             + "\": {\"type\": \"keyword\"},\n"
             + "      \""
             + CREATE_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
+
+    public static final String ML_AGENT_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_AGENT_INDEX_SCHEMA_VERSION
+            + "},\n"
+            + "    \"properties\": {\n"
+            + "      \""
+            + MLAgent.AGENT_NAME_FIELD
+            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "      \""
+            + MLAgent.DESCRIPTION_FIELD
+            + "\" : {\"type\": \"text\"},\n"
+            + "      \""
+            + MLAgent.LLM_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.TOOLS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.PARAMETERS_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.MEMORY_FIELD
+            + "\" : {\"type\": \"flat_object\"},\n"
+            + "      \""
+            + MLAgent.CREATED_TIME_FIELD
+            + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "      \""
+            + MLAgent.LAST_UPDATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
             + "    }\n"
             + "}";

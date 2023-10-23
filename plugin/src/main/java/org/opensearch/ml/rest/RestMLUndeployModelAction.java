@@ -25,11 +25,10 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelInput;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.collect.ImmutableList;
 
 public class RestMLUndeployModelAction extends BaseRestHandler {
     private static final String ML_UNDEPLOY_MODEL_ACTION = "ml_undeploy_model_action";

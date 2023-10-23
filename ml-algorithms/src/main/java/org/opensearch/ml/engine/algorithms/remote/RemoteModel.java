@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -20,6 +19,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.script.ScriptService;
 
 import java.util.Map;

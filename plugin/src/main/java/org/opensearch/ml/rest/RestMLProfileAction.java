@@ -35,13 +35,12 @@ import org.opensearch.ml.action.profile.MLProfileRequest;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.profile.MLModelProfile;
 import org.opensearch.ml.profile.MLProfileInput;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 

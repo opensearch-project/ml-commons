@@ -1,0 +1,143 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import com.github.jengelman.gradle.plugins.shadow.ShadowBasePlugin
+import org.opensearch.gradle.test.RestIntegTestTask
+
+plugins {
+    id 'com.github.johnrengelman.shadow'
+    id 'jacoco'
+    id 'maven-publish'
+    id 'signing'
+}
+
+apply plugin: 'opensearch.java'
+apply plugin: 'opensearch.testclusters'
+apply plugin: 'opensearch.java-rest-test'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
+}
+
+ext {
+    projectSubstitutions = [:]
+    licenseFile = rootProject.file('LICENSE.txt')
+    noticeFile = rootProject.file('NOTICE')
+}
+
+jacoco {
+    toolVersion = '0.8.7'
+    reportsDirectory = file("$buildDir/JacocoReport")
+}
+
+jacocoTestReport {
+    reports {
+        xml.required = false
+        csv.required = false
+        html.destination file("${buildDir}/jacoco/")
+    }
+}
+check.dependsOn jacocoTestReport
+
+def slf4j_version_of_cronutils = "1.7.36"
+dependencies {
+    compileOnly "org.opensearch:opensearch:${opensearch_version}"
+
+    testImplementation "org.opensearch.test:framework:${opensearch_version}"
+    testImplementation "org.apache.logging.log4j:log4j-core:${versions.log4j}"
+}
+
+configurations.all {
+    if (it.state != Configuration.State.UNRESOLVED) return
+    resolutionStrategy {
+        force "org.slf4j:slf4j-api:${slf4j_version_of_cronutils}"
+    }
+}
+
+shadowJar {
+    archiveClassifier = null
+}
+
+test {
+    doFirst {
+        test.classpath -= project.files(project.tasks.named('shadowJar'))
+        test.classpath -= project.configurations.getByName(ShadowBasePlugin.CONFIGURATION_NAME)
+        test.classpath += project.extensions.getByType(SourceSetContainer).getByName(SourceSet.MAIN_SOURCE_SET_NAME).runtimeClasspath
+    }
+    systemProperty 'tests.security.manager', 'false'
+}
+
+task integTest(type: RestIntegTestTask) {
+    description 'Run integ test with opensearch test framework'
+    group 'verification'
+    systemProperty 'tests.security.manager', 'false'
+    dependsOn test
+}
+check.dependsOn integTest
+
+testClusters.javaRestTest {
+    testDistribution = 'INTEG_TEST'
+}
+
+task sourcesJar(type: Jar) {
+    archiveClassifier.set 'sources'
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar) {
+    archiveClassifier.set 'javadoc'
+    from javadoc.destinationDir
+    dependsOn javadoc
+}
+
+publishing {
+    repositories {
+        maven {
+            name = 'staging'
+            url = "${rootProject.buildDir}/local-staging-repo"
+        }
+        maven {
+            name = "Snapshots" //  optional target repository name
+            url = "https://aws.oss.sonatype.org/content/repositories/snapshots"
+            credentials {
+                username "$System.env.SONATYPE_USERNAME"
+                password "$System.env.SONATYPE_PASSWORD"
+            }
+        }
+    }
+    publications {
+        shadow(MavenPublication) { publication ->
+            project.shadow.component(publication)
+            artifact sourcesJar
+            artifact javadocJar
+
+            pom {
+                name = "OpenSearch ML Commons SPI"
+                packaging = "jar"
+                url = "https://github.com/opensearch-project/ml-commons"
+                description = "OpenSearch ML spi"
+                scm {
+                    connection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    developerConnection = "scm:git@github.com:opensearch-project/ml-commons.git"
+                    url = "git@github.com:opensearch-project/ml-commons.git"
+                }
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "http://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+                developers {
+                    developer {
+                        name = "OpenSearch"
+                        url = "https://github.com/opensearch-project/ml-commons"
+                    }
+                }
+            }
+        }
+    }
+}

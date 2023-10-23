@@ -10,8 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
-
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class RestMLSearchTaskAction extends AbstractMLSearchAction<MLTask> {
     private static final String ML_SEARCH_Task_ACTION = "ml_search_task_action";

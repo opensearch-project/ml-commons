@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
 import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
-import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
@@ -58,6 +57,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
@@ -201,6 +201,11 @@ public class MetricsCorrelation extends DLModelExecute {
 
         tensorOutputs.add(parseModelTensorOutput(djlOutput, null));
         return new MetricsCorrelationOutput(tensorOutputs);
+    }
+
+    @Override
+    public void execute(Input input, ActionListener<org.opensearch.ml.common.output.Output> listener) throws ExecuteException {
+
     }
 
     @VisibleForTesting

@@ -36,6 +36,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.action.stats.MLStatsNodeResponse;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesRequest;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStatLevel;
@@ -46,8 +47,6 @@ import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 

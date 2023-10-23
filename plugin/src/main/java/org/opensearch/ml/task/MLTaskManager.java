@@ -43,10 +43,9 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 import org.opensearch.threadpool.ThreadPool;
-
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 
 import lombok.extern.log4j.Log4j2;
 

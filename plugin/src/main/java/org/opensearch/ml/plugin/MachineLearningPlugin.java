@@ -36,6 +36,7 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
@@ -63,6 +64,8 @@ import org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction;
 import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
 import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
+import org.opensearch.ml.action.tools.GetToolTransportAction;
+import org.opensearch.ml.action.tools.ListToolsTransportAction;
 import org.opensearch.ml.action.training.TransportTrainingTaskAction;
 import org.opensearch.ml.action.trainpredict.TransportTrainAndPredictionTaskAction;
 import org.opensearch.ml.action.undeploy.TransportUndeployModelAction;
@@ -88,6 +91,11 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.spi.MLCommonsExtension;
+import org.opensearch.ml.common.spi.memory.Memory;
+import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
@@ -110,6 +118,8 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
+import org.opensearch.ml.common.transport.tools.MLGetToolAction;
+import org.opensearch.ml.common.transport.tools.MLListToolsAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
@@ -119,11 +129,20 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.memory.ConversationBufferWindowMemory;
+import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.tools.AgentTool;
+import org.opensearch.ml.engine.tools.CatIndexTool;
+import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.MathTool;
+import org.opensearch.ml.engine.tools.PainlessScriptTool;
+import org.opensearch.ml.engine.tools.VectorDBTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -142,6 +161,7 @@ import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportActi
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
@@ -152,8 +172,11 @@ import org.opensearch.ml.rest.RestMLExecuteAction;
 import org.opensearch.ml.rest.RestMLGetConnectorAction;
 import org.opensearch.ml.rest.RestMLGetModelAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
+import org.opensearch.ml.rest.RestMLGetToolAction;
+import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
+import org.opensearch.ml.rest.RestMLRegisterAgentAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
 import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
 import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
@@ -191,6 +214,7 @@ import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -210,11 +234,9 @@ import org.opensearch.threadpool.FixedExecutorBuilder;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.watcher.ResourceWatcherService;
 
-import com.google.common.collect.ImmutableList;
-
 import lombok.SneakyThrows;
 
-public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin {
+public class MachineLearningPlugin extends Plugin implements ActionPlugin, SearchPlugin, SearchPipelinePlugin, ExtensiblePlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
@@ -259,6 +281,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private volatile boolean ragSearchPipelineEnabled;
 
+    private Map<String, Tool> externalTools;
+    private Map<String, Tool.Factory> externalToolFactories;
+    private Map<String, Tool.Factory> toolFactories;
+    private ScriptService scriptService;
+    private Encryptor encryptor;
+
     @Override
     public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {
         return ImmutableList
@@ -297,7 +325,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(CreateInteractionAction.INSTANCE, CreateInteractionTransportAction.class),
                 new ActionHandler<>(GetInteractionsAction.INSTANCE, GetInteractionsTransportAction.class),
                 new ActionHandler<>(DeleteConversationAction.INSTANCE, DeleteConversationTransportAction.class),
-                new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class)
+                new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class),
+                new ActionHandler<>(MLRegisterAgentAction.INSTANCE, TransportRegisterAgentAction.class),
+                new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
+                new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class)
             );
     }
 
@@ -321,11 +352,12 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         this.threadPool = threadPool;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
+        this.scriptService = scriptService;
         Settings settings = environment.settings();
         Path dataPath = environment.dataFiles()[0];
         Path configFile = environment.configFile();
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client);
+        encryptor = new EncryptorImpl(clusterService, client);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -435,7 +467,30 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         // Register thread-safe ML objects here.
         LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
+
+        toolFactories = new HashMap<>();
+
+        MLModelTool.Factory.getInstance().init(client);
+        MathTool.Factory.getInstance().init(scriptService);
+        VectorDBTool.Factory.getInstance().init(client, xContentRegistry);
+        AgentTool.Factory.getInstance().init(client);
+        CatIndexTool.Factory.getInstance().init(client, clusterService);
+        PainlessScriptTool.Factory.getInstance().init(client, scriptService);
+        toolFactories.put(MLModelTool.NAME, MLModelTool.Factory.getInstance());
+        toolFactories.put(MathTool.NAME, MathTool.Factory.getInstance());
+        toolFactories.put(VectorDBTool.NAME, VectorDBTool.Factory.getInstance());
+        toolFactories.put(AgentTool.NAME, AgentTool.Factory.getInstance());
+        toolFactories.put(CatIndexTool.NAME, CatIndexTool.Factory.getInstance());
+        toolFactories.put(PainlessScriptTool.NAME, PainlessScriptTool.Factory.getInstance());
+
+        toolFactories.putAll(externalToolFactories);
+
+        Map<String, Memory> memoryMap = new HashMap<>();
+        memoryMap.put(ConversationBufferWindowMemory.TYPE, new ConversationBufferWindowMemory());
+        memoryMap.put(ConversationIndexMemory.TYPE, new ConversationIndexMemory(client));
+        MLAgentExecutor agentExecutor = new MLAgentExecutor(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
+        MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
 
         AnomalyLocalizerImpl anomalyLocalizer = new AnomalyLocalizerImpl(client, settings, clusterService, indexNameExpressionResolver);
         MLEngineClassLoader.register(FunctionName.ANOMALY_LOCALIZATION, anomalyLocalizer);
@@ -517,7 +572,13 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(
+            client,
+            xContentRegistry,
+            scriptService,
+            clusterService,
+            encryptor
+        );
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
@@ -530,6 +591,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             settings,
             mlFeatureEnabledSetting
         );
+        RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction();
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
@@ -548,6 +610,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryGetInteractionsAction restListInteractionsAction = new RestMemoryGetInteractionsAction();
         RestMemoryDeleteConversationAction restDeleteConversationAction = new RestMemoryDeleteConversationAction();
         RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
+        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(externalTools);
+        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(externalTools);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -563,6 +627,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLSearchTaskAction,
                 restMLProfileAction,
                 restMLRegisterModelAction,
+                restMLRegisterAgentAction,
                 restMLDeployModelAction,
                 restMLUndeployModelAction,
                 restMLRegisterModelMetaAction,
@@ -580,7 +645,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restCreateInteractionAction,
                 restListInteractionsAction,
                 restDeleteConversationAction,
-                restMLUpdateConnectorAction
+                restMLUpdateConnectorAction,
+                restMLListToolsAction,
+                restMLGetToolAction
             );
     }
 
@@ -740,5 +807,31 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             );
 
         return responseProcessors;
+    }
+
+    @Override
+    public void loadExtensions(ExtensionLoader loader) {
+        externalTools = new HashMap<>();
+        externalToolFactories = new HashMap<>();
+        for (MLCommonsExtension extension : loader.loadExtensions(MLCommonsExtension.class)) {
+            List<Tool> tools = extension.getTools();
+            if (tools != null) {
+                for (Tool tool : tools) {
+                    externalTools.put(tool.getName(), tool);
+                }
+            }
+
+            List<Tool.Factory> toolFactories = extension.getToolFactories();
+            for (Tool.Factory toolFactory : toolFactories) {
+                ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
+                if (toolAnnotation == null) {
+                    throw new IllegalArgumentException(
+                        "Missing ToolAnnotation for Tool " + toolFactory.getClass().getDeclaringClass().getSimpleName()
+                    );
+                }
+                String annotationValue = toolAnnotation.value();
+                externalToolFactories.put(annotationValue, toolFactory);
+            }
+        }
     }
 }

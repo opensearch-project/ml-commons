@@ -5,11 +5,12 @@
 
 package org.opensearch.ml.engine.utils;
 
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
-import com.google.common.io.ByteSource;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.repackage.com.google.common.hash.HashCode;
+import org.opensearch.ml.repackage.com.google.common.hash.Hashing;
+import org.opensearch.ml.repackage.com.google.common.io.ByteSource;
+import org.opensearch.ml.repackage.com.google.common.io.Files;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -134,7 +135,7 @@ public class FileUtils {
      * @throws IOException
      */
     public static String calculateFileHash(File file) throws IOException {
-        ByteSource byteSource = com.google.common.io.Files.asByteSource(file);
+        ByteSource byteSource = Files.asByteSource(file);
         HashCode hc = byteSource.hash(Hashing.sha256());
         return hc.toString();
     }

@@ -55,6 +55,8 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -63,9 +65,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 

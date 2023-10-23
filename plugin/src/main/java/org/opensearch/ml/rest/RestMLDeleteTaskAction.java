@@ -15,11 +15,10 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.collect.ImmutableList;
 
 public class RestMLDeleteTaskAction extends BaseRestHandler {
     private static final String ML_DELETE_TASK_ACTION = "ml_delete_task_action";

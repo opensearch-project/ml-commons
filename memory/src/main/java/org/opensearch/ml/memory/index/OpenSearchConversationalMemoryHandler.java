@@ -30,8 +30,7 @@ import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.conversation.Interaction.InteractionBuilder;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
-
-import com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 

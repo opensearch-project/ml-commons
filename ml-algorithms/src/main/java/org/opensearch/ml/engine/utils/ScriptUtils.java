@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine.utils;
 
-import com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptService;
 import org.opensearch.script.ScriptType;

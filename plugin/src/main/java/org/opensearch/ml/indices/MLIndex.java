@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.indices;
 
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_MAPPING;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_SCHEMA_VERSION;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_SCHEMA_VERSION;
@@ -26,7 +29,8 @@ public enum MLIndex {
     MODEL(ML_MODEL_INDEX, false, ML_MODEL_INDEX_MAPPING, ML_MODEL_INDEX_SCHEMA_VERSION),
     TASK(ML_TASK_INDEX, false, ML_TASK_INDEX_MAPPING, ML_TASK_INDEX_SCHEMA_VERSION),
     CONNECTOR(ML_CONNECTOR_INDEX, false, ML_CONNECTOR_INDEX_MAPPING, ML_CONNECTOR_SCHEMA_VERSION),
-    CONFIG(ML_CONFIG_INDEX, false, ML_CONFIG_INDEX_MAPPING, ML_CONFIG_INDEX_SCHEMA_VERSION);
+    CONFIG(ML_CONFIG_INDEX, false, ML_CONFIG_INDEX_MAPPING, ML_CONFIG_INDEX_SCHEMA_VERSION),
+    AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING, ML_AGENT_INDEX_SCHEMA_VERSION);
 
     private final String indexName;
     // whether we use an alias for the index

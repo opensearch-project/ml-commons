@@ -10,9 +10,8 @@ import java.util.function.Function;
 
 import org.opensearch.common.settings.Setting;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
-
-import com.google.common.collect.ImmutableList;
 
 public final class MLCommonsSettings {
 

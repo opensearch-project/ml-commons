@@ -19,11 +19,10 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.collect.ImmutableList;
 
 public class RestMLUpdateModelGroupAction extends BaseRestHandler {
 

@@ -20,12 +20,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 public class RestMLTrainAndPredictAction extends BaseRestHandler {
     private static final String ML_TRAIN_AND_PREDICT_ACTION = "ml_train_and_predict_action";

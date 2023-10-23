@@ -41,13 +41,12 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 

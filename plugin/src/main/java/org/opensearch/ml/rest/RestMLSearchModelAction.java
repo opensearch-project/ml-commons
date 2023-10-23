@@ -10,8 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
-
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 /**
  * This class consists of the REST handler to search ML Models.

@@ -17,7 +17,7 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static org.opensearch.ml.repackage.com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,10 +31,9 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 

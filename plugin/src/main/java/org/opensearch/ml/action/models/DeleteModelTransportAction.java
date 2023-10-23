@@ -41,12 +41,11 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;

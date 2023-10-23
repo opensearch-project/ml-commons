@@ -7,6 +7,7 @@ package org.opensearch.ml.engine;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -152,20 +153,20 @@ public class MLEngine {
         return trainAndPredictable.trainAndPredict(mlInput);
     }
 
-    public Output execute(Input input) throws Exception {
+    public void execute(Input input, ActionListener<Output> listener) throws Exception {
         validateInput(input);
         if (input.getFunctionName() == FunctionName.METRICS_CORRELATION) {
             MLExecutable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
             if (executable == null) {
                 throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
             }
-            return executable.execute(input);
+            executable.execute(input, listener);
         } else {
             Executable executable = MLEngineClassLoader.initInstance(input.getFunctionName(), input, Input.class);
             if (executable == null) {
                 throw new IllegalArgumentException("Unsupported executable function: " + input.getFunctionName());
             }
-            return executable.execute(input);
+            executable.execute(input, listener);
         }
     }
 

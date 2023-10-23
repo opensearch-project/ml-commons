@@ -22,11 +22,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-import org.apache.commons.text.StringEscapeUtils;
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;

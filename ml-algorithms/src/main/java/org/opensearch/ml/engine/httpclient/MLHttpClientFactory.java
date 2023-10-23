@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.httpclient;
 
-import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.HttpHost;
@@ -18,6 +17,7 @@ import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;

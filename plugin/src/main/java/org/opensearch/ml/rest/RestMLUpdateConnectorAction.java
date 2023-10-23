@@ -20,13 +20,12 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 public class RestMLUpdateConnectorAction extends BaseRestHandler {
     private static final String ML_UPDATE_CONNECTOR_ACTION = "ml_update_connector_action";

@@ -40,13 +40,12 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 

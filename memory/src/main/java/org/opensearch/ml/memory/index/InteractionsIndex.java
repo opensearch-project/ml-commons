@@ -45,10 +45,9 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.SortOrder;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;

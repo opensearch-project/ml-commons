@@ -43,10 +43,9 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 

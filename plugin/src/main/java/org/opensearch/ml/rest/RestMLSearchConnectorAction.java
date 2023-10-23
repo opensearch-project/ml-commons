@@ -10,8 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
-
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class RestMLSearchConnectorAction extends AbstractMLSearchAction<Connector> {
     private static final String ML_SEARCH_CONNECTOR_ACTION = "ml_search_connector_action";

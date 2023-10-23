@@ -50,6 +50,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -57,8 +58,6 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
-
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 

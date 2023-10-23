@@ -17,8 +17,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-
-import com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;

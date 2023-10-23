@@ -18,12 +18,11 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 public class RestMLUploadModelChunkAction extends BaseRestHandler {
     private static final String ML_UPLOAD_MODEL_CHUNK_ACTION = "ml_upload_model_chunk_action";

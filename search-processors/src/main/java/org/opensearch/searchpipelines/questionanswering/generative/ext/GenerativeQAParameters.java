@@ -29,8 +29,7 @@ import org.opensearch.core.xcontent.ObjectParser;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-
-import com.google.common.base.Preconditions;
+import org.opensearch.ml.repackage.com.google.common.base.Preconditions;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

@@ -16,7 +16,6 @@ import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
-import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -104,9 +103,10 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                         return;
                     }
                 }
-                Output output = mlEngine.execute(input);
-                MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
-                listener.onResponse(response);
+                mlEngine.execute(input, ActionListener.wrap(output -> {
+                    MLExecuteTaskResponse response = new MLExecuteTaskResponse(functionName, output);
+                    listener.onResponse(response);
+                }, e -> { listener.onFailure(e); }));
             } catch (Exception e) {
                 mlStats
                     .createCounterStatIfAbsent(request.getFunctionName(), ActionName.EXECUTE, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)

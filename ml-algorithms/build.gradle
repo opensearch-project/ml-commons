@@ -16,8 +16,9 @@ repositories {
 }
 
 dependencies {
+    implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
-    implementation project(':opensearch-ml-common')
+    implementation group: 'org.opensearch', name:'opensearch-ml-common', version: "2.11.0.0-SNAPSHOT"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
@@ -28,8 +29,8 @@ dependencies {
     implementation group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-classification-sgd', version: '4.2.1'
     implementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
-    implementation 'software.amazon.randomcutforest:randomcutforest-parkservices:3.0-rc3'
-    implementation 'software.amazon.randomcutforest:randomcutforest-core:3.0-rc3'
+    implementation 'software.amazon.randomcutforest:randomcutforest-parkservices:3.8.0'
+    implementation 'software.amazon.randomcutforest:randomcutforest-core:3.8.0'
     implementation group: 'io.protostuff', name: 'protostuff-core', version: '1.8.0'
     implementation group: 'io.protostuff', name: 'protostuff-runtime', version: '1.8.0'
     implementation group: 'io.protostuff', name: 'protostuff-api', version: '1.8.0'
@@ -37,7 +38,6 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '4.4.0'
-    implementation group: 'com.google.guava', name: 'guava', version: '32.0.1-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation platform("ai.djl:bom:0.21.0")
     implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
@@ -62,8 +62,11 @@ dependencies {
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
-    implementation 'com.jayway.jsonpath:json-path:2.8.0'
+    implementation('com.jayway.jsonpath:json-path:2.8.0') {
+        exclude group: 'org.ow2.asm', module: 'asm'
+    }
     implementation group: 'org.json', name: 'json', version: '20230227'
+    implementation group: 'org.jsoup', name: 'jsoup', version: '1.16.1'
 }
 
 configurations.all {
@@ -96,3 +99,4 @@ jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
 }
 check.dependsOn jacocoTestCoverageVerification
+compileJava.dependsOn(':opensearch-ml-common:shadowJar')

@@ -30,14 +30,13 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -128,7 +127,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm);
-        return new MLPredictionTaskRequest(modelId, mlInput, null);
+        return new MLPredictionTaskRequest(modelId, mlInput);
     }
 
 }

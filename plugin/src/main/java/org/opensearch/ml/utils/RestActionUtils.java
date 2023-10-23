@@ -25,13 +25,12 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-
-import com.google.common.annotations.VisibleForTesting;
 
 public class RestActionUtils {
 
@@ -42,6 +41,8 @@ public class RestActionUtils {
     public static final String PARAMETER_RETURN_CONTENT = "return_content";
     public static final String PARAMETER_MODEL_GROUP_NAME = "model_group_name";
     public static final String PARAMETER_MODEL_ID = "model_id";
+    public static final String PARAMETER_AGENT_ID = "agent_id";
+    public static final String PARAMETER_MEMORY_ID = "memory_id";
     public static final String PARAMETER_TASK_ID = "task_id";
     public static final String PARAMETER_CONNECTOR_ID = "connector_id";
     public static final String PARAMETER_DEPLOY_MODEL = "deploy";
@@ -49,6 +50,8 @@ public class RestActionUtils {
     public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
+
+    public static final String PARAMETER_TOOL_NAME = "tool_name";
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);

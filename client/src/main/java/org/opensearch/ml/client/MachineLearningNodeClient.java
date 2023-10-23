@@ -17,6 +17,7 @@ import org.opensearch.client.Client;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
@@ -27,7 +28,6 @@ import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
-import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
@@ -36,10 +36,17 @@ import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
+import org.opensearch.ml.common.transport.tools.MLGetToolAction;
+import org.opensearch.ml.common.transport.tools.MLListToolsAction;
+import org.opensearch.ml.common.transport.tools.MLToolGetRequest;
+import org.opensearch.ml.common.transport.tools.MLToolGetResponse;
+import org.opensearch.ml.common.transport.tools.MLToolsListRequest;
+import org.opensearch.ml.common.transport.tools.MLToolsListResponse;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskAction;
 import org.opensearch.ml.common.transport.training.MLTrainingTaskRequest;
 import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskAction;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -188,6 +195,42 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLTaskSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
             listener.onResponse(searchResponse);
         }, listener::onFailure));
+    }
+
+    @Override
+    public void listTools(ActionListener<List<ToolMetadata>> listener) {
+        MLToolsListRequest mlToolsListRequest = MLToolsListRequest.builder().build();
+
+        client.execute(MLListToolsAction.INSTANCE, mlToolsListRequest, getMlListToolsResponseActionListener(listener));
+    }
+
+    @Override
+    public void getTool(String toolName, ActionListener<ToolMetadata> listener) {
+        MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().toolName(toolName).build();
+
+        client.execute(MLGetToolAction.INSTANCE, mlToolGetRequest, getMlGetToolResponseActionListener(listener));
+    }
+
+    private ActionListener<MLToolsListResponse> getMlListToolsResponseActionListener(ActionListener<List<ToolMetadata>> listener) {
+        ActionListener<MLToolsListResponse> internalListener = ActionListener.wrap(mlModelListResponse -> {
+            listener.onResponse(mlModelListResponse.getToolMetadataList());
+        }, listener::onFailure);
+        ActionListener<MLToolsListResponse> actionListener = wrapActionListener(internalListener, res -> {
+            MLToolsListResponse getResponse = MLToolsListResponse.fromActionResponse(res);
+            return getResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLToolGetResponse> getMlGetToolResponseActionListener(ActionListener<ToolMetadata> listener) {
+        ActionListener<MLToolGetResponse> internalListener = ActionListener.wrap(mlModelGetResponse -> {
+            listener.onResponse(mlModelGetResponse.getToolMetadata());
+        }, listener::onFailure);
+        ActionListener<MLToolGetResponse> actionListener = wrapActionListener(internalListener, res -> {
+            MLToolGetResponse getResponse = MLToolGetResponse.fromActionResponse(res);
+            return getResponse;
+        });
+        return actionListener;
     }
 
     private ActionListener<MLTaskResponse> getMlPredictionTaskResponseActionListener(ActionListener<MLOutput> listener) {

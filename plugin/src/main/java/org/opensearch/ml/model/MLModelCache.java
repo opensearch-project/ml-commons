@@ -19,8 +19,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.engine.MLExecutable;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.profile.MLPredictRequestStats;
-
-import com.google.common.math.Quantiles;
+import org.opensearch.ml.repackage.com.google.common.math.Quantiles;
 
 import lombok.AccessLevel;
 import lombok.Getter;

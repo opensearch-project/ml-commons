@@ -113,6 +113,9 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
+import org.opensearch.ml.repackage.com.google.common.io.Files;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -122,10 +125,6 @@ import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
-
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Files;
 
 import lombok.extern.log4j.Log4j2;
 
