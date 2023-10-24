@@ -67,6 +67,9 @@ shadowJar {
     relocate 'com.google.common', 'org.opensearch.ml.repackage.com.google.common' // dependency of cron-utils
 }
 
+jar {
+    enabled false
+}
 
 task sourcesJar(type: Jar) {
     archiveClassifier.set 'sources'
@@ -130,4 +133,4 @@ publishing {
     gradle.startParameter.setShowStacktrace(ShowStacktrace.ALWAYS)
     gradle.startParameter.setLogLevel(LogLevel.DEBUG)
 }
-publishShadowPublicationToMavenLocal.mustRunAfter jar
+publishShadowPublicationToMavenLocal.mustRunAfter shadowJar
