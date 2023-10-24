@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
