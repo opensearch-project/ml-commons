@@ -25,6 +25,7 @@ jobs:
     strategy:
       matrix:
         java: [11]
+        #java: [11, 17, 20]
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
@@ -80,7 +81,7 @@ jobs:
 
 
   Test-ml-linux-docker:
-    need: Build-ml-linux
+    needs: Build-ml-linux
     strategy:
       matrix:
         java: [11]
