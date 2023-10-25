@@ -55,7 +55,7 @@ public class ConnectorUtilsTest {
     public void processInput_NullInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input is null");
-        ConnectorUtils.processInput(null, null, new HashMap<>(), null);
+        ConnectorUtils.processTextDocsInput(null, null, new HashMap<>(), null);
     }
 
     @Test
@@ -70,7 +70,7 @@ public class ConnectorUtilsTest {
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
-        ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
+        ConnectorUtils.processTextDocsInput(dataSet, null, new HashMap<>(), scriptService);
     }
 
     @Test
@@ -117,7 +117,7 @@ public class ConnectorUtilsTest {
                 .requestBody("{\"input\": \"${parameters.input}\"}")
                 .build();
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
-        ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
+        ConnectorUtils.processRemoteInput(mlInput);
         Assert.assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
     }
 
@@ -204,7 +204,7 @@ public class ConnectorUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
-        RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils.processInput(mlInput, connector, new HashMap<>(), scriptService);
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils.processTextDocsInput(dataSet, preProcessName, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
         Assert.assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
         Assert.assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));

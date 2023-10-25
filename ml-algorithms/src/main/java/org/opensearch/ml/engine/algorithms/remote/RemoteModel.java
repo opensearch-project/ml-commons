@@ -49,6 +49,9 @@ public class RemoteModel implements Predictable {
 
     @Override
     public MLOutput predict(MLInput mlInput) {
+        if (mlInput == null) {
+            throw new IllegalArgumentException("Input is null");
+        }
         if (!isModelReady()) {
             throw new IllegalArgumentException("Model not ready yet. Please run this first: POST /_plugins/_ml/models/<model_id>/_deploy");
         }

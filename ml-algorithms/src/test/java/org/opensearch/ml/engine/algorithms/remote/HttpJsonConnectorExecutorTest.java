@@ -39,6 +39,9 @@ import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -112,7 +115,7 @@ public class HttpJsonConnectorExecutorTest {
                 .requestBody("{\"input\": ${parameters.input}}")
                 .build();
         when(httpClient.execute(any())).thenReturn(response);
-        HttpEntity entity = new StringEntity("{\"response\": \"test result\"}");
+        HttpEntity entity = new StringEntity("[{\"response\": \"test result1\"}, {\"response\": \"test result2\"}]");
         when(response.getEntity()).thenReturn(entity);
         StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
         when(response.getStatusLine()).thenReturn(statusLine);
@@ -121,10 +124,27 @@ public class HttpJsonConnectorExecutorTest {
         when(executor.getHttpClient()).thenReturn(httpClient);
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
-        Assert.assertEquals(2, modelTensorOutput.getMlModelOutputs().size());
+        // If TextDocsInputDataSet has no preprocess function, the preprocess function will be set to MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT.
+        // This default preprocess function will process the input into a list of strings format and for now all TextDocsInputDataSet is for text embedding
+        // including dense embedding and sparse embedding which both case accepts list of string format. For this input format, the result will
+        // always be a single MLModelOutput with a single MLModelTensor with a dataAsMap with key "response" and value is the original result from
+        // remote interface including a list of embeddings or a list of objects(sparse embedding).
+        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("test result", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("response"));
+        Assert.assertEquals(2, ((List)modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("response")).size());
+        Assert.assertEquals("test result1",
+            Optional.of(modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("response"))
+                .map(x -> ((List) x).get(0))
+                .map(x -> ((Map) x).get("response"))
+                .get()
+        );
+        Assert.assertEquals("test result2",
+            Optional.of(modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("response"))
+                .map(x -> ((List) x).get(1))
+                .map(x -> ((Map) x).get("response"))
+                .get()
+        );
     }
 
     @Test

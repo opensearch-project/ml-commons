@@ -52,18 +52,7 @@ public class ConnectorUtils {
         signer = Aws4Signer.create();
     }
 
-    public static RemoteInferenceInputDataSet processInput(MLInput mlInput, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
-        if (mlInput == null) {
-            throw new IllegalArgumentException("Input is null");
-        }
-        RemoteInferenceInputDataSet inputData;
-        if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
-            inputData = processTextDocsInput((TextDocsInputDataSet) mlInput.getInputDataset(), connector, parameters, scriptService);
-        } else if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
-            inputData = (RemoteInferenceInputDataSet)mlInput.getInputDataset();
-        } else {
-            throw new IllegalArgumentException("Wrong input type");
-        }
+    private static RemoteInferenceInputDataSet escapeInput(RemoteInferenceInputDataSet inputData) {
         if (inputData.getParameters() != null) {
             Map<String, String> newParameters = new HashMap<>();
             inputData.getParameters().forEach((key, value) -> {
@@ -80,13 +69,15 @@ public class ConnectorUtils {
         }
         return inputData;
     }
-    private static RemoteInferenceInputDataSet processTextDocsInput(TextDocsInputDataSet inputDataSet, Connector connector, Map<String, String> parameters, ScriptService scriptService) {
-        Optional<ConnectorAction> predictAction = connector.findPredictAction();
-        if (predictAction.isEmpty()) {
-            throw new IllegalArgumentException("no predict action found");
+
+    public static RemoteInferenceInputDataSet processRemoteInput(MLInput input) {
+        return escapeInput((RemoteInferenceInputDataSet) input.getInputDataset());
+    }
+    public static RemoteInferenceInputDataSet processTextDocsInput(TextDocsInputDataSet inputDataSet, String preProcessFunction, Map<String, String> parameters, ScriptService scriptService) {
+        if (inputDataSet == null) {
+            throw new IllegalArgumentException("Input is null");
         }
-        String preProcessFunction = predictAction.get().getPreProcessFunction();
-        preProcessFunction = preProcessFunction == null ? MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT : preProcessFunction;
+        preProcessFunction = Optional.ofNullable(preProcessFunction).orElse(MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT);
         if (MLPreProcessFunction.contains(preProcessFunction)) {
             Map<String, Object> buildInFunctionResult = MLPreProcessFunction.get(preProcessFunction).apply(inputDataSet.getDocs());
             return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(buildInFunctionResult)).build();
@@ -111,7 +102,8 @@ public class ConnectorUtils {
                 throw new IllegalArgumentException("Wrong input");
             }
             Map<String, Object> map = gson.fromJson(processedInput.get(), Map.class);
-            return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(map)).build();
+            RemoteInferenceInputDataSet remoteInferenceInputDataSet =  RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(map)).build();
+            return escapeInput(remoteInferenceInputDataSet);
         }
     }
 

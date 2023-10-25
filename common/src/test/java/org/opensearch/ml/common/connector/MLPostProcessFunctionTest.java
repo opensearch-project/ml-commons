@@ -9,11 +9,14 @@ import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
+import org.opensearch.ml.common.output.MLOutput;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
 
 public class MLPostProcessFunctionTest {
@@ -40,16 +43,31 @@ public class MLPostProcessFunctionTest {
     }
 
     @Test
-    public void test_buildModelTensorList() {
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList());
+    public void test_buildListResultModelTensors() {
+        Assert.assertNotNull(MLPostProcessFunction.buildListResultModelTensors());
         List<List<Float>> numbersList = new ArrayList<>();
         numbersList.add(Collections.singletonList(1.0f));
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList().apply(numbersList));
+        Assert.assertNotNull(MLPostProcessFunction.buildListResultModelTensors().apply(numbersList));
     }
 
     @Test
-    public void test_buildModelTensorList_exception() {
+    public void test_buildListResultModelTensors_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.buildModelTensorList().apply(null);
+        MLPostProcessFunction.buildListResultModelTensors().apply(null);
+    }
+
+    @Test
+    public void test_buildSingleResultModelTensors() {
+        Assert.assertNotNull(MLPostProcessFunction.buildSingleResultModelTensor());
+        List<Float> numbersList = Collections.singletonList(1.0f);
+        Assert.assertNotNull(MLPostProcessFunction.buildSingleResultModelTensor().apply(numbersList));
+    }
+
+    @Test
+    public void test_buildSingleResultModelTensors_exception() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        MLPostProcessFunction.buildSingleResultModelTensor().apply(null);
+        verify(argumentCaptor.capture().getMessage());
     }
 }

@@ -8,8 +8,9 @@ package org.opensearch.ml.engine.algorithms.remote;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -22,31 +23,31 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processRemoteInput;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processTextDocsInput;
 
 public interface RemoteConnectorExecutor {
 
     default ModelTensorOutput executePredict(MLInput mlInput) {
         List<ModelTensors> tensorOutputs = new ArrayList<>();
-
-        if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
-            TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
-            int processedDocs = 0;
-            while(processedDocs < textDocsInputDataSet.getDocs().size()) {
-                List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
-                List<ModelTensors> tempTensorOutputs = new ArrayList<>();
-                preparePayloadAndInvokeRemoteModel(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build()).build(), tempTensorOutputs);
-                int tensorCount = 0;
-                if (tempTensorOutputs.size() > 0 && tempTensorOutputs.get(0).getMlModelTensors() != null) {
-                    tensorCount = tempTensorOutputs.get(0).getMlModelTensors().size();
-                }
-                processedDocs += Math.max(tensorCount, 1);
-                tensorOutputs.addAll(tempTensorOutputs);
-            }
-
+        Connector connector = getConnector();
+        Optional<ConnectorAction> predictAction = connector.findPredictAction();
+        if (predictAction.isEmpty()) {
+            throw new IllegalArgumentException("no predict action found");
+        }
+        Map<String, String> parameters = new HashMap<>();
+        if (connector.getParameters() != null) {
+            parameters.putAll(connector.getParameters());
+        }
+        MLInputDataset inputDataset = mlInput.getInputDataset();
+        if (inputDataset instanceof RemoteInferenceInputDataSet) {
+            processRemoteInputDataSetInvocation(mlInput, parameters, connector, tensorOutputs);
+        } else if (inputDataset instanceof TextDocsInputDataSet) {
+            processTextDocsInputDataSetInvocation(mlInput, parameters, connector, tensorOutputs);
         } else {
-            preparePayloadAndInvokeRemoteModel(mlInput, tensorOutputs);
+            throw new IllegalArgumentException("Wrong input type");
         }
         return new ModelTensorOutput(tensorOutputs);
     }
@@ -57,25 +58,47 @@ public interface RemoteConnectorExecutor {
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry){}
     default void setClusterService(ClusterService clusterService){}
 
-    default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
-        Connector connector = getConnector();
-
-        Map<String, String> parameters = new HashMap<>();
-        if (connector.getParameters() != null) {
-            parameters.putAll(connector.getParameters());
+    private void processTextDocsInputDataSetInvocation(MLInput mlInput, Map<String, String> parameters, Connector connector, List<ModelTensors> tensorOutputs) {
+        if (((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs() == null || ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs().isEmpty()) {
+            throw new IllegalArgumentException("Input text docs size is empty, can not invoke remote model");
         }
-        MLInputDataset inputDataset = mlInput.getInputDataset();
-        if (inputDataset instanceof RemoteInferenceInputDataSet && ((RemoteInferenceInputDataSet) inputDataset).getParameters() != null) {
-            parameters.putAll(((RemoteInferenceInputDataSet) inputDataset).getParameters());
+        String preProcessFunction = connector.findPredictAction()
+            .map(ConnectorAction::getPreProcessFunction)
+            .orElse(MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT);
+        boolean batchEmbeddingSupportFlag = MLPreProcessFunction.getBatchEmbeddingSupportFlag(preProcessFunction);
+        if (batchEmbeddingSupportFlag) {
+            RemoteInferenceInputDataSet inputData = processTextDocsInput((TextDocsInputDataSet) mlInput.getInputDataset(), preProcessFunction, parameters, getScriptService());
+            String payload = createPayload(inputData, connector, parameters);
+            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+        } else {
+            TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
+            int size = Optional.ofNullable(textDocsInputDataSet).map(TextDocsInputDataSet::getDocs).map(List::size).orElse(0);
+            for (int i = 0; i < size; i++) {
+                TextDocsInputDataSet singleDocTextDocInputDataSet =
+                    TextDocsInputDataSet.builder().docs(List.of(textDocsInputDataSet.getDocs().get(i))).build();
+                RemoteInferenceInputDataSet inputData = processTextDocsInput(singleDocTextDocInputDataSet, preProcessFunction, parameters, getScriptService());
+                String payload = createPayload(inputData, connector, parameters);
+                invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+            }
         }
+    }
 
-        RemoteInferenceInputDataSet inputData = processInput(mlInput, connector, parameters, getScriptService());
+    private void processRemoteInputDataSetInvocation(MLInput mlInput, Map<String, String> parameters, Connector connector, List<ModelTensors> tensorOutputs) {
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = processRemoteInput(mlInput);
+        if (remoteInferenceInputDataSet.getParameters() != null) {
+            parameters.putAll(remoteInferenceInputDataSet.getParameters());
+        }
+        String payload = createPayload(remoteInferenceInputDataSet, connector, parameters);
+        invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+    }
+
+    private String createPayload(RemoteInferenceInputDataSet inputData, Connector connector, Map<String, String> parameters) {
         if (inputData.getParameters() != null) {
             parameters.putAll(inputData.getParameters());
         }
         String payload = connector.createPredictPayload(parameters);
         connector.validatePayload(payload);
-        invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
+        return payload;
     }
 
     void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);
