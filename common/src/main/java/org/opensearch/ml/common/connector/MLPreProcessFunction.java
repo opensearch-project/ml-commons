@@ -58,11 +58,7 @@ public class MLPreProcessFunction {
         return PRE_PROCESS_FUNCTIONS.get(preProcessFunction);
     }
 
-    public static boolean getBatchEmbeddingSupportFlag(String preProcessFunction) {
-        //by default, set the batch embedding support to false.
-        if (!BATCH_EMBEDDING_SUPPORT.containsKey(preProcessFunction)) {
-            return false;
-        }
+    public static Boolean getBatchEmbeddingSupportFlag(String preProcessFunction) {
         return BATCH_EMBEDDING_SUPPORT.get(preProcessFunction);
     }
 }

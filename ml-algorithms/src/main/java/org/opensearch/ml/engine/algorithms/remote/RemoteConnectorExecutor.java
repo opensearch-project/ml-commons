@@ -65,12 +65,8 @@ public interface RemoteConnectorExecutor {
         String preProcessFunction = connector.findPredictAction()
             .map(ConnectorAction::getPreProcessFunction)
             .orElse(MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT);
-        boolean batchEmbeddingSupportFlag = MLPreProcessFunction.getBatchEmbeddingSupportFlag(preProcessFunction);
-        if (batchEmbeddingSupportFlag) {
-            RemoteInferenceInputDataSet inputData = processTextDocsInput((TextDocsInputDataSet) mlInput.getInputDataset(), preProcessFunction, parameters, getScriptService());
-            String payload = createPayload(inputData, connector, parameters);
-            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
-        } else {
+        Boolean batchEmbeddingSupportFlag = MLPreProcessFunction.getBatchEmbeddingSupportFlag(preProcessFunction);
+        if (Boolean.FALSE.equals(batchEmbeddingSupportFlag)){
             TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
             int size = Optional.ofNullable(textDocsInputDataSet).map(TextDocsInputDataSet::getDocs).map(List::size).orElse(0);
             for (int i = 0; i < size; i++) {
@@ -80,6 +76,10 @@ public interface RemoteConnectorExecutor {
                 String payload = createPayload(inputData, connector, parameters);
                 invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
             }
+        } else { // two cases: 1. build-in preprocess function but batch embedding not support; 2. non build-in preprocess function, process with user defined painless script.
+            RemoteInferenceInputDataSet inputData = processTextDocsInput((TextDocsInputDataSet) mlInput.getInputDataset(), preProcessFunction, parameters, getScriptService());
+            String payload = createPayload(inputData, connector, parameters);
+            invokeRemoteModel(mlInput, parameters, payload, tensorOutputs);
         }
     }
 
