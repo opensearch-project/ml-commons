@@ -13,13 +13,16 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
@@ -299,4 +302,23 @@ public interface MachineLearningClient {
      * @param listener a listener to be notified of the result
      */
     void registerModelGroup(MLRegisterModelGroupInput mlRegisterModelGroupInput, ActionListener<MLRegisterModelGroupResponse> listener);
+
+    /**
+     * Execute an algorithm
+     * @param name algorithm function name
+     * @param input input
+     * @return the result future
+     */
+    default ActionFuture<MLExecuteTaskResponse> execute(FunctionName name, Input input) {
+        PlainActionFuture<MLExecuteTaskResponse> actionFuture = PlainActionFuture.newFuture();
+        execute(name, input, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Execute an algorithm
+     * @param input an algorithm input
+     * @param listener a listener to be notified of the result
+     */
+    void execute(FunctionName name, Input input, ActionListener<MLExecuteTaskResponse> listener);
 }
