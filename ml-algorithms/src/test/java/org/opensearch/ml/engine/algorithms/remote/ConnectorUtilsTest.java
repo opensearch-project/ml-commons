@@ -11,6 +11,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ingest.TestTemplateService;
@@ -24,6 +25,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.utils.ScriptUtils;
 import org.opensearch.script.ScriptService;
 
 import java.io.IOException;
@@ -33,7 +35,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -118,7 +122,7 @@ public class ConnectorUtilsTest {
                 .build();
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
         ConnectorUtils.processRemoteInput(mlInput);
-        Assert.assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
+        assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
     }
 
     @Test
@@ -158,10 +162,10 @@ public class ConnectorUtilsTest {
         parameters.put("key1", "value1");
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         ModelTensors tensors = ConnectorUtils.processOutput("{\"response\": \"test response\"}", connector, scriptService, ImmutableMap.of());
-        Assert.assertEquals(1, tensors.getMlModelTensors().size());
-        Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
-        Assert.assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
-        Assert.assertEquals("test response", tensors.getMlModelTensors().get(0).getDataAsMap().get("response"));
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+        assertEquals(1, tensors.getMlModelTensors().get(0).getDataAsMap().size());
+        assertEquals("test response", tensors.getMlModelTensors().get(0).getDataAsMap().get("response"));
     }
 
     @Test
@@ -181,13 +185,22 @@ public class ConnectorUtilsTest {
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         String modelResponse = "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils.processOutput(modelResponse, connector, scriptService, ImmutableMap.of());
-        Assert.assertEquals(1, tensors.getMlModelTensors().size());
-        Assert.assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
         Assert.assertNull(tensors.getMlModelTensors().get(0).getDataAsMap());
-        Assert.assertEquals(3, tensors.getMlModelTensors().get(0).getData().length);
-        Assert.assertEquals(-0.014555434, tensors.getMlModelTensors().get(0).getData()[0]);
-        Assert.assertEquals(-0.0002135904, tensors.getMlModelTensors().get(0).getData()[1]);
-        Assert.assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
+        assertEquals(3, tensors.getMlModelTensors().get(0).getData().length);
+        assertEquals(-0.014555434, tensors.getMlModelTensors().get(0).getData()[0]);
+        assertEquals(-0.0002135904, tensors.getMlModelTensors().get(0).getData()[1]);
+        assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
+    }
+
+    @Test
+    public void processInput_TextDocsInputDataSet_userDefinedScriptPreprocessFunction() {
+        List<String> input = Collections.singletonList("test_value");
+        String preprocessFunction = "mock user defined preprocess function";
+        when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"parameters\": {\"input\": \"test_value\"}}"));
+        processInput_TextDocsInputDataSet_PreprocessFunction(
+            "{\"input\": \"${parameters.input}\"}", input, "test_value", preprocessFunction, "input");
     }
 
     private void processInput_TextDocsInputDataSet_PreprocessFunction(String requestBody, List<String> inputs, String expectedProcessedInput, String preProcessName, String resultKey) {
@@ -206,7 +219,7 @@ public class ConnectorUtilsTest {
         Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils.processTextDocsInput(dataSet, preProcessName, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
-        Assert.assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
-        Assert.assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
+        assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
+        assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
     }
 }

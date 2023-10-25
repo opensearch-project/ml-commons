@@ -76,6 +76,16 @@ public class RemoteModelTest {
     }
 
     @Test
+    public void predict_ModelDeployed_NullInput() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Input is null");
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.predict(null);
+    }
+
+    @Test
     public void initModel_RuntimeException() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Tag mismatch!");

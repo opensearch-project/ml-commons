@@ -7,9 +7,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.apache.http.ProtocolVersion;
-import org.apache.http.StatusLine;
-import org.apache.http.message.BasicStatusLine;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -22,6 +19,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.AwsConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -41,6 +40,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -213,5 +213,97 @@ public class AwsConnectorExecutorTest {
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
         Assert.assertEquals("value", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("key"));
+    }
+
+    @Test
+    public void executePredict_BedRock_TextDocsInferenceInput() throws IOException {
+        String jsonString = "{\"embedding\": [-0.043945312,-0.18847656,-0.21679688]}";
+        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
+        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
+        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
+        when(httpRequest.call()).thenReturn(response);
+        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(response.httpResponse()).thenReturn(httpResponse);
+        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
+
+        ConnectorAction predictAction = ConnectorAction.builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"inputText\": \"${parameters.inputText}\"}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
+            .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
+            .build();
+        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1")).build();
+        ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
+        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
+        Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
+        Assert.assertEquals("sentence_embedding", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
+        Assert.assertEquals(3, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData().length);
+    }
+
+    @Test
+    public void test_executePredict_InvalidPredictAction() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("no predict action found");
+        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .parameters(parameters)
+            .credential(credential)
+            .actions(null)
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input1")).build();
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
+    }
+
+    @Test
+    public void test_executePredict_InvalidInputDataset() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Wrong input type");
+        ConnectorAction predictAction = ConnectorAction.builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"inputText\": \"${parameters.inputText}\"}")
+            .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
+            .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
+            .build();
+        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol(ConnectorProtocols.AWS_SIGV4)
+            .parameters(parameters)
+            .credential(credential)
+            .actions(List.of(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(null).build());
     }
 }
