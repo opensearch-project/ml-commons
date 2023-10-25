@@ -9,6 +9,7 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
+# test2
 permissions:
   id-token: write
   contents: read
