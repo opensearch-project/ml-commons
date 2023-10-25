@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
 
@@ -54,6 +55,8 @@ public class MLPostProcessFunctionTest {
     public void test_buildListResultModelTensors_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLPostProcessFunction.buildListResultModelTensors().apply(null);
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        assertEquals("The list of embeddings is null when using the built-in post-processing function.", argumentCaptor.capture().getMessage());
     }
 
     @Test
@@ -68,6 +71,6 @@ public class MLPostProcessFunctionTest {
         exceptionRule.expect(IllegalArgumentException.class);
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         MLPostProcessFunction.buildSingleResultModelTensor().apply(null);
-        verify(argumentCaptor.capture().getMessage());
+        assertEquals("The embeddings is null when using the built-in post-processing function.", argumentCaptor.capture().getMessage());
     }
 }

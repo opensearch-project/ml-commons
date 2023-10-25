@@ -37,7 +37,7 @@ public class MLPostProcessFunction {
         POST_PROCESS_FUNCTIONS.put(BEDROCK_EMBEDDING, buildSingleResultModelTensor());
     }
 
-    public static Function<List<?>, List<ModelTensor>> buildSingleResultModelTensor() {
+    protected static Function<List<?>, List<ModelTensor>> buildSingleResultModelTensor() {
         return embedding -> {
             if (embedding == null) {
                 throw new IllegalArgumentException("The embeddings is null when using the built-in post-processing function.");
@@ -56,7 +56,7 @@ public class MLPostProcessFunction {
         };
     }
 
-    public static Function<List<?>, List<ModelTensor>> buildListResultModelTensors() {
+    protected static Function<List<?>, List<ModelTensor>> buildListResultModelTensors() {
         return embeddings -> {
             List<ModelTensor> modelTensors = new ArrayList<>();
             if (embeddings == null) {
