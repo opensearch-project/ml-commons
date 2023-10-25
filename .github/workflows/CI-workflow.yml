@@ -98,6 +98,11 @@ jobs:
         with:
           name: ml-plugin-linux-${{ matrix.java }}
 
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.ML_ROLE }}
+          aws-region: us-west-2
+
       - name: Pull and Run Docker
         run: |
           plugin=${{ env.PLUGIN }}`
