@@ -10,19 +10,29 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.common.settings.Settings;
 
 import java.net.UnknownHostException;
 
 import static org.junit.Assert.assertNotNull;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND;
 
 public class MLHttpClientFactoryTests {
+
+    private final Settings settings = Settings.builder()
+        .put(ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS.getKey(), 30)
+        .put(ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND.getKey(), 1000)
+        .put(ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND.getKey(), 1000)
+        .build();
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
 
     @Test
     public void test_getCloseableHttpClient_success() {
-        CloseableHttpClient client = MLHttpClientFactory.getCloseableHttpClient();
+        CloseableHttpClient client = new MLHttpClientFactory(settings).createHttpClient();
         assertNotNull(client);
     }
 

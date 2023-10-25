@@ -13,6 +13,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -29,6 +30,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND;
 
 public class RemoteModelTest {
 
@@ -44,10 +48,18 @@ public class RemoteModelTest {
     RemoteModel remoteModel;
     Encryptor encryptor;
 
+    @Mock
+    RemoteConnectorExecutor remoteConnectorExecutor;
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        remoteModel = new RemoteModel();
+        Settings settings = Settings.builder()
+            .put(ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS.getKey(), 30)
+            .put(ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND.getKey(), 1000)
+            .put(ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND.getKey(), 1000)
+            .build();
+        remoteModel = new RemoteModel(new RemoteConnectorExecutorFactory(settings));
         encryptor = spy(new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
     }
 

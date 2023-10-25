@@ -16,12 +16,12 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.script.ScriptService;
 
+import java.rmi.Remote;
 import java.util.Map;
 
 @Log4j2
@@ -34,6 +34,11 @@ public class RemoteModel implements Predictable {
     public static final String XCONTENT_REGISTRY = "xcontent_registry";
 
     private RemoteConnectorExecutor connectorExecutor;
+    private final RemoteConnectorExecutorFactory remoteConnectorExecutorFactory;
+
+    public RemoteModel(RemoteConnectorExecutorFactory remoteConnectorExecutorFactory) {
+        this.remoteConnectorExecutorFactory = remoteConnectorExecutorFactory;
+    }
 
     @VisibleForTesting
     RemoteConnectorExecutor getConnectorExecutor() {
@@ -78,7 +83,7 @@ public class RemoteModel implements Predictable {
         try {
             Connector connector = model.getConnector().cloneConnector();
             connector.decrypt((credential) -> encryptor.decrypt(credential));
-            this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
+            this.connectorExecutor = remoteConnectorExecutorFactory.create(connector);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
             this.connectorExecutor.setClient((Client) params.get(CLIENT));

@@ -123,9 +123,12 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
+import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutorFactory;
+import org.opensearch.ml.engine.algorithms.remote.RemoteModel;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.settings.HttpClientCommonSettings;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -446,6 +449,11 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
+
+        RemoteConnectorExecutorFactory remoteConnectorExecutorFactory = new RemoteConnectorExecutorFactory(settings);
+        RemoteModel remoteModel = new RemoteModel(remoteConnectorExecutorFactory);
+        MLEngineClassLoader.register(FunctionName.REMOTE, remoteModel);
+
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
@@ -695,7 +703,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_UPDATE_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
+                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
+                HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND,
+                HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND,
+                HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS
             );
         return settings;
     }

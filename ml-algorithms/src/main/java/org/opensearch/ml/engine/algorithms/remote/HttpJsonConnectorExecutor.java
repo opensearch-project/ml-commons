@@ -24,7 +24,6 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
 import java.security.AccessController;
@@ -43,12 +42,15 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processO
 public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
     @Getter
-    private HttpConnector connector;
+    private final HttpConnector connector;
+
+    private final CloseableHttpClient httpClient;
     @Setter @Getter
     private ScriptService scriptService;
 
-    public HttpJsonConnectorExecutor(Connector connector) {
+    public HttpJsonConnectorExecutor(Connector connector, CloseableHttpClient httpClient) {
         this.connector = (HttpConnector)connector;
+        this.httpClient = httpClient;
     }
 
     @Override
@@ -95,8 +97,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = getHttpClient();
-                     CloseableHttpResponse response = httpClient.execute(request)) {
+                try (CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
@@ -121,9 +122,5 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             log.error("Fail to execute http connector", e);
             throw new MLException("Fail to execute http connector", e);
         }
-    }
-
-    public CloseableHttpClient getHttpClient() {
-        return MLHttpClientFactory.getCloseableHttpClient();
     }
 }

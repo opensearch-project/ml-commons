@@ -11,6 +11,7 @@ import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.UnsupportedSchemeException;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -18,20 +19,27 @@ import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.impl.conn.DefaultSchemePortResolver;
 import org.apache.http.protocol.HttpContext;
 import org.apache.logging.log4j.util.Strings;
+import org.opensearch.common.settings.Settings;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS;
+import static org.opensearch.ml.engine.settings.HttpClientCommonSettings.ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND;
+
 @Log4j2
 public class MLHttpClientFactory {
 
-    public static CloseableHttpClient getCloseableHttpClient() {
-       return createHttpClient();
+    private final Settings settings;
+
+    public MLHttpClientFactory(Settings settings) {
+        this.settings = settings;
     }
 
-    private static CloseableHttpClient createHttpClient() {
+    public CloseableHttpClient createHttpClient() {
         HttpClientBuilder builder = HttpClientBuilder.create();
 
         // Only allow HTTP and HTTPS schemes
@@ -52,6 +60,13 @@ public class MLHttpClientFactory {
                 return false;
             }
         });
+        builder.setMaxConnTotal(ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS.get(settings));
+        builder.setMaxConnPerRoute(ML_COMMONS_HTTP_CLIENT_MAX_TOTAL_CONNECTIONS.get(settings));
+        RequestConfig requestConfig = RequestConfig.custom()
+            .setConnectTimeout(ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND.get(settings))
+            .setSocketTimeout(ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND.get(settings))
+            .build();
+        builder.setDefaultRequestConfig(requestConfig);
         return builder.build();
     }
 
