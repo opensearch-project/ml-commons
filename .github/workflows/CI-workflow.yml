@@ -64,7 +64,9 @@ jobs:
                                export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
                                echo "::add-mask::$OPENAI_KEY" &&
                                echo "::add-mask::$COHERE_KEY" &&
-                               ./gradlew assemble'
+                               ./gradlew build &&
+                               ./gradlew publishToMavenLoca &&
+                               ./gradlew integTest -PnumNodes=3'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv plugin/build/distributions/$plugin ./
