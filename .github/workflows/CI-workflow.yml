@@ -64,7 +64,7 @@ jobs:
                                export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
                                echo "::add-mask::$OPENAI_KEY" &&
                                echo "::add-mask::$COHERE_KEY" &&
-                               ./gradlew build'
+                               ./gradlew build -Dbuild.snapshot=false'
           plugin="plugin/build/distributions/`basename $(ls plugin/build/distributions/*.zip)`"
           echo $plugin
           echo "build-test-linux=$plugin" >> $GITHUB_OUTPUT
@@ -130,7 +130,7 @@ jobs:
           then
             echo "FROM opensearchstaging/opensearch:$docker_version" >> Dockerfile
             echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
-            echo "ADD ./$plugin /tmp/" >> Dockerfile
+            echo "COPY $plugin /tmp/" >> Dockerfile
             echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/$plugin" >> Dockerfile
             docker build -t opensearch-ml:test .
             echo "imagePresent=true" >> $GITHUB_ENV
