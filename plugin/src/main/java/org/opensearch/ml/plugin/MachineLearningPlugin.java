@@ -695,7 +695,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_UPDATE_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
+                MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND,
+                MLCommonsSettings.ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND,
+                MLCommonsSettings.ML_COMMONS_HTTP_CLIENT_MAX_CONNECTIONS
             );
         return settings;
     }

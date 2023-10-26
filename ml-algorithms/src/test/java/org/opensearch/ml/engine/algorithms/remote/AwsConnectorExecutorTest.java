@@ -7,9 +7,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.apache.http.ProtocolVersion;
-import org.apache.http.StatusLine;
-import org.apache.http.message.BasicStatusLine;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -112,7 +109,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -142,7 +139,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -170,7 +167,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
 
         MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
@@ -204,7 +201,7 @@ public class AwsConnectorExecutorTest {
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
         connector.decrypt((c) -> encryptor.decrypt(c));
-        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());

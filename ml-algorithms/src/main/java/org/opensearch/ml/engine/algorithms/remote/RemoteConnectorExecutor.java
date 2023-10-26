@@ -56,6 +56,10 @@ public interface RemoteConnectorExecutor {
     default void setClient(Client client){}
     default void setXContentRegistry(NamedXContentRegistry xContentRegistry){}
     default void setClusterService(ClusterService clusterService){}
+    default void setConnectionTimeoutInMillis(Integer connectionTimeout){}
+    default void setReadTimeoutInMillis(Integer readTimeout){}
+    default void setMaxConnections(Integer maxConnections){}
+    default void initialize(){}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();

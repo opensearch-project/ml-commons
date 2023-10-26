@@ -33,6 +33,10 @@ public class RemoteModel implements Predictable {
     public static final String CLIENT = "client";
     public static final String XCONTENT_REGISTRY = "xcontent_registry";
 
+    public static final String CONNECTION_TIMEOUT = "ConnectionTimeout";
+    public static final String READ_TIMEOUT = "ReadTimeout";
+    public static final String MAX_CONNECTIONS = "MaxConnections";
+
     private RemoteConnectorExecutor connectorExecutor;
 
     @VisibleForTesting
@@ -79,10 +83,14 @@ public class RemoteModel implements Predictable {
             Connector connector = model.getConnector().cloneConnector();
             connector.decrypt((credential) -> encryptor.decrypt(credential));
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
+            this.connectorExecutor.setConnectionTimeoutInMillis((Integer) params.get(CONNECTION_TIMEOUT));
+            this.connectorExecutor.setReadTimeoutInMillis((Integer) params.get(READ_TIMEOUT));
+            this.connectorExecutor.setMaxConnections((Integer) params.get(MAX_CONNECTIONS));
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
             this.connectorExecutor.setClient((Client) params.get(CLIENT));
             this.connectorExecutor.setXContentRegistry((NamedXContentRegistry) params.get(XCONTENT_REGISTRY));
+            this.connectorExecutor.initialize();
         } catch (RuntimeException e) {
             log.error("Failed to init remote model", e);
             throw e;

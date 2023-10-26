@@ -25,6 +25,9 @@ import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLIENT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CLUSTER_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTION_TIMEOUT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.MAX_CONNECTIONS;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.READ_TIMEOUT;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -34,6 +37,9 @@ import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_HTTP_CLIENT_MAX_CONNECTIONS;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
@@ -156,6 +162,9 @@ public class MLModelManager {
     private volatile Integer maxModelPerNode;
     private volatile Integer maxRegisterTasksPerNode;
     private volatile Integer maxDeployTasksPerNode;
+    private volatile Integer maxConnections;
+    private volatile Integer connectionTimeoutInMillis;
+    private volatile Integer readTimeoutInMillis;
 
     public static final ImmutableSet MODEL_DONE_STATES = ImmutableSet
         .of(
@@ -209,6 +218,9 @@ public class MLModelManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE, it -> maxDeployTasksPerNode = it);
+        maxConnections = ML_COMMONS_HTTP_CLIENT_MAX_CONNECTIONS.get(settings);
+        connectionTimeoutInMillis = ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND.get(settings);
+        readTimeoutInMillis = ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND.get(settings);
     }
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
@@ -931,7 +943,12 @@ public class MLModelManager {
                             XCONTENT_REGISTRY,
                             xContentRegistry,
                             CLUSTER_SERVICE,
-                            clusterService
+                            clusterService,
+                            CONNECTION_TIMEOUT,
+                            connectionTimeoutInMillis,
+                            READ_TIMEOUT,
+                            readTimeoutInMillis,
+                            MAX_CONNECTIONS, maxConnections
                         );
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
                     if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {

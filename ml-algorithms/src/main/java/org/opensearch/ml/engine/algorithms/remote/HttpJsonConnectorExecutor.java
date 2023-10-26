@@ -40,12 +40,14 @@ import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processO
 
 @Log4j2
 @ConnectorExecutor(HTTP)
-public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
+public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     @Getter
     private HttpConnector connector;
     @Setter @Getter
     private ScriptService scriptService;
+
+    private CloseableHttpClient httpClient;
 
     public HttpJsonConnectorExecutor(Connector connector) {
         this.connector = (HttpConnector)connector;
@@ -95,8 +97,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = getHttpClient();
-                     CloseableHttpResponse response = httpClient.execute(request)) {
+                try (CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
@@ -123,7 +124,8 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
         }
     }
 
-    public CloseableHttpClient getHttpClient() {
-        return MLHttpClientFactory.getCloseableHttpClient();
+    public void initialize() {
+        super.validate();
+        this.httpClient = MLHttpClientFactory.getCloseableHttpClient(super.getConnectionTimeoutInMillis(), super.getReadTimeoutInMillis(), super.getMaxConnections());
     }
 }

@@ -22,7 +22,7 @@ public class MLHttpClientFactoryTests {
 
     @Test
     public void test_getCloseableHttpClient_success() {
-        CloseableHttpClient client = MLHttpClientFactory.getCloseableHttpClient();
+        CloseableHttpClient client = MLHttpClientFactory.getCloseableHttpClient(1000, 1000, 30);
         assertNotNull(client);
     }
 
