@@ -79,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: ml-plugin-linux-${{ matrix.java }}
-          path: ${{ env.PLUGIN }}
+          path: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
           if-no-files-found: error
 
 
