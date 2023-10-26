@@ -96,15 +96,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      - uses: actions/download-artifact@v3
-        with:
-          name: ml-plugin-linux-${{ matrix.java }}
-
       - uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: ml-plugin-linux-${{ matrix.java }}
 
       - name: Pull and Run Docker
         run: |
@@ -124,18 +123,14 @@ jobs:
           echo plugin version plugin_version qualifier docker_version
           echo "($plugin) ($version) ($plugin_version) ($qualifier) ($docker_version)"
 
-          pwd && ls -l && du -sh *
+          pwd && ls -l ./$plugin
 
-          cd ..
           if docker pull opensearchstaging/opensearch:$docker_version
           then
             echo "FROM opensearchstaging/opensearch:$docker_version" >> Dockerfile
             echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
             echo "COPY $plugin /tmp/" >> Dockerfile
             echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/$plugin" >> Dockerfile
-            mkdir ml-plugin-linux-${{ matrix.java }}
-            cp -v ./$plugin ml-plugin-linux-${{ matrix.java }}
-            cd ml-plugin-linux-${{ matrix.java }}
             docker build -t opensearch-ml:test .
             echo "imagePresent=true" >> $GITHUB_ENV
           else
