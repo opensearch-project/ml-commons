@@ -31,7 +31,7 @@ jobs:
     if: github.repository == 'opensearch-project/ml-commons'
     environment: ml-commons-cicd-env
     outputs:
-      build-test-linux: ${{ step.step-build-test-linux.outputs.build-test-linux }}
+      build-test-linux: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
     runs-on: ubuntu-latest
     container:
       # using the same image which is used by opensearch-build team to build the OpenSearch Distribution
