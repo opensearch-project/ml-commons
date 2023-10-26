@@ -40,16 +40,28 @@ public class MLPostProcessFunctionTest {
     }
 
     @Test
-    public void test_buildModelTensorList() {
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList());
+    public void test_buildMultipleResultModelTensorList() {
+        Assert.assertNotNull(MLPostProcessFunction.buildMultipleResultModelTensor());
         List<List<Float>> numbersList = new ArrayList<>();
         numbersList.add(Collections.singletonList(1.0f));
-        Assert.assertNotNull(MLPostProcessFunction.buildModelTensorList().apply(numbersList));
+        Assert.assertNotNull(MLPostProcessFunction.buildMultipleResultModelTensor().apply(numbersList));
     }
 
     @Test
-    public void test_buildModelTensorList_exception() {
+    public void test_buildMultipleResultModelTensorList_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.buildModelTensorList().apply(null);
+        MLPostProcessFunction.buildMultipleResultModelTensor().apply(null);
+    }
+
+    @Test
+    public void test_buildSingleResultModelTensorList() {
+        Assert.assertNotNull(MLPostProcessFunction.buildSingleResultModelTensor());
+        Assert.assertNotNull(MLPostProcessFunction.buildSingleResultModelTensor().apply(Collections.singletonList(1.0f)));
+    }
+
+    @Test
+    public void test_buildSingleResultModelTensorList_exception() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        MLPostProcessFunction.buildSingleResultModelTensor().apply(null);
     }
 }
