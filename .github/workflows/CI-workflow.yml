@@ -113,7 +113,11 @@ jobs:
           plugin_version=`echo $plugin|awk -F- '{print $3}'| cut -d. -f 1-4`
           qualifier=`echo $plugin|awk -F- '{print $4}'| cut -d. -f 1-1`
 
-          [[ -n $qualifier ]] && qualifier=-${qualifier}
+          if [ -n "$qualifier" ] && [ "$qualifier" != "SNAPSHOT" ]; then
+              qualifier=-${qualifier}
+          else
+              qualifier=""
+          fi
 
           docker_version=$version$qualifier
 
