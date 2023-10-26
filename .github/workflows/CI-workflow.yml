@@ -132,6 +132,9 @@ jobs:
             echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
             echo "COPY $plugin /tmp/" >> Dockerfile
             echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/$plugin" >> Dockerfile
+            mkdir ml-plugin-linux-${{ matrix.java }}
+            cp -v ./$plugin ml-plugin-linux-${{ matrix.java }}
+            cd ml-plugin-linux-${{ matrix.java }}
             docker build -t opensearch-ml:test .
             echo "imagePresent=true" >> $GITHUB_ENV
           else
