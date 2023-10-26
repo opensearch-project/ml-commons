@@ -123,12 +123,15 @@ jobs:
           echo plugin version plugin_version qualifier docker_version
           echo "($plugin) ($version) ($plugin_version) ($qualifier) ($docker_version)"
 
+          pwd && ls -l
+          ls -l $plugin
+
           cd ..
           if docker pull opensearchstaging/opensearch:$docker_version
           then
             echo "FROM opensearchstaging/opensearch:$docker_version" >> Dockerfile
             echo "RUN if [ -d /usr/share/opensearch/plugins/opensearch-ml ]; then /usr/share/opensearch/bin/opensearch-plugin remove opensearch-ml; fi" >> Dockerfile
-            echo "ADD ml-commons/plugin/build/distributions/$plugin /tmp/" >> Dockerfile
+            echo "ADD ./$plugin /tmp/" >> Dockerfile
             echo "RUN /usr/share/opensearch/bin/opensearch-plugin install --batch file:/tmp/$plugin" >> Dockerfile
             docker build -t opensearch-ml:test .
             echo "imagePresent=true" >> $GITHUB_ENV
