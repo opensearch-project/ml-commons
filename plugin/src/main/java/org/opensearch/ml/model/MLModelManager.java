@@ -948,7 +948,8 @@ public class MLModelManager {
                             connectionTimeoutInMillis,
                             READ_TIMEOUT,
                             readTimeoutInMillis,
-                            MAX_CONNECTIONS, maxConnections
+                            MAX_CONNECTIONS,
+                            maxConnections
                         );
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
                     if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {

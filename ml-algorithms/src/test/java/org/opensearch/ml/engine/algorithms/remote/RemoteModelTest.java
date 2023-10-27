@@ -44,6 +44,8 @@ public class RemoteModelTest {
     RemoteModel remoteModel;
     Encryptor encryptor;
 
+    private Map<String, Object> params = Map.of(RemoteModel.CONNECTION_TIMEOUT, 1000,  RemoteModel.READ_TIMEOUT, 1000, RemoteModel.MAX_CONNECTIONS, 30);
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -71,7 +73,7 @@ public class RemoteModelTest {
         exceptionRule.expectMessage("Wrong input type");
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, params, encryptor);
         remoteModel.predict(mlInput);
     }
 
@@ -82,14 +84,14 @@ public class RemoteModelTest {
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
         doThrow(new IllegalArgumentException("Tag mismatch!")).when(encryptor).decrypt(any());
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, params, encryptor);
     }
 
     @Test
     public void initModel_NullHeader() {
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, params, encryptor);
         Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
         Assert.assertNull(decryptedHeaders);
     }
@@ -98,7 +100,7 @@ public class RemoteModelTest {
     public void initModel_WithHeader() {
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
-        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        remoteModel.initModel(mlModel, params, encryptor);
         Map<String, String> decryptedHeaders = connector.getDecryptedHeaders();
         RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
         Assert.assertNotNull(executor);

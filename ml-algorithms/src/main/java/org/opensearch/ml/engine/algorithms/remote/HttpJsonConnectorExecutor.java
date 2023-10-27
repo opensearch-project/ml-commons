@@ -49,6 +49,11 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
 
     private CloseableHttpClient httpClient;
 
+    public HttpJsonConnectorExecutor(Connector connector, CloseableHttpClient httpClient) {
+        this(connector);
+        this.httpClient = httpClient;
+    }
+
     public HttpJsonConnectorExecutor(Connector connector) {
         this.connector = (HttpConnector)connector;
     }

@@ -178,12 +178,24 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED =
         GenerativeQAProcessorConstants.RAG_PIPELINE_FEATURE_ENABLED;
 
-    public static final Setting<Integer> ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND =
-        Setting.intSetting("plugins.ml_commons.http_client.connection_timeout.in_millisecond", 1000, 1, Setting.Property.NodeScope, Setting.Property.Final);
+    public static final Setting<Integer> ML_COMMONS_HTTP_CLIENT_CONNECTION_TIMEOUT_IN_MILLI_SECOND = Setting
+        .intSetting(
+            "plugins.ml_commons.http_client.connection_timeout.in_millisecond",
+            1000,
+            1,
+            Setting.Property.NodeScope,
+            Setting.Property.Final
+        );
 
-    public static final Setting<Integer> ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND =
-        Setting.intSetting("plugins.ml_commons.http_client.read_timeout.in_millisecond", 3000, 1, Setting.Property.NodeScope, Setting.Property.Final);
+    public static final Setting<Integer> ML_COMMONS_HTTP_CLIENT_READ_TIMEOUT_IN_MILLI_SECOND = Setting
+        .intSetting(
+            "plugins.ml_commons.http_client.read_timeout.in_millisecond",
+            3000,
+            1,
+            Setting.Property.NodeScope,
+            Setting.Property.Final
+        );
 
-    public static final Setting<Integer> ML_COMMONS_HTTP_CLIENT_MAX_CONNECTIONS =
-        Setting.intSetting("plugins.ml_commons.http_client.max_connections", 20, 20, Setting.Property.NodeScope, Setting.Property.Final);
+    public static final Setting<Integer> ML_COMMONS_HTTP_CLIENT_MAX_CONNECTIONS = Setting
+        .intSetting("plugins.ml_commons.http_client.max_connections", 20, 20, Setting.Property.NodeScope, Setting.Property.Final);
 }

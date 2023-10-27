@@ -52,6 +52,10 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor{
     @Setter @Getter
     private ScriptService scriptService;
 
+    public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
+        this.connector = (AwsConnector) connector;
+        this.httpClient = httpClient;
+    }
 
     public AwsConnectorExecutor(Connector connector) {
         this.connector = (AwsConnector) connector;
