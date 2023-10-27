@@ -182,4 +182,24 @@ public class HttpJsonConnectorExecutorTest {
         Assert.assertArrayEquals(new Number[] {-0.014555434, -0.002135904, 0.0035105038}, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData());
         Assert.assertArrayEquals(new Number[] {-0.014555434, -0.002135904, 0.0035105038}, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(1).getData());
     }
+
+    @Test
+    public void test_initialize() {
+        ConnectorAction predictAction = ConnectorAction.builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": ${parameters.input}}")
+            .build();
+        Connector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").actions(Arrays.asList(predictAction)).build();
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector, httpClient));
+        initializeExecutor(executor);
+    }
+
+    private void initializeExecutor(RemoteConnectorExecutor executor) {
+        executor.setConnectionTimeoutInMillis(1000);
+        executor.setReadTimeoutInMillis(1000);
+        executor.setMaxConnections(30);
+        executor.initialize();
+    }
 }

@@ -207,4 +207,27 @@ public class AwsConnectorExecutorTest {
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().size());
         Assert.assertEquals("value", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("key"));
     }
+
+    @Test
+    public void test_initialize() {
+        ConnectorAction predictAction = ConnectorAction.builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+        initializeExecutor(executor);
+    }
+
+    private void initializeExecutor(RemoteConnectorExecutor executor) {
+        executor.setConnectionTimeoutInMillis(1000);
+        executor.setReadTimeoutInMillis(1000);
+        executor.setMaxConnections(30);
+        executor.initialize();
+    }
 }
