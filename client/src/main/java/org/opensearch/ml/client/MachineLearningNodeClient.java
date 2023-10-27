@@ -230,12 +230,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerRequest = new MLRegisterModelRequest(mlInput);
-        client
-            .execute(
-                MLRegisterModelAction.INSTANCE,
-                registerRequest,
-                ActionListener.wrap(listener::onResponse, e -> { listener.onFailure(e); })
-            );
+        client.execute(MLRegisterModelAction.INSTANCE, registerRequest, getMLRegisterModelResponseActionListener(listener));
     }
 
     @Override
@@ -262,6 +257,16 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLTaskResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLTaskResponse predictionResponse = MLTaskResponse.fromActionResponse(res);
             return predictionResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLRegisterModelResponse> getMLRegisterModelResponseActionListener(
+        ActionListener<MLRegisterModelResponse> listener
+    ) {
+        ActionListener<MLRegisterModelResponse> actionListener = wrapActionListener(listener, res -> {
+            MLRegisterModelResponse registerModelResponse = MLRegisterModelResponse.fromActionResponse(res);
+            return registerModelResponse;
         });
         return actionListener;
     }
