@@ -144,7 +144,7 @@ POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_deploy
 POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict
 {
   "parameters": {
-    "inputs": "What is the meaning of life?"
+    "inputText": "What is the meaning of life?"
   }
 }
 ```
@@ -162,9 +162,9 @@ Response:
             1536
           ],
           "data": [
-            0.5390625,
-            -0.46679688,
-            -0.125,
+            0.41992188,
+            -0.7265625,
+            -0.080078125,
             ...
           ]
         }
