@@ -18,15 +18,13 @@ import java.util.Locale;
 import java.util.Optional;
 
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.transport.model.MLModelGetAction;
-import org.opensearch.ml.common.transport.model.MLModelGetRequest;
-import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
@@ -91,9 +89,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         }
 
         return channel -> {
-            MLModelGetRequest getModelRequest = new MLModelGetRequest(modelId, false);
-            ActionListener<MLModelGetResponse> listener = ActionListener.wrap(r -> {
-                MLModel mlModel = r.getMlModel();
+            ActionListener<MLModel> listener = ActionListener.wrap(mlModel -> {
                 String algoName = mlModel.getAlgorithm().name();
                 client
                     .execute(
@@ -109,8 +105,9 @@ public class RestMLPredictionAction extends BaseRestHandler {
                     log.error("Failed to send error response", ex);
                 }
             });
-            client.execute(MLModelGetAction.INSTANCE, getModelRequest, listener);
-
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                modelManager.getModel(modelId, ActionListener.runBefore(listener, () -> context.restore()));
+            }
         };
     }
 
