@@ -139,6 +139,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null

@@ -186,6 +186,9 @@ public class CommonValue {
             + MLModel.DEPLOY_TO_ALL_NODES_FIELD
             + "\": {\"type\": \"boolean\"},\n"
             + "      \""
+            + MLModel.IS_HIDDEN_FIELD
+            + "\": {\"type\": \"boolean\"},\n"
+            + "      \""
             + MLModel.MODEL_CONFIG_FIELD
             + "\" : {\"properties\":{\""
             + MODEL_TYPE_FIELD + "\":{\"type\":\"keyword\"},\""

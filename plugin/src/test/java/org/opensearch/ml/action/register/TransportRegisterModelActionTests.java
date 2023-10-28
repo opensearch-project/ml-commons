@@ -164,6 +164,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
         transportRegisterModelAction = new TransportRegisterModelAction(
             transportService,
             actionFilters,

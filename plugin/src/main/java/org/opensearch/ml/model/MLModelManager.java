@@ -286,6 +286,7 @@ public class MLModelManager {
                     .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
                     .createdTime(now)
                     .lastUpdateTime(now)
+
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                 indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
@@ -509,6 +510,7 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
@@ -567,6 +569,7 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
@@ -626,6 +629,7 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
@@ -705,6 +709,7 @@ public class MLModelManager {
                             .content(Base64.getEncoder().encodeToString(bytes))
                             .createdTime(now)
                             .lastUpdateTime(now)
+                            .isHidden(registerModelInput.getIsHidden())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
                         String chunkId = getModelChunkId(modelId, chunkNum);

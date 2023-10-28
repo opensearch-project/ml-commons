@@ -9,10 +9,16 @@ import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
+
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
 
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
@@ -21,6 +27,8 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.Strings;
@@ -49,6 +57,12 @@ public class RestActionUtils {
     public static final String PARAMETER_MODEL_GROUP_ID = "model_group_id";
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
+
+    public static final String SECURITY_AUTHCZ_ADMIN_DN = "plugins.security.authcz.admin_dn";
+    public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
+    public static final String OPENDISTRO_SECURITY_SSL_PRINCIPAL = OPENDISTRO_SECURITY_CONFIG_PREFIX + "ssl_principal";
+
+    static final Set<LdapName> adminDn = new HashSet<>();
 
     public static String getAlgorithm(RestRequest request) {
         String algorithm = request.param(PARAMETER_ALGORITHM);
@@ -189,6 +203,55 @@ public class RestActionUtils {
         String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
         logger.debug("Filtering result by " + userStr);
         return User.parse(userStr);
+    }
+
+    // This is just for POC now. Ideally we will use `user.isSuperUser` from common-utils:https://github.com/opensearch-project/common-utils/pull/547
+    // TODO: Integration test needs to be added (MUST)
+    public static boolean isSuperAdminUser(ClusterService clusterService, Client client) {
+
+        final List<String> adminDnsA = clusterService.getSettings().getAsList(SECURITY_AUTHCZ_ADMIN_DN, Collections.emptyList());
+
+        for (String dn : adminDnsA) {
+            try {
+                logger.debug("{} is registered as an admin dn", dn);
+                adminDn.add(new LdapName(dn));
+            } catch (final InvalidNameException e) {
+                logger.error("Unable to parse admin dn {}", dn, e);
+            }
+        }
+
+        ThreadContext threadContext = client.threadPool().getThreadContext();
+        final String sslPrincipal = threadContext.getTransient(OPENDISTRO_SECURITY_SSL_PRINCIPAL);
+        return isAdminDN(sslPrincipal);
+    }
+
+    private static boolean isAdminDN(String dn) {
+        if (dn == null)
+            return false;
+        try {
+            return isAdminDN(new LdapName(dn));
+        } catch (InvalidNameException e) {
+            return false;
+        }
+    }
+
+    private static boolean isAdminDN(LdapName dn) {
+        if (dn == null)
+            return false;
+        boolean isAdmin = adminDn.contains(dn);
+        if (logger.isTraceEnabled()) {
+            logger.trace("Is principal {} an admin cert? {}", dn.toString(), isAdmin);
+        }
+        return isAdmin;
+    }
+
+    public static boolean isSuperAdminUser(Client client, Settings settings) {
+        // String userStr =
+        // client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
+        // logger.debug("Filtering result by " + userStr);
+        // User user = User.parse(userStr);
+        // return user.isSuperUser(settings);
+        return true;
     }
 
 }
