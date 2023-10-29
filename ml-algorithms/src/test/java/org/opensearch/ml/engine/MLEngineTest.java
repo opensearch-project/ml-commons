@@ -163,7 +163,7 @@ public class MLEngineTest {
     }
 
     @Test
-    public void train_NullTrainable() {
+    public void testTrainNullTrainable() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLInput mlInput = Mockito.mock(MLInput.class);
         when(mlInput.getAlgorithm()).thenReturn(FunctionName.LINEAR_REGRESSION);
