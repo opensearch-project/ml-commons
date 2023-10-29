@@ -71,19 +71,21 @@ public class MLEngineTest {
     }
 
     @Test
-    public void testDeployModelZipPath() {
+    public void testGetDeployModelZipPath() {
         String modelId = "test_id";
         String modelName = "huggingface/sentence-transformers/msmarco-distilbert-base-tas-b";
         String modelZipPath = mlEngine.getDeployModelZipPath(modelId, modelName);
-        assertEquals(mlEngine.getMlCachePath() + "/models_cache/deploy/test_id/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b.zip", modelZipPath);
+        assertEquals(mlEngine.getMlCachePath() + Path.of("/models_cache/deploy/test_id/huggingface/sentence-transformers/msmarco-distilbert-base-tas-b.zip").toString(), modelZipPath);
     }
 
     @Test
     public void testGetDeployModelChunkPath() {
         String modelId = "test_id";
-        Integer chunkNum = 1;
-        Path chunkPath = mlEngine.getDeployModelChunkPath(modelId, chunkNum);
-        assertEquals(Path.of(mlEngine.getMlCachePath().toString() + "/models_cache/deploy/test_id/chunks/1"), chunkPath);
+        for (int i = 1; i <= 10; i++) {
+            Integer chunkNum = i;
+            Path chunkPath = mlEngine.getDeployModelChunkPath(modelId, chunkNum);
+            assertEquals(Path.of(mlEngine.getMlCachePath().toString() + "/models_cache/deploy/test_id/chunks/" + chunkNum.toString()), chunkPath);
+        }
     }
 
     @Test
@@ -170,7 +172,7 @@ public class MLEngineTest {
     }
 
     @Test
-    public void predict_NullTrainAndPredictable() {
+    public void predictNullPredictable() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLInput mlInput = Mockito.mock(MLInput.class);
         MLModel mlModel = Mockito.mock(MLModel.class);
@@ -180,7 +182,7 @@ public class MLEngineTest {
     }
 
     @Test
-    public void trainAndPredict_NullTrainable() {
+    public void trainAndPredictNullTrainable() {
         exceptionRule.expect(IllegalArgumentException.class);
         MLInput mlInput = Mockito.mock(MLInput.class);
         when(mlInput.getAlgorithm()).thenReturn(FunctionName.LINEAR_REGRESSION);
