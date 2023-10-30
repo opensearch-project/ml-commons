@@ -47,6 +47,7 @@ test {
 jacocoTestReport {
     reports {
         html.required = true
+        xml.required = true
         html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
     }
 
@@ -77,6 +78,8 @@ jacocoTestCoverageVerification {
     }
     dependsOn jacocoTestReport
 }
+
+check.dependsOn jacocoTestCoverageVerification
 
 spotless {
     java {
