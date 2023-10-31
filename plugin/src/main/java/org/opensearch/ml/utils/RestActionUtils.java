@@ -205,7 +205,8 @@ public class RestActionUtils {
         return User.parse(userStr);
     }
 
-    // This is just for POC now. Ideally we will use `user.isSuperUser` from common-utils:https://github.com/opensearch-project/common-utils/pull/547
+    // This is just for POC now. Ideally we will use `user.isSuperUser` from
+    // common-utils:https://github.com/opensearch-project/common-utils/pull/547
     // TODO: Integration test needs to be added (MUST)
     public static boolean isSuperAdminUser(ClusterService clusterService, Client client) {
 

@@ -93,6 +93,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
