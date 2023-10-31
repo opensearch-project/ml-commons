@@ -46,13 +46,14 @@ test {
 
 jacocoTestReport {
     reports {
-        html.required = true
-        xml.required = true
-        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
+        xml.getRequired().set(true)
+        csv.getRequired().set(false)
+        html.getRequired().set(true)
     }
 
     dependsOn test
 }
+
 
 List<String> jacocoExclusions = []
 

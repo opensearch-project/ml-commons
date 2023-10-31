@@ -29,8 +29,9 @@ lombok {
 
 jacocoTestReport {
     reports {
-        html.required = true
-        xml.required = true
+        xml.getRequired().set(true)
+        csv.getRequired().set(false)
+        html.getRequired().set(true)
     }
 
     dependsOn test
