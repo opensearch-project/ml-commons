@@ -3,12 +3,6 @@
 Compatible with OpenSearch 2.11.1
  
  
-### Enhancements
- 
- 
-### Infrastructure
- 
- 
 ### Bug Fixes
  
  * fix multiple docs support ([#1516](https://github.com/opensearch-project/ml-commons/pull/1516))
@@ -16,12 +10,4 @@ Compatible with OpenSearch 2.11.1
 ### CVE Fixes
  
 * Bump json version to address CVE-2023-5072 ([#1551](https://github.com/opensearch-project/ml-commons/pull/1551))
- 
- 
-### Documentation
- 
- 
-### Maintenance
- 
- 
-### Refactoring
+
