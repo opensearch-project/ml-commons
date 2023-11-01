@@ -38,8 +38,8 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 
 public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     private final String clusterManagerNodeId = "clusterManagerNode";

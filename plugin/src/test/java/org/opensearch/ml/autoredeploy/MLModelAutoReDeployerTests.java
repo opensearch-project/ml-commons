@@ -57,7 +57,7 @@ import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class MLModelAutoReDeployerTests extends OpenSearchTestCase {
     @Mock

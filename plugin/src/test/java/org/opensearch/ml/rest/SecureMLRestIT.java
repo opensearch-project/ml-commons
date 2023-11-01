@@ -31,8 +31,8 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.base.Throwables;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";

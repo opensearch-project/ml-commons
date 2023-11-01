@@ -28,8 +28,8 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.utils.TestHelper;
 
-import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.base.Throwables;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class MLModelGroupRestIT extends MLCommonsRestTestCase {
 

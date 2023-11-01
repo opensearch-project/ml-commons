@@ -27,7 +27,7 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
-import com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class RestActionUtilsTests extends OpenSearchTestCase {
 

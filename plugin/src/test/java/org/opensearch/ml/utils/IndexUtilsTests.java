@@ -10,7 +10,7 @@ import org.opensearch.action.support.master.AcknowledgedResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class IndexUtilsTests extends OpenSearchIntegTestCase {
 
