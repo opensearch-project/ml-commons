@@ -55,31 +55,21 @@ jacocoTestReport {
 }
 
 
-List<String> jacocoExclusions = []
-
 jacocoTestCoverageVerification {
     violationRules {
         rule {
-            element = 'CLASS'
-            excludes = jacocoExclusions
-            limit {
-                counter = 'BRANCH'
-                minimum = 0.7  //TODO: change this value to 0.7
-            }
-        }
-        rule {
-            element = 'CLASS'
-            excludes = jacocoExclusions
             limit {
                 counter = 'LINE'
-                value = 'COVEREDRATIO'
-                minimum = 0.8  //TODO: change this value to 0.8
+                minimum = 0.7 //TODO: increase coverage to 0.7
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.8 //TODO: increase coverage to 0.8
             }
         }
     }
     dependsOn jacocoTestReport
 }
-
 check.dependsOn jacocoTestCoverageVerification
 
 spotless {
