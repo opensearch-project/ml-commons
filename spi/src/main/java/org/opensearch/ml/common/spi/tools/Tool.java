@@ -16,10 +16,12 @@ public interface Tool {
     /**
      * Run tool and return response.
      * @param parameters input parameters
-     * @return
-     * @param <T>
+     * @return the tool's output
+     * @param <T> The output type
      */
-    default <T> T run(Map<String, String> parameters) {return null;};
+    default <T> T run(Map<String, String> parameters) {
+        return null;
+    };
 
     default <T> void run(Map<String, String> parameters, ActionListener<T> listener) {};
 
@@ -27,13 +29,13 @@ public interface Tool {
      * Set input parser.
      * @param parser
      */
-    default void setInputParser(Parser parser){};
+    default void setInputParser(Parser<?, ?> parser) {};
 
     /**
      * Set output parser.
      * @param parser
      */
-    default void setOutputParser(Parser parser){};
+    default void setOutputParser(Parser<?, ?> parser) {};
 
     /**
      * Get tool name.
@@ -78,13 +80,15 @@ public interface Tool {
      * the tool may end the whole CoT process by returning true.
      * @param input
      * @param toolParameters
-     * @return
+     * @return true as a signal to CoT to end the chain, false to continue CoT
      */
-    default boolean end(String input, Map<String, String> toolParameters){return false;}
+    default boolean end(String input, Map<String, String> toolParameters) {
+        return false;
+    }
 
     /**
      * Tool factory which can create instance of {@link Tool}.
-     * @param <T>
+     * @param <T> The subclass this factory produces
      */
     interface Factory<T extends Tool> {
         T create(Map<String, Object> params);

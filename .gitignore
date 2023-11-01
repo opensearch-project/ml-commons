@@ -7,3 +7,7 @@ ml-algorithms/build/
 plugin/build/
 plugin/src/test/resources/bwc/*
 .DS_Store
+*/bin/
+.classpath
+.project
+.settings
