@@ -21,13 +21,12 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class RestActionUtilsTests extends OpenSearchTestCase {
 

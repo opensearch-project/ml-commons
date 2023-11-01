@@ -63,14 +63,13 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 
 public class TransportForwardActionTests extends OpenSearchTestCase {
 

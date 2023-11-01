@@ -50,6 +50,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -59,8 +60,6 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
 

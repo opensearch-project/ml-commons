@@ -8,9 +8,8 @@ package org.opensearch.ml.utils;
 import org.junit.Ignore;
 import org.opensearch.action.support.master.AcknowledgedResponse;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.test.OpenSearchIntegTestCase;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.test.OpenSearchIntegTestCase;
 
 public class IndexUtilsTests extends OpenSearchIntegTestCase {
 

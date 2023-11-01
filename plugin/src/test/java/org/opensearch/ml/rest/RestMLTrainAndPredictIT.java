@@ -23,12 +23,11 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.builder.SearchSourceBuilder;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class RestMLTrainAndPredictIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_train_predict_it";

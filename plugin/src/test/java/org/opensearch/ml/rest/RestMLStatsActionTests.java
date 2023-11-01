@@ -56,6 +56,8 @@ import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.action.stats.MLStatsNodesResponse;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLActionStats;
@@ -76,9 +78,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class RestMLStatsActionTests extends OpenSearchTestCase {
     @Rule

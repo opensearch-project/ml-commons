@@ -100,6 +100,9 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.indices.MLIndicesHandler;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -110,10 +113,6 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 
 public class MLModelManagerTests extends OpenSearchTestCase {
 

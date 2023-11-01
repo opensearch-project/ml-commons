@@ -74,13 +74,12 @@ import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalcul
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.profile.MLProfileInput;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.Sets;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
-
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.repackage.com.google.common.collect.Sets;
 
 public class TestHelper {
 

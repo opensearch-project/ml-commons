@@ -36,10 +36,9 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.test.OpenSearchTestCase;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
+import org.opensearch.test.OpenSearchTestCase;
 
 public class DiscoveryNodeHelperTests extends OpenSearchTestCase {
     private final String clusterManagerNodeId = "clusterManagerNode";

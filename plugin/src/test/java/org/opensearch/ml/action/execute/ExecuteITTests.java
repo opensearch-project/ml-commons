@@ -16,9 +16,8 @@ import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalcu
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
-import org.opensearch.test.OpenSearchIntegTestCase;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 3)
 public class ExecuteITTests extends MLCommonsIntegTestCase {

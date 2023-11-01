@@ -28,11 +28,10 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
-import org.opensearch.ml.utils.TestHelper;
-import org.opensearch.search.builder.SearchSourceBuilder;
-
 import org.opensearch.ml.repackage.com.google.common.base.Throwables;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class SecureMLRestIT extends MLCommonsRestTestCase {
     private String irisIndex = "iris_data_secure_ml_it";
