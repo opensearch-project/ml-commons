@@ -30,8 +30,9 @@ public class PainlessScriptTool implements Tool {
 
     @Setter @Getter
     private String alias;
+    private static String DEFAULT_DESCRIPTION = "User this tool to get index information.";
     @Getter @Setter
-    private String description = "User this tool to get index information.";
+    private String description = DEFAULT_DESCRIPTION;
     private Client client;
     private String modelId;
     @Setter
@@ -103,6 +104,11 @@ public class PainlessScriptTool implements Tool {
         @Override
         public PainlessScriptTool create(Map<String, Object> map) {
             return new PainlessScriptTool(client, scriptService);
+        }
+
+        @Override
+        public String getDefaultDescription() {
+            return DEFAULT_DESCRIPTION;
         }
     }
 }

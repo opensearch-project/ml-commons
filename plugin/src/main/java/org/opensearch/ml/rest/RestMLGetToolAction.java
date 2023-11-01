@@ -27,10 +27,10 @@ public class RestMLGetToolAction extends BaseRestHandler {
 
     private static final String ML_GET_TOOL_ACTION = "ml_get_tool_action";
 
-    private Map<String, Tool> externalTools;
+    private Map<String, Tool.Factory> toolFactories;
 
-    public RestMLGetToolAction(Map<String, Tool> externalTools) {
-        this.externalTools = externalTools;
+    public RestMLGetToolAction(Map<String, Tool.Factory> toolFactories) {
+        this.toolFactories = toolFactories;
     }
 
     @Override
@@ -41,7 +41,7 @@ public class RestMLGetToolAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tool/{%s}", ML_BASE_URI, PARAMETER_TOOL_NAME)));
+            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/tools/{%s}", ML_BASE_URI, PARAMETER_TOOL_NAME)));
     }
 
     /**
@@ -60,10 +60,8 @@ public class RestMLGetToolAction extends BaseRestHandler {
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
-        externalTools
-            .forEach(
-                (key, value) -> toolList.add(ToolMetadata.builder().name(value.getName()).description(value.getDescription()).build())
-            );
+        toolFactories
+            .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
         String toolName = getParameterId(request, PARAMETER_TOOL_NAME);
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().toolName(toolName).externalTools(toolList).build();
         return channel -> client.execute(MLGetToolAction.INSTANCE, mlToolGetRequest, new RestToXContentListener<>(channel));

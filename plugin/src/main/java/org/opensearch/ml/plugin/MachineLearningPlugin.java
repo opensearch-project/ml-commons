@@ -606,8 +606,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryGetInteractionsAction restListInteractionsAction = new RestMemoryGetInteractionsAction();
         RestMemoryDeleteConversationAction restDeleteConversationAction = new RestMemoryDeleteConversationAction();
         RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
-        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(externalTools);
-        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(externalTools);
+        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
+        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -817,7 +817,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 }
             }
 
-            List<Tool.Factory> toolFactories = extension.getToolFactories();
+            List<Tool.Factory<? extends Tool>> toolFactories = extension.getToolFactories();
             for (Tool.Factory toolFactory : toolFactories) {
                 ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
                 if (toolAnnotation == null) {

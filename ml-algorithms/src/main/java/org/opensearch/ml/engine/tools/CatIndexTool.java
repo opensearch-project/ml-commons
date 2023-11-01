@@ -46,8 +46,9 @@ public class CatIndexTool implements Tool {
 
     @Setter @Getter
     private String alias;
+    private static String DEFAULT_DESCRIPTION = "User this tool to get index information.";
     @Getter @Setter
-    private String description = "User this tool to get index information.";
+    private String description = DEFAULT_DESCRIPTION;
     private Client client;
     private String modelId;
     @Setter
@@ -231,6 +232,11 @@ public class CatIndexTool implements Tool {
         @Override
         public CatIndexTool create(Map<String, Object> map) {
             return new CatIndexTool(client, clusterService, (String)map.get("model_id"));
+        }
+
+        @Override
+        public String getDefaultDescription() {
+            return DEFAULT_DESCRIPTION;
         }
     }
 }

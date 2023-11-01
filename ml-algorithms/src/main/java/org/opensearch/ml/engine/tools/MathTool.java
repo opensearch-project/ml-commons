@@ -29,8 +29,9 @@ public class MathTool implements Tool {
     @Setter
     private ScriptService scriptService;
 
+    private static String DEFAULT_DESCRIPTION = "Use this tool to calculate any math problem.";
     @Getter @Setter
-    private String description = "Use this tool to calculate any math problem.";
+    private String description = DEFAULT_DESCRIPTION;
 
     public MathTool(ScriptService scriptService) {
         this.scriptService = scriptService;
@@ -94,6 +95,11 @@ public class MathTool implements Tool {
         @Override
         public MathTool create(Map<String, Object> map) {
             return new MathTool(scriptService);
+        }
+
+        @Override
+        public String getDefaultDescription() {
+            return DEFAULT_DESCRIPTION;
         }
     }
 }
