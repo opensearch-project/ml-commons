@@ -16,7 +16,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Ignore;
 import org.opensearch.ml.common.output.Output;
-import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -420,6 +419,7 @@ public class AnomalyLocalizerImplTests {
         anomalyLocalizer.execute(input, actionListener);
     }
 
+    //TODO: fix this
     @Ignore
     @SuppressWarnings("unchecked")
     @Test(expected = RuntimeException.class)
@@ -433,6 +433,7 @@ public class AnomalyLocalizerImplTests {
         anomalyLocalizer.execute(input, mock(ActionListener.class));
     }
 
+    //TODO: fix this
     @Ignore
     @Test(expected = RuntimeException.class)
     public void testExecuteInterrupted() {
