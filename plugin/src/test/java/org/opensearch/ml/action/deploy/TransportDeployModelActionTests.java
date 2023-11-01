@@ -77,7 +77,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-import com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class TransportDeployModelActionTests extends OpenSearchTestCase {
     @Mock

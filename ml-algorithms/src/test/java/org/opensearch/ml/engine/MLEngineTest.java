@@ -13,9 +13,11 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
@@ -27,6 +29,7 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.MLInput;
@@ -38,9 +41,11 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
 import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
 import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFrame;
@@ -259,8 +264,13 @@ public class MLEngineTest {
     @Test
     public void executeLocalSampleCalculator() throws Exception {
         Input input = new LocalSampleCalculatorInput("sum", Arrays.asList(1.0, 2.0));
-        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) mlEngine.execute(input);
-        assertEquals(3.0, output.getResult(), 1e-5);
+        ActionListener<Output> listener = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(3.0, output.getResult(), 1e-5);
+        }, e -> {
+            fail("Test failed");
+        });
+        mlEngine.execute(input, listener);
     }
 
     @Test
@@ -283,7 +293,13 @@ public class MLEngineTest {
                 return null;
             }
         };
-        mlEngine.execute(input);
+        ActionListener<Output> listener = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            assertEquals(3.0, output.getResult(), 1e-5);
+        }, e -> {
+            fail("Test failed");
+        });
+        mlEngine.execute(input, listener);
     }
 
 

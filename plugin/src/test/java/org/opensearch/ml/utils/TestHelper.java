@@ -79,8 +79,8 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.search.SearchModule;
 import org.opensearch.test.rest.FakeRestRequest;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.Sets;
 
 public class TestHelper {
 

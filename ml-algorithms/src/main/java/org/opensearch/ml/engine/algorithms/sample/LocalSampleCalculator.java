@@ -47,12 +47,15 @@ public class LocalSampleCalculator implements Executable {
             case "sum":
                 double sum = inputData.stream().mapToDouble(f -> f.doubleValue()).sum() ;
                 listener.onResponse(new LocalSampleCalculatorOutput(sum));
+                break;
             case "max":
                 double max = inputData.stream().max(Comparator.naturalOrder()).get();
                 listener.onResponse(new LocalSampleCalculatorOutput(max));
+                break;
             case "min":
                 double min = inputData.stream().min(Comparator.naturalOrder()).get();
                 listener.onResponse(new LocalSampleCalculatorOutput(min));
+                break;
             default:
                 throw new IllegalArgumentException("can't support this operation");
         }

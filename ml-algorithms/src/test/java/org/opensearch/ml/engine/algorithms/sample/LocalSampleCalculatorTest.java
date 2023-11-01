@@ -13,10 +13,15 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 
 import java.util.Arrays;
+
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 
 public class LocalSampleCalculatorTest {
     @Rule
@@ -36,16 +41,31 @@ public class LocalSampleCalculatorTest {
 
     @Test
     public void execute() {
-        LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) calculator.execute(input);
-        Assert.assertEquals(6.0, output.getResult().doubleValue(), 1e-5);
+        ActionListener<Output> actionListener1 = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            Assert.assertEquals(6.0, output.getResult().doubleValue(), 1e-5);
+        }, e -> {
+            fail("Test failed: " + e.getMessage());
+        });
+        calculator.execute(input, actionListener1);
 
+        ActionListener<Output> actionListener2 = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            Assert.assertEquals(3.0, output.getResult().doubleValue(), 1e-5);
+        }, e -> {
+            fail("Test failed: " + e.getMessage());
+        });
         input = new LocalSampleCalculatorInput("max", Arrays.asList(1.0, 2.0, 3.0));
-        output = (LocalSampleCalculatorOutput) calculator.execute(input);
-        Assert.assertEquals(3.0, output.getResult().doubleValue(), 1e-5);
+        calculator.execute(input, actionListener2);
 
+        ActionListener<Output> actionListener3 = ActionListener.wrap(o -> {
+            LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) o;
+            Assert.assertEquals(1.0, output.getResult().doubleValue(), 1e-5);
+        }, e -> {
+            fail("Test failed: " + e.getMessage());
+        });
         input = new LocalSampleCalculatorInput("min", Arrays.asList(1.0, 2.0, 3.0));
-        output = (LocalSampleCalculatorOutput) calculator.execute(input);
-        Assert.assertEquals(1.0, output.getResult().doubleValue(), 1e-5);
+        calculator.execute(input, actionListener3);
     }
 
     @Test
@@ -53,13 +73,17 @@ public class LocalSampleCalculatorTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("can't support this operation");
         input = new LocalSampleCalculatorInput("wrong_operation", Arrays.asList(1.0, 2.0, 3.0));
-        calculator.execute(input);
+        ActionListener<Output> actionListener = ActionListener.wrap(o -> {
+        }, e -> {
+            fail("Test failed: " + e.getMessage());
+        });
+        calculator.execute(input, actionListener);
     }
 
     @Test
     public void executeWithNullInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("wrong input");
-        calculator.execute(null);
+        calculator.execute(null, mock(ActionListener.class));
     }
 }

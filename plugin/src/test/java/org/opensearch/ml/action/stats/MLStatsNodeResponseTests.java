@@ -28,8 +28,8 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 
 public class MLStatsNodeResponseTests extends OpenSearchTestCase {
     private MLStatsNodeResponse response;

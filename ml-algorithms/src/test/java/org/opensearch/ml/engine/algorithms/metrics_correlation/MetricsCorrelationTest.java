@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
-import com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Ignore;

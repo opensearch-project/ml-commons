@@ -43,7 +43,7 @@ import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
-import com.google.common.collect.ImmutableMap;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class MLTaskManagerTests extends OpenSearchTestCase {
     MLTaskManager mlTaskManager;
