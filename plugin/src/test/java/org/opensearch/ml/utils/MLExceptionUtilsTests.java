@@ -19,9 +19,8 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.core.common.io.stream.NotSerializableExceptionWrapper;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
-import org.opensearch.test.OpenSearchIntegTestCase;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.test.OpenSearchIntegTestCase;
 
 public class MLExceptionUtilsTests extends OpenSearchIntegTestCase {
 

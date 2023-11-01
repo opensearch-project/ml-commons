@@ -13,9 +13,8 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRequest;
-import org.opensearch.test.OpenSearchIntegTestCase;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {

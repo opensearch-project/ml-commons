@@ -86,13 +86,13 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.ml.profile.MLProfileInput;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
 public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {

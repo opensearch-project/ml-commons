@@ -17,9 +17,8 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
-import org.opensearch.test.OpenSearchIntegTestCase;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 1)
 public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {

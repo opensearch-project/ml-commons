@@ -50,7 +50,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLExecuteAction = new RestMLExecuteAction();
+        restMLExecuteAction = new RestMLExecuteAction(client);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -69,7 +69,7 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction();
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(client);
         assertNotNull(restMLExecuteAction);
     }
 

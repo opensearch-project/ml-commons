@@ -483,7 +483,9 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         toolFactories.put(CatIndexTool.NAME, CatIndexTool.Factory.getInstance());
         toolFactories.put(PainlessScriptTool.NAME, PainlessScriptTool.Factory.getInstance());
 
-        toolFactories.putAll(externalToolFactories);
+        if (externalToolFactories != null) {
+            toolFactories.putAll(externalToolFactories);
+        }
 
         Map<String, Memory> memoryMap = new HashMap<>();
         memoryMap.put(ConversationBufferWindowMemory.TYPE, new ConversationBufferWindowMemory());
@@ -572,13 +574,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
-        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(
-            client,
-            xContentRegistry,
-            scriptService,
-            clusterService,
-            encryptor
-        );
+        RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(client);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();

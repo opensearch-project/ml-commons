@@ -18,9 +18,8 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
 import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.utils.TestHelper;
-
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
