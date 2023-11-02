@@ -44,7 +44,7 @@ public class VectorDBTool implements Tool {
     public static final String NAME = "VectorDBTool";
     @Setter @Getter
     private String alias;
-    private static String DEFAULT_DESCRIPTION = "Useful for when need to search my data in OpenSearch index.";
+    private static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
     @Getter @Setter
     private String description = DEFAULT_DESCRIPTION;
 

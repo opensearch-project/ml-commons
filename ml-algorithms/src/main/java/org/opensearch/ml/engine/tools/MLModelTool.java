@@ -36,7 +36,7 @@ public class MLModelTool implements Tool {
 
     @Setter @Getter
     private String alias;
-    private static String DEFAULT_DESCRIPTION = "User this tool to run any model.";
+    private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     @Getter @Setter
     private String description = DEFAULT_DESCRIPTION;
     private Client client;
