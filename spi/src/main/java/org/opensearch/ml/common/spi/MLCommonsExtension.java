@@ -15,12 +15,6 @@ import java.util.List;
 public interface MLCommonsExtension {
 
     /**
-     * Get tools.
-     * @return A list of provided tools
-     */
-    List<Tool> getTools();
-
-    /**
      * Get tool factories.
      * @return A list of tool factories
      */

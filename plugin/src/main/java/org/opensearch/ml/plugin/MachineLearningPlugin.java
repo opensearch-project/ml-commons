@@ -281,7 +281,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     private volatile boolean ragSearchPipelineEnabled;
 
-    private Map<String, Tool> externalTools;
     private Map<String, Tool.Factory> externalToolFactories;
     private Map<String, Tool.Factory> toolFactories;
     private ScriptService scriptService;
@@ -807,16 +806,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public void loadExtensions(ExtensionLoader loader) {
-        externalTools = new HashMap<>();
         externalToolFactories = new HashMap<>();
         for (MLCommonsExtension extension : loader.loadExtensions(MLCommonsExtension.class)) {
-            List<Tool> tools = extension.getTools();
-            if (tools != null) {
-                for (Tool tool : tools) {
-                    externalTools.put(tool.getName(), tool);
-                }
-            }
-
             List<Tool.Factory<? extends Tool>> toolFactories = extension.getToolFactories();
             for (Tool.Factory toolFactory : toolFactories) {
                 ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
