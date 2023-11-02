@@ -23,6 +23,12 @@ public interface Tool {
         return null;
     };
 
+    /**
+     * Run tool and return response asynchronously.
+     * @param parameters input parameters
+     * @param listener an action listener for the response
+     * @param <T> The output type
+     */
     default <T> void run(Map<String, String> parameters, ActionListener<T> listener) {};
 
     /**
