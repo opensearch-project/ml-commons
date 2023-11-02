@@ -164,6 +164,12 @@ jobs:
             ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster"
           fi
 
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v3
+        with:
+          flags: ml-commons
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   Build-ml-windows:
     strategy:
       matrix:
