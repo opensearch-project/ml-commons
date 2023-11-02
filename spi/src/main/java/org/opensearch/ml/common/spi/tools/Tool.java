@@ -92,5 +92,6 @@ public interface Tool {
      */
     interface Factory<T extends Tool> {
         T create(Map<String, Object> params);
+        String getDefaultDescription();
     }
 }

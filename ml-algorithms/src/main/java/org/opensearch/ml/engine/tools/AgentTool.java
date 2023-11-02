@@ -35,8 +35,9 @@ public class AgentTool implements Tool {
     @Setter @Getter
     private String alias;
 
+    private static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
     @Getter @Setter
-    private String description = "Use this tool to run any agent.";
+    private String description = DEFAULT_DESCRIPTION;
 
     public AgentTool(Client client, String agentId) {
         this.client = client;
@@ -91,6 +92,11 @@ public class AgentTool implements Tool {
         @Override
         public AgentTool create(Map<String, Object> map) {
             return new AgentTool(client, (String)map.get("agent_id"));
+        }
+
+        @Override
+        public String getDefaultDescription() {
+            return DEFAULT_DESCRIPTION;
         }
     }
 }

@@ -44,8 +44,9 @@ public class VectorDBTool implements Tool {
     public static final String NAME = "VectorDBTool";
     @Setter @Getter
     private String alias;
+    private static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
     @Getter @Setter
-    private String description = "Useful for when need to search my data in OpenSearch index.";
+    private String description = DEFAULT_DESCRIPTION;
 
     private Client client;
     private NamedXContentRegistry xContentRegistry;
@@ -228,6 +229,11 @@ public class VectorDBTool implements Tool {
                     .modelId(modelId)
                     .docSize(docSize)
                     .build();
+        }
+
+        @Override
+        public String getDefaultDescription() {
+            return DEFAULT_DESCRIPTION;
         }
     }
 

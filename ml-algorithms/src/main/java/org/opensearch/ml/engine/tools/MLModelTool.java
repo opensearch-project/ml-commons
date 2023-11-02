@@ -36,8 +36,9 @@ public class MLModelTool implements Tool {
 
     @Setter @Getter
     private String alias;
+    private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     @Getter @Setter
-    private String description = "User this tool to run any model.";
+    private String description = DEFAULT_DESCRIPTION;
     private Client client;
     private String modelId;
     @Setter
@@ -115,6 +116,11 @@ public class MLModelTool implements Tool {
         @Override
         public MLModelTool create(Map<String, Object> map) {
             return new MLModelTool(client, (String)map.get("model_id"));
+        }
+
+        @Override
+        public String getDefaultDescription() {
+            return DEFAULT_DESCRIPTION;
         }
     }
 }

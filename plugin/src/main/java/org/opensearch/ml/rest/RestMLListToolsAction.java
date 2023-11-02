@@ -26,10 +26,10 @@ import org.opensearch.rest.action.RestToXContentListener;
 public class RestMLListToolsAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_ACTION = "ml_get_tools_action";
 
-    private Map<String, Tool> externalTools;
+    private Map<String, Tool.Factory> toolFactories;
 
-    public RestMLListToolsAction(Map<String, Tool> externalTools) {
-        this.externalTools = externalTools;
+    public RestMLListToolsAction(Map<String, Tool.Factory> toolFactories) {
+        this.toolFactories = toolFactories;
     }
 
     @Override
@@ -58,10 +58,8 @@ public class RestMLListToolsAction extends BaseRestHandler {
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         List<ToolMetadata> toolList = new ArrayList<>();
-        externalTools
-            .forEach(
-                (key, value) -> toolList.add(ToolMetadata.builder().name(value.getName()).description(value.getDescription()).build())
-            );
+        toolFactories
+            .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
         MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().externalTools(toolList).build();
         return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsGetRequest, new RestToXContentListener<>(channel));
     }
