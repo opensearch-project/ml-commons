@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
@@ -41,7 +42,14 @@ public interface RemoteConnectorExecutor {
                 if (tempTensorOutputs.size() > 0 && tempTensorOutputs.get(0).getMlModelTensors() != null) {
                     tensorCount = tempTensorOutputs.get(0).getMlModelTensors().size();
                 }
-                processedDocs += Math.max(tensorCount, 1);
+                // This is to support some model which takes N text docs and embedding size is less than N-1.
+                // We need to tell executor what's the step size for each model run.
+                Map<String, String> parameters = getConnector().getParameters();
+                if (parameters != null && parameters.containsKey("input_docs_processed_step_size")) {
+                    processedDocs += Integer.parseInt(parameters.get("input_docs_processed_step_size"));
+                } else {
+                    processedDocs += Math.max(tensorCount, 1);
+                }
                 tensorOutputs.addAll(tempTensorOutputs);
             }
 
