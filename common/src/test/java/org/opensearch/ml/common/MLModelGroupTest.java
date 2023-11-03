@@ -30,8 +30,8 @@ public class MLModelGroupTest {
 
     @Test
     public void toXContent_NullName() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("model group name is null");
+        exceptionRule.expect(NullPointerException.class);
+        exceptionRule.expectMessage("model group name must not be null");
 
         MLModelGroup.builder().build();
     }

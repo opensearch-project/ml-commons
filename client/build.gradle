@@ -9,6 +9,7 @@ plugins {
     id 'jacoco'
     id 'com.github.johnrengelman.shadow'
     id 'maven-publish'
+    id 'com.diffplug.spotless' version '6.18.0'
     id 'signing'
 }
 
@@ -20,6 +21,16 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '4.4.0'
 
 }
+
+spotless {
+    java {
+        removeUnusedImports()
+        importOrder 'java', 'javax', 'org', 'com'
+
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    }
+}
+
 
 jacocoTestReport {
     reports {

@@ -5,21 +5,27 @@
 
 package org.opensearch.ml.client;
 
+import java.util.List;
+import java.util.Map;
 
-import org.opensearch.common.action.ActionFuture;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.common.action.ActionFuture;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
-
-import java.util.List;
-import java.util.Map;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
+import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.
@@ -80,7 +86,6 @@ public interface MachineLearningClient {
         train(mlInput, asyncTask, actionFuture);
         return actionFuture;
     }
-
 
     /**
      * Do the training machine learning job. The training job will be always async process. The job id will be returned in this method.
@@ -202,14 +207,12 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
-
     /**
      * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
      * @param searchRequest searchRequest to search the ML Model
      * @param listener action listener
      */
     void searchModel(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
-
 
     /**
      * For more info on search task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-task
@@ -228,6 +231,76 @@ public interface MachineLearningClient {
      * @param listener action listener
      */
     void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
+
+    /**
+     * Register model
+     * For additional info on register, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#registering-a-model
+     * @param mlInput ML input
+     */
+    default ActionFuture<MLRegisterModelResponse> register(MLRegisterModelInput mlInput) {
+        PlainActionFuture<MLRegisterModelResponse> actionFuture = PlainActionFuture.newFuture();
+        register(mlInput, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Register model
+     * For additional info on register, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#registering-a-model
+     * @param mlInput ML input
+     * @param listener a listener to be notified of the result
+     */
+    void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener);
+
+    /**
+     * Deploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#deploying-a-model
+     * @param modelId the model id
+     */
+    default ActionFuture<MLDeployModelResponse> deploy(String modelId) {
+        PlainActionFuture<MLDeployModelResponse> actionFuture = PlainActionFuture.newFuture();
+        deploy(modelId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Deploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#deploying-a-model
+     * @param modelId the model id
+     * @param listener a listener to be notified of the result
+     */
+    void deploy(String modelId, ActionListener<MLDeployModelResponse> listener);
+
+    /**
+     * Create connector for remote model
+     * @param mlCreateConnectorInput Create Connector Input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/extensibility/connectors/
+     * @return the result future
+     */
+    default ActionFuture<MLCreateConnectorResponse> createConnector(MLCreateConnectorInput mlCreateConnectorInput) {
+        PlainActionFuture<MLCreateConnectorResponse> actionFuture = PlainActionFuture.newFuture();
+        createConnector(mlCreateConnectorInput, actionFuture);
+        return actionFuture;
+    }
+
+    void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener);
+
+    /**
+     * Register model group
+     * For additional info on model group, refer: https://opensearch.org/docs/latest/ml-commons-plugin/model-access-control#registering-a-model-group
+     * @param mlRegisterModelGroupInput model group input
+     */
+    default ActionFuture<MLRegisterModelGroupResponse> registerModelGroup(MLRegisterModelGroupInput mlRegisterModelGroupInput) {
+        PlainActionFuture<MLRegisterModelGroupResponse> actionFuture = PlainActionFuture.newFuture();
+        registerModelGroup(mlRegisterModelGroupInput, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Register model group
+     * For additional info on model group, refer: https://opensearch.org/docs/latest/ml-commons-plugin/model-access-control#registering-a-model-group
+     * @param mlRegisterModelGroupInput model group input
+     * @param listener a listener to be notified of the result
+     */
+    void registerModelGroup(MLRegisterModelGroupInput mlRegisterModelGroupInput, ActionListener<MLRegisterModelGroupResponse> listener);
 
     /**
      * Get a list of ToolMetadata and return ActionFuture.
