@@ -22,6 +22,9 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
@@ -30,6 +33,10 @@ import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
@@ -195,6 +202,22 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLTaskSearchAction.INSTANCE, searchRequest, ActionListener.wrap(searchResponse -> {
             listener.onResponse(searchResponse);
         }, listener::onFailure));
+    }
+
+    @Override
+    public void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener) {
+        MLRegisterModelRequest registerRequest = new MLRegisterModelRequest(mlInput);
+        client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
+            listener.onFailure(e);
+        }));
+    }
+
+    @Override
+    public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, false);
+        client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, ActionListener.wrap(listener::onResponse, e -> {
+            listener.onFailure(e);
+        }));
     }
 
     @Override

@@ -17,6 +17,9 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
+import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -228,6 +231,44 @@ public interface MachineLearningClient {
      * @param listener action listener
      */
     void searchTask(SearchRequest searchRequest, ActionListener<SearchResponse> listener);
+
+    /**
+     * Register model
+     * For additional info on register, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#registering-a-model
+     * @param mlInput ML input
+     */
+    default ActionFuture<MLRegisterModelResponse> register(MLRegisterModelInput mlInput) {
+        PlainActionFuture<MLRegisterModelResponse> actionFuture = PlainActionFuture.newFuture();
+        register(mlInput, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Register model
+     * For additional info on register, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#registering-a-model
+     * @param mlInput ML input
+     * @param listener a listener to be notified of the result
+     */
+    void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener);
+
+    /**
+     * Deploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#deploying-a-model
+     * @param modelId the model id
+     */
+    default ActionFuture<MLDeployModelResponse> deploy(String modelId) {
+        PlainActionFuture<MLDeployModelResponse> actionFuture = PlainActionFuture.newFuture();
+        deploy(modelId, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Deploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#deploying-a-model
+     * @param modelId the model id
+     * @param listener a listener to be notified of the result
+     */
+    void deploy(String modelId, ActionListener<MLDeployModelResponse> listener);
 
     /**
      * Get a list of ToolMetadata and return ActionFuture.
