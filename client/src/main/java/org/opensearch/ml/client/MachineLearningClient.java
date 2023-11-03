@@ -17,6 +17,8 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
@@ -269,6 +271,19 @@ public interface MachineLearningClient {
      * @param listener a listener to be notified of the result
      */
     void deploy(String modelId, ActionListener<MLDeployModelResponse> listener);
+
+    /**
+     * Create connector for remote model
+     * @param mlCreateConnectorInput Create Connector Input, refer: https://opensearch.org/docs/latest/ml-commons-plugin/extensibility/connectors/
+     * @return the result future
+     */
+    default ActionFuture<MLCreateConnectorResponse> createConnector(MLCreateConnectorInput mlCreateConnectorInput) {
+        PlainActionFuture<MLCreateConnectorResponse> actionFuture = PlainActionFuture.newFuture();
+        createConnector(mlCreateConnectorInput, actionFuture);
+        return actionFuture;
+    }
+
+    void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener);
 
     /**
      * Get a list of ToolMetadata and return ActionFuture.

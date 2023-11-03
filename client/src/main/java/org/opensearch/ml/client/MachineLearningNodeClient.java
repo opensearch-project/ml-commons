@@ -22,6 +22,10 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -218,6 +222,12 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, ActionListener.wrap(listener::onResponse, e -> {
             listener.onFailure(e);
         }));
+    }
+
+    @Override
+    public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
+        MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, listener);
     }
 
     @Override

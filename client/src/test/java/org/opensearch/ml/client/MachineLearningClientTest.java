@@ -19,6 +19,7 @@ import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -28,6 +29,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.output.MLTrainingOutput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
@@ -71,6 +74,9 @@ public class MachineLearningClientTest {
 
     @Mock
     MLDeployModelResponse deployModelResponse;
+
+    @Mock
+    MLCreateConnectorResponse createConnectorResponse;
 
 
     private String modekId = "test_model_id";
@@ -156,6 +162,11 @@ public class MachineLearningClientTest {
             @Override
             public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
                 listener.onResponse(deployModelResponse);
+            }
+
+            @Override
+            public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
+                listener.onResponse(createConnectorResponse);
             }
 
             @Override
@@ -312,5 +323,27 @@ public class MachineLearningClientTest {
     @Test
     public void deploy() {
         assertEquals(deployModelResponse, machineLearningClient.deploy("modelId").actionGet());
+    }
+
+    @Test
+    public void createConnector() {
+        Map<String, String> params = Map.ofEntries(Map.entry("endpoint", "endpoint"), Map.entry("temp", "7"));
+        Map<String, String> credentials = Map.ofEntries(Map.entry("key1", "key1"), Map.entry("key2", "key2"));
+
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput.builder()
+                .name("test")
+                .description("description")
+                .version("testModelVersion")
+                .protocol("testProtocol")
+                .parameters(params)
+                .credential(credentials)
+                .actions(null)
+                .backendRoles(null)
+                .addAllBackendRoles(false)
+                .access(AccessMode.from("private"))
+                .dryRun(false)
+                .build();
+
+        assertEquals(createConnectorResponse, machineLearningClient.createConnector(mlCreateConnectorInput).actionGet());
     }
 }
