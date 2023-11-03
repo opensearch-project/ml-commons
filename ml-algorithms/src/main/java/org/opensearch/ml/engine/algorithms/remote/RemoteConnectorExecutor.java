@@ -47,7 +47,7 @@ public interface RemoteConnectorExecutor {
                 Map<String, String> parameters = getConnector().getParameters();
                 int stepSize = 1;
                 if (parameters != null) {
-                    stepSize = Integer.parseInt(Optional.ofNullable(parameters.get("text_docs_processed_step_size")).orElse("1"));
+                    stepSize = Integer.parseInt(Optional.ofNullable(parameters.get("input_docs_processed_step_size")).orElse("1"));
                 }
                 processedDocs += Math.max(tensorCount, stepSize);
                 tensorOutputs.addAll(tempTensorOutputs);

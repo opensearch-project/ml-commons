@@ -209,7 +209,7 @@ public class HttpJsonConnectorExecutorTest {
                 .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
                 .requestBody("{\"input\": ${parameters.input}}")
                 .build();
-        Map<String, String> parameters = ImmutableMap.of("text_docs_processed_step_size", "2");
+        Map<String, String> parameters = ImmutableMap.of("input_docs_processed_step_size", "2");
         HttpConnector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
         HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
         executor.setScriptService(scriptService);
