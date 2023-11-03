@@ -9,5 +9,6 @@ public enum MLInputDataType {
     SEARCH_QUERY,
     DATA_FRAME,
     TEXT_DOCS,
+    TEXT_SIMILARITY,
     REMOTE
 }

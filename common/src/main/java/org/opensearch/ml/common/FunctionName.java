@@ -17,6 +17,7 @@ public enum FunctionName {
     RCF_SUMMARIZE,
     LOGISTIC_REGRESSION,
     TEXT_EMBEDDING,
+    TEXT_SIMILARITY,
     SPARSE_ENCODING,
     SPARSE_TOKENIZE,
     METRICS_CORRELATION,
@@ -35,7 +36,7 @@ public enum FunctionName {
      * @return true for deep learning model.
      */
     public static boolean isDLModel(FunctionName functionName) {
-        if (functionName == TEXT_EMBEDDING || functionName == SPARSE_ENCODING || functionName == SPARSE_TOKENIZE) {
+        if (functionName == TEXT_EMBEDDING || functionName == SPARSE_ENCODING || functionName == SPARSE_TOKENIZE || functionName == TEXT_SIMILARITY) {
             return true;
         }
         return false;
