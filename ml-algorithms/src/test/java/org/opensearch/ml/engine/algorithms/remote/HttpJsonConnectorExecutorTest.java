@@ -234,4 +234,45 @@ public class HttpJsonConnectorExecutorTest {
         Assert.assertEquals("sentence_embedding", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());
         Assert.assertArrayEquals(new Number[] {-0.014555434, -0.002135904, 0.0035105038}, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getData());
     }
+
+    @Test
+    public void executePredict_TextDocsInput_LessEmbeddingThanInputDocs_InvalidStepSize() throws IOException {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Invalid parameter: input_docs_processed_step_size. It must be positive integer.");
+        String preprocessResult1 = "{\"parameters\": { \"input\": \"test doc1\" } }";
+        String preprocessResult2 = "{\"parameters\": { \"input\": \"test doc2\" } }";
+        when(scriptService.compile(any(), any()))
+                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult1))
+                .then(invocation -> new TestTemplateService.MockTemplateScript.Factory(preprocessResult2));
+
+        ConnectorAction predictAction = ConnectorAction.builder()
+                .actionType(ConnectorAction.ActionType.PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
+                .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
+                .requestBody("{\"input\": ${parameters.input}}")
+                .build();
+        // step size must be positive integer, here we set it as -1, should trigger IllegalArgumentException
+        Map<String, String> parameters = ImmutableMap.of("input_docs_processed_step_size", "-1");
+        HttpConnector connector = HttpConnector.builder().name("test connector").version("1").protocol("http").parameters(parameters).actions(Arrays.asList(predictAction)).build();
+        HttpJsonConnectorExecutor executor = spy(new HttpJsonConnectorExecutor(connector));
+        executor.setScriptService(scriptService);
+        when(httpClient.execute(any())).thenReturn(response);
+        // model takes 2 input docs, but only output 1 embedding
+        String modelResponse = "{\n" + "    \"object\": \"list\",\n" + "    \"data\": [\n" + "        {\n"
+                               + "            \"object\": \"embedding\",\n" + "            \"index\": 0,\n" + "            \"embedding\": [\n"
+                               + "                -0.014555434,\n" + "                -0.002135904,\n" + "                0.0035105038\n" + "            ]\n"
+                               + "        }    ],\n"
+                               + "    \"model\": \"text-embedding-ada-002-v2\",\n" + "    \"usage\": {\n" + "        \"prompt_tokens\": 5,\n"
+                               + "        \"total_tokens\": 5\n" + "    }\n" + "}";
+        StatusLine statusLine = new BasicStatusLine(new ProtocolVersion("HTTP", 1, 1), 200, "OK");
+        when(response.getStatusLine()).thenReturn(statusLine);
+        HttpEntity entity = new StringEntity(modelResponse);
+        when(response.getEntity()).thenReturn(entity);
+        when(executor.getHttpClient()).thenReturn(httpClient);
+        when(executor.getConnector()).thenReturn(connector);
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("test doc1", "test doc2")).build();
+        ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+    }
 }
