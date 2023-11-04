@@ -13,6 +13,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.MLExceptionUtils.UPDATE_CONNECTOR_DISABLED_ERR_MSG;
 
 import java.util.HashMap;
 import java.util.List;
@@ -140,6 +141,15 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         exceptionRule.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest();
+        restMLUpdateConnectorAction.handleRequest(request, channel, client);
+    }
+
+    public void testPrepareRequestUpdateDisabled() throws Exception {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule.expectMessage(UPDATE_CONNECTOR_DISABLED_ERR_MSG);
+
+        when(mlFeatureEnabledSetting.isUpdateConnectorEnabled()).thenReturn(false);
         RestRequest request = getRestRequest();
         restMLUpdateConnectorAction.handleRequest(request, channel, client);
     }
