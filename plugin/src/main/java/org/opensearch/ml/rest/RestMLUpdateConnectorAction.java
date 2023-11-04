@@ -64,7 +64,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
             throw new IllegalStateException(UPDATE_CONNECTOR_DISABLED_ERR_MSG);
         }
         if (!request.hasContent()) {
-            throw new IOException("Failed to update connector: Request body is empty");
+            throw new OpenSearchParseException("Failed to update connector: Request body is empty");
         }
 
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
