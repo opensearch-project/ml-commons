@@ -18,12 +18,17 @@ import org.opensearch.ml.common.spi.tools.Tool;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+
+import org.opensearch.Version;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.opensearch.action.admin.cluster.state.ClusterStateResponse;
+import org.opensearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.opensearch.action.admin.indices.stats.CommonStats;
 import org.opensearch.action.admin.indices.stats.CommonStatsFlags;
 import org.opensearch.action.admin.indices.stats.IndexStats;
@@ -46,6 +51,7 @@ import org.opensearch.cluster.routing.ShardRoutingState;
 import org.opensearch.cluster.routing.TestShardRouting;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.UUIDs;
+import org.opensearch.common.settings.Settings;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -59,34 +65,28 @@ public class CatIndexToolTests {
 
     @Mock
     private Client client;
-
     @Mock
     private AdminClient adminClient;
-
     @Mock
     private IndicesAdminClient indicesAdminClient;
-
     @Mock
     private ClusterAdminClient clusterAdminClient;
-
     @Mock
     private ClusterService clusterService;
-
     @Mock
     private ClusterState clusterState;
-
     @Mock
     private Metadata metadata;
-
+    @Mock
+    private GetSettingsResponse getSettingsResponse;
     @Mock
     private IndicesStatsResponse indicesStatsResponse;
-
+    @Mock
+    private ClusterStateResponse clusterStateResponse;
     @Mock
     private ClusterHealthResponse clusterHealthResponse;
-
     @Mock
     private IndexMetadata indexMetadata;
-
     @Mock
     private IndexRoutingTable indexRoutingTable;
 
@@ -103,6 +103,8 @@ public class CatIndexToolTests {
         when(client.admin()).thenReturn(adminClient);
 
         when(indexMetadata.getState()).thenReturn(State.OPEN);
+        when(indexMetadata.getCreationVersion()).thenReturn(Version.CURRENT);
+        
         when(metadata.index(any(String.class))).thenReturn(indexMetadata);
         when(clusterState.metadata()).thenReturn(metadata);
         when(clusterService.state()).thenReturn(clusterState);
@@ -117,16 +119,43 @@ public class CatIndexToolTests {
     @Test
     public void testRunAsyncNoIndices() throws Exception {
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<IndicesStatsResponse>> actionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
-        doNothing().when(indicesAdminClient).stats(any(), actionListenerCaptor.capture());
+        ArgumentCaptor<ActionListener<GetSettingsResponse>> settingsActionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getSettings(any(), settingsActionListenerCaptor.capture());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<IndicesStatsResponse>> statsActionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).stats(any(), statsActionListenerCaptor.capture());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<ClusterStateResponse>> clusterStateActionListenerCaptor = ArgumentCaptor.forClass(
+            ActionListener.class
+        );
+        doNothing().when(clusterAdminClient).state(any(), clusterStateActionListenerCaptor.capture());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthActionListenerCaptor = ArgumentCaptor.forClass(
+            ActionListener.class
+        );
+        doNothing().when(clusterAdminClient).health(any(), clusterHealthActionListenerCaptor.capture());
+
+        when(getSettingsResponse.getIndexToSettings()).thenReturn(Collections.emptyMap());
         when(indicesStatsResponse.getIndices()).thenReturn(Collections.emptyMap());
+        when(clusterStateResponse.getState()).thenReturn(clusterState);
+        when(clusterState.getMetadata()).thenReturn(metadata);
+        when(metadata.spliterator()).thenReturn(Arrays.spliterator(new IndexMetadata[0]));
+
+        when(clusterHealthResponse.getIndices()).thenReturn(Collections.emptyMap());
 
         Tool tool = CatIndexTool.Factory.getInstance().create(Map.of("model_id", "test"));
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
         tool.run(otherParams, listener);
-        actionListenerCaptor.getValue().onResponse(indicesStatsResponse);
+        settingsActionListenerCaptor.getValue().onResponse(getSettingsResponse);
+        statsActionListenerCaptor.getValue().onResponse(indicesStatsResponse);
+        clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
+        clusterHealthActionListenerCaptor.getValue().onResponse(clusterHealthResponse);
+
         future.join();
         assertEquals("There were no results searching the indices parameter [null].", future.get());
     }
@@ -136,10 +165,27 @@ public class CatIndexToolTests {
         String indexName = "foo";
         Index index = new Index(indexName, UUIDs.base64UUID());
 
-        // Setup indices query
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<IndicesStatsResponse>> indicesStatsListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
-        doNothing().when(indicesAdminClient).stats(any(), indicesStatsListenerCaptor.capture());
+        ArgumentCaptor<ActionListener<GetSettingsResponse>> settingsActionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getSettings(any(), settingsActionListenerCaptor.capture());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<IndicesStatsResponse>> statsActionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).stats(any(), statsActionListenerCaptor.capture());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<ClusterStateResponse>> clusterStateActionListenerCaptor = ArgumentCaptor.forClass(
+            ActionListener.class
+        );
+        doNothing().when(clusterAdminClient).state(any(), clusterStateActionListenerCaptor.capture());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthActionListenerCaptor = ArgumentCaptor.forClass(
+            ActionListener.class
+        );
+        doNothing().when(clusterAdminClient).health(any(), clusterHealthActionListenerCaptor.capture());
+
+        when(getSettingsResponse.getIndexToSettings()).thenReturn(Map.of("foo", Settings.EMPTY));
 
         int shardId = 0;
         ShardId shId = new ShardId(index, shardId);
@@ -152,14 +198,14 @@ public class CatIndexToolTests {
         ).build();
         when(indicesStatsResponse.getIndices()).thenReturn(Map.of(indexName, fooStats));
 
-        // Setup cluster health query
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<ActionListener<ClusterHealthResponse>> clusterHealthListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
-        doNothing().when(clusterAdminClient).health(any(), clusterHealthListenerCaptor.capture());
-
         when(indexMetadata.getIndex()).thenReturn(index);
-        when(indexMetadata.getNumberOfShards()).thenReturn(1);
-        when(indexMetadata.getNumberOfReplicas()).thenReturn(0);
+        when(indexMetadata.getNumberOfShards()).thenReturn(5);
+        when(indexMetadata.getNumberOfReplicas()).thenReturn(1);
+        when(clusterStateResponse.getState()).thenReturn(clusterState);
+        when(clusterState.getMetadata()).thenReturn(metadata);
+        when(metadata.spliterator()).thenReturn(
+            Arrays.spliterator(new IndexMetadata[] { indexMetadata })
+        );
         @SuppressWarnings("unchecked")
         Iterator<IndexShardRoutingTable> iterator = (Iterator<IndexShardRoutingTable>) mock(Iterator.class);
         when(iterator.hasNext()).thenReturn(false);
@@ -173,22 +219,21 @@ public class CatIndexToolTests {
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
         tool.run(otherParams, listener);
-        indicesStatsListenerCaptor.getValue().onResponse(indicesStatsResponse);
-        clusterHealthListenerCaptor.getValue().onResponse(clusterHealthResponse);
-        future.orTimeout(10, TimeUnit.SECONDS).join();
-        String response = future.get();
-        assertEquals(
-            "health\tstatus\tindex\tuuid\tpri\trep\tdocs.count\tdocs.deleted\tstore.size\tpri.store.size\n"
-                + "red\tOPEN\tfoo\tnull\t1\t0\t0\t0\t0b\t0b\n",
-            response
-        );
-    }
+        settingsActionListenerCaptor.getValue().onResponse(getSettingsResponse);
+        statsActionListenerCaptor.getValue().onResponse(indicesStatsResponse);
+        clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
+        clusterHealthActionListenerCaptor.getValue().onResponse(clusterHealthResponse);
 
-    @Test
-    public void testRun() {
-        Tool tool = CatIndexTool.Factory.getInstance().create(Map.of("model_id", "test"));
-        // TODO This is not implemented on the interface, need to change this test if/when it is
-        assertNull(tool.run(emptyParams));
+        future.orTimeout(10, TimeUnit.SECONDS).join();
+        String response = future.get();        
+        String[] responseRows = response.trim().split("\\n");
+
+        assertEquals(2, responseRows.length);
+        String header = responseRows[0];
+        String fooRow = responseRows[1];
+        assertEquals(header.split("\\t").length, fooRow.split("\\t").length);
+        assertTrue(header.startsWith("health\tstatus\tindex\tuuid\tpri\trep"));
+        assertTrue(fooRow.startsWith("red\topen\tfoo\tnull\t5\t1"));
     }
 
     @Test
