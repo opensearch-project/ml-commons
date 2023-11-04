@@ -70,6 +70,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
+    private static final String GITHUB_CI_AWS_REGION = "us-west-2";
 
     private static final String BEDROCK_CONNECTOR_BLUEPRINT1 =
               "{\n"
@@ -78,7 +79,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
             + "  \"version\": 1,\n"
             + "  \"protocol\": \"aws_sigv4\",\n"
             + "  \"parameters\": {\n"
-            + "    \"region\": \"us-east-1\",\n"
+            + "    \"region\": \"" + GITHUB_CI_AWS_REGION + "\",\n"
             + "    \"service_name\": \"bedrock\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
@@ -93,7 +94,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
             + "            \"headers\": {\n"
             + "                \"content-type\": \"application/json\"\n"
             + "            },\n"
-            + "            \"url\": \"https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke\",\n"
+            + "            \"url\": \"https://bedrock-runtime." + GITHUB_CI_AWS_REGION + ".amazonaws.com/model/anthropic.claude-v2/invoke\",\n"
             + "            \"request_body\": \"{\\\"prompt\\\":\\\"\\\\n\\\\nHuman: ${parameters.inputs}\\\\n\\\\nAssistant:\\\",\\\"max_tokens_to_sample\\\":300,\\\"temperature\\\":0.5,\\\"top_k\\\":250,\\\"top_p\\\":1,\\\"stop_sequences\\\":[\\\"\\\\\\\\n\\\\\\\\nHuman:\\\"]}\"\n"
             + "        }\n"
             + "    ]\n"
@@ -105,7 +106,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
             + "  \"version\": 1,\n"
             + "  \"protocol\": \"aws_sigv4\",\n"
             + "  \"parameters\": {\n"
-            + "    \"region\": \"us-east-1\",\n"
+            + "    \"region\": \"" + GITHUB_CI_AWS_REGION + "\",\n"
             + "    \"service_name\": \"bedrock\"\n"
             + "  },\n"
             + "  \"credential\": {\n"
@@ -119,7 +120,7 @@ public class RestMLRAGSearchProcessorIT extends RestMLRemoteInferenceIT {
             + "            \"headers\": {\n"
             + "                \"content-type\": \"application/json\"\n"
             + "            },\n"
-            + "            \"url\": \"https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke\",\n"
+            + "            \"url\": \"https://bedrock-runtime." + GITHUB_CI_AWS_REGION + ".amazonaws.com/model/anthropic.claude-v2/invoke\",\n"
             + "            \"request_body\": \"{\\\"prompt\\\":\\\"\\\\n\\\\nHuman: ${parameters.inputs}\\\\n\\\\nAssistant:\\\",\\\"max_tokens_to_sample\\\":300,\\\"temperature\\\":0.5,\\\"top_k\\\":250,\\\"top_p\\\":1,\\\"stop_sequences\\\":[\\\"\\\\\\\\n\\\\\\\\nHuman:\\\"]}\"\n"
             + "        }\n"
             + "    ]\n"
