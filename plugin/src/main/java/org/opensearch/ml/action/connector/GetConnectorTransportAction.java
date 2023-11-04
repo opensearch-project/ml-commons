@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -19,11 +20,11 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
@@ -79,7 +80,13 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                         if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
                             actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
                         } else {
-                            actionListener.onFailure(new MLValidationException("You don't have permission to access this connector"));
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        "You don't have permission to access this connector",
+                                        RestStatus.BAD_REQUEST
+                                    )
+                                );
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml connector" + r.getId(), e);
@@ -87,12 +94,17 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                     }
                 } else {
                     actionListener
-                        .onFailure(new IllegalArgumentException("Failed to find connector with the provided connector id: " + connectorId));
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Failed to find connector with the provided connector id: " + connectorId,
+                                RestStatus.NOT_FOUND
+                            )
+                        );
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
                     log.error("Failed to get connector index", e);
-                    actionListener.onFailure(new IllegalArgumentException("Fail to find connector"));
+                    actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                 } else {
                     log.error("Failed to get ML connector " + connectorId, e);
                     actionListener.onFailure(e);
