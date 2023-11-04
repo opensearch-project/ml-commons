@@ -69,8 +69,8 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException, InterruptedException {
         disableClusterConnectorAccessControl();
-        // TODO Do we really need to wait this long?  This adds 20s to every test case run.
-        //      Can we instead check the cluster state and move on?
+        // TODO Do we really need to wait this long? This adds 20s to every test case run.
+        // Can we instead check the cluster state and move on?
         Thread.sleep(20000);
     }
 
