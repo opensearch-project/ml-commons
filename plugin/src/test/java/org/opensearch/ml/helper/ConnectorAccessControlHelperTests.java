@@ -22,6 +22,7 @@ import java.util.Optional;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -207,7 +208,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
         connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
-        verify(actionListener, times(1)).onFailure(any(MLResourceNotFoundException.class));
+        verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
     }
 
     public void test_validateConnectorAccess_searchConnectorException_return_false() {

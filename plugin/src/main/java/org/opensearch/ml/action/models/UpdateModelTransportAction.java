@@ -390,10 +390,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
 
     private Boolean isModelDeployed(MLModelState mlModelState) {
         return !mlModelState.equals(MLModelState.LOADED)
-                && !mlModelState.equals(MLModelState.LOADING)
-                && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
-                && !mlModelState.equals(MLModelState.DEPLOYED)
-                && !mlModelState.equals(MLModelState.DEPLOYING)
-                && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
+            && !mlModelState.equals(MLModelState.LOADING)
+            && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+            && !mlModelState.equals(MLModelState.DEPLOYED)
+            && !mlModelState.equals(MLModelState.DEPLOYING)
+            && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
     }
 }

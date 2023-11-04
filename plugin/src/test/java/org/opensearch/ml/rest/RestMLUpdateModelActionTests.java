@@ -24,6 +24,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -111,7 +112,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
 
     @Test
     public void testUpdateModelRequestWithEmptyContent() throws Exception {
-        exceptionRule.expect(IOException.class);
+        exceptionRule.expect(OpenSearchParseException.class);
         exceptionRule.expectMessage("Model update request has empty body");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLUpdateModelAction.handleRequest(request, channel, client);
