@@ -33,56 +33,68 @@ public interface Tool {
 
     /**
      * Set input parser.
-     * @param parser
+     * @param parser the parser to set
      */
     default void setInputParser(Parser<?, ?> parser) {};
 
     /**
      * Set output parser.
-     * @param parser
+     * @param parser the parser to set
      */
     default void setOutputParser(Parser<?, ?> parser) {};
 
     /**
      * Get tool type mapping to the run function.
-     * @return
+     * @return the tool type mapping
      */
     String getType();
 
     /**
      * Get tool version.
-     * @return
+     * @return the tool version
      */
     String getVersion();
 
     /**
      * Get tool name which is displayed in prompt.
-     * @return
+     * @return the tool name
      */
     String getName();
 
     /**
      * Set tool name which is displayed in prompt.
-     * @param name
+     * @param name the tool name
      */
     void setName(String name);
 
     /**
+      * Get tool alias.
+      * @return the tool alias
+      */ 
+    String getAlias();
+
+    /**
+     * Set tool alias.
+     * @param alias the alias to set
+     */
+    void setAlias(String alias);
+
+    /**
      * Get tool description.
-     * @return
+     * @return the tool description
      */
     String getDescription();
 
     /**
      * Set tool description.
-     * @param description
+     * @param description the description to set
      */
     void setDescription(String description);
 
     /**
      * Validate if the input is good.
      * @param parameters input parameters
-     * @return
+     * @return true if the input is valid
      */
     boolean validate(Map<String, String> parameters);
 
@@ -90,8 +102,8 @@ public interface Tool {
      * Check if should end the whole CoT immediately.
      * For example, if some critical error detected like high memory pressure,
      * the tool may end the whole CoT process by returning true.
-     * @param input
-     * @param toolParameters
+     * @param input tool input string
+     * @param toolParameters map of input parameters
      * @return true as a signal to CoT to end the chain, false to continue CoT
      */
     default boolean end(String input, Map<String, String> toolParameters) {
@@ -111,7 +123,18 @@ public interface Tool {
      * @param <T> The subclass this factory produces
      */
     interface Factory<T extends Tool> {
+        /**
+         * Create an instance of this tool.
+         *
+         * @param params Parameters for the tool
+         * @return an instance of this tool
+         */
         T create(Map<String, Object> params);
+
+        /**
+         * Get the default description of this tool.
+         * @return the default description
+         */
         String getDefaultDescription();
     }
 }

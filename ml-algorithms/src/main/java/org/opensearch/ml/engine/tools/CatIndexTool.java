@@ -319,12 +319,18 @@ public class CatIndexTool implements Tool {
         return true;
     }
 
+    /**
+     * Factory for the {@link CatIndexTool}
+     */
     public static class Factory implements Tool.Factory<CatIndexTool> {
         private Client client;
         private ClusterService clusterService;
 
         private static Factory INSTANCE;
 
+        /** 
+         * Create or return the singleton factory instance
+         */
         public static Factory getInstance() {
             if (INSTANCE != null) {
                 return INSTANCE;
@@ -338,6 +344,11 @@ public class CatIndexTool implements Tool {
             }
         }
 
+        /**
+         * Initialize this factory
+         * @param client The OpenSearch client
+         * @param clusterService The OpenSearch cluster service
+         */
         public void init(Client client, ClusterService clusterService) {
             this.client = client;
             this.clusterService = clusterService;
@@ -354,7 +365,7 @@ public class CatIndexTool implements Tool {
         }
     }
 
-    protected Table getTableWithHeader() {
+    private Table getTableWithHeader() {
         Table table = new Table();
         table.startHeaders();
         table.addCell("health", "alias:h;desc:current health status");
@@ -720,8 +731,7 @@ public class CatIndexTool implements Tool {
         return table;
     }
 
-    // package private for testing
-    Table buildTable(
+    private Table buildTable(
         final Map<String, Settings> indicesSettings,
         final Map<String, ClusterIndexHealth> indicesHealths,
         final Map<String, IndexStats> indicesStats,
