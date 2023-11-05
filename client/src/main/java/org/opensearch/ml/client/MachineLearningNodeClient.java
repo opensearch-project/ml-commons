@@ -183,7 +183,12 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLRegisterModelGroupResponse> listener
     ) {
         MLRegisterModelGroupRequest mlRegisterModelGroupRequest = new MLRegisterModelGroupRequest(mlRegisterModelGroupInput);
-        client.execute(MLRegisterModelGroupAction.INSTANCE, mlRegisterModelGroupRequest, listener);
+        client
+            .execute(
+                MLRegisterModelGroupAction.INSTANCE,
+                mlRegisterModelGroupRequest,
+                getMlRegisterModelGroupResponseActionListener(listener)
+            );
     }
 
     /**
@@ -230,29 +235,47 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void register(MLRegisterModelInput mlInput, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerRequest = new MLRegisterModelRequest(mlInput);
-        client
-            .execute(
-                MLRegisterModelAction.INSTANCE,
-                registerRequest,
-                ActionListener.wrap(listener::onResponse, e -> { listener.onFailure(e); })
-            );
+        client.execute(MLRegisterModelAction.INSTANCE, registerRequest, getMLRegisterModelResponseActionListener(listener));
     }
 
     @Override
     public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, false);
-        client
-            .execute(
-                MLDeployModelAction.INSTANCE,
-                deployModelRequest,
-                ActionListener.wrap(listener::onResponse, e -> { listener.onFailure(e); })
-            );
+        client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, getMlDeployModelResponseActionListener(listener));
     }
 
     @Override
     public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
-        client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, listener);
+        client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, getMlCreateConnectorResponseActionListener(listener));
+    }
+
+    private ActionListener<MLDeployModelResponse> getMlDeployModelResponseActionListener(ActionListener<MLDeployModelResponse> listener) {
+        ActionListener<MLDeployModelResponse> actionListener = wrapActionListener(listener, response -> {
+            MLDeployModelResponse deployModelResponse = MLDeployModelResponse.fromActionResponse(response);
+            return deployModelResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLCreateConnectorResponse> getMlCreateConnectorResponseActionListener(
+        ActionListener<MLCreateConnectorResponse> listener
+    ) {
+        ActionListener<MLCreateConnectorResponse> actionListener = wrapActionListener(listener, response -> {
+            MLCreateConnectorResponse createConnectorResponse = MLCreateConnectorResponse.fromActionResponse(response);
+            return createConnectorResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLRegisterModelGroupResponse> getMlRegisterModelGroupResponseActionListener(
+        ActionListener<MLRegisterModelGroupResponse> listener
+    ) {
+        ActionListener<MLRegisterModelGroupResponse> actionListener = wrapActionListener(listener, response -> {
+            MLRegisterModelGroupResponse registerModelGroupResponse = MLRegisterModelGroupResponse.fromActionResponse(response);
+            return registerModelGroupResponse;
+        });
+        return actionListener;
     }
 
     private ActionListener<MLTaskResponse> getMlPredictionTaskResponseActionListener(ActionListener<MLOutput> listener) {
@@ -262,6 +285,16 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLTaskResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLTaskResponse predictionResponse = MLTaskResponse.fromActionResponse(res);
             return predictionResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLRegisterModelResponse> getMLRegisterModelResponseActionListener(
+        ActionListener<MLRegisterModelResponse> listener
+    ) {
+        ActionListener<MLRegisterModelResponse> actionListener = wrapActionListener(listener, res -> {
+            MLRegisterModelResponse registerModelResponse = MLRegisterModelResponse.fromActionResponse(res);
+            return registerModelResponse;
         });
         return actionListener;
     }

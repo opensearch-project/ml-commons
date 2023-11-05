@@ -102,5 +102,4 @@ public class MLHttpClientFactoryTests {
         HttpHost httpHost = new HttpHost("api.openai.com:65537", -1, "https");
         MLHttpClientFactory.validateSchemaAndPort(httpHost);
     }
-
 }
