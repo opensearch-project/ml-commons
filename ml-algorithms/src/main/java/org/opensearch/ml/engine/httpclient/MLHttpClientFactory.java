@@ -57,10 +57,6 @@ public class MLHttpClientFactory {
 
     @VisibleForTesting
     protected static void validateSchemaAndPort(HttpHost host) {
-        if (Strings.isBlank(host.getHostName())) {
-            log.error("Remote inference host name is empty!");
-            throw new IllegalArgumentException("Host name is empty!");
-        }
         String scheme = host.getSchemeName();
         if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
             String[] hostNamePort = host.getHostName().split(":");
