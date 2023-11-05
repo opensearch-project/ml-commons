@@ -27,8 +27,6 @@ public class RestMLDeployModelActionIT extends MLCommonsRestTestCase {
 
     @Before
     public void setup() throws IOException {
-        // Skip test if running on Mac OS, https://github.com/opensearch-project/ml-commons/issues/844
-        Assume.assumeFalse(System.getProperty("os.name").startsWith("Mac OS X"));
         mlRegisterModelGroupInput = MLRegisterModelGroupInput.builder().name("testGroupID").description("This is test Group").build();
         registerModelGroup(client(), TestHelper.toJsonString(mlRegisterModelGroupInput), registerModelGroupResult -> {
             this.modelGroupId = (String) registerModelGroupResult.get("model_group_id");
