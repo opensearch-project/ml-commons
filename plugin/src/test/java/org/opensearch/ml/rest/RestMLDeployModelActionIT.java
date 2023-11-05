@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import java.io.IOException;
 import java.util.Map;
 
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
