@@ -27,7 +27,7 @@ dependencies {
     implementation group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.2.1'
     implementation group: 'org.tribuo', name: 'tribuo-classification-sgd', version: '4.2.1'
-    implementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
+    implementation group: 'commons-io', name: 'commons-io', version: '2.15.0'
     implementation 'software.amazon.randomcutforest:randomcutforest-parkservices:3.0-rc3'
     implementation 'software.amazon.randomcutforest:randomcutforest-core:3.0-rc3'
     implementation group: 'io.protostuff', name: 'protostuff-core', version: '1.8.0'
