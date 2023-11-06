@@ -231,8 +231,8 @@ public class CatIndexToolTests {
         String header = responseRows[0];
         String fooRow = responseRows[1];
         assertEquals(header.split("\\t").length, fooRow.split("\\t").length);
-        assertTrue(header.startsWith("health\tstatus\tindex\tuuid\tpri\trep"));
-        assertTrue(fooRow.startsWith("red\topen\tfoo\tnull\t5\t1"));
+        assertEquals("health\tstatus\tindex\tuuid\tpri\trep\tdocs.count\tdocs.deleted\tstore.size\tpri.store.size", header);
+        assertEquals("red\topen\tfoo\tnull\t5\t1\t0\t0\t0b\t0b", fooRow);
     }
 
     @Test
