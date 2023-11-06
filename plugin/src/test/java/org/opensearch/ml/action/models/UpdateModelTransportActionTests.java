@@ -775,7 +775,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         );
     }
 
-    //TODO: Add UT to make sure that version incremented successfully.
+    // TODO: Add UT to make sure that version incremented successfully.
 
     private MLModel prepareMLModel(FunctionName functionName) throws IllegalArgumentException {
         MLModel mlModel;
