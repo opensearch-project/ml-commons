@@ -84,7 +84,7 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
                                 .onFailure(
                                     new OpenSearchStatusException(
                                         "You don't have permission to access this connector",
-                                        RestStatus.BAD_REQUEST
+                                        RestStatus.FORBIDDEN
                                     )
                                 );
                         }

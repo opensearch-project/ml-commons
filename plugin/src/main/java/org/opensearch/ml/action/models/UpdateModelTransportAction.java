@@ -106,7 +106,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                                 "ML Model "
                                                     + modelId
                                                     + " is in deploying or deployed state, please undeploy the models first!",
-                                                RestStatus.BAD_REQUEST
+                                                RestStatus.FORBIDDEN
                                             )
                                         );
                                 }
@@ -115,7 +115,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                     .onFailure(
                                         new OpenSearchStatusException(
                                             "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
-                                            RestStatus.BAD_REQUEST
+                                            RestStatus.FORBIDDEN
                                         )
                                     );
                             }
@@ -217,7 +217,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             .onFailure(
                                 new OpenSearchStatusException(
                                     "You don't have permission to update the connector, connector id: " + relinkConnectorId,
-                                    RestStatus.BAD_REQUEST
+                                    RestStatus.FORBIDDEN
                                 )
                             );
                     }
@@ -274,7 +274,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             new OpenSearchStatusException(
                                 "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
                                     + newModelGroupId,
-                                RestStatus.BAD_REQUEST
+                                RestStatus.FORBIDDEN
                             )
                         );
                 }
