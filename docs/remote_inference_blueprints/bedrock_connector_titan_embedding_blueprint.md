@@ -1,6 +1,8 @@
-### Bedrock connector blueprint example
+# Bedrock connector blueprint example for Titan embedding model
 
-1. Add connector endpoint to trusted URLs:
+## 1. Add connector endpoint to trusted URLs:
+
+Note: no need to do this after 2.11.0
 
 ```json
 PUT /_cluster/settings
@@ -13,7 +15,7 @@ PUT /_cluster/settings
 }
 ```
 
-2. Create connector for Amazon Bedrock:
+## 2. Create connector for Amazon Bedrock:
 
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
@@ -84,14 +86,14 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-Response:
+Sample response:
 ```json
 {
   "connector_id": "nzh9PIsBnGXNcxYpPEcv"
 }
 ```
 
-3. Create model group:
+## 3. Create model group:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -101,7 +103,7 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-Response:
+Sample response:
 ```json
 {
   "model_group_id": "rqR9PIsBQRofe4CScErR",
@@ -109,7 +111,7 @@ Response:
 }
 ```
 
-4. Register model to model group & deploy model:
+## 4. Register model to model group & deploy model:
 
 ```json
 POST /_plugins/_ml/models/_register
@@ -122,7 +124,7 @@ POST /_plugins/_ml/models/_register
 }
 ```
 
-Response:
+Sample response:
 ```json
 {
   "task_id": "r6R9PIsBQRofe4CSlUoG",
@@ -138,7 +140,7 @@ Deploy model, in this demo the model id is `sKR9PIsBQRofe4CSlUov`
 POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_deploy
 ```
 
-5. Test model inference
+## 5. Test model inference
 
 ```json
 POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict
@@ -149,7 +151,7 @@ POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict
 }
 ```
 
-Response:
+Sample response:
 ```json
 {
   "inference_results": [
