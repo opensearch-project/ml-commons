@@ -179,6 +179,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             .modelId("test_id")
             .modelState(MLModelState.REGISTERED)
             .algorithm(FunctionName.TEXT_EMBEDDING)
+            .isHidden(false)
             .build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
