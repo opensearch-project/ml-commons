@@ -122,3 +122,5 @@ publishing {
     }
 
 }
+compileJava.dependsOn(':opensearch-ml-common:shadowJar')
+delombok.dependsOn(':opensearch-ml-common:shadowJar')
