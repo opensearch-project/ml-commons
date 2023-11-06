@@ -120,6 +120,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
 
     MLModel mlModelWithNullFunctionName;
 
+    MLModel localModel;
+
     ThreadContext threadContext;
 
     @Before
@@ -167,7 +169,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             )
         );
 
-        MLModel localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
+        localModel = prepareMLModel(FunctionName.TEXT_EMBEDDING);
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -772,6 +774,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             argumentCaptor.getValue().getMessage()
         );
     }
+
+    //TODO: Add UT to make sure that version incremented successfully.
 
     private MLModel prepareMLModel(FunctionName functionName) throws IllegalArgumentException {
         MLModel mlModel;

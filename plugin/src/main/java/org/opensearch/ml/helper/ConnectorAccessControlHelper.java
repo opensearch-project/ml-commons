@@ -105,7 +105,7 @@ public class ConnectorAccessControlHelper {
             }
         }, e -> {
             log.error("Failed to get connector", e);
-            listener.onFailure(new IllegalStateException("Failed to get connector:" + connectorId));
+            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
         }));
     }
 

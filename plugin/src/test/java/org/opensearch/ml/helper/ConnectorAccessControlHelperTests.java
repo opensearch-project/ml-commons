@@ -222,7 +222,7 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
 
         connectorAccessControlHelper.validateConnectorAccess(client, "anyId", actionListener);
-        verify(actionListener).onFailure(any(IllegalStateException.class));
+        verify(actionListener).onFailure(any(OpenSearchStatusException.class));
     }
 
     public void test_skipConnectorAccessControl_userIsNull_return_true() {
