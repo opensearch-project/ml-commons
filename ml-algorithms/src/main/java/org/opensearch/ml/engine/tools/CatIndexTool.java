@@ -149,6 +149,16 @@ public class CatIndexTool implements Tool {
         }));
     }
 
+    @Override
+    public String getType() {
+        return null;
+    }
+
+    @Override
+    public String getVersion() {
+        return null;
+    }
+
     @Data
     public static class IndexState {
         private String health;
@@ -196,6 +206,11 @@ public class CatIndexTool implements Tool {
     @Override
     public String getName() {
         return CatIndexTool.NAME;
+    }
+
+    @Override
+    public void setName(String s) {
+
     }
 
     @Override

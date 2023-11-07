@@ -77,8 +77,8 @@ public class MLFlowAgentRunner {
                 int finalI = i;
                 lastStepListener.whenComplete(output -> {
                     String outputKey = lastToolSpec.getName() + ".output";
-                    if (lastToolSpec.getAlias() !=  null) {
-                        outputKey = lastToolSpec.getAlias() + ".output";
+                    if (lastToolSpec.getName() !=  null) {
+                        outputKey = lastToolSpec.getName() + ".output";
                     }
                     if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
                         ModelTensors tensors = (ModelTensors) ((List) output).get(0);
@@ -137,7 +137,7 @@ public class MLFlowAgentRunner {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getName());
         }
         Tool tool = toolFactories.get(toolSpec.getName()).create(toolParams);
-        tool.setAlias(toolSpec.getAlias());
+        tool.setName(toolSpec.getName());
 
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());
@@ -155,8 +155,8 @@ public class MLFlowAgentRunner {
             if (key.startsWith(toolSpec.getName() + ".")) {
                 toBeReplaced = toolSpec.getName()+".";
             }
-            if (toolSpec.getAlias() != null && key.startsWith(toolSpec.getAlias() + ".")) {
-                toBeReplaced = toolSpec.getAlias()+".";
+            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
+                toBeReplaced = toolSpec.getName()+".";
             }
             if (toBeReplaced != null) {
                 executeParams.put(key.replace(toBeReplaced, ""), params.get(key));

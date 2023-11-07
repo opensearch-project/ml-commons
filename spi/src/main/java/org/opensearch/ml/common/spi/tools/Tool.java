@@ -38,22 +38,28 @@ public interface Tool {
     default void setOutputParser(Parser<?, ?> parser) {};
 
     /**
-     * Get tool name.
+     * Get tool type mapping to the run function.
+     * @return
+     */
+    String getType();
+
+    /**
+     * Get tool version.
+     * @return
+     */
+    String getVersion();
+
+    /**
+     * Get tool name which is displayed in prompt.
      * @return
      */
     String getName();
 
     /**
-     * Get tool alias.
-     * @return
+     * Set tool name which is displayed in prompt.
+     * @param name
      */
-    String getAlias();
-
-    /**
-     * Set tool alias.
-     * @param alias
-     */
-    void setAlias(String alias);
+    void setName(String name);
 
     /**
      * Get tool description.
@@ -83,6 +89,14 @@ public interface Tool {
      * @return true as a signal to CoT to end the chain, false to continue CoT
      */
     default boolean end(String input, Map<String, String> toolParameters) {
+        return false;
+    }
+
+    /**
+     * The tool runs against the original human input.
+     * @return
+     */
+    default boolean useOriginalInput() {
         return false;
     }
 
