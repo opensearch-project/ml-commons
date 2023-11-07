@@ -63,7 +63,7 @@ import org.opensearch.transport.TransportService;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
+public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     private UpdateConnectorTransportAction transportUpdateConnectorAction;
 

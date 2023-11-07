@@ -12,7 +12,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +23,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -111,7 +111,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
 
     @Test
     public void testUpdateModelRequestWithEmptyContent() throws Exception {
-        exceptionRule.expect(IOException.class);
+        exceptionRule.expect(OpenSearchParseException.class);
         exceptionRule.expectMessage("Model update request has empty body");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLUpdateModelAction.handleRequest(request, channel, client);
@@ -122,6 +122,14 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Request should contain model_id");
         RestRequest request = getRestRequestWithNullModelId();
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+    }
+
+    @Test
+    public void testUpdateModelRequestWithNullField() throws Exception {
+        exceptionRule.expect(OpenSearchParseException.class);
+        exceptionRule.expectMessage("Can't get text on a VALUE_NULL");
+        RestRequest request = getRestRequestWithNullField();
         restMLUpdateModelAction.handleRequest(request, channel, client);
     }
 
@@ -158,6 +166,20 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         final Map<String, Object> modelContent = Map.of("name", "testModelName", "description", "This is test description");
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithNullField() {
+        RestRequest.Method method = RestRequest.Method.PUT;
+        String requestContent = "{\"name\":\"testModelName\",\"description\":null}";
+        Map<String, String> params = new HashMap<>();
+        params.put("model_id", "test_modelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")

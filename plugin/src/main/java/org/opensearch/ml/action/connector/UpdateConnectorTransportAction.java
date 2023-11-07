@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
@@ -27,13 +28,13 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -136,10 +137,11 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                 }
                 listener
                     .onFailure(
-                        new MLValidationException(
+                        new OpenSearchStatusException(
                             searchHits.length
                                 + " models are still using this connector, please undeploy the models first: "
-                                + Arrays.toString(modelIds.toArray(new String[0]))
+                                + Arrays.toString(modelIds.toArray(new String[0])),
+                            RestStatus.BAD_REQUEST
                         )
                     );
             }

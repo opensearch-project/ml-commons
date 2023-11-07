@@ -150,7 +150,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find connector", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetConnector_RuntimeException() {
