@@ -57,7 +57,7 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.20.19')
+    implementation platform('software.amazon.awssdk:bom:2.21.15')
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
