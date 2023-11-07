@@ -42,7 +42,6 @@ public class MLModelGroup implements ToXContentObject {
     @Setter
     private String name;
     private String description;
-    @Setter
     private int latestVersion;
     private List<String> backendRoles;
     private User owner;
