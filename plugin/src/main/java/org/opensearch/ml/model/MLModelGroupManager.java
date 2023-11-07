@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.model;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.time.Instant;
@@ -13,6 +12,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 
 import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -25,10 +25,8 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
@@ -38,7 +36,6 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
-import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -219,22 +216,12 @@ public class MLModelGroupManager {
      * @param modelGroupId  model group id
      * @param listener action listener
      */
-    public void getModelGroup(String modelGroupId, ActionListener<MLModelGroup> listener) {
+    public void getModelGroupResponse(String modelGroupId, ActionListener<GetResponse> listener) {
         GetRequest getRequest = new GetRequest();
         getRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId);
         client.get(getRequest, ActionListener.wrap(r -> {
             if (r != null && r.isExists()) {
-                try (
-                    XContentParser parser = MLNodeUtils
-                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
-                ) {
-                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                    MLModelGroup mlModelGroup = MLModelGroup.parse(parser);
-                    listener.onResponse(mlModelGroup);
-                } catch (Exception e) {
-                    log.error("Failed to parse ml model group.", e);
-                    listener.onFailure(e);
-                }
+                listener.onResponse(r);
             } else {
                 listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
             }
