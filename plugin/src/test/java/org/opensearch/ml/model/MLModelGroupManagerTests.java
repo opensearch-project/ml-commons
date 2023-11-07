@@ -70,7 +70,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     private ActionListener<String> actionListener;
 
     @Mock
-    private ActionListener<MLModelGroup> modelGroupListener;
+    private ActionListener<GetResponse> modelGroupListener;
 
     @Mock
     private IndexResponse indexResponse;
@@ -353,9 +353,8 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        mlModelGroupManager.getModelGroup("testModelGroupID", modelGroupListener);
-        ArgumentCaptor<MLModelGroup> argumentCaptor = ArgumentCaptor.forClass(MLModelGroup.class);
-        verify(modelGroupListener).onResponse(argumentCaptor.capture());
+        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        verify(modelGroupListener).onResponse(getResponse);
     }
 
     public void test_OtherExceptionGetModelGroup() throws IOException {
@@ -368,7 +367,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        mlModelGroupManager.getModelGroup("testModelGroupID", modelGroupListener);
+        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
         assertEquals(
@@ -384,7 +383,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        mlModelGroupManager.getModelGroup("testModelGroupID", modelGroupListener);
+        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model group with ID: testModelGroupID", argumentCaptor.getValue().getMessage());

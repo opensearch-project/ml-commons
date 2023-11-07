@@ -62,7 +62,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
+public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     private UpdateConnectorTransportAction transportUpdateConnectorAction;
 

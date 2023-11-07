@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
@@ -54,17 +55,21 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
      */
     private MLUpdateModelRequest getRequest(RestRequest request) throws IOException {
         if (!request.hasContent()) {
-            throw new IOException("Model update request has empty body");
+            throw new OpenSearchParseException("Model update request has empty body");
         }
 
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLUpdateModelInput input = MLUpdateModelInput.parse(parser);
-        // Model ID can only be set here. Model version can only be set automatically.
-        input.setModelId(modelId);
-        input.setVersion(null);
-        return new MLUpdateModelRequest(input);
+        try {
+            MLUpdateModelInput input = MLUpdateModelInput.parse(parser);
+            // Model ID can only be set here. Model version can only be set automatically.
+            input.setModelId(modelId);
+            input.setVersion(null);
+            return new MLUpdateModelRequest(input);
+        } catch (IllegalStateException e) {
+            throw new OpenSearchParseException(e.getMessage());
+        }
     }
 }
