@@ -7,8 +7,6 @@ package org.opensearch.ml.engine.tools;
 
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
-
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -29,9 +27,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Table;
 import org.opensearch.common.Table.Cell;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.time.DateFormatter;
 import org.opensearch.common.unit.TimeValue;
-import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
@@ -39,9 +35,6 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -55,12 +48,9 @@ import java.util.stream.StreamSupport;
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-@Log4j2
 @ToolAnnotation(CatIndexTool.NAME)
 public class CatIndexTool implements Tool {
     public static final String NAME = "CatIndexTool";
-
-    private static final DateFormatter STRICT_DATE_TIME_FORMATTER = DateFormatter.forPattern("strict_date_time");
 
     @Setter
     @Getter
@@ -101,7 +91,9 @@ public class CatIndexTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        // Reference: OpenSearch o.o.rest/action/cat/RestIndicesAction.java
+        // TODO: This logic exactly matches the OpenSearch _cat/indices REST action. If code at
+        // o.o.rest/action/cat/RestIndicesAction.java changes those changes need to be reflected here
+        // https://github.com/opensearch-project/ml-commons/pull/1582#issuecomment-1796962876
         @SuppressWarnings("unchecked")
         List<String> indexList = parameters.containsKey("indices")
             ? gson.fromJson(parameters.get("indices"), List.class)
