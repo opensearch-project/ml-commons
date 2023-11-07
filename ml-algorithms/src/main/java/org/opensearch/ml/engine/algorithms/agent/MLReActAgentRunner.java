@@ -156,12 +156,12 @@ public class MLReActAgentRunner {
                 }
             }
             Tool tool = toolFactories.get(toolSpec.getName()).create(toolParams);
-            tool.setAlias(toolSpec.getAlias());
+            tool.setName(toolSpec.getName());
 
             if (toolSpec.getDescription() != null) {
                 tool.setDescription(toolSpec.getDescription());
             }
-            String toolName = Optional.ofNullable(toolSpec.getAlias()).orElse(toolSpec.getName());
+            String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getName());
             tools.put(toolName, tool);
             toolSpecMap.put(toolName, toolSpec);
         }
@@ -210,7 +210,7 @@ public class MLReActAgentRunner {
             inputTools.addAll(gson.fromJson(parameters.get(TOOLS), List.class));
         } else {
             for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-                String toolName = Optional.ofNullable(entry.getValue().getAlias()).orElse(entry.getValue().getName());
+                String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getName());
                 inputTools.add(toolName);
             }
         }

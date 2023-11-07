@@ -14,8 +14,8 @@ public interface Parser<S, T> {
 
     /**
      * Parse input.
-     * @param input
-     * @return output
+     * @param input the parser input
+     * @return output the parser output
      */
     T parse(S input);
 }

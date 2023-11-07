@@ -22,38 +22,38 @@ import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 @Getter
 public class MLToolSpec implements ToXContentObject {
+    public static final String TOOL_TYPE_FIELD = "type";
     public static final String TOOL_NAME_FIELD = "name";
-    public static final String ALIAS_FIELD = "alias";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String INCLUDE_OUTPUT_IN_AGENT_RESPONSE = "include_output_in_agent_response";
 
+    private String type;
     private String name;
-    private String alias;
     private String description;
     private Map<String, String> parameters;
     private Boolean includeOutputInAgentResponse;
 
 
     @Builder(toBuilder = true)
-    public MLToolSpec(String name,
-                      String alias,
+    public MLToolSpec(String type,
+                      String name,
                       String description,
                       Map<String, String> parameters,
                       Boolean includeOutputInAgentResponse) {
-        if (name == null) {
-            throw new IllegalArgumentException("agent name is null");
+        if (type == null) {
+            throw new IllegalArgumentException("tool type is null");
         }
+        this.type = type;
         this.name = name;
-        this.alias = alias;
         this.description = description;
         this.parameters = parameters;
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
     }
 
     public MLToolSpec(StreamInput input) throws IOException{
-        name = input.readString();
-        alias = input.readOptionalString();
+        type = input.readString();
+        name = input.readOptionalString();
         description = input.readOptionalString();
         if (input.readBoolean()) {
             parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
@@ -62,8 +62,8 @@ public class MLToolSpec implements ToXContentObject {
     }
 
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
-        out.writeOptionalString(alias);
+        out.writeString(type);
+        out.writeOptionalString(name);
         out.writeOptionalString(description);
         if (parameters != null && parameters.size() > 0) {
             out.writeBoolean(true);
@@ -77,11 +77,11 @@ public class MLToolSpec implements ToXContentObject {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
+        if (type != null) {
+            builder.field(TOOL_TYPE_FIELD, type);
+        }
         if (name != null) {
             builder.field(TOOL_NAME_FIELD, name);
-        }
-        if (alias != null) {
-            builder.field(ALIAS_FIELD, alias);
         }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
@@ -97,8 +97,8 @@ public class MLToolSpec implements ToXContentObject {
     }
 
     public static MLToolSpec parse(XContentParser parser) throws IOException {
+        String type = null;
         String name = null;
-        String alias = null;
         String description = null;
         Map<String, String> parameters = null;
         Boolean returnDirect = null;
@@ -109,11 +109,11 @@ public class MLToolSpec implements ToXContentObject {
             parser.nextToken();
 
             switch (fieldName) {
+                case TOOL_TYPE_FIELD:
+                    type = parser.text();
+                    break;
                 case TOOL_NAME_FIELD:
                     name = parser.text();
-                    break;
-                case ALIAS_FIELD:
-                    alias = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
@@ -130,8 +130,8 @@ public class MLToolSpec implements ToXContentObject {
             }
         }
         return MLToolSpec.builder()
+                .type(type)
                 .name(name)
-                .alias(alias)
                 .description(description)
                 .parameters(parameters)
                 .includeOutputInAgentResponse(returnDirect)

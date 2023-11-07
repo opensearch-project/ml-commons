@@ -17,9 +17,8 @@ repositories {
 
 dependencies {
     implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
+    implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
-//    implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
-    implementation group: 'org.opensearch', name:'opensearch-ml-common', version: "${opensearch_build}"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     implementation "org.opensearch:common-utils:${common_utils_version}"
@@ -59,7 +58,7 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.20.19')
+    implementation platform('software.amazon.awssdk:bom:2.21.15')
     implementation 'software.amazon.awssdk:auth'
     implementation 'software.amazon.awssdk:apache-client'
     implementation 'com.amazonaws:aws-encryption-sdk-java:2.4.1'
