@@ -125,6 +125,14 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         restMLUpdateModelAction.handleRequest(request, channel, client);
     }
 
+    @Test
+    public void testUpdateModelRequestWithNullField() throws Exception {
+        exceptionRule.expect(OpenSearchParseException.class);
+        exceptionRule.expectMessage("Can't get text on a VALUE_NULL");
+        RestRequest request = getRestRequestWithNullField();
+        restMLUpdateModelAction.handleRequest(request, channel, client);
+    }
+
     private RestRequest getRestRequest() {
         RestRequest.Method method = RestRequest.Method.PUT;
         final Map<String, Object> modelContent = Map.of("name", "testModelName", "description", "This is test description");
@@ -158,6 +166,20 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         final Map<String, Object> modelContent = Map.of("name", "testModelName", "description", "This is test description");
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/models/{model_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithNullField() {
+        RestRequest.Method method = RestRequest.Method.PUT;
+        String requestContent = "{\"name\":\"testModelName\",\"description\":null}";
+        Map<String, String> params = new HashMap<>();
+        params.put("model_id", "test_modelId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
