@@ -132,7 +132,7 @@ public class IndexMappingToolTests {
         when(getIndexResponse.mappings()).thenReturn(Map.of(indexName, mapping));
 
         // Now make the call
-        Tool tool = IndexMappingTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
@@ -159,7 +159,7 @@ public class IndexMappingToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = IndexMappingTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(IndexMappingTool.NAME, tool.getName());
         assertTrue(tool.validate(indicesParams));
         assertTrue(tool.validate(otherParams));

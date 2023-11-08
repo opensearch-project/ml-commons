@@ -45,8 +45,6 @@ public class IndexMappingTool implements Tool {
     @Getter
     private String version;
     private Client client;
-    @SuppressWarnings("unused")
-    private String modelId;
     @Setter
     private Parser<?, ?> inputParser;
     @Setter
@@ -54,10 +52,9 @@ public class IndexMappingTool implements Tool {
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
-    public IndexMappingTool(Client client, ClusterService clusterService, String modelId) {
+    public IndexMappingTool(Client client, ClusterService clusterService) {
         this.client = client;
         this.clusterService = clusterService;
-        this.modelId = modelId;
 
         outputParser = new Parser<>() {
             @Override
@@ -186,7 +183,7 @@ public class IndexMappingTool implements Tool {
 
         @Override
         public IndexMappingTool create(Map<String, Object> map) {
-            return new IndexMappingTool(client, clusterService, (String) map.get("model_id"));
+            return new IndexMappingTool(client, clusterService);
         }
 
         @Override
