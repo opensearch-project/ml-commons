@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.client.Client;
@@ -18,6 +19,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -25,6 +27,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,29 +60,38 @@ public class MLFlowAgentRunner {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
+        List<ModelTensor> flowAgentOutput = new ArrayList<>();
         Map<String, String> firstToolExecuteParams = null;
-        StepListener<Object> lastStepListener = null;
+        StepListener<Object> previousStepListener = null;
         if (toolSpecs.size() == 0) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
-        for (int i = 0 ;i<toolSpecs.size(); i++) {
-            MLToolSpec toolSpec = toolSpecs.get(i);
-            Tool tool = createTool(toolSpec);
+
+        for (int i = 0 ; i <= toolSpecs.size() ; i++) {
             if (i == 0) {
+                MLToolSpec toolSpec = toolSpecs.get(i);
+                Tool tool = createTool(toolSpec);
                 firstStepListener = new StepListener();
-                lastStepListener = firstStepListener;
+                previousStepListener = firstStepListener;
                 firstTool = tool;
                 firstToolExecuteParams = getToolExecuteParams(toolSpec, params);
             } else {
-                MLToolSpec lastToolSpec = toolSpecs.get(i - 1);
+                MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
                 int finalI = i;
-                lastStepListener.whenComplete(output -> {
-                    String outputKey = lastToolSpec.getName() + ".output";
-                    if (lastToolSpec.getAlias() !=  null) {
-                        outputKey = lastToolSpec.getAlias() + ".output";
+                previousStepListener.whenComplete(output -> {
+                    String key = previousToolSpec.getAlias() != null ? previousToolSpec.getAlias() : previousToolSpec.getName();
+                    String outputKey = key + ".output";
+
+                    if (BooleanUtils.isTrue(previousToolSpec.getIncludeOutputInAgentResponse()) || finalI == toolSpecs.size()) {
+                        String result = output instanceof String ? (String) output :
+                                AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+
+                        ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
+                        flowAgentOutput.add(stepOutput);
                     }
+
                     if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
                         ModelTensors tensors = (ModelTensors) ((List) output).get(0);
                         Object response = tensors.getMlModelTensors().get(0).getDataAsMap().get("response");
@@ -93,18 +105,23 @@ public class MLFlowAgentRunner {
                             params.put(outputKey, escapeJson(toJson(output.toString())));
                         }
                     }
-                    if (finalI < toolSpecs.size() - 1) {
-                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
-                    } else {
-                        tool.run(getToolExecuteParams(toolSpec, params), listener);
+
+                    if (finalI == toolSpecs.size()) {
+                        listener.onResponse(flowAgentOutput);
+                        return;
                     }
+
+                    MLToolSpec toolSpec = toolSpecs.get(finalI);
+                    Tool tool = createTool(toolSpec);
+                    if (finalI < toolSpecs.size()) {
+                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
+                    }
+
                 }, e -> {
                     log.error("Failed to run flow agent", e);
                     listener.onFailure(e);
                 });
-                if (i < toolSpecs.size() - 1) {
-                    lastStepListener  = nextStepListener;
-                }
+                previousStepListener  = nextStepListener;
             }
         }
         if (toolSpecs.size() == 1) {
