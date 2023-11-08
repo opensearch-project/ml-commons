@@ -11,6 +11,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.spi.tools.Tool;
 
 import java.util.Arrays;
@@ -70,7 +71,7 @@ public class IndexMappingToolTests {
 
     @Test
     public void testRunAsyncNoIndexParams() throws Exception {
-        Tool tool = IndexMappingTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
@@ -82,7 +83,7 @@ public class IndexMappingToolTests {
     
     @Test
     public void testRunAsyncNoIndices() throws Exception {
-        Tool tool = IndexMappingTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
@@ -90,6 +91,25 @@ public class IndexMappingToolTests {
 
         future.join();
         assertEquals("There were no results searching the index parameter [null].", future.get());
+    }
+        
+    @Test
+    public void testRunAsyncNoResults() throws Exception {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<GetIndexResponse>> actionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getIndex(any(), actionListenerCaptor.capture());
+
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+
+        when(getIndexResponse.indices()).thenReturn(Strings.EMPTY_ARRAY);
+
+        tool.run(indicesParams, listener);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        future.join();
+        assertEquals("There were no results searching the index parameter [[\"foo\"]].", future.get());
     }
 
     @Test
