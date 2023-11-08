@@ -62,7 +62,7 @@ public class TextSimilarityMLInput extends MLInput {
         if(inputDataset != null) {
             TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
             List<Pair<String, String>> pairs = ds.getPairs();
-            ModelResultFilter resultFilter = ds.getResultsFilter();
+            ModelResultFilter resultFilter = ds.getResultFilter();
             if (pairs != null && !pairs.isEmpty()) {
                 builder.startArray(TEXT_PAIRS_FIELD);
                 for(Pair<String, String> p : pairs) {

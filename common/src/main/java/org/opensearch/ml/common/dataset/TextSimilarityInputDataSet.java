@@ -38,14 +38,14 @@ import lombok.experimental.FieldDefaults;
 @InputDataSet(MLInputDataType.TEXT_SIMILARITY)
 public class TextSimilarityInputDataSet extends MLInputDataset {
     
-    private ModelResultFilter resultsFilter;
+    private ModelResultFilter resultFilter;
 
     private List<Pair<String, String>> pairs;
 
     @Builder(toBuilder = true)
-    public TextSimilarityInputDataSet(List<Pair<String, String>> pairs, ModelResultFilter resultsFilter) {
+    public TextSimilarityInputDataSet(List<Pair<String, String>> pairs, ModelResultFilter resultFilter) {
         super(MLInputDataType.TEXT_SIMILARITY);
-        this.resultsFilter = resultsFilter;
+        this.resultFilter = resultFilter;
         Objects.requireNonNull(pairs);
         if(pairs.isEmpty()) {
             throw new IllegalArgumentException("pairs must be nonempty");
@@ -63,9 +63,9 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
             this.pairs.add(Pair.of(query, context));
         }
         if(in.readBoolean()) {
-            this.resultsFilter = new ModelResultFilter(in);
+            this.resultFilter = new ModelResultFilter(in);
         } else {
-            this.resultsFilter = null;
+            this.resultFilter = null;
         }
     }
 
@@ -77,9 +77,9 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
             out.writeString(p.getLeft());
             out.writeString(p.getRight());
         }
-        if(this.resultsFilter != null) {
+        if(this.resultFilter != null) {
             out.writeBoolean(true);
-            resultsFilter.writeTo(out);
+            resultFilter.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
