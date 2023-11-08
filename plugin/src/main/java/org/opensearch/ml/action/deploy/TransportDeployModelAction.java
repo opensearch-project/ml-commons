@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.deploy;
 
+import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_AUTHCZ_ADMIN_DN;
 import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
@@ -16,6 +17,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -68,6 +70,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
+
+import javax.naming.InvalidNameException;
+import javax.naming.ldap.LdapName;
 
 @Log4j2
 public class TransportDeployModelAction extends HandledTransportAction<ActionRequest, MLDeployModelResponse> {
@@ -130,7 +135,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
         User user = RestActionUtils.getUserContext(client);
-        boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -433,6 +438,11 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         actionListener::onFailure
                     )
             );
+    }
+
+    // this method is only to stub static method.
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 
 }

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.anyMap;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.isA;
@@ -223,6 +224,23 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecute_success_hidden_model() {
+        transportDeployModelAction = spy(new TransportDeployModelAction(
+                transportService,
+                actionFilters,
+                modelHelper,
+                mlTaskManager,
+                clusterService,
+                threadPool,
+                client,
+                namedXContentRegistry,
+                nodeFilter,
+                mlTaskDispatcher,
+                mlModelManager,
+                mlStats,
+                settings,
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
+        ));
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         when(mlModel.getIsHidden()).thenReturn(true);
@@ -241,15 +259,32 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
 
-        try (MockedStatic<RestActionUtils> loader = mockStatic(RestActionUtils.class)) {
-            loader.when(() -> RestActionUtils.isSuperAdminUser(clusterService, client)).thenReturn(true);
-            ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
-            transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
-            verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
-        }
+
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        doReturn(true).when(transportDeployModelAction).isSuperAdminUserWrapper(clusterService, client);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
     }
 
     public void testDoExecute_no_permission_hidden_model() {
+        transportDeployModelAction = spy(new TransportDeployModelAction(
+                transportService,
+                actionFilters,
+                modelHelper,
+                mlTaskManager,
+                clusterService,
+                threadPool,
+                client,
+                namedXContentRegistry,
+                nodeFilter,
+                mlTaskDispatcher,
+                mlModelManager,
+                mlStats,
+                settings,
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
+        ));
+
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         when(mlModel.getIsHidden()).thenReturn(true);
@@ -268,14 +303,12 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
 
-        try (MockedStatic<RestActionUtils> loader = mockStatic(RestActionUtils.class)) {
-            loader.when(() -> RestActionUtils.isSuperAdminUser(clusterService, client)).thenReturn(false);
-            ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
-            transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
-            ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-            verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
-            assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
-        }
+        doReturn(false).when(transportDeployModelAction).isSuperAdminUserWrapper(clusterService, client);
+        ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+        transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     public void testDoExecute_userHasNoAccessException() {
