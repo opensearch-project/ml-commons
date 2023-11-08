@@ -77,8 +77,8 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -279,6 +279,9 @@ public class MLModelManager {
                     .version(version)
                     .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
                     .description(mlRegisterModelMetaInput.getDescription())
+                    .quotaFlag(mlRegisterModelMetaInput.getQuotaFlag())
+                    .rateLimitNumber(mlRegisterModelMetaInput.getRateLimitNumber())
+                    .rateLimitUnit(mlRegisterModelMetaInput.getRateLimitUnit())
                     .modelFormat(mlRegisterModelMetaInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(mlRegisterModelMetaInput.getModelConfig())
@@ -289,7 +292,7 @@ public class MLModelManager {
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
+                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
@@ -503,6 +506,9 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .quotaFlag(registerModelInput.getQuotaFlag())
+                    .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                    .rateLimitUnit(registerModelInput.getRateLimitUnit())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -561,6 +567,9 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .quotaFlag(registerModelInput.getQuotaFlag())
+                    .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                    .rateLimitUnit(registerModelInput.getRateLimitUnit())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -622,6 +631,9 @@ public class MLModelManager {
                     .algorithm(functionName)
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .quotaFlag(registerModelInput.getQuotaFlag())
+                    .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                    .rateLimitUnit(registerModelInput.getRateLimitUnit())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(registerModelInput.getModelConfig())
@@ -701,6 +713,9 @@ public class MLModelManager {
                             .algorithm(functionName)
                             .version(version)
                             .modelFormat(registerModelInput.getModelFormat())
+                            .quotaFlag(registerModelInput.getQuotaFlag())
+                            .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                            .rateLimitUnit(registerModelInput.getRateLimitUnit())
                             .chunkNumber(chunkNum)
                             .totalChunks(chunkFiles.size())
                             .content(Base64.getEncoder().encodeToString(bytes))
@@ -921,6 +936,7 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Exceed max local model per node limit"));
             return;
         }
+        int eligibleNodeCount = workerNodes.size();
         modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
@@ -944,7 +960,7 @@ public class MLModelManager {
                         );
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
                     if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-                        setupPredictable(modelId, mlModel, params);
+                        setupPredictable(modelId, mlModel, params, eligibleNodeCount);
                         wrappedListener.onResponse("successful");
                         return;
                     }
@@ -964,7 +980,7 @@ public class MLModelManager {
                                 ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                 Connector connector = Connector.createConnector(parser);
                                 mlModel.setConnector(connector);
-                                setupPredictable(modelId, mlModel, params);
+                                setupPredictable(modelId, mlModel, params, eligibleNodeCount);
                                 wrappedListener.onResponse("successful");
                                 log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
                             }
@@ -990,6 +1006,8 @@ public class MLModelManager {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
+                            modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, mlModel));
+                            modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             wrappedListener.onResponse("successful");
@@ -1003,6 +1021,8 @@ public class MLModelManager {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
                         try {
                             modelCacheHelper.setPredictor(modelId, predictable);
+                            modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
+                            modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, mlModel));
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
@@ -1044,11 +1064,29 @@ public class MLModelManager {
         listener.onFailure(e);
     }
 
-    private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
+    private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params, Integer eligibleNodeCount) {
         Predictable predictable = mlEngine.deploy(mlModel, params);
         modelCacheHelper.setPredictor(modelId, predictable);
+        modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, mlModel));
+        modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
         mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
         modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+    }
+
+    private TokenBucket rateLimiterConstructor(Integer eligibleNodeCount, MLModel mlModel) {
+        if (mlModel != null && mlModel.getRateLimitNumber() != null && mlModel.getRateLimitUnit() != null) {
+            double rateLimitNumber = Double.parseDouble(mlModel.getRateLimitNumber());
+            TimeUnit rateLimitUnit = mlModel.getRateLimitUnit();
+            log
+                .debug(
+                    "Initializing the rate limiter for Model {}, with TPS limit {}, evenly distributed on {} nodes",
+                    mlModel.getModelId(),
+                    rateLimitNumber / rateLimitUnit.toSeconds(1),
+                    eligibleNodeCount
+                );
+            return new TokenBucket(System::nanoTime, rateLimitNumber / rateLimitUnit.toNanos(1) / eligibleNodeCount, 2);
+        }
+        return null;
     }
 
     /**

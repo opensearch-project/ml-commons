@@ -22,9 +22,11 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import java.io.IOException;
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
@@ -41,6 +43,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static final String MODEL_GROUP_ID_FIELD = "model_group_id";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String VERSION_FIELD = "version";
+    public static final String QUOTA_FLAG_FIELD = "quota_flag";
+    public static final String RATE_LIMIT_NUMBER_FIELD = "rate_limit_number";
+    public static final String RATE_LIMIT_UNIT_FIELD = "rate_limit_unit";
     public static final String URL_FIELD = "url";
     public static final String HASH_VALUE_FIELD = "model_content_hash_value";
     public static final String MODEL_FORMAT_FIELD = "model_format";
@@ -59,6 +64,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private String modelGroupId;
     private String version;
     private String description;
+    private Boolean quotaFlag;
+    private String rateLimitNumber;
+    private TimeUnit rateLimitUnit;
     private String url;
     private String hashValue;
     private MLModelFormat modelFormat;
@@ -81,6 +89,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                 String modelGroupId,
                                 String version,
                                 String description,
+                                Boolean quotaFlag,
+                                String rateLimitNumber,
+                                TimeUnit rateLimitUnit,
                                 String url,
                                 String hashValue,
                                 MLModelFormat modelFormat,
@@ -114,6 +125,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.modelGroupId = modelGroupId;
         this.version = version;
         this.description = description;
+        this.quotaFlag = quotaFlag;
+        this.rateLimitNumber = rateLimitNumber;
+        this.rateLimitUnit = rateLimitUnit;
         this.url = url;
         this.hashValue = hashValue;
         this.modelFormat = modelFormat;
@@ -135,6 +149,11 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.modelGroupId = in.readOptionalString();
         this.version = in.readOptionalString();
         this.description = in.readOptionalString();
+        this.quotaFlag = in.readOptionalBoolean();
+        this.rateLimitNumber = in.readOptionalString();
+        if (in.readBoolean()) {
+            rateLimitUnit = in.readEnum(TimeUnit.class);
+        }
         this.url = in.readOptionalString();
         this.hashValue = in.readOptionalString();
         if (in.readBoolean()) {
@@ -170,6 +189,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         out.writeOptionalString(modelGroupId);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
+        out.writeOptionalBoolean(quotaFlag);
+        out.writeOptionalString(rateLimitNumber);
+        if (rateLimitUnit != null) {
+            out.writeBoolean(true);
+            out.writeEnum(rateLimitUnit);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalString(url);
         out.writeOptionalString(hashValue);
         if (modelFormat != null) {
@@ -223,6 +250,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
+        if (quotaFlag != null) {
+            builder.field(QUOTA_FLAG_FIELD, quotaFlag);
+        }
+        if (rateLimitNumber != null) {
+            builder.field(RATE_LIMIT_NUMBER_FIELD, rateLimitNumber);
+        }
+        if (rateLimitUnit != null) {
+            builder.field(RATE_LIMIT_UNIT_FIELD, rateLimitUnit);
+        }
         if (url != null) {
             builder.field(URL_FIELD, url);
         }
@@ -264,6 +300,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel) throws IOException {
         FunctionName functionName = null;
         String modelGroupId = null;
+        Boolean quotaFlag = null;
+        String rateLimitNumber = null;
+        TimeUnit rateLimitUnit = null;
         String url = null;
         String hashValue = null;
         String description = null;
@@ -287,6 +326,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
                 case MODEL_GROUP_ID_FIELD:
                     modelGroupId = parser.text();
+                    break;
+                case QUOTA_FLAG_FIELD:
+                    quotaFlag = parser.booleanValue();
+                    break;
+                case RATE_LIMIT_NUMBER_FIELD:
+                    rateLimitNumber = parser.text();
+                    break;
+                case RATE_LIMIT_UNIT_FIELD:
+                    rateLimitUnit = TimeUnit.valueOf(parser.text());
                     break;
                 case URL_FIELD:
                     url = parser.text();
@@ -335,7 +383,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup);
+        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, quotaFlag, rateLimitNumber, rateLimitUnit, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup);
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -343,6 +391,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         String name = null;
         String modelGroupId = null;
         String version = null;
+        Boolean quotaFlag = null;
+        String rateLimitNumber = null;
+        TimeUnit rateLimitUnit = null;
         String url = null;
         String hashValue = null;
         String description = null;
@@ -377,6 +428,15 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
+                case QUOTA_FLAG_FIELD:
+                    quotaFlag = parser.booleanValue();
+                    break;
+                case RATE_LIMIT_NUMBER_FIELD:
+                    rateLimitNumber = parser.text();
+                    break;
+                case RATE_LIMIT_UNIT_FIELD:
+                    rateLimitUnit = TimeUnit.valueOf(parser.text());
+                    break;
                 case URL_FIELD:
                     url = parser.text();
                     break;
@@ -421,6 +481,6 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup);
+        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, quotaFlag, rateLimitNumber, rateLimitUnit, url, hashValue, modelFormat, modelConfig, deployModel, modelNodeIds.toArray(new String[0]), connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup);
     }
 }
