@@ -110,8 +110,8 @@ public class CatIndexToolTests {
 
         CatIndexTool.Factory.getInstance().init(client, clusterService);
 
-        indicesParams = Map.of("indices", "foo");
-        otherParams = Map.of("other", "bar");
+        indicesParams = Map.of("index", "[\"foo\"]");
+        otherParams = Map.of("other", "[\"bar\"]");
         emptyParams = Collections.emptyMap();
     }
 
