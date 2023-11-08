@@ -56,9 +56,6 @@ public class CatIndexTool implements Tool {
     @Setter
     @Getter
     private String name = CatIndexTool.NAME;
-    @Setter
-    @Getter
-    private String alias;
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;

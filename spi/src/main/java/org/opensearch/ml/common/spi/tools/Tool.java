@@ -68,18 +68,6 @@ public interface Tool {
     void setName(String name);
 
     /**
-      * Get tool alias.
-      * @return the tool alias
-      */ 
-    String getAlias();
-
-    /**
-     * Set tool alias.
-     * @param alias the alias to set
-     */
-    void setAlias(String alias);
-
-    /**
      * Get tool description.
      * @return the tool description
      */
