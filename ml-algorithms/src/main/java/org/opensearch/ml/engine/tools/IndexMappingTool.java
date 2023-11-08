@@ -75,6 +75,13 @@ public class IndexMappingTool implements Tool {
         List<String> indexList = parameters.containsKey("index")
             ? gson.fromJson(parameters.get("index"), List.class)
             : Collections.emptyList();
+        if (indexList.isEmpty()) {
+            @SuppressWarnings("unchecked")
+            T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
+            listener.onResponse(empty);
+            return;
+        }
+        
         final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
         final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
@@ -119,6 +126,7 @@ public class IndexMappingTool implements Tool {
                     onFailure(e);
                 }
             }
+
 
             @Override
             public void onFailure(final Exception e) {
