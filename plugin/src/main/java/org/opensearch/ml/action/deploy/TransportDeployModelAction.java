@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -34,6 +35,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -41,7 +43,6 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelInput;
@@ -145,7 +146,12 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
                     } else {
                         wrappedListener
-                            .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User doesn't have privilege to perform this operation on this model",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
                     }
                 } else {
                     modelAccessControlHelper
@@ -153,7 +159,10 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                             if (!access) {
                                 wrappedListener
                                     .onFailure(
-                                        new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model",
+                                            RestStatus.FORBIDDEN
+                                        )
                                     );
                             } else {
                                 deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);

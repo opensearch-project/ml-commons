@@ -17,6 +17,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,8 +38,10 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionType;
 import org.opensearch.action.index.IndexResponse;
@@ -72,6 +75,7 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -218,6 +222,62 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
     }
 
+    public void testDoExecute_success_hidden_model() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getIsHidden()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        try (MockedStatic<RestActionUtils> loader = mockStatic(RestActionUtils.class)) {
+            loader.when(() -> RestActionUtils.isSuperAdminUser(clusterService, client)).thenReturn(true);
+            ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+            transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+            verify(deployModelResponseListener).onResponse(any(MLDeployModelResponse.class));
+        }
+    }
+
+    public void testDoExecute_no_permission_hidden_model() {
+        MLModel mlModel = mock(MLModel.class);
+        when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
+        when(mlModel.getIsHidden()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(3);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(anyString(), isNull(), any(String[].class), Mockito.isA(ActionListener.class));
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("mockIndexId");
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        try (MockedStatic<RestActionUtils> loader = mockStatic(RestActionUtils.class)) {
+            loader.when(() -> RestActionUtils.isSuperAdminUser(clusterService, client)).thenReturn(false);
+            ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
+            transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
+            ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+            verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
+            assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        }
+    }
+
     public void testDoExecute_userHasNoAccessException() {
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
@@ -237,7 +297,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(deployModelResponseListener).onFailure(argumentCaptor.capture());
-        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     public void testDoExecuteRemoteInferenceDisabled() {

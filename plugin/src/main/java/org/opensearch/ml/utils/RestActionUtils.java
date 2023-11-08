@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.utils;
 
+import static org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_AUTHCZ_ADMIN_DN;
 import static org.opensearch.ml.common.MLModel.MODEL_CONTENT_FIELD;
 import static org.opensearch.ml.common.MLModel.OLD_MODEL_CONTENT_FIELD;
 
@@ -58,7 +59,6 @@ public class RestActionUtils {
     public static final String OPENSEARCH_DASHBOARDS_USER_AGENT = "OpenSearch Dashboards";
     public static final String[] UI_METADATA_EXCLUDE = new String[] { "ui_metadata" };
 
-    public static final String SECURITY_AUTHCZ_ADMIN_DN = "plugins.security.authcz.admin_dn";
     public static final String OPENDISTRO_SECURITY_CONFIG_PREFIX = "_opendistro_security_";
     public static final String OPENDISTRO_SECURITY_SSL_PRINCIPAL = OPENDISTRO_SECURITY_CONFIG_PREFIX + "ssl_principal";
 
@@ -210,7 +210,7 @@ public class RestActionUtils {
     // TODO: Integration test needs to be added (MUST)
     public static boolean isSuperAdminUser(ClusterService clusterService, Client client) {
 
-        final List<String> adminDnsA = clusterService.getSettings().getAsList(SECURITY_AUTHCZ_ADMIN_DN, Collections.emptyList());
+        final List<String> adminDnsA = clusterService.getSettings().getAsList(OPENSEARCH_SECURITY_AUTHCZ_ADMIN_DN, Collections.emptyList());
 
         for (String dn : adminDnsA) {
             try {

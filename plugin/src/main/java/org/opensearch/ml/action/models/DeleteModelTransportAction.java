@@ -36,7 +36,6 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
@@ -112,7 +111,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                             if (!isSuperAdmin) {
                                 wrappedListener
                                     .onFailure(
-                                        new OpenSearchStatusException("User doesn't have privilege to perform this operation on this model", RestStatus.FORBIDDEN)
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model",
+                                            RestStatus.FORBIDDEN
+                                        )
                                     );
                             } else {
                                 if (isModelNotDeployed(mlModelState)) {
@@ -132,7 +134,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     if (!access) {
                                         wrappedListener
                                             .onFailure(
-                                                    new OpenSearchStatusException("User doesn't have privilege to perform this operation on this model", RestStatus.FORBIDDEN)
+                                                new OpenSearchStatusException(
+                                                    "User doesn't have privilege to perform this operation on this model",
+                                                    RestStatus.FORBIDDEN
+                                                )
                                             );
                                     } else if (isModelNotDeployed(mlModelState)) {
                                         deleteModel(modelId, actionListener);

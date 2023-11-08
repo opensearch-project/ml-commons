@@ -59,6 +59,12 @@ dependencies {
     implementation "org.apache.logging.log4j:log4j-slf4j-impl:2.19.0"
     testImplementation group: 'commons-io', name: 'commons-io', version: '2.11.0'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
+    // this is required to mock static classes/methods
+    testImplementation group: 'net.bytebuddy', name: 'byte-buddy-agent', version: '1.14.7'
+    testImplementation group: 'net.bytebuddy', name: 'byte-buddy', version: '1.14.7'
+    testImplementation group: 'org.objenesis', name: 'objenesis', version: '3.2'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.5.0'
+
 
     checkstyle "com.puppycrawl.tools:checkstyle:${project.checkstyle.toolVersion}"
 }
@@ -121,6 +127,7 @@ def _numNodes = findProperty('numNodes') as Integer ?: 1
 test {
     include '**/*Tests.class'
     systemProperty 'tests.security.manager', 'false'
+    systemProperty "jdk.attach.allowAttachSelf", true  // this is required to mock static classes/methods
 }
 
 def opensearch_tmp_dir = rootProject.file('build/private/opensearch_tmp').absoluteFile

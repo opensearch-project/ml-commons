@@ -148,6 +148,13 @@ public class ModelAccessControlHelper {
     }
 
     public boolean isSecurityEnabledAndModelAccessControlEnabled(User user) {
+        if (user != null) {
+            log.info("User name: ", user.getName());
+            log.info("User backend roles: ", user.getBackendRoles());
+            log.info("model access control enabled: ", modelAccessControlEnabled);
+        } else {
+            log.info("user name is null");
+        }
         return user != null && modelAccessControlEnabled;
     }
 
