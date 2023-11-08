@@ -50,7 +50,7 @@ public class IndexMappingToolTests {
     @Mock
     private GetIndexResponse getIndexResponse;
 
-    private Map<String, String> indicesParams;
+    private Map<String, String> indexParams;
     private Map<String, String> otherParams;
     private Map<String, String> emptyParams;
 
@@ -63,7 +63,7 @@ public class IndexMappingToolTests {
 
         IndexMappingTool.Factory.getInstance().init(client);
 
-        indicesParams = Map.of("index", "[\"foo\"]");
+        indexParams = Map.of("index", "[\"foo\"]");
         otherParams = Map.of("other", "[\"bar\"]");
         emptyParams = Collections.emptyMap();
     }
@@ -105,7 +105,7 @@ public class IndexMappingToolTests {
 
         when(getIndexResponse.indices()).thenReturn(Strings.EMPTY_ARRAY);
 
-        tool.run(indicesParams, listener);
+        tool.run(indexParams, listener);
         actionListenerCaptor.getValue().onResponse(getIndexResponse);
 
         future.join();
@@ -153,7 +153,7 @@ public class IndexMappingToolTests {
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
-        tool.run(indicesParams, listener);
+        tool.run(indexParams, listener);
         actionListenerCaptor.getValue().onResponse(getIndexResponse);
 
         future.orTimeout(10, TimeUnit.SECONDS).join();
@@ -178,7 +178,7 @@ public class IndexMappingToolTests {
     public void testTool() {
         Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(IndexMappingTool.NAME, tool.getName());
-        assertTrue(tool.validate(indicesParams));
+        assertTrue(tool.validate(indexParams));
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
     }
