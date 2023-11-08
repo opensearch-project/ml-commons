@@ -127,7 +127,6 @@ public class IndexMappingTool implements Tool {
                 }
             }
 
-
             @Override
             public void onFailure(final Exception e) {
                 listener.onFailure(e);
