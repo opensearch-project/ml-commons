@@ -145,7 +145,7 @@ public class CatIndexToolTests {
 
         when(clusterHealthResponse.getIndices()).thenReturn(Collections.emptyMap());
 
-        Tool tool = CatIndexTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
@@ -213,7 +213,7 @@ public class CatIndexToolTests {
         when(clusterHealthResponse.getIndices()).thenReturn(Map.of(indexName, fooHealth));
 
         // Now make the call
-        Tool tool = CatIndexTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
@@ -237,7 +237,7 @@ public class CatIndexToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = CatIndexTool.Factory.getInstance().create(Map.of("model_id", "test"));
+        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(CatIndexTool.NAME, tool.getName());
         assertTrue(tool.validate(indicesParams));
         assertTrue(tool.validate(otherParams));

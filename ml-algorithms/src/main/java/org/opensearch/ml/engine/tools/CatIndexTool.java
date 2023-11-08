@@ -65,8 +65,6 @@ public class CatIndexTool implements Tool {
     private String version;
     
     private Client client;
-    @SuppressWarnings("unused")
-    private String modelId;
     @Setter
     private Parser<?, ?> inputParser;
     @Setter
@@ -74,10 +72,9 @@ public class CatIndexTool implements Tool {
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
-    public CatIndexTool(Client client, ClusterService clusterService, String modelId) {
+    public CatIndexTool(Client client, ClusterService clusterService) {
         this.client = client;
         this.clusterService = clusterService;
-        this.modelId = modelId;
 
         outputParser = new Parser<>() {
             @Override
@@ -340,7 +337,7 @@ public class CatIndexTool implements Tool {
 
         @Override
         public CatIndexTool create(Map<String, Object> map) {
-            return new CatIndexTool(client, clusterService, (String) map.get("model_id"));
+            return new CatIndexTool(client, clusterService);
         }
 
         @Override
