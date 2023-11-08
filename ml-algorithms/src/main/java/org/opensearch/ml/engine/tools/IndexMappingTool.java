@@ -49,12 +49,9 @@ public class IndexMappingTool implements Tool {
     private Parser<?, ?> inputParser;
     @Setter
     private Parser<?, ?> outputParser;
-    @SuppressWarnings("unused")
-    private ClusterService clusterService;
 
-    public IndexMappingTool(Client client, ClusterService clusterService) {
+    public IndexMappingTool(Client client) {
         this.client = client;
-        this.clusterService = clusterService;
 
         outputParser = new Parser<>() {
             @Override
@@ -151,7 +148,6 @@ public class IndexMappingTool implements Tool {
      */
     public static class Factory implements Tool.Factory<IndexMappingTool> {
         private Client client;
-        private ClusterService clusterService;
 
         private static Factory INSTANCE;
 
@@ -174,16 +170,14 @@ public class IndexMappingTool implements Tool {
         /**
          * Initialize this factory
          * @param client The OpenSearch client
-         * @param clusterService The OpenSearch cluster service
          */
-        public void init(Client client, ClusterService clusterService) {
+        public void init(Client client) {
             this.client = client;
-            this.clusterService = clusterService;
         }
 
         @Override
         public IndexMappingTool create(Map<String, Object> map) {
-            return new IndexMappingTool(client, clusterService);
+            return new IndexMappingTool(client);
         }
 
         @Override

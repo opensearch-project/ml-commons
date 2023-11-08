@@ -25,7 +25,6 @@ import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.cluster.metadata.MappingMetadata;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.json.JsonXContent;
@@ -46,8 +45,6 @@ public class IndexMappingToolTests {
     @Mock
     private IndicesAdminClient indicesAdminClient;
     @Mock
-    private ClusterService clusterService;
-    @Mock
     private MappingMetadata mappingMetadata;
     @Mock
     private GetIndexResponse getIndexResponse;
@@ -63,7 +60,7 @@ public class IndexMappingToolTests {
         when(adminClient.indices()).thenReturn(indicesAdminClient);
         when(client.admin()).thenReturn(adminClient);
 
-        IndexMappingTool.Factory.getInstance().init(client, clusterService);
+        IndexMappingTool.Factory.getInstance().init(client);
 
         indicesParams = Map.of("index", "[\"foo\"]");
         otherParams = Map.of("other", "[\"bar\"]");
