@@ -51,11 +51,14 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 @ToolAnnotation(CatIndexTool.NAME)
 public class CatIndexTool implements Tool {
     public static final String NAME = "CatIndexTool";
+    private static final String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
 
     @Setter
     @Getter
+    private String name = CatIndexTool.NAME;
+    @Setter
+    @Getter
     private String alias;
-    private static String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -293,16 +296,6 @@ public class CatIndexTool implements Tool {
                 listener.onFailure(e);
             }
         }, size);
-    }
-
-    @Override
-    public String getName() {
-        return CatIndexTool.NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override
