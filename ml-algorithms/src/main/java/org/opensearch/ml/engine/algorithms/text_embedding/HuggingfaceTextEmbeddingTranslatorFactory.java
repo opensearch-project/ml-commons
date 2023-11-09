@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+
 import ai.djl.Model;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import ai.djl.modality.Input;
@@ -13,14 +22,6 @@ import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
 import ai.djl.util.Pair;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-
-import java.io.IOException;
-import java.lang.reflect.Type;
-import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
 
 public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFactory {
 
@@ -36,7 +37,12 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
     private final String modelType;
     private final boolean neuron;
 
-    public HuggingfaceTextEmbeddingTranslatorFactory(TextEmbeddingModelConfig.PoolingMode poolingMode, boolean normalizeResult, String modelType, boolean neuron) {
+    public HuggingfaceTextEmbeddingTranslatorFactory(
+        TextEmbeddingModelConfig.PoolingMode poolingMode,
+        boolean normalizeResult,
+        String modelType,
+        boolean neuron
+    ) {
         this.poolingMode = poolingMode == null ? TextEmbeddingModelConfig.PoolingMode.MEAN : poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelType = modelType;
@@ -52,23 +58,22 @@ public class HuggingfaceTextEmbeddingTranslatorFactory implements TranslatorFact
     /** {@inheritDoc} */
     @Override
     @SuppressWarnings("unchecked")
-    public <I, O> Translator<I, O> newInstance(
-            Class<I> input, Class<O> output, Model model, Map<String, ?> arguments)
-            throws TranslateException {
+    public <I, O> Translator<I, O> newInstance(Class<I> input, Class<O> output, Model model, Map<String, ?> arguments)
+        throws TranslateException {
         Path modelPath = model.getModelPath();
         try {
-            HuggingFaceTokenizer tokenizer =
-                    HuggingFaceTokenizer.builder(arguments)
-                            .optTokenizerPath(modelPath)
-                            .optManager(model.getNDManager())
-                            .build();
+            HuggingFaceTokenizer tokenizer = HuggingFaceTokenizer
+                .builder(arguments)
+                .optTokenizerPath(modelPath)
+                .optManager(model.getNDManager())
+                .build();
             boolean inputTokenTypeIds = neuron && ("bert".equalsIgnoreCase(modelType) || "albert".equalsIgnoreCase(modelType));
-            HuggingfaceTextEmbeddingTranslator translator =
-                    HuggingfaceTextEmbeddingTranslator.builder(tokenizer, arguments)
-                            .optPoolingMode(poolingMode.getName())
-                            .optNormalize(normalizeResult)
-                            .optInputTokenTypeIds(inputTokenTypeIds)
-                            .build();
+            HuggingfaceTextEmbeddingTranslator translator = HuggingfaceTextEmbeddingTranslator
+                .builder(tokenizer, arguments)
+                .optPoolingMode(poolingMode.getName())
+                .optNormalize(normalizeResult)
+                .optInputTokenTypeIds(inputTokenTypeIds)
+                .build();
             if (input == String.class && output == float[].class) {
                 return (Translator<I, O>) translator;
             } else if (input == Input.class && output == Output.class) {

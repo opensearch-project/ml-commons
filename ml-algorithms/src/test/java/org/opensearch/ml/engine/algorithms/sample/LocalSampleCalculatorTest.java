@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
+import java.util.Arrays;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -15,8 +17,6 @@ import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
-
-import java.util.Arrays;
 
 public class LocalSampleCalculatorTest {
     @Rule

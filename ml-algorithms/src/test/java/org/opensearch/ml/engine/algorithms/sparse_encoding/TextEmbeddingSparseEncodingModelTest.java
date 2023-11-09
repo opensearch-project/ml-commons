@@ -1,12 +1,23 @@
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
-import ai.djl.Model;
-import ai.djl.modality.Input;
-import ai.djl.modality.Output;
-import ai.djl.ndarray.NDArray;
-import ai.djl.ndarray.NDList;
-import ai.djl.ndarray.NDManager;
-import ai.djl.translate.TranslatorContext;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.*;
+import static org.opensearch.ml.engine.algorithms.DLModel.*;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -30,23 +41,13 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.Mockito.*;
-import static org.opensearch.ml.engine.algorithms.DLModel.*;
+import ai.djl.Model;
+import ai.djl.modality.Input;
+import ai.djl.modality.Output;
+import ai.djl.ndarray.NDArray;
+import ai.djl.ndarray.NDList;
+import ai.djl.ndarray.NDManager;
+import ai.djl.translate.TranslatorContext;
 
 public class TextEmbeddingSparseEncodingModelTest {
     @Rule
@@ -77,14 +78,15 @@ public class TextEmbeddingSparseEncodingModelTest {
         modelName = "test_model_name";
         functionName = FunctionName.SPARSE_ENCODING;
         version = "1";
-        model = MLModel.builder()
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .name("test_model_name")
-                .modelId("test_model_id")
-                .algorithm(FunctionName.SPARSE_ENCODING)
-                .version("1.0.0")
-                .modelState(MLModelState.TRAINED)
-                .build();
+        model = MLModel
+            .builder()
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .name("test_model_name")
+            .modelId("test_model_id")
+            .algorithm(FunctionName.SPARSE_ENCODING)
+            .version("1.0.0")
+            .modelState(MLModelState.TRAINED)
+            .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("sparse_demo.zip").toURI());
@@ -111,7 +113,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         String testSentence = "hello world";
         when(input.getAsString(0)).thenReturn(testSentence);
         NDArray indiceNdArray = mock(NDArray.class);
-        when(indiceNdArray.toLongArray()).thenReturn(new long[]{102l, 101l});
+        when(indiceNdArray.toLongArray()).thenReturn(new long[] { 102l, 101l });
         when(manager.create((long[]) any())).thenReturn(indiceNdArray);
         doNothing().when(indiceNdArray).setName(any());
         NDList outputList = sparseEncodingTranslator.processInput(translatorContext, input);
@@ -119,7 +121,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         Iterator<NDArray> iterator = outputList.iterator();
         while (iterator.hasNext()) {
             NDArray ndArray = iterator.next();
-            long [] output = ndArray.toLongArray();
+            long[] output = ndArray.toLongArray();
             assertEquals(2, output.length);
         }
     }
@@ -137,7 +139,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         when(ndArray.nonzero()).thenReturn(ndArray);
         when(ndArray.squeeze()).thenReturn(ndArray);
         when(ndArray.getFloat(any())).thenReturn(1.0f);
-        when(ndArray.toLongArray()).thenReturn(new long[]{10000, 10001});
+        when(ndArray.toLongArray()).thenReturn(new long[] { 10000, 10001 });
         when(ndArray.getName()).thenReturn("output");
         List<NDArray> ndArrayList = Collections.singletonList(ndArray);
         NDList ndList = new NDList(ndArrayList);
@@ -160,7 +162,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
@@ -177,7 +179,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         ModelTensorOutput output = (ModelTensorOutput) textEmbeddingSparseEncodingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
@@ -249,7 +251,8 @@ public class TextEmbeddingSparseEncodingModelTest {
     public void predict_NullModelHelper() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        textEmbeddingSparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
+        textEmbeddingSparseEncodingModel
+            .predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -262,7 +265,8 @@ public class TextEmbeddingSparseEncodingModelTest {
         } catch (Exception e) {
             assertEquals("model id is null", e.getMessage());
         }
-        textEmbeddingSparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
+        textEmbeddingSparseEncodingModel
+            .predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -271,7 +275,8 @@ public class TextEmbeddingSparseEncodingModelTest {
         exceptionRule.expectMessage("Failed to inference SPARSE_ENCODING");
         textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
         textEmbeddingSparseEncodingModel.close();
-        textEmbeddingSparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
+        textEmbeddingSparseEncodingModel
+            .predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build());
     }
 
     @Test
@@ -285,7 +290,8 @@ public class TextEmbeddingSparseEncodingModelTest {
     public void predict_BeforeInitingModel() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model not deployed");
-        textEmbeddingSparseEncodingModel.predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build(), model);
+        textEmbeddingSparseEncodingModel
+            .predict(MLInput.builder().algorithm(FunctionName.SPARSE_ENCODING).inputDataset(inputDataSet).build(), model);
     }
 
     @After

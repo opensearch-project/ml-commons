@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.sample;
 
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -22,20 +26,16 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicReference;
-
 @Function(FunctionName.SAMPLE_ALGO)
 public class SampleAlgo implements Trainable, Predictable {
     public static final String VERSION = "1.0.0";
     private static final int DEFAULT_SAMPLE_PARAM = -1;
     private int sampleParam;
 
-    public SampleAlgo(){}
+    public SampleAlgo() {}
 
     public SampleAlgo(MLAlgoParams parameters) {
-        this.sampleParam = Optional.ofNullable(((SampleAlgoParams)parameters).getSampleParam()).orElse(DEFAULT_SAMPLE_PARAM);
+        this.sampleParam = Optional.ofNullable(((SampleAlgoParams) parameters).getSampleParam()).orElse(DEFAULT_SAMPLE_PARAM);
     }
 
     @Override
@@ -56,10 +56,8 @@ public class SampleAlgo implements Trainable, Predictable {
     @Override
     public MLOutput predict(MLInput mlInput) {
         AtomicReference<Double> sum = new AtomicReference<>((double) 0);
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
-        dataFrame.forEach(row -> {
-            row.forEach(item -> sum.updateAndGet(v -> v + item.doubleValue()));
-        });
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
+        dataFrame.forEach(row -> { row.forEach(item -> sum.updateAndGet(v -> v + item.doubleValue())); });
         return SampleAlgoOutput.builder().sampleResult(sum.get()).build();
     }
 
@@ -73,13 +71,14 @@ public class SampleAlgo implements Trainable, Predictable {
 
     @Override
     public MLModel train(MLInput mlInput) {
-        MLModel model = MLModel.builder()
-                .name(FunctionName.SAMPLE_ALGO.name())
-                .algorithm(FunctionName.SAMPLE_ALGO)
-                .version(VERSION)
-                .content(ModelSerDeSer.serializeToBase64("This is a sample testing model with parameter: " + sampleParam))
-                .modelState(MLModelState.TRAINED)
-                .build();
+        MLModel model = MLModel
+            .builder()
+            .name(FunctionName.SAMPLE_ALGO.name())
+            .algorithm(FunctionName.SAMPLE_ALGO)
+            .version(VERSION)
+            .content(ModelSerDeSer.serializeToBase64("This is a sample testing model with parameter: " + sampleParam))
+            .modelState(MLModelState.TRAINED)
+            .build();
         return model;
     }
 }

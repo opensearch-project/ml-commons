@@ -5,25 +5,25 @@
 
 package org.opensearch.ml.engine.algorithms.rcf;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
-
-import java.util.concurrent.ThreadLocalRandom;
 
 public class FixedInTimeRandomCutForestTest {
     @Rule
@@ -41,12 +41,7 @@ public class FixedInTimeRandomCutForestTest {
 
     @Before
     public void setUp() {
-        parameters = FitRCFParams.builder()
-                .numberOfTrees(10)
-                .shingleSize(8)
-                .sampleSize(100)
-                .timeField("timestamp")
-                .build();
+        parameters = FitRCFParams.builder().numberOfTrees(10).shingleSize(8).sampleSize(100).timeField("timestamp").build();
 
         forest = new FixedInTimeRandomCutForest(parameters);
         trainDataFrame = constructRCFDataFrame(false);
@@ -64,7 +59,7 @@ public class FixedInTimeRandomCutForestTest {
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(dataSize, predictions.size());
         int anomalyCount = 0;
-        for (int i = 0 ;i<dataSize; i++) {
+        for (int i = 0; i < dataSize; i++) {
             if (i % 100 == 0) {
                 if (predictions.getRow(i).getValue(1).doubleValue() > 0.01) {
                     anomalyCount++;
@@ -99,7 +94,12 @@ public class FixedInTimeRandomCutForestTest {
     @Test
     public void trainWithMLAlgoParams() {
         FitRCFParams params = FitRCFParams.builder().build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.FIT_RCF).inputDataset(trainDataFrameInputDataSet).parameters(params).build();
+        MLInput mlInput = MLInput
+            .builder()
+            .algorithm(FunctionName.FIT_RCF)
+            .inputDataset(trainDataFrameInputDataSet)
+            .parameters(params)
+            .build();
         MLModel model = forest.train(mlInput);
         Assert.assertEquals(FunctionName.FIT_RCF.name(), model.getName());
         Assert.assertEquals("1.0.0", model.getVersion());
@@ -114,30 +114,34 @@ public class FixedInTimeRandomCutForestTest {
     }
 
     private DataFrame constructRCFDataFrame(boolean predict) {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("timestamp", ColumnType.LONG), new ColumnMeta("value", ColumnType.INTEGER)};
+        ColumnMeta[] columnMetas = new ColumnMeta[] {
+            new ColumnMeta("timestamp", ColumnType.LONG),
+            new ColumnMeta("value", ColumnType.INTEGER) };
         DataFrame dataFrame = new DefaultDataFrame(columnMetas);
         long startTime = 1643677200000l;
         for (int i = 0; i < dataSize; i++) {
-            long time = startTime + i * 1000 * 60;//1 minute interval
+            long time = startTime + i * 1000 * 60;// 1 minute interval
             if (predict && i % 100 == 0) {
-                dataFrame.appendRow(new Object[]{time, ThreadLocalRandom.current().nextInt(100, 1000)});
+                dataFrame.appendRow(new Object[] { time, ThreadLocalRandom.current().nextInt(100, 1000) });
             } else {
-                dataFrame.appendRow(new Object[]{time, ThreadLocalRandom.current().nextInt(1, 10)});
+                dataFrame.appendRow(new Object[] { time, ThreadLocalRandom.current().nextInt(1, 10) });
             }
         }
         return dataFrame;
     }
 
     private DataFrame constructRCFDataFrameStringTimestamp(boolean predict) {
-        ColumnMeta[] columnMetas = new ColumnMeta[]{new ColumnMeta("timestamp", ColumnType.STRING), new ColumnMeta("value", ColumnType.INTEGER)};
+        ColumnMeta[] columnMetas = new ColumnMeta[] {
+            new ColumnMeta("timestamp", ColumnType.STRING),
+            new ColumnMeta("value", ColumnType.INTEGER) };
         DataFrame dataFrame = new DefaultDataFrame(columnMetas);
         long startTime = 1643677200000l;
         for (int i = 0; i < dataSize; i++) {
-            long time = startTime + i * 1000 * 60;//1 minute interval
+            long time = startTime + i * 1000 * 60;// 1 minute interval
             if (predict && i % 100 == 0) {
-                dataFrame.appendRow(new Object[]{String.valueOf(time), ThreadLocalRandom.current().nextInt(100, 1000)});
+                dataFrame.appendRow(new Object[] { String.valueOf(time), ThreadLocalRandom.current().nextInt(100, 1000) });
             } else {
-                dataFrame.appendRow(new Object[]{String.valueOf(time), ThreadLocalRandom.current().nextInt(1, 10)});
+                dataFrame.appendRow(new Object[] { String.valueOf(time), ThreadLocalRandom.current().nextInt(1, 10) });
             }
         }
         return dataFrame;

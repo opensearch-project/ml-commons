@@ -5,25 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
-import org.opensearch.OpenSearchStatusException;
-import org.opensearch.core.rest.RestStatus;
-import org.opensearch.ml.common.connector.AwsConnector;
-import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.engine.annotation.ConnectorExecutor;
-import org.opensearch.script.ScriptService;
-import software.amazon.awssdk.core.internal.http.loader.DefaultSdkHttpClientBuilder;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.http.AbortableInputStream;
-import software.amazon.awssdk.http.HttpExecuteRequest;
-import software.amazon.awssdk.http.HttpExecuteResponse;
-import software.amazon.awssdk.http.SdkHttpClient;
-import software.amazon.awssdk.http.SdkHttpFullRequest;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
+import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -34,18 +18,36 @@ import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.Map;
 
-import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
-import static software.amazon.awssdk.http.SdkHttpMethod.POST;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.common.connector.AwsConnector;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.script.ScriptService;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.core.internal.http.loader.DefaultSdkHttpClientBuilder;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.http.AbortableInputStream;
+import software.amazon.awssdk.http.HttpExecuteRequest;
+import software.amazon.awssdk.http.HttpExecuteResponse;
+import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.SdkHttpFullRequest;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
-public class AwsConnectorExecutor implements RemoteConnectorExecutor{
+public class AwsConnectorExecutor implements RemoteConnectorExecutor {
 
     @Getter
     private AwsConnector connector;
     private final SdkHttpClient httpClient;
-    @Setter @Getter
+    @Setter
+    @Getter
     private ScriptService scriptService;
 
     public AwsConnectorExecutor(Connector connector, SdkHttpClient httpClient) {
@@ -57,16 +59,17 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
         this(connector, new DefaultSdkHttpClientBuilder().build());
     }
 
-     @Override
-     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
+    @Override
+    public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
         try {
             String endpoint = connector.getPredictEndpoint(parameters);
             RequestBody requestBody = RequestBody.fromString(payload);
 
-            SdkHttpFullRequest.Builder builder = SdkHttpFullRequest.builder()
-                    .method(POST)
-                    .uri(URI.create(endpoint))
-                    .contentStreamProvider(requestBody.contentStreamProvider());
+            SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
+                .builder()
+                .method(POST)
+                .uri(URI.create(endpoint))
+                .contentStreamProvider(requestBody.contentStreamProvider());
             Map<String, String> headers = connector.getDecryptedHeaders();
             if (headers != null) {
                 for (String key : headers.keySet()) {
@@ -74,10 +77,11 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor{
                 }
             }
             SdkHttpFullRequest request = builder.build();
-            HttpExecuteRequest executeRequest = HttpExecuteRequest.builder()
-                    .request(signRequest(request))
-                    .contentStreamProvider(request.contentStreamProvider().orElse(null))
-                    .build();
+            HttpExecuteRequest executeRequest = HttpExecuteRequest
+                .builder()
+                .request(signRequest(request))
+                .contentStreamProvider(request.contentStreamProvider().orElse(null))
+                .build();
 
             HttpExecuteResponse response = AccessController.doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> {
                 return httpClient.prepareRequest(executeRequest).call();

@@ -5,6 +5,18 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
+import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.EVENT_PATTERN;
+import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.EVENT_WINDOW;
+import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.SUSPECTED_METRICS;
+
+import java.nio.FloatBuffer;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
+import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
+
 import ai.djl.modality.Output;
 import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
@@ -12,17 +24,6 @@ import ai.djl.ndarray.types.Shape;
 import ai.djl.translate.Batchifier;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorContext;
-import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor;
-import org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensors;
-
-import java.nio.FloatBuffer;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.EVENT_PATTERN;
-import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.SUSPECTED_METRICS;
-import static org.opensearch.ml.common.output.execute.metrics_correlation.MCorrModelTensor.EVENT_WINDOW;
 
 public class MetricsCorrelationTranslator implements Translator<float[][], Output> {
 
@@ -34,8 +35,7 @@ public class MetricsCorrelationTranslator implements Translator<float[][], Outpu
     }
 
     @Override
-    public void prepare(TranslatorContext ctx) {
-    }
+    public void prepare(TranslatorContext ctx) {}
 
     @Override
     public NDList processInput(TranslatorContext ctx, float[][] input) {
@@ -68,7 +68,8 @@ public class MetricsCorrelationTranslator implements Translator<float[][], Outpu
             } else if (SUSPECTED_METRICS.equals(ndArray.getName())) {
                 suspected_metrics = ndArray.toLongArray();
             } else if (EVENT_PATTERN.equals(ndArray.getName())) {
-                event_pattern = ndArray.toFloatArray();;
+                event_pattern = ndArray.toFloatArray();
+                ;
             }
             if (i % 3 == 0) {
                 outputs.add(new MCorrModelTensor(event_window, event_pattern, suspected_metrics));
