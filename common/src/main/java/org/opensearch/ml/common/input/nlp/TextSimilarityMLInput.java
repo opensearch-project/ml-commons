@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
@@ -41,7 +42,6 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_SIMILARITY})
 public class TextSimilarityMLInput extends MLInput {
     public static final String TEXT_PAIRS_FIELD = "text_pairs";
-    public static final String RESULT_FILTER_FIELD = "result_filter";
 
     public TextSimilarityMLInput(FunctionName algorithm, MLInputDataset dataset) {
         super(algorithm, null, dataset);
@@ -49,6 +49,11 @@ public class TextSimilarityMLInput extends MLInput {
 
     public TextSimilarityMLInput(StreamInput in) throws IOException {
         super(in);
+    }
+
+    @Override
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
     }
 
     @Override
@@ -91,7 +96,9 @@ public class TextSimilarityMLInput extends MLInput {
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                        parser.nextToken();
                         String query = parser.text();
+                        parser.nextToken();
                         String context = parser.text();
                         pairs.add(Pair.of(query, context));
                         ensureExpectedToken(XContentParser.Token.END_ARRAY, parser.nextToken(), parser);
@@ -103,7 +110,7 @@ public class TextSimilarityMLInput extends MLInput {
             }
         }        
         if(pairs.isEmpty()) {
-            throw new IllegalArgumentException("No text pairs");
+            throw new IllegalArgumentException("no text pairs");
         }
         inputDataset = new TextSimilarityInputDataSet(pairs);
     }

@@ -8,6 +8,8 @@ package org.opensearch.ml.common.input;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -21,6 +23,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
@@ -55,6 +58,8 @@ public class MLInput implements Input {
     public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
     // Input text sentences for text embedding model
     public static final String TEXT_DOCS_FIELD = "text_docs";
+    // Input text pairs for text similarity model
+    public static final String TEXT_PAIRS_FIELD = "text_pairs";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -157,6 +162,21 @@ public class MLInput implements Input {
                             builder.field(TARGET_RESPONSE_POSITIONS_FIELD, targetPositions.toArray(new Integer[0]));
                         }
                     }
+                    break;
+                case TEXT_SIMILARITY:
+                    TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
+                    List<Pair<String, String>> pairs = ds.getPairs();
+                    if (pairs != null && !pairs.isEmpty()) {
+                        builder.startArray(TEXT_PAIRS_FIELD);
+                        for(Pair<String, String> p : pairs) {
+                            builder.startArray();
+                            builder.value(p.getLeft());
+                            builder.value(p.getRight());
+                            builder.endArray();
+                        }
+                        builder.endArray();
+                    }
+                    break;
                 default:
                     break;
             }
@@ -186,6 +206,7 @@ public class MLInput implements Input {
         List<String> targetResponse = new ArrayList<>();
         List<Integer> targetResponsePositions = new ArrayList<>();
         List<String> textDocs = new ArrayList<>();
+        List<Pair<String, String>> textPairs = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -233,6 +254,18 @@ public class MLInput implements Input {
                         textDocs.add(parser.text());
                     }
                     break;
+                case TEXT_PAIRS_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                        parser.nextToken();
+                        String query = parser.text();
+                        parser.nextToken();
+                        String context = parser.text();
+                        textPairs.add(Pair.of(query, context));
+                        ensureExpectedToken(XContentParser.Token.END_ARRAY, parser.nextToken(), parser);
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -242,6 +275,9 @@ public class MLInput implements Input {
         if (algorithm == FunctionName.TEXT_EMBEDDING || algorithm == FunctionName.SPARSE_ENCODING || algorithm == FunctionName.SPARSE_TOKENIZE) {
             ModelResultFilter filter = new ModelResultFilter(returnBytes, returnNumber, targetResponse, targetResponsePositions);
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
+        }
+        if (algorithm == FunctionName.TEXT_SIMILARITY) {
+            inputDataSet = new TextSimilarityInputDataSet(textPairs);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }
