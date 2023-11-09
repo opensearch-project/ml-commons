@@ -26,7 +26,6 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -38,14 +37,11 @@ import lombok.experimental.FieldDefaults;
 @InputDataSet(MLInputDataType.TEXT_SIMILARITY)
 public class TextSimilarityInputDataSet extends MLInputDataset {
     
-    private ModelResultFilter resultFilter;
-
     private List<Pair<String, String>> pairs;
 
     @Builder(toBuilder = true)
-    public TextSimilarityInputDataSet(List<Pair<String, String>> pairs, ModelResultFilter resultFilter) {
+    public TextSimilarityInputDataSet(List<Pair<String, String>> pairs) {
         super(MLInputDataType.TEXT_SIMILARITY);
-        this.resultFilter = resultFilter;
         Objects.requireNonNull(pairs);
         if(pairs.isEmpty()) {
             throw new IllegalArgumentException("pairs must be nonempty");
@@ -62,11 +58,6 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
             String context = in.readString();
             this.pairs.add(Pair.of(query, context));
         }
-        if(in.readBoolean()) {
-            this.resultFilter = new ModelResultFilter(in);
-        } else {
-            this.resultFilter = null;
-        }
     }
 
     @Override
@@ -76,12 +67,6 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
         for (Pair<String, String> p : this.pairs) {
             out.writeString(p.getLeft());
             out.writeString(p.getRight());
-        }
-        if(this.resultFilter != null) {
-            out.writeBoolean(true);
-            resultFilter.writeTo(out);
-        } else {
-            out.writeBoolean(false);
         }
     }
 }

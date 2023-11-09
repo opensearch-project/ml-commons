@@ -29,7 +29,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -62,7 +61,6 @@ public class TextSimilarityMLInput extends MLInput {
         if(inputDataset != null) {
             TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
             List<Pair<String, String>> pairs = ds.getPairs();
-            ModelResultFilter resultFilter = ds.getResultFilter();
             if (pairs != null && !pairs.isEmpty()) {
                 builder.startArray(TEXT_PAIRS_FIELD);
                 for(Pair<String, String> p : pairs) {
@@ -73,20 +71,6 @@ public class TextSimilarityMLInput extends MLInput {
                 }
                 builder.endArray();
             }
-            if (resultFilter != null) {
-                builder.startObject(RESULT_FILTER_FIELD);
-                builder.field(RETURN_BYTES_FIELD, resultFilter.isReturnBytes());
-                builder.field(RETURN_NUMBER_FIELD, resultFilter.isReturnNumber());
-                List<String> targetResponse = resultFilter.getTargetResponse();
-                if (targetResponse != null && targetResponse.size() > 0) {
-                    builder.field(TARGET_RESPONSE_FIELD, targetResponse.toArray(new String[0]));
-                }
-                List<Integer> targetPositions = resultFilter.getTargetResponsePositions();
-                if (targetPositions != null && targetPositions.size() > 0) {
-                    builder.field(TARGET_RESPONSE_POSITIONS_FIELD, targetPositions.toArray(new Integer[0]));
-                }
-                builder.endObject();
-            }
         }
         builder.endObject();
         return builder;
@@ -96,12 +80,6 @@ public class TextSimilarityMLInput extends MLInput {
         super();
         this.algorithm = functionName;
         List<Pair<String, String>> pairs = new ArrayList<>();
-        ModelResultFilter resultFilter = null;
-
-        boolean returnBytes = false;
-        boolean returnNumber = true;
-        List<String> targetResponse = new ArrayList<>();
-        List<Integer> targetResponsePositions = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -109,24 +87,6 @@ public class TextSimilarityMLInput extends MLInput {
             parser.nextToken();
 
             switch (fieldName) {
-                case RETURN_BYTES_FIELD:
-                    returnBytes = parser.booleanValue();
-                    break;
-                case RETURN_NUMBER_FIELD:
-                    returnNumber = parser.booleanValue();
-                    break;
-                case TARGET_RESPONSE_FIELD:
-                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        targetResponse.add(parser.text());
-                    }
-                    break;
-                case TARGET_RESPONSE_POSITIONS_FIELD:
-                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        targetResponsePositions.add(parser.intValue());
-                    }
-                    break;
                 case TEXT_PAIRS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
@@ -137,22 +97,15 @@ public class TextSimilarityMLInput extends MLInput {
                         ensureExpectedToken(XContentParser.Token.END_ARRAY, parser.nextToken(), parser);
                     }
                     break;
-                case RESULT_FILTER_FIELD:
-                    resultFilter = ModelResultFilter.parse(parser);
-                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
-        }
-        ModelResultFilter filter = resultFilter != null ? resultFilter : ModelResultFilter.builder().returnBytes(returnBytes)
-                .returnNumber(returnNumber).targetResponse(targetResponse).targetResponsePositions(targetResponsePositions)
-                .build();
-        
+        }        
         if(pairs.isEmpty()) {
             throw new IllegalArgumentException("No text pairs");
         }
-        inputDataset = new TextSimilarityInputDataSet(pairs, filter);
+        inputDataset = new TextSimilarityInputDataSet(pairs);
     }
 
 }

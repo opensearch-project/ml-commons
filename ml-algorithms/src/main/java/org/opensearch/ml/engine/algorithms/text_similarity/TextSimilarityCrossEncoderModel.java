@@ -25,7 +25,6 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
@@ -44,13 +43,13 @@ public class TextSimilarityCrossEncoderModel extends DLModel {
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
         TextSimilarityInputDataSet textSimInput = (TextSimilarityInputDataSet) inputDataSet;
-        ModelResultFilter resultFilter = textSimInput.getResultFilter();
         for (Pair<String, String> pair : textSimInput.getPairs()) {
             Input input = new Input();
             input.add(pair.getLeft());
             input.add(pair.getRight());
             output = getPredictor().predict(input);
-            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
+            ModelTensors outputTensors = ModelTensors.fromBytes(output.getData().getAsBytes());
+            tensorOutputs.add(outputTensors);
         }
         return new ModelTensorOutput(tensorOutputs);
     }
