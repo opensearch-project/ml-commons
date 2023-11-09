@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
@@ -38,6 +39,8 @@ import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchHit;
 
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -241,9 +244,11 @@ public class MLReActAgentRunner {
         AtomicBoolean getFinalAnswer = new AtomicBoolean(false);
         AtomicReference<String> lastTool = new AtomicReference<>();
         AtomicReference<String> lastThought = new AtomicReference<>();
+        AtomicReference<String> currentAction = new AtomicReference<>();
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastActionResult = new AtomicReference<>();
+        List<ModelTensor> outputModelTensors = new ArrayList<>();
 
         StepListener<?> lastStepListener = null;
         int maxIterations = Integer.parseInt(maxIteration) * 2;
@@ -259,7 +264,7 @@ public class MLReActAgentRunner {
 
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder("");
-                if (finalI % 2 == 0) {
+                if (finalI % 2 == 0) {  // LLM response handler to identify next action
                     MLTaskResponse llmResponse = (MLTaskResponse) output;
                     ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
                     Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
@@ -303,13 +308,11 @@ public class MLReActAgentRunner {
                         }
                         cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").result(finalAnswer).build())).build());
 
-                        List<ModelTensors> finalModelTensors = new ArrayList<>();
-                        finalModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("response", finalAnswer)).build())).build());
                         getFinalAnswer.set(true);
                         if (verbose) {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
                         } else {
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+                            publishResponse(listener, outputModelTensors, finalAnswer);
                         }
                         return;
                     }
@@ -317,9 +320,7 @@ public class MLReActAgentRunner {
                         if (verbose) {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
                         } else {
-                            List<ModelTensors> finalModelTensors = new ArrayList<>();
-                            finalModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("response", thought)).build())).build());
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+                            publishResponse(listener, outputModelTensors, finalAnswer);
                         }
                     }
 
@@ -335,6 +336,7 @@ public class MLReActAgentRunner {
                         }
                     }
                     action = toolName;
+                    currentAction.set(action);
 
                     if (action != null && tools.containsKey(action) && inputTools.contains(action)) {
                         Map<String, String> toolParams = new HashMap<>();
@@ -388,9 +390,18 @@ public class MLReActAgentRunner {
                         newPrompt.set(substitutor.replace(finalPrompt));
                         tmpParameters.put(PROMPT, newPrompt.get());
                     }
-                } else {
+                } else { // Handle tool output
                     Object result = output;
                     modelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + result)).build())).build());
+
+                    MLToolSpec toolSpec = toolSpecMap.get(currentAction.get());
+                    if (toolSpec != null && BooleanUtils.isTrue(toolSpec.getIncludeOutputInAgentResponse())) {
+                        String name = toolSpec.getAlias() != null ? toolSpec.getAlias() : toolSpec.getName();
+                        String outputString = output instanceof String ? (String) output :
+                                AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+                        ModelTensor modelTensor = ModelTensor.builder().name(name).result(outputString).build();
+                        outputModelTensors.add(modelTensor);
+                    }
 
                     String toolResponse = tmpParameters.get("prompt.tool_response");
                     StringSubstitutor toolResponseSubstitutor = new StringSubstitutor(ImmutableMap.of("observation", result), "${parameters.", "}");
@@ -409,13 +420,12 @@ public class MLReActAgentRunner {
                     ActionRequest request = new MLPredictionTaskRequest(llm.getModelId(), RemoteInferenceMLInput.builder()
                             .algorithm(FunctionName.REMOTE)
                             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build()).build());
+
                     if (finalI == maxIterations - 1) {
                         if (verbose) {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(cotModelTensors).build());
                         } else {
-                            List<ModelTensors> finalModelTensors = new ArrayList<>();
-                            finalModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("response", lastThought.get())).build())).build());
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+                            publishResponse(listener, outputModelTensors, lastThought.get());
                         }
                     } else {
                         client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
@@ -434,6 +444,13 @@ public class MLReActAgentRunner {
                 .algorithm(FunctionName.REMOTE)
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build()).build());
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
+    }
+
+    private void publishResponse(ActionListener<Object> listener, List<ModelTensor> outputModelTensors, String finalAnswer) {
+        List<ModelTensors> finalModelTensors = new ArrayList<>();
+        outputModelTensors.add(ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("response", finalAnswer)).build());
+        finalModelTensors.add(ModelTensors.builder().mlModelTensors(outputModelTensors).build());
+        listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
     }
 
     private String addPrefixSuffixToPrompt(Map<String, String> parameters, String prompt) {
