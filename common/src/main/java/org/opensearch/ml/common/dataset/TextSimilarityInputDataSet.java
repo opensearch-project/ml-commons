@@ -52,7 +52,7 @@ public class TextSimilarityInputDataSet extends MLInputDataset {
     public TextSimilarityInputDataSet(StreamInput in) throws IOException {
         super(MLInputDataType.TEXT_SIMILARITY);
         int size = in.readInt();
-        this.pairs = new ArrayList<Pair<String, String>>(size);
+        this.pairs = new ArrayList<Pair<String, String>>();
         for(int i = 0; i < size; i++) {
             String query = in.readString();
             String context = in.readString();
