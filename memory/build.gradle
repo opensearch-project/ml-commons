@@ -24,8 +24,7 @@ plugins {
 }
 
 dependencies {
-//    implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
-    implementation group: 'org.opensearch', name:'opensearch-ml-common', version: "${opensearch_build}"
+    implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: '5.2.1'
     implementation "org.opensearch:common-utils:${common_utils_version}"

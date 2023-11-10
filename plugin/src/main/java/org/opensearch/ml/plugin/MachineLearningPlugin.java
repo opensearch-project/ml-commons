@@ -809,7 +809,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         externalToolFactories = new HashMap<>();
         for (MLCommonsExtension extension : loader.loadExtensions(MLCommonsExtension.class)) {
             List<Tool.Factory<? extends Tool>> toolFactories = extension.getToolFactories();
-            for (Tool.Factory toolFactory : toolFactories) {
+            for (Tool.Factory<? extends Tool> toolFactory : toolFactories) {
                 ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
                 if (toolAnnotation == null) {
                     throw new IllegalArgumentException(
