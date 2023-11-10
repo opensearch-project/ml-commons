@@ -87,7 +87,8 @@ public class ModelHelper {
                         .url(modelZipFileUrl)
                         .deployModel(deployModel)
                         .modelNodeIds(modelNodeIds)
-                        .modelGroupId(modelGroupId);
+                        .modelGroupId(modelGroupId)
+                        .functionName(FunctionName.from((String) config.get("model_task_type")));;
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
                         case MLRegisterModelInput.MODEL_FORMAT_FIELD:

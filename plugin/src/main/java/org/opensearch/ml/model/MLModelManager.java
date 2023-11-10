@@ -756,6 +756,7 @@ public class MLModelManager {
             throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
         }
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
+            mlTask.setFunctionName(registerModelInput.getFunctionName());
             registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
