@@ -52,6 +52,7 @@ import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
 import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
+import org.opensearch.ml.action.models.InPlaceUpdateModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
 import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
@@ -98,6 +99,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
@@ -286,6 +288,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
                 new ActionHandler<>(MLUpdateModelAction.INSTANCE, UpdateModelTransportAction.class),
+                new ActionHandler<>(MLInPlaceUpdateModelAction.INSTANCE, InPlaceUpdateModelTransportAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
                 new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),

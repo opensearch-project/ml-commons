@@ -409,7 +409,7 @@ public class MLModel implements ToXContentObject {
         String oldContent = null;
         User user = null;
 
-        String description = null;;
+        String description = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;

@@ -9,9 +9,13 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -25,7 +29,10 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -36,11 +43,15 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelAction;
+import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelNodesRequest;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -54,13 +65,16 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-@FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
+    ClusterService clusterService;
     ModelAccessControlHelper modelAccessControlHelper;
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelManager mlModelManager;
     MLModelGroupManager mlModelGroupManager;
+    MLEngine mlEngine;
+    volatile List<String> trustedConnectorEndpointsRegex;
 
     @Inject
     public UpdateModelTransportAction(
@@ -70,7 +84,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         ConnectorAccessControlHelper connectorAccessControlHelper,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelManager mlModelManager,
-        MLModelGroupManager mlModelGroupManager
+        MLModelGroupManager mlModelGroupManager,
+        Settings settings,
+        ClusterService clusterService,
+        MLEngine mlEngine
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
@@ -78,6 +95,12 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.clusterService = clusterService;
+        this.mlEngine = mlEngine;
+        trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
     }
 
     @Override
@@ -91,25 +114,21 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+                boolean modelDeployFlag = isModelDeployed(mlModel.getModelState());
                 FunctionName functionName = mlModel.getAlgorithm();
-                MLModelState mlModelState = mlModel.getModelState();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
                         .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
                             if (hasPermission) {
-                                if (isModelDeployed(mlModelState)) {
-                                    updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener, context);
-                                } else {
-                                    actionListener
-                                        .onFailure(
-                                            new OpenSearchStatusException(
-                                                "ML Model "
-                                                    + modelId
-                                                    + " is in deploying or deployed state, please undeploy the models first!",
-                                                RestStatus.FORBIDDEN
-                                            )
-                                        );
-                                }
+                                updateRemoteOrTextEmbeddingModel(
+                                    modelId,
+                                    updateModelInput,
+                                    mlModel,
+                                    user,
+                                    actionListener,
+                                    context,
+                                    modelDeployFlag
+                                );
                             } else {
                                 actionListener
                                     .onFailure(
@@ -153,28 +172,48 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLModel mlModel,
         User user,
         ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ThreadContext.StoredContext context,
+        boolean modelDeployFlag
     ) {
         String newModelGroupId = (Strings.hasLength(updateModelInput.getModelGroupId())
             && !Objects.equals(updateModelInput.getModelGroupId(), mlModel.getModelGroupId())) ? updateModelInput.getModelGroupId() : null;
         String relinkConnectorId = Strings.hasLength(updateModelInput.getConnectorId()) ? updateModelInput.getConnectorId() : null;
 
         if (mlModel.getAlgorithm() == TEXT_EMBEDDING) {
-            if (relinkConnectorId == null) {
-                updateModelWithRegisteringToAnotherModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener, context);
+            if (relinkConnectorId == null && updateModelInput.getConnectorUpdateContent() == null) {
+                updateModelWithRegisteringToAnotherModelGroup(
+                    modelId,
+                    newModelGroupId,
+                    user,
+                    updateModelInput,
+                    actionListener,
+                    context,
+                    modelDeployFlag
+                );
             } else {
                 actionListener
                     .onFailure(
-                        new OpenSearchStatusException(
-                            "Trying to update the connector or connector_id field on a local model",
-                            RestStatus.BAD_REQUEST
-                        )
+                        new OpenSearchStatusException("Trying to update the connector_id field on a local model.", RestStatus.BAD_REQUEST)
                     );
             }
         } else {
             // mlModel.getAlgorithm() == REMOTE
             if (relinkConnectorId == null) {
-                updateModelWithRegisteringToAnotherModelGroup(modelId, newModelGroupId, user, updateModelInput, actionListener, context);
+                if (updateModelInput.getConnectorUpdateContent() != null) {
+                    Connector connector = mlModel.getConnector();
+                    connector.update(updateModelInput.getConnectorUpdateContent(), mlEngine::encrypt);
+                    connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                    updateModelInput.setConnector(connector);
+                }
+                updateModelWithRegisteringToAnotherModelGroup(
+                    modelId,
+                    newModelGroupId,
+                    user,
+                    updateModelInput,
+                    actionListener,
+                    context,
+                    modelDeployFlag
+                );
             } else {
                 updateModelWithRelinkStandAloneConnector(
                     modelId,
@@ -184,7 +223,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     user,
                     updateModelInput,
                     actionListener,
-                    context
+                    context,
+                    modelDeployFlag
                 );
             }
         }
@@ -198,7 +238,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ThreadContext.StoredContext context,
+        boolean modelDeployFlag
     ) {
         if (Strings.hasLength(mlModel.getConnectorId())) {
             connectorAccessControlHelper
@@ -210,7 +251,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             user,
                             updateModelInput,
                             actionListener,
-                            context
+                            context,
+                            modelDeployFlag
                         );
                     } else {
                         actionListener
@@ -242,9 +284,18 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         User user,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ThreadContext.StoredContext context,
+        boolean modelDeployFlag
     ) {
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
+        // This flag is used to decide if we need to re-deploy the predictor(model) when performing the in-place update
+        boolean updatePredictorFlag = (updateModelInput.getConnector() != null || updateModelInput.getConnectorId() != null);
+        boolean inPlaceUpdateFieldFlag = (updateModelInput.getQuotaFlag() != null
+            || updateModelInput.getRateLimitNumber() != null
+            || updateModelInput.getRateLimitUnit() != null
+            || updatePredictorFlag);
+        // This flag is used to decide if we need to perform an in-place update
+        boolean inPlaceUpdateFlag = modelDeployFlag && inPlaceUpdateFieldFlag;
         if (newModelGroupId != null) {
             modelAccessControlHelper.validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasRelinkPermission -> {
                 if (hasRelinkPermission) {
@@ -256,7 +307,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             updateModelInput,
                             newModelGroupResponse,
                             actionListener,
-                            context
+                            context,
+                            inPlaceUpdateFlag,
+                            updatePredictorFlag
                         );
                     },
                         exception -> actionListener
@@ -283,7 +336,15 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 actionListener.onFailure(exception);
             }));
         } else {
-            updateRequestConstructor(modelId, updateRequest, updateModelInput, actionListener, context);
+            updateRequestConstructor(
+                modelId,
+                updateRequest,
+                updateModelInput,
+                actionListener,
+                context,
+                inPlaceUpdateFlag,
+                updatePredictorFlag
+            );
         }
     }
 
@@ -292,12 +353,24 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         UpdateRequest updateRequest,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ThreadContext.StoredContext context,
+        boolean inPlaceUpdateFlag,
+        boolean updatePredictorFlag
     ) {
         try {
             updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
-            client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+            if (inPlaceUpdateFlag) {
+                String[] targetNodeIds = getAllNodes();
+                MLInPlaceUpdateModelNodesRequest mlInPlaceUpdateModelNodesRequest = new MLInPlaceUpdateModelNodesRequest(
+                    targetNodeIds,
+                    modelId,
+                    updatePredictorFlag
+                );
+                client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context, mlInPlaceUpdateModelNodesRequest));
+            } else {
+                client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+            }
         } catch (IOException e) {
             log.error("Failed to build update request.");
             actionListener.onFailure(e);
@@ -311,7 +384,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput,
         GetResponse newModelGroupResponse,
         ActionListener<UpdateResponse> actionListener,
-        ThreadContext.StoredContext context
+        ThreadContext.StoredContext context,
+        boolean inPlaceUpdateFlag,
+        boolean updatePredictorFlag
     ) {
         Map<String, Object> newModelGroupSourceMap = newModelGroupResponse.getSourceAsMap();
         String updatedVersion = incrementLatestVersion(newModelGroupSourceMap);
@@ -326,21 +401,70 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         try {
             updateRequest.doc(updateModelInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS));
             updateRequest.docAsUpsert(true);
-            client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
-                client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
-            }, e -> {
-                log
-                    .error(
-                        "Failed to register ML model with model ID {} to the new model group with model group ID {}",
-                        modelId,
-                        newModelGroupId
-                    );
-                actionListener.onFailure(e);
-            }));
+            if (inPlaceUpdateFlag) {
+                String[] targetNodeIds = getAllNodes();
+                MLInPlaceUpdateModelNodesRequest mlInPlaceUpdateModelNodesRequest = new MLInPlaceUpdateModelNodesRequest(
+                    targetNodeIds,
+                    modelId,
+                    updatePredictorFlag
+                );
+                client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
+                    client
+                        .update(
+                            updateRequest,
+                            getUpdateResponseListener(modelId, actionListener, context, mlInPlaceUpdateModelNodesRequest)
+                        );
+                }, e -> {
+                    log
+                        .error(
+                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+                            modelId,
+                            newModelGroupId
+                        );
+                    actionListener.onFailure(e);
+                }));
+            } else {
+                client.update(updateModelGroupRequest, ActionListener.wrap(r -> {
+                    client.update(updateRequest, getUpdateResponseListener(modelId, actionListener, context));
+                }, e -> {
+                    log
+                        .error(
+                            "Failed to register ML model with model ID {} to the new model group with model group ID {}",
+                            modelId,
+                            newModelGroupId
+                        );
+                    actionListener.onFailure(e);
+                }));
+            }
         } catch (IOException e) {
             log.error("Failed to build update request.");
             actionListener.onFailure(e);
         }
+    }
+
+    private ActionListener<UpdateResponse> getUpdateResponseListener(
+        String modelId,
+        ActionListener<UpdateResponse> actionListener,
+        ThreadContext.StoredContext context,
+        MLInPlaceUpdateModelNodesRequest mlInPlaceUpdateModelNodesRequest
+    ) {
+        return ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                log.info("Model id:{} failed update", modelId);
+                actionListener.onResponse(updateResponse);
+                return;
+            }
+            client.execute(MLInPlaceUpdateModelAction.INSTANCE, mlInPlaceUpdateModelNodesRequest, ActionListener.wrap(r -> {
+                log.info("Successfully perform in-place update ML model with model ID {}", modelId);
+                actionListener.onResponse(updateResponse);
+            }, e -> {
+                log.error("Failed to perform in-place update for model: {}" + modelId, e);
+                actionListener.onFailure(e);
+            }));
+        }, exception -> {
+            log.error("Failed to update ML model: " + modelId, exception);
+            actionListener.onFailure(exception);
+        }), context::restore);
     }
 
     private ActionListener<UpdateResponse> getUpdateResponseListener(
@@ -389,11 +513,18 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private Boolean isModelDeployed(MLModelState mlModelState) {
-        return !mlModelState.equals(MLModelState.LOADED)
-            && !mlModelState.equals(MLModelState.LOADING)
-            && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
-            && !mlModelState.equals(MLModelState.DEPLOYED)
-            && !mlModelState.equals(MLModelState.DEPLOYING)
-            && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
+        return mlModelState.equals(MLModelState.LOADED)
+            || mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+            || mlModelState.equals(MLModelState.DEPLOYED)
+            || mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
+    }
+
+    private String[] getAllNodes() {
+        Iterator<DiscoveryNode> iterator = clusterService.state().nodes().iterator();
+        List<String> nodeIds = new ArrayList<>();
+        while (iterator.hasNext()) {
+            nodeIds.add(iterator.next().getId());
+        }
+        return nodeIds.toArray(new String[0]);
     }
 }
