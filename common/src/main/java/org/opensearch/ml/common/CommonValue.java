@@ -338,17 +338,8 @@ public class CommonValue {
             + MLAgent.AGENT_NAME_FIELD
             + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
-            + MLAgent.AGENT_TYPE_FIELD
-            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
-            + "      \""
             + MLAgent.DESCRIPTION_FIELD
             + "\" : {\"type\": \"text\"},\n"
-            + "      \""
-            + MLAgent.PROMPT_FIELD
-            + "\" : {\"type\": \"text\"},\n"
-            + "      \""
-            + MLAgent.MODEL_ID_FIELD
-            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
             + MLAgent.LLM_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
@@ -361,9 +352,6 @@ public class CommonValue {
             + "      \""
             + MLAgent.MEMORY_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
-            + "      \""
-            + MLAgent.MEMORY_ID_FIELD
-            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
             + MLAgent.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"

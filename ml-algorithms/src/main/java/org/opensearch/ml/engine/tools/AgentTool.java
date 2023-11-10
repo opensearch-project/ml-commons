@@ -59,23 +59,8 @@ public class AgentTool implements Tool {
     }
 
     @Override
-    public String getType() {
-        return null;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
     public String getName() {
         return AgentTool.NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override

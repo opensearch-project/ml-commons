@@ -17,8 +17,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -29,26 +32,20 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String AGENT_NAME_FIELD = "name";
     public static final String AGENT_TYPE_FIELD = "type";
     public static final String DESCRIPTION_FIELD = "description";
-    public static final String PROMPT_FIELD = "prompt";
-    public static final String MODEL_ID_FIELD = "model_id";
     public static final String LLM_FIELD = "llm";
     public static final String TOOLS_FIELD = "tools";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String MEMORY_FIELD = "memory";
-    public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
 
     private String name;
     private String type;
     private String description;
-    private String prompt;
-    private String modelId;
     private LLMSpec llm;
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
-    private String memoryId;
 
     private Instant createdTime;
     private Instant lastUpdateTime;
@@ -57,13 +54,10 @@ public class MLAgent implements ToXContentObject, Writeable {
     public MLAgent(String name,
                    String type,
                    String description,
-                   String prompt,
-                   String modelId,
                    LLMSpec llm,
                    List<MLToolSpec> tools,
                    Map<String, String> parameters,
                    MLMemorySpec memory,
-                   String memoryId,
                    Instant createdTime,
                    Instant lastUpdateTime) {
         if (name == null) {
@@ -72,23 +66,27 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.name = name;
         this.type = type;
         this.description = description;
-        this.prompt = prompt;
-        this.modelId = modelId;
         this.llm = llm;
         this.tools = tools;
         this.parameters = parameters;
         this.memory = memory;
-        this.memoryId = memoryId;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
+        if (!"flow".equals(type)) {
+            Set<String> toolNames = new HashSet<>();
+            for (MLToolSpec toolSpec : tools) {
+                String toolName = Optional.ofNullable(toolSpec.getAlias()).orElse(toolSpec.getName());
+                if (toolNames.contains(toolName)) {
+                    throw new IllegalArgumentException("Tool has duplicate name or alias: " + toolName);
+                }
+            }
+        }
     }
 
     public MLAgent(StreamInput input) throws IOException{
         name = input.readString();
-        type = input.readString();
+        type = input.readOptionalString();
         description = input.readOptionalString();
-        prompt = input.readOptionalString();
-        modelId = input.readString();
         if (input.readBoolean()) {
             llm = new LLMSpec(input);
         }
@@ -105,17 +103,14 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             memory = new MLMemorySpec(input);
         }
-        memoryId = input.readOptionalString();
         createdTime = input.readInstant();
         lastUpdateTime = input.readInstant();
     }
 
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(name);
-        out.writeString(type);
+        out.writeOptionalString(type);
         out.writeOptionalString(description);
-        out.writeOptionalString(prompt);
-        out.writeString(modelId);
         if (llm != null) {
             out.writeBoolean(true);
             llm.writeTo(out);
@@ -143,7 +138,6 @@ public class MLAgent implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalString(memoryId);
         out.writeInstant(createdTime);
         out.writeInstant(lastUpdateTime);
     }
@@ -160,12 +154,6 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (prompt != null) {
-            builder.field(PROMPT_FIELD, prompt);
-        }
-        if (modelId != null) {
-            builder.field(MODEL_ID_FIELD, modelId);
-        }
         if (llm != null) {
             builder.field(LLM_FIELD, llm);
         }
@@ -177,9 +165,6 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         if (memory != null) {
             builder.field(MEMORY_FIELD, memory);
-        }
-        if (memoryId != null) {
-            builder.field(MEMORY_ID_FIELD, memoryId);
         }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
@@ -195,13 +180,10 @@ public class MLAgent implements ToXContentObject, Writeable {
         String name = null;
         String type = null;
         String description = null;;
-        String prompt = null;
-        String modelId = null;
         LLMSpec llm = null;
         List<MLToolSpec> tools = null;
         Map<String, String> parameters = null;
         MLMemorySpec memory = null;
-        String memoryId = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
 
@@ -220,12 +202,6 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
-                case PROMPT_FIELD:
-                    prompt = parser.text();
-                    break;
-                case MODEL_ID_FIELD:
-                    modelId = parser.text();
-                    break;
                 case LLM_FIELD:
                     llm = LLMSpec.parse(parser);
                     break;
@@ -242,9 +218,6 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case MEMORY_FIELD:
                     memory = MLMemorySpec.parse(parser);
                     break;
-                case MEMORY_ID_FIELD:
-                    memoryId = parser.text();
-                    break;
                 case CREATED_TIME_FIELD:
                     createdTime = Instant.ofEpochMilli(parser.longValue());
                     break;
@@ -260,13 +233,10 @@ public class MLAgent implements ToXContentObject, Writeable {
                 .name(name)
                 .type(type)
                 .description(description)
-                .prompt(prompt)
-                .modelId(modelId)
                 .llm(llm)
                 .tools(tools)
                 .parameters(parameters)
                 .memory(memory)
-                .memoryId(memoryId)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
                 .build();

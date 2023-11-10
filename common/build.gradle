@@ -61,7 +61,6 @@ jacocoTestCoverageVerification {
 check.dependsOn jacocoTestCoverageVerification
 
 shadowJar {
-    destinationDirectory = file("${project.buildDir}/distributions")
     archiveClassifier.set(null)
     exclude 'META-INF/maven/com.google.guava/**'
     exclude 'com/google/thirdparty/**'
