@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.lang3.tuple.Pair;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -28,6 +29,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
+import org.opensearch.ml.engine.annotation.Function;
 
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
@@ -35,6 +37,7 @@ import ai.djl.translate.TranslateException;
 import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
 
+@Function(FunctionName.TEXT_SIMILARITY)
 public class TextSimilarityCrossEncoderModel extends DLModel {
     
     @Override
