@@ -43,7 +43,7 @@ POST /_plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
-           "request_body": "{\r\n\"prompt\":\"${parameters.inputs}\",\r\n\"maxTokens\":200,\r\n\"temperature\":0.7,\r\n\"topP\":1,\r\n\"stopSequences\":[\r\n\r\n],\r\n\"countPenalty\":{\r\n\"scale\":0\r\n},\r\n\"presencePenalty\":{\r\n\"scale\":0\r\n},\r\n\"frequencyPenalty\":{\r\n\"scale\":0\r\n}\r\n}",
+           "request_body": "{\"prompt\":\"${parameters.inputs}\",\"maxTokens\":200,\"temperature\":0.7,\"topP\":1,\"stopSequences\":[],\"countPenalty\":{\"scale\":0},\"presencePenalty\":{\"scale\":0},\"frequencyPenalty\":{\"scale\":0}}",
            "post_process_function": "\n  return params['completions'][0].data.text; \n"
         }
     ]
@@ -76,7 +76,7 @@ POST /_plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
-           "request_body": "{\r\n\"prompt\":\"${parameters.inputs}\",\r\n\"maxTokens\":200,\r\n\"temperature\":0.7,\r\n\"topP\":1,\r\n\"stopSequences\":[\r\n\r\n],\r\n\"countPenalty\":{\r\n\"scale\":0\r\n},\r\n\"presencePenalty\":{\r\n\"scale\":0\r\n},\r\n\"frequencyPenalty\":{\r\n\"scale\":0\r\n}\r\n}",
+           "request_body": "{\"prompt\":\"${parameters.inputs}\",\"maxTokens\":200,\"temperature\":0.7,\"topP\":1,\"stopSequences\":[],\"countPenalty\":{\"scale\":0},\"presencePenalty\":{\"scale\":0},\"frequencyPenalty\":{\"scale\":0}}",
            "post_process_function": "\n  return params['completions'][0].data.text; \n"
         }
     ]
