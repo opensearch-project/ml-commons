@@ -82,6 +82,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
             return;
         }
         String name = request.getName();
+        String applicationType = request.getApplicationType();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(r -> { internalListener.onResponse(new CreateConversationResponse(r)); }, e -> {
@@ -92,7 +93,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
             if (name == null) {
                 cmHandler.createConversation(al);
             } else {
-                cmHandler.createConversation(name, al);
+                cmHandler.createConversation(name, applicationType, al);
             }
         } catch (Exception e) {
             log.error("Failed to create new conversation with name " + request.getName(), e);
