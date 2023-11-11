@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.OpenSearchWrapperException;
@@ -116,6 +117,8 @@ public class InteractionsIndex {
      * @param origin the origin of the response for this interaction
      * @param additionalInfo additional information used for constructing the LLM prompt
      * @param timestamp when this interaction happened
+     * @param parintid the parent interactionId of this interaction
+     * @param traceNumber the trace number for a parent interaction
      * @param listener gets the id of the newly created interaction record
      */
     public void createInteraction(
@@ -124,9 +127,11 @@ public class InteractionsIndex {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo,
+        Map<String, String> additionalInfo,
         Instant timestamp,
-        ActionListener<String> listener
+        ActionListener<String> listener,
+        String parintid,
+        Integer traceNumber
     ) {
         initInteractionsIndexIfAbsent(ActionListener.wrap(indexExists -> {
             String userstr = client
@@ -153,7 +158,11 @@ public class InteractionsIndex {
                                 ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD,
                                 additionalInfo,
                                 ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
-                                timestamp
+                                timestamp,
+                                ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD,
+                                parintid,
+                                ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD,
+                                traceNumber
                             );
                         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                             ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -179,6 +188,30 @@ public class InteractionsIndex {
     }
 
     /**
+     * Add an interaction to this index. Return the ID of the newly created interaction
+     * @param conversationId The id of the conversation this interaction belongs to
+     * @param input the user (human) input into this interaction
+     * @param promptTemplate the prompt template used for this interaction
+     * @param response the GenAI response for this interaction
+     * @param origin the origin of the response for this interaction
+     * @param additionalInfo additional information used for constructing the LLM prompt
+     * @param timestamp when this interaction happened
+     * @param listener gets the id of the newly created interaction record
+     */
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        Instant timestamp,
+        ActionListener<String> listener
+    ) {
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, timestamp, listener, "", null);
+    }
+
+    /**
      * Add an interaction to this index, timestamped now. Return the id of the newly created interaction
      * @param conversationId The id of the converation this interaction belongs to
      * @param input the user (human) input into this interaction
@@ -194,10 +227,10 @@ public class InteractionsIndex {
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo,
+        Map<String, String> additionalInfo,
         ActionListener<String> listener
     ) {
-        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener);
+        createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, Instant.now(), listener, "", null);
     }
 
     /**
