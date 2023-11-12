@@ -14,9 +14,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.common.CommonValue.UNDEPLOYED;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
-import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
-import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
-import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTask.*;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
@@ -756,7 +754,8 @@ public class MLModelManager {
             throw new IllegalArgumentException("This model is not in the pre-trained model list, please check your parameters.");
         }
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
-            mlTask.setFunctionName(registerModelInput.getFunctionName());
+            mlTask.setFunctionName(mlRegisterModelInput.getFunctionName());
+            mlTaskManager.updateMLTask(taskId, ImmutableMap.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()), TIMEOUT_IN_MILLIS, false);
             registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
