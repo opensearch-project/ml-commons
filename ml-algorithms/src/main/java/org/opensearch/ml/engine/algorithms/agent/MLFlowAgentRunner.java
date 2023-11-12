@@ -42,15 +42,15 @@ public class MLFlowAgentRunner {
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
-    private Map<String, Memory> memoryMap;
+    private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory> memoryMap) {
+    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
-        this.memoryMap = memoryMap;
+        this.memoryFactoryMap = memoryFactoryMap;
     }
 
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {

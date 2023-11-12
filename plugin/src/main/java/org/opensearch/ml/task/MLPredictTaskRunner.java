@@ -48,7 +48,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.Predictable;
-import org.opensearch.ml.indices.MLInputDatasetHandler;
+import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.stats.ActionName;

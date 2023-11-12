@@ -48,19 +48,17 @@ import java.util.stream.StreamSupport;
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-@ToolAnnotation(CatIndexTool.NAME)
+@ToolAnnotation(CatIndexTool.TYPE)
 public class CatIndexTool implements Tool {
-    public static final String NAME = "CatIndexTool";
+    public static final String TYPE = "CatIndexTool";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
 
     @Setter
     @Getter
-    private String name = CatIndexTool.NAME;
+    private String name = CatIndexTool.TYPE;
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
-    @Getter
-    private String type;
     @Getter
     private String version;
     
@@ -174,6 +172,11 @@ public class CatIndexTool implements Tool {
                 }
             }
         );
+    }
+
+    @Override
+    public String getType() {
+        return TYPE;
     }
 
     /**

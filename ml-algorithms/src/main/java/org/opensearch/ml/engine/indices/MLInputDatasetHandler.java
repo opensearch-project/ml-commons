@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.indices;
+package org.opensearch.ml.engine.indices;
 
 import java.util.ArrayList;
 import java.util.List;

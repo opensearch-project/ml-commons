@@ -30,12 +30,12 @@ import java.util.Map;
  * This tool supports running any ml-commons model.
  */
 @Log4j2
-@ToolAnnotation(MLModelTool.NAME)
+@ToolAnnotation(MLModelTool.TYPE)
 public class MLModelTool implements Tool {
-    public static final String NAME = "MLModelTool";
+    public static final String TYPE = "MLModelTool";
 
     @Setter @Getter
-    private String alias;
+    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     @Getter @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -80,23 +80,12 @@ public class MLModelTool implements Tool {
 
     @Override
     public String getType() {
-        return null;
+        return TYPE;
     }
 
     @Override
     public String getVersion() {
         return null;
-    }
-
-
-    @Override
-    public String getName() {
-        return MLModelTool.NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override

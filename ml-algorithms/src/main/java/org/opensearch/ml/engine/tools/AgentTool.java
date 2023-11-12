@@ -26,14 +26,14 @@ import java.util.Map;
  * This tool supports running any Agent.
  */
 @Log4j2
-@ToolAnnotation(AgentTool.NAME)
+@ToolAnnotation(AgentTool.TYPE)
 public class AgentTool implements Tool {
-    public static final String NAME = "AgentTool";
+    public static final String TYPE = "AgentTool";
     private final Client client;
 
     private String agentId;
     @Setter @Getter
-    private String alias;
+    private String name = TYPE;
 
     private static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
     @Getter @Setter
@@ -60,22 +60,12 @@ public class AgentTool implements Tool {
 
     @Override
     public String getType() {
-        return null;
+        return TYPE;
     }
 
     @Override
     public String getVersion() {
         return null;
-    }
-
-    @Override
-    public String getName() {
-        return AgentTool.NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override
