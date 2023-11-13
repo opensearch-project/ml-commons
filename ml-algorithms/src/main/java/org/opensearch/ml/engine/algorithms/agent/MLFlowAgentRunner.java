@@ -85,7 +85,7 @@ public class MLFlowAgentRunner {
                     String outputKey = previousToolSpec.getName() !=  null ? previousToolSpec.getName() + ".output"
                       : previousToolSpec.getType() + ".output";
 
-                    if (BooleanUtils.isTrue(previousToolSpec.getIncludeOutputInAgentResponse()) || finalI == toolSpecs.size()) {
+                    if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
                         String result = output instanceof String ? (String) output :
                                 AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
 

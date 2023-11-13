@@ -404,7 +404,7 @@ public class MLReActAgentRunner {
                     modelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().dataAsMap(ImmutableMap.of("response", lastThought.get() + "\nObservation: " + result)).build())).build());
 
                     MLToolSpec toolSpec = toolSpecMap.get(currentAction.get());
-                    if (toolSpec != null && BooleanUtils.isTrue(toolSpec.getIncludeOutputInAgentResponse())) {
+                    if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
                         String outputString = output instanceof String ? (String) output :
                                 AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
                         ModelTensor modelTensor = ModelTensor.builder().name(toolSpec.getName()).result(outputString).build();

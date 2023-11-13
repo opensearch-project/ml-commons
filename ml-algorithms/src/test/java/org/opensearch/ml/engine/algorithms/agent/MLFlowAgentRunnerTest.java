@@ -105,6 +105,7 @@ public class MLFlowAgentRunnerTest {
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         Assert.assertEquals(1, agentOutput.size());
         // Respond with last tool output
+        Assert.assertEquals(SECOND_TOOL, agentOutput.get(0).getName());
         Assert.assertEquals("Second tool response", agentOutput.get(0).getResult());
     }
 
@@ -121,6 +122,8 @@ public class MLFlowAgentRunnerTest {
         List<ModelTensor> agentOutput = (List<ModelTensor>) objectCaptor.getValue();
         // Respond with all tool output
         Assert.assertEquals(2, agentOutput.size());
+        Assert.assertEquals(FIRST_TOOL, agentOutput.get(0).getName());
+        Assert.assertEquals(SECOND_TOOL, agentOutput.get(1).getName());
         Assert.assertEquals("First tool response", agentOutput.get(0).getResult());
         Assert.assertEquals("Second tool response", agentOutput.get(1).getResult());
     }

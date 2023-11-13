@@ -32,7 +32,7 @@ public class MLToolSpec implements ToXContentObject {
     private String name;
     private String description;
     private Map<String, String> parameters;
-    private Boolean includeOutputInAgentResponse;
+    private boolean includeOutputInAgentResponse;
 
 
     @Builder(toBuilder = true)
@@ -40,7 +40,7 @@ public class MLToolSpec implements ToXContentObject {
                       String name,
                       String description,
                       Map<String, String> parameters,
-                      Boolean includeOutputInAgentResponse) {
+                      boolean includeOutputInAgentResponse) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
         }
@@ -89,9 +89,7 @@ public class MLToolSpec implements ToXContentObject {
         if (parameters != null && parameters.size() > 0) {
             builder.field(PARAMETERS_FIELD, parameters);
         }
-        if (includeOutputInAgentResponse != null) {
-            builder.field(INCLUDE_OUTPUT_IN_AGENT_RESPONSE, includeOutputInAgentResponse);
-        }
+        builder.field(INCLUDE_OUTPUT_IN_AGENT_RESPONSE, includeOutputInAgentResponse);
         builder.endObject();
         return builder;
     }
@@ -101,7 +99,7 @@ public class MLToolSpec implements ToXContentObject {
         String name = null;
         String description = null;
         Map<String, String> parameters = null;
-        Boolean returnDirect = null;
+        boolean includeOutputInAgentResponse = false;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -122,7 +120,7 @@ public class MLToolSpec implements ToXContentObject {
                     parameters = getParameterMap(parser.map());
                     break;
                 case INCLUDE_OUTPUT_IN_AGENT_RESPONSE:
-                    returnDirect = parser.booleanValue();
+                    includeOutputInAgentResponse = parser.booleanValue();
                     break;
                 default:
                     parser.skipChildren();
@@ -134,7 +132,7 @@ public class MLToolSpec implements ToXContentObject {
                 .name(name)
                 .description(description)
                 .parameters(parameters)
-                .includeOutputInAgentResponse(returnDirect)
+                .includeOutputInAgentResponse(includeOutputInAgentResponse)
                 .build();
     }
 
