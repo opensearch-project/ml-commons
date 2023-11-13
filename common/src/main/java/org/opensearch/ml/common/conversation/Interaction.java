@@ -61,6 +61,19 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private Integer traceNum;
 
+    public Interaction(String id, Instant createTime, String conversationId, String input, String promptTemplate, String response, String origin, Map<String, String> additionalInfo) {
+        this.id = id;
+        this.createTime = createTime;
+        this.conversationId = conversationId;
+        this.input = input;
+        this.promptTemplate = promptTemplate;
+        this.response = response;
+        this.origin = origin;
+        this.additionalInfo = additionalInfo;
+        this.parentInteractionId = null;
+        this.traceNum = null;
+    }
+
     /**
      * Creates an Interaction object from a map of fields in the OS index
      * @param id the Interaction id
