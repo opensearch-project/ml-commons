@@ -54,9 +54,9 @@ public class CreateInteractionRequest extends ActionRequest {
     @Getter
     private Map<String, String> additionalInfo;
     @Getter
-    private String parent_interaction_id;
+    private String parentInteractionId;
     @Getter
-    private Integer trace_number;
+    private Integer traceNum;
 
     public CreateInteractionRequest(
         String conversationId,
@@ -89,8 +89,8 @@ public class CreateInteractionRequest extends ActionRequest {
         if (in.readBoolean()) {
             this.additionalInfo = in.readMap(s -> s.readString(), s -> s.readString());
         }
-        this.parent_interaction_id = in.readOptionalString();
-        this.trace_number = in.readOptionalInt();
+        this.parentInteractionId = in.readOptionalString();
+        this.traceNum = in.readOptionalInt();
     }
 
     @Override
@@ -107,8 +107,8 @@ public class CreateInteractionRequest extends ActionRequest {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalString(parent_interaction_id);
-        out.writeOptionalInt(trace_number);
+        out.writeOptionalString(parentInteractionId);
+        out.writeOptionalInt(traceNum);
     }
 
     @Override
