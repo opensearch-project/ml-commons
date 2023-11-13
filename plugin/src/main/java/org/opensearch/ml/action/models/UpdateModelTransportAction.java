@@ -204,6 +204,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     connector.update(updateModelInput.getConnectorUpdateContent(), mlEngine::encrypt);
                     connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                     updateModelInput.setConnector(connector);
+                    updateModelInput.setConnectorUpdateContent(null);
                 }
                 updateModelWithRegisteringToAnotherModelGroup(
                     modelId,
