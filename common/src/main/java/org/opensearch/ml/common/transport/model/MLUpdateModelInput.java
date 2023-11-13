@@ -222,6 +222,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     break;
                 case CONNECTOR_FIELD:
                     connector = Connector.createConnector(parser);
+                    break;
                 case CONNECTOR_ID_FIELD:
                     connectorId = parser.text();
                     break;

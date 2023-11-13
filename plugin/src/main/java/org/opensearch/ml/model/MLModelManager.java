@@ -932,7 +932,7 @@ public class MLModelManager {
                         }, wrappedListener::onFailure));
                     }
                     wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
-                    log.info("Completed in-place update quota/throttling setting for the model {}", modelId);
+                    log.info("Completed in-place update for the model {}", modelId);
                 }
             }, wrappedListener::onFailure));
         }
