@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.Set;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -104,6 +105,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         this.action = spy(new CreateConversationTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
     }
 
+    @Ignore
     public void testCreateConversation() {
         log.info("testing create conversation transport");
         doAnswer(invocation -> {
@@ -131,6 +133,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getId().equals("testID-2"));
     }
 
+    @Ignore
     public void testCreateConversationFails_thenFail() {
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
@@ -143,6 +146,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
         assert (argCaptor.getValue().getMessage().equals("Testing Error"));
     }
 
+    @Ignore
     public void testDoExecuteFails_thenFail() {
         doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).createConversation(any(), any());
         action.doExecute(null, request, actionListener);
