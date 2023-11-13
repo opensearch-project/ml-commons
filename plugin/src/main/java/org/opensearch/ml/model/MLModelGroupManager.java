@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Iterator;
 
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -30,6 +32,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -205,6 +208,24 @@ public class MLModelGroupManager {
             log.error("Failed to search model group index", e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Get model group from model group index.
+     *
+     * @param modelGroupId  model group id
+     * @param listener action listener
+     */
+    public void getModelGroupResponse(String modelGroupId, ActionListener<GetResponse> listener) {
+        GetRequest getRequest = new GetRequest();
+        getRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId);
+        client.get(getRequest, ActionListener.wrap(r -> {
+            if (r != null && r.isExists()) {
+                listener.onResponse(r);
+            } else {
+                listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
+            }
+        }, e -> { listener.onFailure(e); }));
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {

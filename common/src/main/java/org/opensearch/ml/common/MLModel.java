@@ -23,10 +23,12 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 
 import java.io.IOException;
+import java.sql.Time;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
@@ -50,8 +52,13 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    //SHA256 hash value of model content.
+    // SHA256 hash value of model content.
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
+
+    // Model level quota and throttling control
+    public static final String QUOTA_FLAG_FIELD = "quota_flag";
+    public static final String RATE_LIMIT_NUMBER_FIELD = "rate_limit_number";
+    public static final String RATE_LIMIT_UNIT_FIELD = "rate_limit_unit";
 
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
@@ -92,6 +99,9 @@ public class MLModel implements ToXContentObject {
     private Long modelContentSizeInBytes;
     private String modelContentHash;
     private MLModelConfig modelConfig;
+    private Boolean quotaFlag;
+    private String rateLimitNumber;
+    private TimeUnit rateLimitUnit;
     private Instant createdTime;
     private Instant lastUpdateTime;
     private Instant lastRegisteredTime;
@@ -126,6 +136,9 @@ public class MLModel implements ToXContentObject {
                    MLModelState modelState,
                    Long modelContentSizeInBytes,
                    String modelContentHash,
+                   Boolean quotaFlag,
+                   String rateLimitNumber,
+                   TimeUnit rateLimitUnit,
                    MLModelConfig modelConfig,
                    Instant createdTime,
                    Instant lastUpdateTime,
@@ -152,6 +165,9 @@ public class MLModel implements ToXContentObject {
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
         this.modelContentHash = modelContentHash;
+        this.quotaFlag = quotaFlag;
+        this.rateLimitNumber = rateLimitNumber;
+        this.rateLimitUnit = rateLimitUnit;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -196,6 +212,11 @@ public class MLModel implements ToXContentObject {
                 } else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
+            }
+            quotaFlag = input.readOptionalBoolean();
+            rateLimitNumber = input.readOptionalString();
+            if (input.readBoolean()) {
+                rateLimitUnit = input.readEnum(TimeUnit.class);
             }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();
@@ -247,6 +268,14 @@ public class MLModel implements ToXContentObject {
         if (modelConfig != null) {
             out.writeBoolean(true);
             modelConfig.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        out.writeOptionalBoolean(quotaFlag);
+        out.writeOptionalString(rateLimitNumber);
+        if (rateLimitUnit != null) {
+            out.writeBoolean(true);
+            out.writeEnum(rateLimitUnit);
         } else {
             out.writeBoolean(false);
         }
@@ -312,6 +341,15 @@ public class MLModel implements ToXContentObject {
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
+        if (quotaFlag != null) {
+            builder.field(QUOTA_FLAG_FIELD, quotaFlag);
+        }
+        if (rateLimitNumber != null) {
+            builder.field(RATE_LIMIT_NUMBER_FIELD, rateLimitNumber);
+        }
+        if (rateLimitUnit != null) {
+            builder.field(RATE_LIMIT_UNIT_FIELD, rateLimitUnit);
+        }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
@@ -371,12 +409,15 @@ public class MLModel implements ToXContentObject {
         String oldContent = null;
         User user = null;
 
-        String description = null;;
+        String description = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
         String modelContentHash = null;
         MLModelConfig modelConfig = null;
+        Boolean quotaFlag = null;
+        String rateLimitNumber = null;
+        TimeUnit rateLimitUnit = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
         Instant lastUploadedTime = null;
@@ -461,6 +502,15 @@ public class MLModel implements ToXContentObject {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
                     break;
+                case QUOTA_FLAG_FIELD:
+                    quotaFlag = parser.booleanValue();
+                    break;
+                case RATE_LIMIT_NUMBER_FIELD:
+                    rateLimitNumber = parser.text();
+                    break;
+                case RATE_LIMIT_UNIT_FIELD:
+                    rateLimitUnit = TimeUnit.valueOf(parser.text());
+                    break;
                 case PLANNING_WORKER_NODE_COUNT_FIELD:
                     planningWorkerNodeCount = parser.intValue();
                     break;
@@ -524,6 +574,9 @@ public class MLModel implements ToXContentObject {
                 .modelContentSizeInBytes(modelContentSizeInBytes)
                 .modelContentHash(modelContentHash)
                 .modelConfig(modelConfig)
+                .quotaFlag(quotaFlag)
+                .rateLimitNumber(rateLimitNumber)
+                .rateLimitUnit(rateLimitUnit)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
                 .lastRegisteredTime(lastRegisteredTime == null? lastUploadedTime : lastRegisteredTime)

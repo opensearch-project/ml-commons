@@ -23,34 +23,36 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
+import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
-import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.TransportService;
 
 public class MLModelGroupManagerTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-
-    @Mock
-    private TransportService transportService;
 
     @Mock
     private MLIndicesHandler mlIndicesHandler;
@@ -62,25 +64,22 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
-    private Task task;
-
-    @Mock
     private Client client;
-    @Mock
-    private ActionFilters actionFilters;
 
     @Mock
     private ActionListener<String> actionListener;
+
+    @Mock
+    private ActionListener<GetResponse> modelGroupListener;
 
     @Mock
     private IndexResponse indexResponse;
 
     ThreadContext threadContext;
 
-    private TransportRegisterModelGroupAction transportRegisterModelGroupAction;
-
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
+
     @Mock
     private MLModelGroupManager mlModelGroupManager;
 
@@ -335,6 +334,61 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
     }
 
+    public void test_SuccessGetModelGroup() throws IOException {
+        MLModelGroup modelGroup = MLModelGroup
+            .builder()
+            .modelGroupId("testModelGroupID")
+            .name("test")
+            .description("this is test group")
+            .latestVersion(1)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .owner(new User())
+            .access(AccessMode.PUBLIC.name())
+            .build();
+
+        GetResponse getResponse = prepareGetResponse(modelGroup);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        verify(modelGroupListener).onResponse(getResponse);
+    }
+
+    public void test_OtherExceptionGetModelGroup() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener
+                .onFailure(
+                    new RuntimeException("Any other Exception occurred during getting the model group. Please check log for more details.")
+                );
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(modelGroupListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Any other Exception occurred during getting the model group. Please check log for more details.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void test_NotFoundGetModelGroup() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
+
+        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(modelGroupListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find model group with ID: testModelGroupID", argumentCaptor.getValue().getMessage());
+    }
+
     private MLRegisterModelGroupInput prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
         return MLRegisterModelGroupInput
             .builder()
@@ -363,4 +417,10 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         return searchResponse;
     }
 
+    private GetResponse prepareGetResponse(MLModelGroup mlModelGroup) throws IOException {
+        XContentBuilder content = mlModelGroup.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        return new GetResponse(getResult);
+    }
 }

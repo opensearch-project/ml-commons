@@ -8,7 +8,6 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
-import static org.opensearch.ml.utils.MLExceptionUtils.UPDATE_CONNECTOR_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_CONNECTOR_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
@@ -16,6 +15,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -59,18 +59,19 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
         if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
         }
-        if (!mlFeatureEnabledSetting.isUpdateConnectorEnabled()) {
-            throw new IllegalStateException(UPDATE_CONNECTOR_DISABLED_ERR_MSG);
-        }
+
         if (!request.hasContent()) {
-            throw new IOException("Failed to update connector: Request body is empty");
+            throw new OpenSearchParseException("Failed to update connector: Request body is empty");
         }
 
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
 
-        XContentParser parser = request.contentParser();
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-
-        return MLUpdateConnectorRequest.parse(parser, connectorId);
+        try {
+            XContentParser parser = request.contentParser();
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            return MLUpdateConnectorRequest.parse(parser, connectorId);
+        } catch (IllegalStateException illegalStateException) {
+            throw new OpenSearchParseException(illegalStateException.getMessage());
+        }
     }
 }

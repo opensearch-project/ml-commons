@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -34,7 +35,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     public static final String FUNCTION_NAME_FIELD = "function_name";
     public static final String MODEL_NAME_FIELD = "name"; //mandatory
     public static final String DESCRIPTION_FIELD = "description"; //optional
-
+    public static final String QUOTA_FLAG_FIELD = "quota_flag";
+    public static final String RATE_LIMIT_NUMBER_FIELD = "rate_limit_number";
+    public static final String RATE_LIMIT_UNIT_FIELD = "rate_limit_unit";
     public static final String VERSION_FIELD = "version";
     public static final String MODEL_FORMAT_FIELD = "model_format"; //mandatory
     public static final String MODEL_STATE_FIELD = "model_state";
@@ -55,7 +58,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private String modelGroupId;
     private String description;
     private String version;
-
+    private Boolean quotaFlag;
+    private String rateLimitNumber;
+    private TimeUnit rateLimitUnit;
     private MLModelFormat modelFormat;
 
     private MLModelState modelState;
@@ -70,7 +75,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
     private Boolean doesVersionCreateModelGroup;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
+    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version, String description, Boolean quotaFlag, String rateLimitNumber, TimeUnit rateLimitUnit, MLModelFormat modelFormat, MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue, MLModelConfig modelConfig, Integer totalChunks, List<String> backendRoles,
                                     AccessMode accessMode,
                                     Boolean isAddAllBackendRoles,
                                     Boolean doesVersionCreateModelGroup) {
@@ -98,6 +103,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.modelGroupId = modelGroupId;
         this.version = version;
         this.description = description;
+        this.quotaFlag = quotaFlag;
+        this.rateLimitNumber = rateLimitNumber;
+        this.rateLimitUnit = rateLimitUnit;
         this.modelFormat = modelFormat;
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
@@ -116,6 +124,11 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         this.modelGroupId = in.readOptionalString();
         this.version = in.readOptionalString();
         this.description = in.readOptionalString();
+        this.quotaFlag = in.readOptionalBoolean();
+        this.rateLimitNumber = in.readOptionalString();
+        if (in.readBoolean()) {
+            rateLimitUnit = in.readEnum(TimeUnit.class);
+        }
         if (in.readBoolean()) {
             modelFormat = in.readEnum(MLModelFormat.class);
         }
@@ -143,6 +156,14 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         out.writeOptionalString(modelGroupId);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
+        out.writeOptionalBoolean(quotaFlag);
+        out.writeOptionalString(rateLimitNumber);
+        if (rateLimitUnit != null) {
+            out.writeBoolean(true);
+            out.writeEnum(rateLimitUnit);
+        } else {
+            out.writeBoolean(false);
+        }
         if (modelFormat != null) {
             out.writeBoolean(true);
             out.writeEnum(modelFormat);
@@ -194,6 +215,15 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
+        if (quotaFlag != null) {
+            builder.field(QUOTA_FLAG_FIELD, quotaFlag);
+        }
+        if (rateLimitNumber != null) {
+            builder.field(RATE_LIMIT_NUMBER_FIELD, rateLimitNumber);
+        }
+        if (rateLimitUnit != null) {
+            builder.field(RATE_LIMIT_UNIT_FIELD, rateLimitUnit);
+        }
         builder.field(MODEL_FORMAT_FIELD, modelFormat);
         if (modelState != null) {
             builder.field(MODEL_STATE_FIELD, modelState);
@@ -226,6 +256,9 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
         String modelGroupId = null;
         String version = null;
         String description = null;
+        Boolean quotaFlag = null;
+        String rateLimitNumber = null;
+        TimeUnit rateLimitUnit = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
@@ -256,6 +289,15 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
+                    break;
+                case QUOTA_FLAG_FIELD:
+                    quotaFlag = parser.booleanValue();
+                    break;
+                case RATE_LIMIT_NUMBER_FIELD:
+                    rateLimitNumber = parser.text();
+                    break;
+                case RATE_LIMIT_UNIT_FIELD:
+                    rateLimitUnit = TimeUnit.valueOf(parser.text());
                     break;
                 case MODEL_FORMAT_FIELD:
                     modelFormat = MLModelFormat.from(parser.text());
@@ -296,7 +338,7 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable{
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup);
+        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, quotaFlag, rateLimitNumber, rateLimitUnit, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig, totalChunks,  backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup);
     }
 
 }
