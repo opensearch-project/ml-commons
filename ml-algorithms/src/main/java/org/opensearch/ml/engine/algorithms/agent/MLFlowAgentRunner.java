@@ -82,8 +82,8 @@ public class MLFlowAgentRunner {
                 int finalI = i;
                 previousStepListener.whenComplete(output -> {
                     String key = previousToolSpec.getName();
-                    String outputKey = lastToolSpec.getName() !=  null ? lastToolSpec.getName() + ".output" 
-                      : lastToolSpec.getType() + ".output";
+                    String outputKey = previousToolSpec.getName() !=  null ? previousToolSpec.getName() + ".output"
+                      : previousToolSpec.getType() + ".output";
 
                     if (BooleanUtils.isTrue(previousToolSpec.getIncludeOutputInAgentResponse()) || finalI == toolSpecs.size()) {
                         String result = output instanceof String ? (String) output :

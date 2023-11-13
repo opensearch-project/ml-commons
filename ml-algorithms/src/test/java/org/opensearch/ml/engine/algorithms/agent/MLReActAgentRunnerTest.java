@@ -57,7 +57,7 @@ public class MLReActAgentRunnerTest {
     private Map<String, Tool.Factory> toolFactories;
 
     @Mock
-    private Map<String, Memory> memoryMap;
+    private Map<String, Memory.Factory> memoryMap;
 
     private MLReActAgentRunner mlReActAgentRunner;
 
@@ -127,8 +127,8 @@ public class MLReActAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputNotSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type("toolType").build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type("toolType").build();
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
         final MLAgent mlAgent = MLAgent.builder().name("TestAgent").llm(llmSpec)
                 .tools(Arrays.asList(firstToolSpec, secondToolSpec)).build();
         mlReActAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
@@ -143,9 +143,9 @@ public class MLReActAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputSet() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type("toolType")
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL)
                 .includeOutputInAgentResponse(true).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type("toolType")
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL)
                 .includeOutputInAgentResponse(true).build();
         final MLAgent mlAgent = MLAgent.builder().name("TestAgent").llm(llmSpec)
                 .tools(Arrays.asList(firstToolSpec, secondToolSpec)).build();
@@ -163,9 +163,9 @@ public class MLReActAgentRunnerTest {
     @Test
     public void testRunWithIncludeOutputSetToSomeTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type("toolType")
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL)
                 .includeOutputInAgentResponse(true).build();
-        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type("toolType")
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL)
                 .includeOutputInAgentResponse(false).build();
         final MLAgent mlAgent = MLAgent.builder().name("TestAgent").llm(llmSpec)
                 .tools(Arrays.asList(firstToolSpec, secondToolSpec)).build();
