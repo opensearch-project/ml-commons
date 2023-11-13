@@ -84,15 +84,15 @@ public class MLReActAgentRunner {
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
-    private Map<String, Memory> memoryMap;
+    private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLReActAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory> memoryMap) {
+    public MLReActAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
-        this.memoryMap = memoryMap;
+        this.memoryFactoryMap = memoryFactoryMap;
     }
 
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
@@ -100,39 +100,43 @@ public class MLReActAgentRunner {
         String sessionId = params.containsKey(SESSION_ID) ? params.get(SESSION_ID) : UUID.randomUUID().toString();
         if (mlAgent.getMemory() != null) {
             String memoryType = mlAgent.getMemory().getType();
-            if (!memoryType.startsWith("conversation") || !this.memoryMap.containsKey(memoryType)) {
+            if (!memoryType.startsWith("conversation") || !this.memoryFactoryMap.containsKey(memoryType)) {
                 throw new IllegalArgumentException("Invalid memory type");
             }
-            ConversationIndexMemory memory = (ConversationIndexMemory)memoryMap.get(memoryType);
-            if (clusterService.state().metadata().hasIndex(memory.getIndexName())) {
-                memory.getMessages(sessionId, ActionListener.<SearchResponse>wrap(r -> { //TODO: support onlyIncludeFinalAnswerInChatHistory parameters
-                    List<Message> messageList = new ArrayList<>();
-                    Iterator<SearchHit> iterator = r.getHits().iterator();
-                    while(iterator.hasNext()) {
-                        SearchHit next = iterator.next();
-                        Map<String, Object> map = next.getSourceAsMap();
-                        String question = (String)map.get("question");
-                        String response = (String)map.get("response");
-                        messageList.add(ConversationIndexMessage.conversationIndexMessageBuilder().sessionId(sessionId).question(question).response(response).build());
-                    }
-
-                    StringBuilder chatHistoryBuilder = new StringBuilder();
-                    if (messageList.size() > 0) {
-                        chatHistoryBuilder.append("Below is Chat History between Human and AI which sorted by time with asc order:\n");
-                        for (Message message : messageList) {
-                            chatHistoryBuilder.append(message.toString()).append("\n");
+            memoryFactoryMap.get(memoryType).create(params, ActionListener.<ConversationIndexMemory>wrap(memory->{
+                if (clusterService.state().metadata().hasIndex(memory.getMemoryMessageIndexName())) {
+                    memory.getMessages(sessionId, ActionListener.<SearchResponse>wrap(r -> { //TODO: support onlyIncludeFinalAnswerInChatHistory parameters
+                        List<Message> messageList = new ArrayList<>();
+                        Iterator<SearchHit> iterator = r.getHits().iterator();
+                        while(iterator.hasNext()) {
+                            SearchHit next = iterator.next();
+                            Map<String, Object> map = next.getSourceAsMap();
+                            String question = (String)map.get("question");
+                            String response = (String)map.get("response");
+                            messageList.add(ConversationIndexMessage.conversationIndexMessageBuilder().sessionId(sessionId).question(question).response(response).build());
                         }
-                        params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-                    }
 
+                        StringBuilder chatHistoryBuilder = new StringBuilder();
+                        if (messageList.size() > 0) {
+                            chatHistoryBuilder.append("Below is Chat History between Human and AI which sorted by time with asc order:\n");
+                            for (Message message : messageList) {
+                                chatHistoryBuilder.append(message.toString()).append("\n");
+                            }
+                            params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                        }
+
+                        runAgent(mlAgent, params, listener, toolSpecs, memory, sessionId);
+                    }, e-> {
+                        log.error("Failed to get session history", e);
+                        listener.onFailure(e);
+                    }));
+                } else {
                     runAgent(mlAgent, params, listener, toolSpecs, memory, sessionId);
-                }, e-> {
-                    log.error("Failed to get session history", e);
-                    listener.onFailure(e);
-                }));
-            } else {
-                runAgent(mlAgent, params, listener, toolSpecs, memory, sessionId);
-            }
+                }
+            }, e->{
+                listener.onFailure(e);
+            }));
+
         } else {
             runAgent(mlAgent, params, listener, toolSpecs, null, sessionId);
         }
@@ -155,13 +159,17 @@ public class MLReActAgentRunner {
                     executeParams.put(key.replace(toolSpec.getName()+".", ""), params.get(key));
                 }
             }
-            Tool tool = toolFactories.get(toolSpec.getName()).create(toolParams);
+            if (!toolFactories.containsKey(toolSpec.getType())) {
+                listener.onFailure(new IllegalArgumentException("No tool factory found for " + toolSpec.getType()));
+                return;
+            }
+            Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
             tool.setName(toolSpec.getName());
 
             if (toolSpec.getDescription() != null) {
                 tool.setDescription(toolSpec.getDescription());
             }
-            String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getName());
+            String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
             tools.put(toolName, tool);
             toolSpecMap.put(toolName, toolSpec);
         }
@@ -210,8 +218,9 @@ public class MLReActAgentRunner {
             inputTools.addAll(gson.fromJson(parameters.get(TOOLS), List.class));
         } else {
             for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-                String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getName());
-                inputTools.add(toolName);
+//                String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getType());
+//                String toolName = Optional.ofNullable(entry.getKey()).orElse(entry.getValue().getType());
+                inputTools.add(entry.getKey());
             }
         }
 

@@ -135,7 +135,8 @@ import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelatio
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-import org.opensearch.ml.engine.memory.ConversationBufferWindowMemory;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
@@ -145,8 +146,6 @@ import org.opensearch.ml.engine.tools.PainlessScriptTool;
 import org.opensearch.ml.engine.tools.VectorDBTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.indices.MLIndicesHandler;
-import org.opensearch.ml.indices.MLInputDatasetHandler;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationTransportAction;
@@ -475,21 +474,30 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         AgentTool.Factory.getInstance().init(client);
         CatIndexTool.Factory.getInstance().init(client, clusterService);
         PainlessScriptTool.Factory.getInstance().init(client, scriptService);
-        toolFactories.put(MLModelTool.NAME, MLModelTool.Factory.getInstance());
-        toolFactories.put(MathTool.NAME, MathTool.Factory.getInstance());
-        toolFactories.put(VectorDBTool.NAME, VectorDBTool.Factory.getInstance());
-        toolFactories.put(AgentTool.NAME, AgentTool.Factory.getInstance());
-        toolFactories.put(CatIndexTool.NAME, CatIndexTool.Factory.getInstance());
-        toolFactories.put(PainlessScriptTool.NAME, PainlessScriptTool.Factory.getInstance());
+        toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
+        toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
+        toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
+        toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
+        toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
+        toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
 
-        Map<String, Memory> memoryMap = new HashMap<>();
-        memoryMap.put(ConversationBufferWindowMemory.TYPE, new ConversationBufferWindowMemory());
-        memoryMap.put(ConversationIndexMemory.TYPE, new ConversationIndexMemory(client));
-        MLAgentExecutor agentExecutor = new MLAgentExecutor(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+        Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
+        ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
+        conversationIndexMemoryFactory.init(client, mlIndicesHandler);
+        memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
+
+        MLAgentExecutor agentExecutor = new MLAgentExecutor(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            toolFactories,
+            memoryFactoryMap
+        );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
         MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
 

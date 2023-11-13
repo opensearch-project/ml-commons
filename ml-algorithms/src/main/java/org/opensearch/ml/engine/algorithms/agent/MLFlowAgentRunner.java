@@ -45,15 +45,15 @@ public class MLFlowAgentRunner {
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
-    private Map<String, Memory> memoryMap;
+    private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory> memoryMap) {
+    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
-        this.memoryMap = memoryMap;
+        this.memoryFactoryMap = memoryFactoryMap;
     }
 
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
@@ -82,7 +82,8 @@ public class MLFlowAgentRunner {
                 int finalI = i;
                 previousStepListener.whenComplete(output -> {
                     String key = previousToolSpec.getName();
-                    String outputKey = key + ".output";
+                    String outputKey = lastToolSpec.getName() !=  null ? lastToolSpec.getName() + ".output" 
+                      : lastToolSpec.getType() + ".output";
 
                     if (BooleanUtils.isTrue(previousToolSpec.getIncludeOutputInAgentResponse()) || finalI == toolSpecs.size()) {
                         String result = output instanceof String ? (String) output :
@@ -150,11 +151,13 @@ public class MLFlowAgentRunner {
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
         }
-        if (!toolFactories.containsKey(toolSpec.getName())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getName());
+        if (!toolFactories.containsKey(toolSpec.getType())) {
+            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
-        Tool tool = toolFactories.get(toolSpec.getName()).create(toolParams);
-        tool.setName(toolSpec.getName());
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+        if (toolSpec.getName() != null) {
+            tool.setName(toolSpec.getName());
+        }
 
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());
@@ -169,8 +172,8 @@ public class MLFlowAgentRunner {
         }
         for (String key : params.keySet()) {
             String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName()+".";
+            if (key.startsWith(toolSpec.getType() + ".")) {
+                toBeReplaced = toolSpec.getType() + ".";
             }
             if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
                 toBeReplaced = toolSpec.getName()+".";

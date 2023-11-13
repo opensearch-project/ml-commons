@@ -19,6 +19,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.search.spell.LevenshteinDistance;
@@ -45,9 +46,36 @@ public class GetInteractionsResponseTests extends OpenSearchTestCase {
     public void setup() {
         interactions = List
             .of(
-                new Interaction("id0", Instant.now(), "cid", "input", "pt", "response", "origin", "metadata"),
-                new Interaction("id1", Instant.now(), "cid", "input", "pt", "response", "origin", "mteadata"),
-                new Interaction("id2", Instant.now(), "cid", "input", "pt", "response", "origin", "metadata")
+                new Interaction(
+                    "id0",
+                    Instant.now(),
+                    "cid",
+                    "input",
+                    "pt",
+                    "response",
+                    "origin",
+                    Collections.singletonMap("metadata", "some meta")
+                ),
+                new Interaction(
+                    "id1",
+                    Instant.now(),
+                    "cid",
+                    "input",
+                    "pt",
+                    "response",
+                    "origin",
+                    Collections.singletonMap("metadata", "some meta")
+                ),
+                new Interaction(
+                    "id2",
+                    Instant.now(),
+                    "cid",
+                    "input",
+                    "pt",
+                    "response",
+                    "origin",
+                    Collections.singletonMap("metadata", "some meta")
+                )
             );
     }
 

@@ -19,6 +19,7 @@ package org.opensearch.ml.memory.index;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.action.StepListener;
 import org.opensearch.action.support.PlainActionFuture;
@@ -89,6 +90,16 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
     /**
      * Create a new conversation
      * @param name the name of the new conversation
+     * @param applicationType the application that creates this conversation
+     * @param listener listener to wait for this op to finish, gets unique id of new conversation
+     */
+    public void createConversation(String name, String applicationType, ActionListener<String> listener) {
+        conversationMetaIndex.createConversation(name, applicationType, listener);
+    }
+
+    /**
+     * Create a new conversation
+     * @param name the name of the new conversation
      * @return ActionFuture for the conversationId of the new conversation
      */
     public ActionFuture<String> createConversation(String name) {
@@ -113,11 +124,50 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo,
+        Map<String, String> additionalInfo,
         ActionListener<String> listener
     ) {
         Instant time = Instant.now();
         interactionsIndex.createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, time, listener);
+    }
+
+    /**
+     * Adds an interaction to the conversation indicated, updating the conversational metadata
+     * @param conversationId the conversation to add the interaction to
+     * @param input the human input for the interaction
+     * @param promptTemplate the prompt template used for this interaction
+     * @param response the Gen AI response for this interaction
+     * @param origin the name of the GenAI agent in this interaction
+     * @param additionalInfo additional information used in constructing the LLM prompt
+     * @param interactionId the parent interactionId of this interaction
+     * @param traceNumber the trace number for a parent interaction
+     * @param listener gets the ID of the new interaction
+     */
+    public void createInteraction(
+        String conversationId,
+        String input,
+        String promptTemplate,
+        String response,
+        String origin,
+        Map<String, String> additionalInfo,
+        ActionListener<String> listener,
+        String interactionId,
+        Integer traceNumber
+    ) {
+        Instant time = Instant.now();
+        interactionsIndex
+            .createInteraction(
+                conversationId,
+                input,
+                promptTemplate,
+                response,
+                origin,
+                additionalInfo,
+                time,
+                listener,
+                interactionId,
+                traceNumber
+            );
     }
 
     /**
@@ -136,7 +186,7 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
         String promptTemplate,
         String response,
         String origin,
-        String additionalInfo
+        Map<String, String> additionalInfo
     ) {
         PlainActionFuture<String> fut = PlainActionFuture.newFuture();
         createInteraction(conversationId, input, promptTemplate, response, origin, additionalInfo, fut);

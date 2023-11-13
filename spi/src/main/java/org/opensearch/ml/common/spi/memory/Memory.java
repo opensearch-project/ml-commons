@@ -7,6 +7,8 @@ package org.opensearch.ml.common.spi.memory;
 
 import org.opensearch.core.action.ActionListener;
 
+import java.util.Map;
+
 /**
  * A general memory interface.
  * @param <T>
@@ -46,4 +48,14 @@ public interface Memory<T extends Message> {
      * @param id memory id
      */
     void remove(String id);
+
+    interface Factory<T extends Memory> {
+        /**
+         * Create an instance of this Memory.
+         *
+         * @param params Parameters for the memory
+         * @param listener Action listern for the memory creation action
+         */
+        void create(Map<String, Object> params, ActionListener<T> listener);
+    }
 }

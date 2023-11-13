@@ -19,12 +19,12 @@ import java.util.regex.Pattern;
 
 import static org.opensearch.ml.engine.utils.ScriptUtils.executeScript;
 
-@ToolAnnotation(MathTool.NAME)
+@ToolAnnotation(MathTool.TYPE)
 public class MathTool implements Tool {
-    public static final String NAME = "MathTool";
+    public static final String TYPE = "MathTool";
 
     @Setter @Getter
-    private String alias;
+    private String name = TYPE;
 
     @Setter
     private ScriptService scriptService;
@@ -58,22 +58,12 @@ public class MathTool implements Tool {
 
     @Override
     public String getType() {
-        return null;
+        return TYPE;
     }
 
     @Override
     public String getVersion() {
         return null;
-    }
-
-    @Override
-    public String getName() {
-        return MathTool.NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override

@@ -238,7 +238,7 @@ public class CatIndexToolTests {
     @Test
     public void testTool() {
         Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
-        assertEquals(CatIndexTool.NAME, tool.getName());
+        assertEquals(CatIndexTool.TYPE, tool.getName());
         assertTrue(tool.validate(indicesParams));
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));

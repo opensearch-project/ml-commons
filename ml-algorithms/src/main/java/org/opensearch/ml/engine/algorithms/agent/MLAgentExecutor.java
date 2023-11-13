@@ -58,15 +58,15 @@ public class MLAgentExecutor implements Executable {
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
-    private Map<String, Memory> memoryMap;
+    private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLAgentExecutor(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory> memoryMap) {
+    public MLAgentExecutor(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
-        this.memoryMap = memoryMap;
+        this.memoryFactoryMap = memoryFactoryMap;
     }
 
     @Override
@@ -130,10 +130,10 @@ public class MLAgentExecutor implements Executable {
                                 listener.onFailure(ex);
                             });
                             if ("flow".equals(mlAgent.getType())) {
-                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
                                 flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             } else if ("cot".equals(mlAgent.getType())) {
-                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
                                 reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             }
                         }

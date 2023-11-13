@@ -35,6 +35,8 @@ import lombok.Getter;
 public class CreateConversationRequest extends ActionRequest {
     @Getter
     private String name = null;
+    @Getter
+    private String applicationType = null;
 
     /**
      * Constructor
@@ -44,6 +46,7 @@ public class CreateConversationRequest extends ActionRequest {
     public CreateConversationRequest(StreamInput in) throws IOException {
         super(in);
         this.name = in.readOptionalString();
+        this.applicationType = in.readOptionalString();
     }
 
     /**
@@ -57,6 +60,16 @@ public class CreateConversationRequest extends ActionRequest {
 
     /**
      * Constructor
+     * @param name name of the conversation
+     */
+    public CreateConversationRequest(String name, String applicationType) {
+        super();
+        this.name = name;
+        this.applicationType = applicationType;
+    }
+
+    /**
+     * Constructor
      * name will be null
      */
     public CreateConversationRequest() {}
@@ -65,6 +78,7 @@ public class CreateConversationRequest extends ActionRequest {
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeOptionalString(name);
+        out.writeOptionalString(applicationType);
     }
 
     @Override

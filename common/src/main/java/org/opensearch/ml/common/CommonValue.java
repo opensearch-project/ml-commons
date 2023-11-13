@@ -47,6 +47,10 @@ public class CommonValue {
     public static final String ML_MAP_RESPONSE_KEY = "response";
     public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
     public static final Integer ML_AGENT_INDEX_SCHEMA_VERSION = 1;
+    public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
+    public static final Integer ML_MEMORY_META_INDEX_SCHEMA_VERSION = 1;
+    public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
+    public static final Integer ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION = 1;
 
     public static final String USER_FIELD_MAPPING = "      \""
             + CommonValue.USER
@@ -328,7 +332,6 @@ public class CommonValue {
             + "    }\n"
             + "}";
 
-
     public static final String ML_AGENT_INDEX_MAPPING = "{\n"
             + "    \"_meta\": {\"schema_version\": "
             + ML_AGENT_INDEX_SCHEMA_VERSION
@@ -339,16 +342,10 @@ public class CommonValue {
             + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
             + MLAgent.AGENT_TYPE_FIELD
-            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "\" : {\"type\":\"keyword\"},\n"
             + "      \""
             + MLAgent.DESCRIPTION_FIELD
             + "\" : {\"type\": \"text\"},\n"
-            + "      \""
-            + MLAgent.PROMPT_FIELD
-            + "\" : {\"type\": \"text\"},\n"
-            + "      \""
-            + MLAgent.MODEL_ID_FIELD
-            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
             + "      \""
             + MLAgent.LLM_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
@@ -362,9 +359,6 @@ public class CommonValue {
             + MLAgent.MEMORY_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
             + "      \""
-            + MLAgent.MEMORY_ID_FIELD
-            + "\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
-            + "      \""
             + MLAgent.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
@@ -372,4 +366,31 @@ public class CommonValue {
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
             + "    }\n"
             + "}";
+
+    public static final String ML_MEMORY_META_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_MEMORY_META_INDEX_SCHEMA_VERSION
+            + "    },\n"
+            + "    \"properties\": {\n"
+            + "        \"name\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "        \"application_type\" : {\"type\":\"keyword\"},\n"
+            + "        \"created_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \"last_updated_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
+    public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING = "{\n"
+            + "    \"_meta\": {\"schema_version\": "
+            + ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION
+            + "    },\n"
+            + "    \"properties\": {\n"
+            + "        \"question\" : {\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\n"
+            + "        \"response\" : {\"type\":\"text\"},\n"
+            + "        \"session_id\" : {\"type\":\"keyword\"},\n"
+            + "        \"final_answer\" : {\"type\":\"boolean\"},\n"
+            + "        \"created_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
+            + "        \"last_updated_time\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"}\n"
+            + "    }\n"
+            + "}";
+
 }

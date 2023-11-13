@@ -34,11 +34,11 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
  * This tool supports neural search with embedding models and knn index.
  */
 @Log4j2
-@ToolAnnotation(VectorDBTool.NAME)
+@ToolAnnotation(VectorDBTool.TYPE)
 public class VectorDBTool implements Tool {
-    public static final String NAME = "VectorDBTool";
+    public static final String TYPE = "VectorDBTool";
     @Setter @Getter
-    private String alias;
+    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
     @Getter @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -113,22 +113,12 @@ public class VectorDBTool implements Tool {
 
     @Override
     public String getType() {
-        return null;
+        return TYPE;
     }
 
     @Override
     public String getVersion() {
         return null;
-    }
-
-    @Override
-    public String getName() {
-        return NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override

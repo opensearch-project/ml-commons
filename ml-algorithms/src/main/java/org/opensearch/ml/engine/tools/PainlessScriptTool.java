@@ -24,12 +24,12 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 
 @Log4j2
-@ToolAnnotation(PainlessScriptTool.NAME)
+@ToolAnnotation(PainlessScriptTool.TYPE)
 public class PainlessScriptTool implements Tool {
-    public static final String NAME = "PainlessScriptTool";
+    public static final String TYPE = "PainlessScriptTool";
 
     @Setter @Getter
-    private String alias;
+    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
     @Getter @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -66,23 +66,12 @@ public class PainlessScriptTool implements Tool {
 
     @Override
     public String getType() {
-        return null;
+        return TYPE;
     }
 
     @Override
     public String getVersion() {
         return null;
-    }
-
-
-    @Override
-    public String getName() {
-        return PainlessScriptTool.NAME;
-    }
-
-    @Override
-    public void setName(String s) {
-
     }
 
     @Override

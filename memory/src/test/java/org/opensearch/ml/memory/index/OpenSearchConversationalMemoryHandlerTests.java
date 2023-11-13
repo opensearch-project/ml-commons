@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.Before;
@@ -79,10 +80,9 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
-        ActionFuture<String> result = cmHandler.createInteraction("cid", "inp", "pt", "rsp", "ogn", "meta");
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), any(), any(), any());
+        ActionFuture<String> result = cmHandler
+            .createInteraction("cid", "inp", "pt", "rsp", "ogn", Collections.singletonMap("meta", "some meta"));
         assert (result.actionGet(200).equals("iid"));
     }
 
@@ -91,9 +91,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), any(), any(), any());
         InteractionBuilder builder = Interaction
             .builder()
             .conversationId("cid")
@@ -101,7 +99,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .origin("origin")
             .response("rsp")
             .promptTemplate("pt")
-            .additionalInfo("meta");
+            .additionalInfo(Collections.singletonMap("meta", "some meta"));
         @SuppressWarnings("unchecked")
         ActionListener<String> createInteractionListener = mock(ActionListener.class);
         cmHandler.createInteraction(builder, createInteractionListener);
@@ -115,9 +113,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             ActionListener<String> al = invocation.getArgument(7);
             al.onResponse("iid");
             return null;
-        })
-            .when(interactionsIndex)
-            .createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any(), any());
+        }).when(interactionsIndex).createInteraction(anyString(), anyString(), anyString(), anyString(), anyString(), any(), any(), any());
         InteractionBuilder builder = Interaction
             .builder()
             .origin("ogn")
@@ -125,7 +121,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
             .input("inp")
             .response("rsp")
             .promptTemplate("pt")
-            .additionalInfo("meta");
+            .additionalInfo(Collections.singletonMap("meta", "some meta"));
         ActionFuture<String> result = cmHandler.createInteraction(builder);
         assert (result.actionGet(200).equals("iid"));
     }

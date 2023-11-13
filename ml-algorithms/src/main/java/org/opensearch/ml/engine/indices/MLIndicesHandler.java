@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.indices;
+package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
@@ -60,6 +60,14 @@ public class MLIndicesHandler {
 
     public void initMLConnectorIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.CONNECTOR, listener);
+    }
+
+    public void initMemoryMetaIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MEMORY_META, listener);
+    }
+
+    public void initMemoryMessageIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MEMORY_MESSAGE, listener);
     }
 
     public void initMLConfigIndex(ActionListener<Boolean> listener) {

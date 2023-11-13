@@ -21,6 +21,7 @@ import static org.mockito.Mockito.*;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -182,7 +183,8 @@ public class ConversationalMemoryClientTests extends OpenSearchTestCase {
         ActionFuture<CreateInteractionResponse> future = mock(ActionFuture.class);
         when(future.actionGet(anyLong())).thenReturn(res);
         when(client.execute(eq(CreateInteractionAction.INSTANCE), any())).thenReturn(future);
-        String actual = memoryClient.createInteraction("cid", "input", "prompt", "answer", "origin", "hits");
+        String actual = memoryClient
+            .createInteraction("cid", "input", "prompt", "answer", "origin", Collections.singletonMap("metadata", "hits"));
         assertEquals(id, actual);
     }
 }

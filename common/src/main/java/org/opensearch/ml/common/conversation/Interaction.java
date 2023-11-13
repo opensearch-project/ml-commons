@@ -19,6 +19,7 @@ package org.opensearch.ml.common.conversation;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -54,7 +55,7 @@ public class Interaction implements Writeable, ToXContentObject {
     @Getter
     private String origin;
     @Getter
-    private String additionalInfo;
+    private Map<String, String> additionalInfo;
 
     /**
      * Creates an Interaction object from a map of fields in the OS index
@@ -69,7 +70,7 @@ public class Interaction implements Writeable, ToXContentObject {
         String promptTemplate = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD);
         String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
         String origin     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
-        String additionalInfo  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
+        Map<String,String> additionalInfo  = (Map<String,String>) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
         return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
@@ -97,7 +98,10 @@ public class Interaction implements Writeable, ToXContentObject {
         String promptTemplate = in.readString();
         String response = in.readString();
         String origin = in.readString();
-        String additionalInfo = in.readOptionalString();
+        Map<String, String> additionalInfo = new HashMap<>();
+        if (in.readBoolean()) {
+            additionalInfo = in.readMap(s -> s.readString(), s -> s.readString());
+        }
         return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
     }
 
@@ -111,7 +115,12 @@ public class Interaction implements Writeable, ToXContentObject {
         out.writeString(promptTemplate);
         out.writeString(response);
         out.writeString(origin);
-        out.writeOptionalString(additionalInfo);
+        if (additionalInfo != null) {
+            out.writeBoolean(true);
+            out.writeMap(additionalInfo, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
