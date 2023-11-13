@@ -32,6 +32,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -52,6 +53,7 @@ import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
@@ -123,6 +125,11 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     MLModel localModel;
 
     ThreadContext threadContext;
+    @Mock
+    ClusterService clusterService;
+
+    @Mock
+    MLEngine mlEngine;
 
     @Before
     public void setup() throws IOException {
@@ -165,7 +172,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 connectorAccessControlHelper,
                 modelAccessControlHelper,
                 mlModelManager,
-                mlModelGroupManager
+                mlModelGroupManager,
+                settings,
+                clusterService,
+                mlEngine
             )
         );
 
@@ -173,6 +183,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.getSettings()).thenReturn(settings);
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 

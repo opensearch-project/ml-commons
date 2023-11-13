@@ -44,6 +44,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelAction;
@@ -109,39 +110,63 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
         User user = RestActionUtils.getUserContext(client);
+        boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
                 boolean modelDeployFlag = isModelDeployed(mlModel.getModelState());
                 FunctionName functionName = mlModel.getAlgorithm();
+                MLModelState mlModelState = mlModel.getModelState();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
-                    modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                updateRemoteOrTextEmbeddingModel(
-                                    modelId,
-                                    updateModelInput,
-                                    mlModel,
-                                    user,
-                                    actionListener,
-                                    context,
-                                    modelDeployFlag
+                    if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
+                        if (isSuperAdmin) {
+                            updateRemoteOrTextEmbeddingModel(
+                                modelId,
+                                updateModelInput,
+                                mlModel,
+                                user,
+                                actionListener,
+                                context,
+                                modelDeployFlag
+                            );
+                        } else {
+                            actionListener
+                                .onFailure(
+                                    new MLValidationException(
+                                        "User doesn't have permission to perform this operation on this model, model ID " + modelId
+                                    )
                                 );
-                            } else {
-                                actionListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
-                                            RestStatus.FORBIDDEN
-                                        )
+                        }
+                    } else {
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    updateRemoteOrTextEmbeddingModel(
+                                        modelId,
+                                        updateModelInput,
+                                        mlModel,
+                                        user,
+                                        actionListener,
+                                        context,
+                                        modelDeployFlag
                                     );
-                            }
-                        }, exception -> {
-                            log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                            actionListener.onFailure(exception);
-                        }));
+                                } else {
+                                    actionListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
+                            }, exception -> {
+                                log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                                actionListener.onFailure(exception);
+                            }));
+                    }
+
                 } else {
                     actionListener
                         .onFailure(
@@ -153,13 +178,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 }
             },
                 e -> actionListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "Failed to find model to update with the provided model id: " + modelId,
-                            RestStatus.NOT_FOUND
-                        )
-                    )
-            ));
+                    .onFailure(new MLResourceNotFoundException("Failed to find model to update with the provided model id: " + modelId))
+            ), () -> context.restore()));
         } catch (Exception e) {
             log.error("Failed to update ML model for " + modelId, e);
             actionListener.onFailure(e);

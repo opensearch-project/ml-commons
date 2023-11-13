@@ -287,10 +287,16 @@ public class MLModelManager {
                     .totalChunks(mlRegisterModelMetaInput.getTotalChunks())
                     .modelContentHash(mlRegisterModelMetaInput.getModelContentHashValue())
                     .modelContentSizeInBytes(mlRegisterModelMetaInput.getModelContentSizeInBytes())
+                    .isHidden(mlRegisterModelMetaInput.getIsHidden())
                     .createdTime(now)
                     .lastUpdateTime(now)
+
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+
+                if (mlRegisterModelMetaInput.getIsHidden()) {
+                    indexRequest.id(modelName);
+                }
                 indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -515,9 +521,13 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
 
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
@@ -576,8 +586,12 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
+                }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 // create model meta doc
@@ -638,10 +652,14 @@ public class MLModelManager {
                     .modelConfig(registerModelInput.getModelConfig())
                     .createdTime(now)
                     .lastUpdateTime(now)
+                    .isHidden(registerModelInput.getIsHidden())
                     .build();
                 IndexRequest indexModelMetaRequest = new IndexRequest(ML_MODEL_INDEX);
                 if (functionName == FunctionName.METRICS_CORRELATION) {
                     indexModelMetaRequest.id(functionName.name());
+                }
+                if (registerModelInput.getIsHidden()) {
+                    indexModelMetaRequest.id(modelName);
                 }
                 indexModelMetaRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexModelMetaRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
@@ -719,8 +737,12 @@ public class MLModelManager {
                             .content(Base64.getEncoder().encodeToString(bytes))
                             .createdTime(now)
                             .lastUpdateTime(now)
+                            .isHidden(registerModelInput.getIsHidden())
                             .build();
                         IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
+                        if (registerModelInput.getIsHidden()) {
+                            indexRequest.id(modelName);
+                        }
                         String chunkId = getModelChunkId(modelId, chunkNum);
                         indexRequest.id(chunkId);
                         indexRequest.source(mlModel.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));

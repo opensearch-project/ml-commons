@@ -17,6 +17,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
@@ -80,11 +81,13 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLUndeployModelsResponse> listener) {
+        log.info("Undeploying model: dhrubo");
         MLUndeployModelsRequest undeployModelsRequest = MLUndeployModelsRequest.fromActionRequest(request);
         String[] modelIds = undeployModelsRequest.getModelIds();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
 
         if (modelAccessControlHelper.isModelAccessControlEnabled()) {
+            log.info("checking model access control model: dhrubo");
             // Only allow user undeploy one model if model access control enabled.
             if (modelIds == null || modelIds.length != 1) {
                 throw new IllegalArgumentException("only support undeploy one model");
@@ -114,14 +117,25 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
     private void validateAccess(String modelId, ActionListener<Boolean> listener) {
         User user = RestActionUtils.getUserContext(client);
+        boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
-                modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+                Boolean isHidden = mlModel.getIsHidden();
+                if (isHidden != null && isHidden) {
+                    if (isSuperAdmin) {
+                        listener.onResponse(true);
+                    } else {
+                        listener
+                            .onFailure(new MLValidationException("User Doesn't have privilege to perform this operation on this model"));
+                    }
+                } else {
+                    modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+                }
             }, e -> {
                 log.error("Failed to find Model", e);
                 listener.onFailure(e);
-            }), () -> context.restore()));
+            }), context::restore));
         } catch (Exception e) {
             log.error("Failed to undeploy ML model");
             listener.onFailure(e);

@@ -57,6 +57,7 @@ public class ModelHelper {
         String modelName = registerModelInput.getModelName();
         String version = registerModelInput.getVersion();
         MLModelFormat modelFormat = registerModelInput.getModelFormat();
+        Boolean isHidden = registerModelInput.getIsHidden();
         boolean deployModel = registerModelInput.isDeployModel();
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         String modelGroupId = registerModelInput.getModelGroupId();
@@ -87,6 +88,7 @@ public class ModelHelper {
                         .url(modelZipFileUrl)
                         .deployModel(deployModel)
                         .modelNodeIds(modelNodeIds)
+                        .isHidden(isHidden)
                         .modelGroupId(modelGroupId);
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
