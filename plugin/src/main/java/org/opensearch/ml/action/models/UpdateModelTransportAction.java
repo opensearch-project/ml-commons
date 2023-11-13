@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
 
 import java.io.IOException;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -18,12 +19,14 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -54,6 +57,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelManager mlModelManager;
     MLModelGroupManager mlModelGroupManager;
+    ClusterService clusterService;
 
     @Inject
     public UpdateModelTransportAction(
@@ -63,6 +67,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         ConnectorAccessControlHelper connectorAccessControlHelper,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelManager mlModelManager,
+        ClusterService clusterService,
         MLModelGroupManager mlModelGroupManager
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
@@ -71,6 +76,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlModelManager = mlModelManager;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.clusterService = clusterService;
     }
 
     @Override
@@ -79,6 +85,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
         User user = RestActionUtils.getUserContext(client);
+        boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
@@ -87,38 +94,67 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 FunctionName functionName = mlModel.getAlgorithm();
                 MLModelState mlModelState = mlModel.getModelState();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
-                    modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                if (!mlModelState.equals(MLModelState.LOADED)
-                                    && !mlModelState.equals(MLModelState.LOADING)
-                                    && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
-                                    && !mlModelState.equals(MLModelState.DEPLOYED)
-                                    && !mlModelState.equals(MLModelState.DEPLOYING)
-                                    && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
-                                    updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener);
+                    if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
+                        if (isSuperAdmin) {
+                            if (!mlModelState.equals(MLModelState.LOADED)
+                                && !mlModelState.equals(MLModelState.LOADING)
+                                && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+                                && !mlModelState.equals(MLModelState.DEPLOYED)
+                                && !mlModelState.equals(MLModelState.DEPLOYING)
+                                && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
+                                updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener);
+                            } else {
+                                actionListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model",
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                            }
+                        } else {
+                            actionListener
+                                .onFailure(
+                                    new MLValidationException(
+                                        "User doesn't have privilege to perform this operation on this model, model ID " + modelId
+                                    )
+                                );
+                        }
+                    } else {
+                        modelAccessControlHelper
+                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    if (!mlModelState.equals(MLModelState.LOADED)
+                                        && !mlModelState.equals(MLModelState.LOADING)
+                                        && !mlModelState.equals(MLModelState.PARTIALLY_LOADED)
+                                        && !mlModelState.equals(MLModelState.DEPLOYED)
+                                        && !mlModelState.equals(MLModelState.DEPLOYING)
+                                        && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED)) {
+                                        updateRemoteOrTextEmbeddingModel(modelId, updateModelInput, mlModel, user, actionListener);
+                                    } else {
+                                        actionListener
+                                            .onFailure(
+                                                new MLValidationException(
+                                                    "ML Model "
+                                                        + modelId
+                                                        + " is in deploying or deployed state, please undeploy the models first!"
+                                                )
+                                            );
+                                    }
                                 } else {
                                     actionListener
                                         .onFailure(
                                             new MLValidationException(
-                                                "ML Model "
-                                                    + modelId
-                                                    + " is in deploying or deployed state, please undeploy the models first!"
+                                                "User doesn't have privilege to perform this operation on this model, model ID " + modelId
                                             )
                                         );
                                 }
-                            } else {
-                                actionListener
-                                    .onFailure(
-                                        new MLValidationException(
-                                            "User doesn't have privilege to perform this operation on this model, model ID " + modelId
-                                        )
-                                    );
-                            }
-                        }, exception -> {
-                            log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                            actionListener.onFailure(exception);
-                        }));
+                            }, exception -> {
+                                log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                                actionListener.onFailure(exception);
+                            }));
+                    }
+
                 } else {
                     actionListener
                         .onFailure(

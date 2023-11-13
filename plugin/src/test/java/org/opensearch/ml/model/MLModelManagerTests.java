@@ -209,6 +209,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .modelFormat(modelFormat)
             .modelConfig(modelConfig)
             .url(url)
+            .isHidden(false)
             .build();
 
         Map<Enum, MLStat<?>> stats = new ConcurrentHashMap<>();
@@ -913,6 +914,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 )
             )
             .totalChunks(2)
+            .isHidden(false)
             .build();
         return input;
     }

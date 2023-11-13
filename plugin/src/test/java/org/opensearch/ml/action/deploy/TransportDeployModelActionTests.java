@@ -18,7 +18,6 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,7 +38,6 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
@@ -76,7 +74,6 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
-import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -224,7 +221,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecute_success_hidden_model() {
-        transportDeployModelAction = spy(new TransportDeployModelAction(
+        transportDeployModelAction = spy(
+            new TransportDeployModelAction(
                 transportService,
                 actionFilters,
                 modelHelper,
@@ -240,7 +238,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 settings,
                 modelAccessControlHelper,
                 mlFeatureEnabledSetting
-        ));
+            )
+        );
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);
         when(mlModel.getIsHidden()).thenReturn(true);
@@ -259,7 +258,6 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
 
-
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         doReturn(true).when(transportDeployModelAction).isSuperAdminUserWrapper(clusterService, client);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
@@ -267,7 +265,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecute_no_permission_hidden_model() {
-        transportDeployModelAction = spy(new TransportDeployModelAction(
+        transportDeployModelAction = spy(
+            new TransportDeployModelAction(
                 transportService,
                 actionFilters,
                 modelHelper,
@@ -283,7 +282,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 settings,
                 modelAccessControlHelper,
                 mlFeatureEnabledSetting
-        ));
+            )
+        );
 
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.ANOMALY_LOCALIZATION);

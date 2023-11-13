@@ -29,6 +29,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -115,6 +116,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     MLModel mlModelWithNullFunctionName;
 
     ThreadContext threadContext;
+    @Mock
+    ClusterService clusterService;
 
     @Before
     public void setup() throws IOException {
@@ -157,6 +160,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 connectorAccessControlHelper,
                 modelAccessControlHelper,
                 mlModelManager,
+                clusterService,
                 mlModelGroupManager
             )
         );
@@ -165,6 +169,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(clusterService.getSettings()).thenReturn(settings);
         shardId = new ShardId(new Index("indexName", "uuid"), 1);
         updateResponse = new UpdateResponse(shardId, "taskId", 1, 1, 1, DocWriteResponse.Result.UPDATED);
 
