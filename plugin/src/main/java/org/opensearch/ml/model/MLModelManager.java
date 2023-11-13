@@ -8,7 +8,6 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
@@ -76,8 +75,8 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -89,6 +88,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
@@ -122,6 +122,7 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
+import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
@@ -277,6 +278,9 @@ public class MLModelManager {
                     .version(version)
                     .modelGroupId(mlRegisterModelMetaInput.getModelGroupId())
                     .description(mlRegisterModelMetaInput.getDescription())
+                    .quotaFlag(mlRegisterModelMetaInput.getQuotaFlag())
+                    .rateLimitNumber(mlRegisterModelMetaInput.getRateLimitNumber())
+                    .rateLimitUnit(mlRegisterModelMetaInput.getRateLimitUnit())
                     .modelFormat(mlRegisterModelMetaInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(mlRegisterModelMetaInput.getModelConfig())
@@ -287,7 +291,7 @@ public class MLModelManager {
                     .lastUpdateTime(now)
                     .build();
                 IndexRequest indexRequest = new IndexRequest(ML_MODEL_INDEX);
-                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), EMPTY_PARAMS));
+                indexRequest.source(mlModelMeta.toXContent(XContentBuilder.builder(JSON.xContent()), EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
                 client.index(indexRequest, ActionListener.wrap(response -> {
@@ -501,6 +505,9 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .quotaFlag(registerModelInput.getQuotaFlag())
+                    .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                    .rateLimitUnit(registerModelInput.getRateLimitUnit())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -559,6 +566,9 @@ public class MLModelManager {
                     .modelGroupId(registerModelInput.getModelGroupId())
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .quotaFlag(registerModelInput.getQuotaFlag())
+                    .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                    .rateLimitUnit(registerModelInput.getRateLimitUnit())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERED)
                     .connector(registerModelInput.getConnector())
@@ -620,6 +630,9 @@ public class MLModelManager {
                     .algorithm(functionName)
                     .version(version)
                     .description(registerModelInput.getDescription())
+                    .quotaFlag(registerModelInput.getQuotaFlag())
+                    .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                    .rateLimitUnit(registerModelInput.getRateLimitUnit())
                     .modelFormat(registerModelInput.getModelFormat())
                     .modelState(MLModelState.REGISTERING)
                     .modelConfig(registerModelInput.getModelConfig())
@@ -643,7 +656,6 @@ public class MLModelManager {
                     log.error("Failed to index model meta doc", e);
                     handleException(functionName, taskId, e);
                 });
-
                 client.index(indexModelMetaRequest, threadedActionListener(REGISTER_THREAD_POOL, listener));
             }, e -> {
                 log.error("Failed to init model index", e);
@@ -699,6 +711,9 @@ public class MLModelManager {
                             .algorithm(functionName)
                             .version(version)
                             .modelFormat(registerModelInput.getModelFormat())
+                            .quotaFlag(registerModelInput.getQuotaFlag())
+                            .rateLimitNumber(registerModelInput.getRateLimitNumber())
+                            .rateLimitUnit(registerModelInput.getRateLimitUnit())
                             .chunkNumber(chunkNum)
                             .totalChunks(chunkFiles.size())
                             .content(Base64.getEncoder().encodeToString(bytes))
@@ -875,6 +890,55 @@ public class MLModelManager {
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
+    public synchronized Map<String, String> inplaceUpdateModel(
+        String modelId,
+        boolean updatePredictorFlag,
+        ActionListener<String> listener
+    ) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            getModel(modelId, ActionListener.wrap(mlModel -> {
+                int NodeCount = getWorkerNodes(modelId, mlModel.getAlgorithm()).length;
+                modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(NodeCount, mlModel));
+                modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
+                if (updatePredictorFlag) {
+                    assert FunctionName.REMOTE == mlModel.getAlgorithm()
+                        : "In-place update is only supported on REMOTE models at this time.";
+                    Map<String, Object> params = ImmutableMap
+                        .of(
+                            ML_ENGINE,
+                            mlEngine,
+                            SCRIPT_SERVICE,
+                            scriptService,
+                            CLIENT,
+                            client,
+                            XCONTENT_REGISTRY,
+                            xContentRegistry,
+                            CLUSTER_SERVICE,
+                            clusterService
+                        );
+                    if (mlModel.getConnector() != null) {
+                        Predictable predictable = mlEngine.deploy(mlModel, params);
+                        modelCacheHelper.setPredictor(modelId, predictable);
+                        wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                        log.info("Completed in-place update internal connector for the model {}", modelId);
+                    } else {
+                        getConnector(client, mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                            mlModel.setConnector(connector);
+                            Predictable predictable = mlEngine.deploy(mlModel, params);
+                            modelCacheHelper.setPredictor(modelId, predictable);
+                            wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                            log.info("Completed in-place update stand-alone connector for the model {}", modelId);
+                        }, wrappedListener::onFailure));
+                    }
+                    wrappedListener.onResponse("successfully performed in-place update for the model " + modelId);
+                    log.info("Completed in-place update for the model {}", modelId);
+                }
+            }, wrappedListener::onFailure));
+        }
+        return null;
+    }
+
     /**
      * Read model chunks from model index. Concat chunks into a whole model file, then load
      * into memory.
@@ -911,6 +975,7 @@ public class MLModelManager {
             listener.onFailure(new IllegalArgumentException("Exceed max local model per node limit"));
             return;
         }
+        int eligibleNodeCount = workerNodes.size();
         modelCacheHelper.initModelState(modelId, MLModelState.DEPLOYING, functionName, workerNodes, deployToAllNodes);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<String> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
@@ -934,33 +999,17 @@ public class MLModelManager {
                         );
                     // deploy remote model with internal connector or model trained by built-in algorithm like kmeans
                     if (mlModel.getConnector() != null || FunctionName.REMOTE != mlModel.getAlgorithm()) {
-                        setupPredictable(modelId, mlModel, params);
+                        setupPredictable(modelId, mlModel, params, eligibleNodeCount);
                         wrappedListener.onResponse("successful");
                         return;
                     }
                     log.info("Set connector {} for the model: {}", mlModel.getConnectorId(), modelId);
-                    GetRequest getConnectorRequest = new GetRequest();
-                    FetchSourceContext fetchContext = new FetchSourceContext(true, null, null);
-                    getConnectorRequest.index(ML_CONNECTOR_INDEX).id(mlModel.getConnectorId()).fetchSourceContext(fetchContext);
-                    // get connector and deploy remote model with standalone connector
-                    client.get(getConnectorRequest, ActionListener.wrap(getResponse -> {
-                        if (getResponse != null && getResponse.isExists()) {
-                            try (
-                                XContentParser parser = createXContentParserFromRegistry(
-                                    xContentRegistry,
-                                    getResponse.getSourceAsBytesRef()
-                                )
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                Connector connector = Connector.createConnector(parser);
-                                mlModel.setConnector(connector);
-                                setupPredictable(modelId, mlModel, params);
-                                wrappedListener.onResponse("successful");
-                                log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
-                            }
-                        }
-                    }, e -> { wrappedListener.onFailure(e); }));
-
+                    getConnector(client, mlModel.getConnectorId(), ActionListener.wrap(connector -> {
+                        mlModel.setConnector(connector);
+                        setupPredictable(modelId, mlModel, params, eligibleNodeCount);
+                        wrappedListener.onResponse("successful");
+                        log.info("Completed setting connector {} in the model {}", mlModel.getConnectorId(), modelId);
+                    }, wrappedListener::onFailure));
                     return;
                 }
                 // check circuit breaker before deploying custom model chunks
@@ -980,6 +1029,8 @@ public class MLModelManager {
                         MLExecutable mlExecutable = mlEngine.deployExecute(mlModel, params);
                         try {
                             modelCacheHelper.setMLExecutor(modelId, mlExecutable);
+                            modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, mlModel));
+                            modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             wrappedListener.onResponse("successful");
@@ -993,6 +1044,8 @@ public class MLModelManager {
                         Predictable predictable = mlEngine.deploy(mlModel, params);
                         try {
                             modelCacheHelper.setPredictor(modelId, predictable);
+                            modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
+                            modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, mlModel));
                             mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
                             modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
                             Long modelContentSizeInBytes = mlModel.getModelContentSizeInBytes();
@@ -1034,11 +1087,29 @@ public class MLModelManager {
         listener.onFailure(e);
     }
 
-    private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params) {
+    private void setupPredictable(String modelId, MLModel mlModel, Map<String, Object> params, Integer eligibleNodeCount) {
         Predictable predictable = mlEngine.deploy(mlModel, params);
         modelCacheHelper.setPredictor(modelId, predictable);
+        modelCacheHelper.setRateLimiter(modelId, rateLimiterConstructor(eligibleNodeCount, mlModel));
+        modelCacheHelper.setQuotaFlag(modelId, mlModel.getQuotaFlag());
         mlStats.getStat(MLNodeLevelStat.ML_DEPLOYED_MODEL_COUNT).increment();
         modelCacheHelper.setModelState(modelId, MLModelState.DEPLOYED);
+    }
+
+    private TokenBucket rateLimiterConstructor(Integer eligibleNodeCount, MLModel mlModel) {
+        if (mlModel != null && mlModel.getRateLimitNumber() != null && mlModel.getRateLimitUnit() != null) {
+            double rateLimitNumber = Double.parseDouble(mlModel.getRateLimitNumber());
+            TimeUnit rateLimitUnit = mlModel.getRateLimitUnit();
+            log
+                .debug(
+                    "Initializing the rate limiter for Model {}, with TPS limit {}, evenly distributed on {} nodes",
+                    mlModel.getModelId(),
+                    rateLimitNumber / rateLimitUnit.toSeconds(1),
+                    eligibleNodeCount
+                );
+            return new TokenBucket(System::nanoTime, rateLimitNumber / rateLimitUnit.toNanos(1) / eligibleNodeCount, 2);
+        }
+        return null;
     }
 
     /**
@@ -1081,6 +1152,30 @@ public class MLModelManager {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
             }
         }, e -> { listener.onFailure(e); }));
+    }
+
+    private void getConnector(Client client, String connectorId, ActionListener<Connector> listener) {
+        GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
+        client.get(getRequest, ActionListener.wrap(r -> {
+            if (r != null && r.isExists()) {
+                try (
+                    XContentParser parser = MLNodeUtils
+                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Connector connector = Connector.createConnector(parser);
+                    listener.onResponse(connector);
+                } catch (Exception e) {
+                    log.error("Failed to parse connector:" + connectorId);
+                    listener.onFailure(e);
+                }
+            } else {
+                listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+            }
+        }, e -> {
+            log.error("Failed to get connector", e);
+            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
+        }));
     }
 
     private void retrieveModelChunks(MLModel mlModelMeta, ActionListener<File> listener) throws InterruptedException {
@@ -1291,6 +1386,10 @@ public class MLModelManager {
         return eligibleNodeIds;
     }
 
+    public int getWorkerNodesSize(String modelId, FunctionName functionName, boolean onlyEligibleNode) {
+        return getWorkerNodes(modelId, functionName, onlyEligibleNode).length;
+    }
+
     /**
      * Get worker node of specific model without filtering eligible node.
      *
@@ -1300,6 +1399,10 @@ public class MLModelManager {
      */
     public String[] getWorkerNodes(String modelId, FunctionName functionName) {
         return getWorkerNodes(modelId, functionName, false);
+    }
+
+    public int getWorkerNodesSize(String modelId, FunctionName functionName) {
+        return getWorkerNodes(modelId, functionName, false).length;
     }
 
     /**
