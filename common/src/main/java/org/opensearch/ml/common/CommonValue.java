@@ -359,6 +359,7 @@ public class CommonValue {
             + MLAgent.MEMORY_FIELD
             + "\" : {\"type\": \"flat_object\"},\n"
             + "      \""
+            + MLAgent.CREATED_TIME_FIELD
             + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
             + "      \""
             + MLAgent.LAST_UPDATED_TIME_FIELD

@@ -76,7 +76,7 @@ public class MLFlowAgentRunner {
                 StepListener<Object> nextStepListener = new StepListener<>();
                 int finalI = i;
                 lastStepListener.whenComplete(output -> {
-                    String outputKey = lastToolSpec.getName() + ".output";
+                    String outputKey = lastToolSpec.getType() + ".output";
                     if (lastToolSpec.getName() !=  null) {
                         outputKey = lastToolSpec.getName() + ".output";
                     }
@@ -133,11 +133,13 @@ public class MLFlowAgentRunner {
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
         }
-        if (!toolFactories.containsKey(toolSpec.getName())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getName());
+        if (!toolFactories.containsKey(toolSpec.getType())) {
+            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
-        Tool tool = toolFactories.get(toolSpec.getName()).create(toolParams);
-        tool.setName(toolSpec.getName());
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+        if (toolSpec.getName() != null) {
+            tool.setName(toolSpec.getName());
+        }
 
         if (toolSpec.getDescription() != null) {
             tool.setDescription(toolSpec.getDescription());
@@ -152,8 +154,8 @@ public class MLFlowAgentRunner {
         }
         for (String key : params.keySet()) {
             String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName()+".";
+            if (key.startsWith(toolSpec.getType() + ".")) {
+                toBeReplaced = toolSpec.getType() + ".";
             }
             if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
                 toBeReplaced = toolSpec.getName()+".";
