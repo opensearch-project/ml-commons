@@ -396,10 +396,9 @@ public class MLReActAgentRunner {
 
                     MLToolSpec toolSpec = toolSpecMap.get(currentAction.get());
                     if (toolSpec != null && BooleanUtils.isTrue(toolSpec.getIncludeOutputInAgentResponse())) {
-                        String name = toolSpec.getAlias() != null ? toolSpec.getAlias() : toolSpec.getName();
                         String outputString = output instanceof String ? (String) output :
                                 AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
-                        ModelTensor modelTensor = ModelTensor.builder().name(name).result(outputString).build();
+                        ModelTensor modelTensor = ModelTensor.builder().name(toolSpec.getName()).result(outputString).build();
                         outputModelTensors.add(modelTensor);
                     }
 
