@@ -15,6 +15,7 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.commons.alerting.AlertingPluginInterface;
 import org.opensearch.commons.alerting.action.GetAlertsRequest;
 import org.opensearch.commons.alerting.action.GetAlertsResponse;
+import org.opensearch.commons.alerting.model.Alert;
 import org.opensearch.commons.alerting.model.Table;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -25,14 +26,14 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import lombok.Getter;
 import lombok.Setter;
 
-@ToolAnnotation(SearchAlertsTool.NAME)
+@ToolAnnotation(SearchAlertsTool.TYPE)
 public class SearchAlertsTool implements Tool {
-    public static final String NAME = "SearchAlertsTool";
+    public static final String TYPE = "SearchAlertsTool";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to search alerts.";
 
     @Setter
     @Getter
-    private String name = SearchAlertsTool.NAME;
+    private String name = TYPE;
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -98,8 +99,16 @@ public class SearchAlertsTool implements Tool {
         );
 
         // create response listener
+        // stringify the response, may change to a standard format in the future
         ActionListener<GetAlertsResponse> getAlertsListener = ActionListener.<GetAlertsResponse>wrap(response -> {
-            listener.onResponse((T) response);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Alerts=[");
+            for (Alert alert : response.getAlerts()) {
+                sb.append(alert.toString());
+            }
+            sb.append("]");
+            sb.append("TotalAlerts=").append(response.getTotalAlerts());
+            listener.onResponse((T) sb.toString());
         }, e -> { listener.onFailure(e); });
 
         // execute the search
@@ -112,6 +121,11 @@ public class SearchAlertsTool implements Tool {
             return false;
         }
         return true;
+    }
+
+    @Override
+    public String getType() {
+        return TYPE;
     }
 
     /**

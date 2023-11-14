@@ -62,9 +62,10 @@ public class SearchAlertsToolTests {
     public void testRunWithNoAlerts() throws Exception {
         Tool tool = SearchAlertsTool.Factory.getInstance().create(Collections.emptyMap());
         GetAlertsResponse getAlertsResponse = new GetAlertsResponse(Collections.emptyList(), 0);
+        String expectedResponseStr = "Alerts=[]TotalAlerts=0";
 
         @SuppressWarnings("unchecked")
-        ActionListener<GetAlertsResponse> listener = Mockito.mock(ActionListener.class);
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
 
         doAnswer((invocation) -> {
             ActionListener<GetAlertsResponse> responseListener = invocation.getArgument(2);
@@ -73,9 +74,9 @@ public class SearchAlertsToolTests {
         }).when(nodeClient).execute(any(ActionType.class), any(), any());
 
         tool.run(nonEmptyParams, listener);
-        ArgumentCaptor<GetAlertsResponse> responseCaptor = ArgumentCaptor.forClass(GetAlertsResponse.class);
+        ArgumentCaptor<String> responseCaptor = ArgumentCaptor.forClass(String.class);
         verify(listener, times(1)).onResponse(responseCaptor.capture());
-        assertEquals((Integer) 0, responseCaptor.getValue().getTotalAlerts());
+        assertEquals(expectedResponseStr, responseCaptor.getValue());
     }
 
     @Test
@@ -138,9 +139,15 @@ public class SearchAlertsToolTests {
         List<Alert> mockAlerts = List.of(alert1, alert2);
 
         GetAlertsResponse getAlertsResponse = new GetAlertsResponse(mockAlerts, mockAlerts.size());
+        String expectedResponseStr = new StringBuilder()
+            .append("Alerts=[")
+            .append(alert1.toString())
+            .append(alert2.toString())
+            .append("]TotalAlerts=2")
+            .toString();
 
         @SuppressWarnings("unchecked")
-        ActionListener<GetAlertsResponse> listener = Mockito.mock(ActionListener.class);
+        ActionListener<String> listener = Mockito.mock(ActionListener.class);
 
         doAnswer((invocation) -> {
             ActionListener<GetAlertsResponse> responseListener = invocation.getArgument(2);
@@ -149,15 +156,15 @@ public class SearchAlertsToolTests {
         }).when(nodeClient).execute(any(ActionType.class), any(), any());
 
         tool.run(nonEmptyParams, listener);
-        ArgumentCaptor<GetAlertsResponse> responseCaptor = ArgumentCaptor.forClass(GetAlertsResponse.class);
+        ArgumentCaptor<String> responseCaptor = ArgumentCaptor.forClass(String.class);
         verify(listener, times(1)).onResponse(responseCaptor.capture());
-        assertEquals((Integer) mockAlerts.size(), responseCaptor.getValue().getTotalAlerts());
+        assertEquals(expectedResponseStr, responseCaptor.getValue());
     }
 
     @Test
     public void testValidate() {
         Tool tool = SearchAlertsTool.Factory.getInstance().create(Collections.emptyMap());
-        assertEquals(SearchAlertsTool.NAME, tool.getName());
+        assertEquals(SearchAlertsTool.TYPE, tool.getType());
         assertTrue(tool.validate(emptyParams));
         assertTrue(tool.validate(nonEmptyParams));
         assertFalse(tool.validate(nullParams));
