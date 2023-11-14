@@ -88,13 +88,15 @@ public class ModelHelper {
 
                 MLRegisterModelInput.MLRegisterModelInputBuilder builder = MLRegisterModelInput.builder();
 
-                builder.modelName(modelName)
-                        .version(version)
-                        .url(modelZipFileUrl)
-                        .deployModel(deployModel)
-                        .modelNodeIds(modelNodeIds)
-                        .modelGroupId(modelGroupId)
-                        .functionName(FunctionName.from((String) config.get("model_task_type")));;
+                builder
+                    .modelName(modelName)
+                    .version(version)
+                    .url(modelZipFileUrl)
+                    .deployModel(deployModel)
+                    .modelNodeIds(modelNodeIds)
+                    .modelGroupId(modelGroupId)
+                    .functionName(FunctionName.from((String) config.get("model_task_type")));
+
                 config.entrySet().forEach(entry -> {
                     switch (entry.getKey().toString()) {
                         case MLRegisterModelInput.MODEL_FORMAT_FIELD:
