@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import lombok.Setter;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
@@ -67,6 +68,9 @@ public class MLModelAutoReDeployer {
     private final Queue<ModelAutoRedeployArrangement> modelAutoRedeployArrangements = new ConcurrentLinkedQueue<>();
 
     private final SearchRequestBuilderFactory searchRequestBuilderFactory;
+
+    @Setter
+    private ActionListener<Boolean> startCronJobListener;
 
     public MLModelAutoReDeployer(
         ClusterService clusterService,
@@ -126,6 +130,7 @@ public class MLModelAutoReDeployer {
     public void buildAutoReloadArrangement(List<String> addedNodes, String clusterManagerNodeId) {
         if (!enableAutoReDeployModel) {
             log.info("Model auto reload configuration is false, not performing auto reloading!");
+            startCronjobAndClearListener();
             return;
         }
         String localNodeId = clusterService.localNode().getId();
@@ -142,10 +147,12 @@ public class MLModelAutoReDeployer {
     public void redeployAModel() {
         if (!enableAutoReDeployModel) {
             log.info("Model auto reload configuration is false, not performing auto reloading!");
+            startCronjobAndClearListener();
             return;
         }
         if (modelAutoRedeployArrangements.size() == 0) {
             log.info("No models needs to be auto redeployed!");
+            startCronjobAndClearListener();
             return;
         }
         ModelAutoRedeployArrangement modelAutoRedeployArrangement = modelAutoRedeployArrangements.poll();
@@ -176,9 +183,10 @@ public class MLModelAutoReDeployer {
                     });
                 redeployAModel();
             }
-        },
-            e -> { log.error("Failed to query need auto redeploy models, no action will be performed, addedNodes are: {}", addedNodes, e); }
-        );
+        }, e -> {
+            log.error("Failed to query need auto redeploy models, no action will be performed, addedNodes are: {}", addedNodes, e);
+            startCronjobAndClearListener();
+        });
 
         queryRunningModels(listener);
     }
@@ -294,6 +302,14 @@ public class MLModelAutoReDeployer {
 
         MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, nodeIds, false, true);
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, listener);
+    }
+
+    private void startCronjobAndClearListener() {
+        boolean managerNode = clusterService.localNode().isClusterManagerNode();
+        if (managerNode && startCronJobListener != null) {
+            startCronJobListener.onResponse(true);
+            startCronJobListener = null;
+        }
     }
 
     @Data

@@ -119,8 +119,6 @@ public class MLSyncUpCron implements Runnable {
                         Set<String> workerNodes = deployingModels.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
-                } else {
-
                 }
 
                 String[] runningDeployModelTaskIds = response.getRunningDeployModelTaskIds();

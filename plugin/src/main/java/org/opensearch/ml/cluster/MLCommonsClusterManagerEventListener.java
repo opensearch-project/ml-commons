@@ -14,6 +14,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.indices.MLIndicesHandler;
@@ -22,7 +23,6 @@ import org.opensearch.threadpool.ThreadPool;
 
 import lombok.extern.log4j.Log4j2;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Log4j2
@@ -70,11 +70,20 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     @Override
     public void onClusterManager() {
+        ActionListener<Boolean> listener = ActionListener.wrap(r -> {
+            if (syncModelRoutingCron == null) {
+                startSyncModelRoutingCron();
+            }
+        }, e -> {
+            if (syncModelRoutingCron == null) {
+                startSyncModelRoutingCron();
+            }
+        });
+        mlModelAutoReDeployer.setStartCronJobListener(listener);
         String localNodeId = clusterService.localNode().getId();
-        mlModelAutoReDeployer.buildAutoReloadArrangement(List.of(localNodeId), localNodeId);
-        if (syncModelRoutingCron == null) {
-            startSyncModelRoutingCron();
-        }
+        threadPool.schedule(() -> mlModelAutoReDeployer.buildAutoReloadArrangement(List.of(localNodeId), localNodeId),
+            TimeValue.timeValueSeconds(jobInterval),
+            GENERAL_THREAD_POOL);
     }
 
     private void startSyncModelRoutingCron() {
