@@ -9,6 +9,7 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
+    id 'com.diffplug.spotless' version '6.18.0'
 }
 
 repositories {
@@ -18,7 +19,6 @@ repositories {
 dependencies {
     implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
     implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
-    implementation project(':opensearch-ml-memory')
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
@@ -47,6 +47,7 @@ dependencies {
     implementation("ai.djl.onnxruntime:onnxruntime-engine:0.21.0") {
         exclude group: "com.microsoft.onnxruntime", module: "onnxruntime"
     }
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.3.50"
     def os = DefaultNativePlatform.currentOperatingSystem
     //mac doesn't support GPU
     if (os.macOsX) {
