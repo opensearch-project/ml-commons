@@ -32,8 +32,10 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -63,6 +65,7 @@ public class MLSyncUpCron implements Runnable {
     private volatile Boolean mlConfigInited;
     @VisibleForTesting
     Semaphore updateModelStateSemaphore;
+    private MLModelAutoReDeployer mlModelAutoReDeployer;
 
     public MLSyncUpCron(
         Client client,
@@ -116,6 +119,8 @@ public class MLSyncUpCron implements Runnable {
                         Set<String> workerNodes = deployingModels.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
+                } else {
+
                 }
 
                 String[] runningDeployModelTaskIds = response.getRunningDeployModelTaskIds();
@@ -270,17 +275,19 @@ public class MLSyncUpCron implements Runnable {
                             newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
                         }
                     }
-                    MLModelState mlModelState = getNewModelState(
-                        deployingModels,
-                        modelWorkerNodes,
-                        modelId,
-                        state,
-                        lastUpdateTime,
-                        planningWorkerNodeCount,
-                        currentWorkerNodeCountInIndex
-                    );
-                    if (mlModelState != null) {
-                        newModelStates.put(modelId, mlModelState);
+                    if (modelWorkerNodes != null && modelWorkerNodes.size() != 0) {
+                        MLModelState mlModelState = getNewModelState(
+                            deployingModels,
+                            modelWorkerNodes,
+                            modelId,
+                            state,
+                            lastUpdateTime,
+                            planningWorkerNodeCount,
+                            currentWorkerNodeCountInIndex
+                        );
+                        if (mlModelState != null) {
+                            newModelStates.put(modelId, mlModelState);
+                        }
                     }
                 }
                 bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes);

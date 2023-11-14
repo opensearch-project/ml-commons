@@ -468,7 +468,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             threadPool,
             nodeHelper,
             mlIndicesHandler,
-            encryptor
+            encryptor,
+            mlModelAutoRedeployer
         );
 
         // TODO move this into MLFeatureEnabledSetting

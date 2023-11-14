@@ -14,12 +14,16 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.indices.MLIndicesHandler;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 
 import lombok.extern.log4j.Log4j2;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Log4j2
 public class MLCommonsClusterManagerEventListener implements LocalNodeClusterManagerListener {
@@ -35,6 +39,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     private volatile Integer jobInterval;
 
+    private final MLModelAutoReDeployer mlModelAutoReDeployer;
+
     public MLCommonsClusterManagerEventListener(
         ClusterService clusterService,
         Client client,
@@ -42,7 +48,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         ThreadPool threadPool,
         DiscoveryNodeHelper nodeHelper,
         MLIndicesHandler mlIndicesHandler,
-        Encryptor encryptor
+        Encryptor encryptor,
+        MLModelAutoReDeployer modelAutoReDeployer
     ) {
         this.clusterService = clusterService;
         this.client = client;
@@ -51,6 +58,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         this.nodeHelper = nodeHelper;
         this.mlIndicesHandler = mlIndicesHandler;
         this.encryptor = encryptor;
+        this.mlModelAutoReDeployer = modelAutoReDeployer;
 
         this.jobInterval = ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS, it -> {
@@ -62,6 +70,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     @Override
     public void onClusterManager() {
+        String localNodeId = clusterService.localNode().getId();
+        mlModelAutoReDeployer.buildAutoReloadArrangement(List.of(localNodeId), localNodeId);
         if (syncModelRoutingCron == null) {
             startSyncModelRoutingCron();
         }
