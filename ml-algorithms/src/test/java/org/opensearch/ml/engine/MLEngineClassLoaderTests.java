@@ -5,6 +5,15 @@
 
 package org.opensearch.ml.engine;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Test;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
@@ -13,15 +22,6 @@ import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Mockito.mock;
 
 public class MLEngineClassLoaderTests {
 
@@ -43,7 +43,8 @@ public class MLEngineClassLoaderTests {
 
         // set properties
         MLEngineClassLoader.deregister(FunctionName.LOCAL_SAMPLE_CALCULATOR);
-        LocalSampleCalculator instance = MLEngineClassLoader.initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
+        LocalSampleCalculator instance = MLEngineClassLoader
+            .initInstance(FunctionName.LOCAL_SAMPLE_CALCULATOR, input, Input.class, properties);
         LocalSampleCalculatorOutput output = (LocalSampleCalculatorOutput) instance.execute(input);
         assertEquals(d1 + d2, output.getResult(), 1e-6);
         assertEquals(client, instance.getClient());

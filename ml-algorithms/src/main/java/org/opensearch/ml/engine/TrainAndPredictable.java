@@ -8,7 +8,6 @@ package org.opensearch.ml.engine;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 
-
 /**
  * This is machine learning algorithms train and predict interface.
  */

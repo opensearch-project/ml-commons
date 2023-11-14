@@ -5,6 +5,23 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
+import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_HELPER;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_ZIP_FILE;
+import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
+
+import java.io.File;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -29,24 +46,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
-
-import java.io.File;
-import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS;
-import static org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_HELPER;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.MODEL_ZIP_FILE;
-import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.SENTENCE_EMBEDDING;
-
 
 public class TextEmbeddingDenseModelTest {
 
@@ -79,20 +78,22 @@ public class TextEmbeddingDenseModelTest {
         modelName = "test_model_name";
         functionName = FunctionName.TEXT_EMBEDDING;
         version = "1";
-        modelConfig = TextEmbeddingModelConfig.builder()
-                .modelType("bert")
-                .embeddingDimension(dimension)
-                .frameworkType(SENTENCE_TRANSFORMERS)
-                .build();
-        model = MLModel.builder()
-                .modelFormat(MLModelFormat.TORCH_SCRIPT)
-                .name("test_model_name")
-                .modelId("test_model_id")
-                .algorithm(FunctionName.TEXT_EMBEDDING)
-                .version("1.0.0")
-                .modelConfig(modelConfig)
-                .modelState(MLModelState.TRAINED)
-                .build();
+        modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(dimension)
+            .frameworkType(SENTENCE_TRANSFORMERS)
+            .build();
+        model = MLModel
+            .builder()
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .name("test_model_name")
+            .modelId("test_model_id")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .version("1.0.0")
+            .modelConfig(modelConfig)
+            .modelState(MLModelState.TRAINED)
+            .build();
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("all-MiniLM-L6-v2_torchscript_sentence-transformer.zip").toURI());
@@ -117,7 +118,7 @@ public class TextEmbeddingDenseModelTest {
         ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             int position = findSentenceEmbeddingPosition(tensors);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
@@ -134,7 +135,7 @@ public class TextEmbeddingDenseModelTest {
         ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             int position = findSentenceEmbeddingPosition(tensors);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
@@ -147,13 +148,17 @@ public class TextEmbeddingDenseModelTest {
     @Test
     public void initModel_predict_TorchScript_SentenceTransformer_ResultFilter() {
         textEmbeddingDenseModel.initModel(model, params, encryptor);
-        ModelResultFilter resultFilter = ModelResultFilter.builder().returnNumber(true).targetResponse(Arrays.asList(SENTENCE_EMBEDDING)).build();
+        ModelResultFilter resultFilter = ModelResultFilter
+            .builder()
+            .returnNumber(true)
+            .targetResponse(Arrays.asList(SENTENCE_EMBEDDING))
+            .build();
         TextDocsInputDataSet textDocsInputDataSet = inputDataSet.toBuilder().resultFilter(resultFilter).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             int position = findSentenceEmbeddingPosition(tensors);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
@@ -196,27 +201,34 @@ public class TextEmbeddingDenseModelTest {
         initModel_predict_HuggingfaceModel(modelFile, modelType, poolingMode, normalize, modelMaxLength, modelFormat, 768);
     }
 
-    private void initModel_predict_HuggingfaceModel(String modelFile, String modelType, TextEmbeddingModelConfig.PoolingMode poolingMode,
-                                                    boolean normalizeResult, Integer modelMaxLength,
-                                                    MLModelFormat modelFormat, int dimension) throws URISyntaxException {
+    private void initModel_predict_HuggingfaceModel(
+        String modelFile,
+        String modelType,
+        TextEmbeddingModelConfig.PoolingMode poolingMode,
+        boolean normalizeResult,
+        Integer modelMaxLength,
+        MLModelFormat modelFormat,
+        int dimension
+    ) throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource(modelFile).toURI()));
         params.put(ML_ENGINE, mlEngine);
-        TextEmbeddingModelConfig onnxModelConfig = modelConfig.toBuilder()
-                .frameworkType(HUGGINGFACE_TRANSFORMERS)
-                .modelType(modelType)
-                .poolingMode(poolingMode)
-                .normalizeResult(normalizeResult)
-                .modelMaxLength(modelMaxLength)
-                .build();
+        TextEmbeddingModelConfig onnxModelConfig = modelConfig
+            .toBuilder()
+            .frameworkType(HUGGINGFACE_TRANSFORMERS)
+            .modelType(modelType)
+            .poolingMode(poolingMode)
+            .normalizeResult(normalizeResult)
+            .modelMaxLength(modelMaxLength)
+            .build();
         MLModel mlModel = model.toBuilder().modelFormat(modelFormat).modelConfig(onnxModelConfig).build();
         textEmbeddingDenseModel.initModel(mlModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput) textEmbeddingDenseModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
-        for (int i=0;i<mlModelOutputs.size();i++) {
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             int position = findSentenceEmbeddingPosition(tensors);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
@@ -337,7 +349,7 @@ public class TextEmbeddingDenseModelTest {
 
     private int findSentenceEmbeddingPosition(ModelTensors modelTensors) {
         List<ModelTensor> mlModelTensors = modelTensors.getMlModelTensors();
-        for (int i=0; i<mlModelTensors.size(); i++) {
+        for (int i = 0; i < mlModelTensors.size(); i++) {
             ModelTensor mlModelTensor = mlModelTensors.get(i);
             if (SENTENCE_EMBEDDING.equals(mlModelTensor.getName())) {
                 return i;

@@ -5,29 +5,31 @@
 
 package org.opensearch.ml.engine.algorithms.rcf;
 
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.decodeBase64;
+
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+
+import org.opensearch.ml.common.MLModel;
+
 import com.amazon.randomcutforest.parkservices.state.ThresholdedRandomCutForestState;
 import com.amazon.randomcutforest.state.RandomCutForestState;
+
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
 import io.protostuff.runtime.RuntimeSchema;
 import lombok.experimental.UtilityClass;
-import org.opensearch.ml.common.MLModel;
-
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-
-import static org.opensearch.ml.engine.utils.ModelSerDeSer.decodeBase64;
 
 @UtilityClass
 public class RCFModelSerDeSer {
     private static final int SERIALIZATION_BUFFER_BYTES = 512;
-    private static final Schema<RandomCutForestState> rcfSchema =
-            AccessController.doPrivileged((PrivilegedAction<Schema<RandomCutForestState>>) () ->
-                    RuntimeSchema.getSchema(RandomCutForestState.class));
-    private static final Schema<ThresholdedRandomCutForestState> trcfSchema =
-            AccessController.doPrivileged((PrivilegedAction<Schema<ThresholdedRandomCutForestState>>) () ->
-                    RuntimeSchema.getSchema(ThresholdedRandomCutForestState.class));
+    private static final Schema<RandomCutForestState> rcfSchema = AccessController
+        .doPrivileged((PrivilegedAction<Schema<RandomCutForestState>>) () -> RuntimeSchema.getSchema(RandomCutForestState.class));
+    private static final Schema<ThresholdedRandomCutForestState> trcfSchema = AccessController
+        .doPrivileged(
+            (PrivilegedAction<Schema<ThresholdedRandomCutForestState>>) () -> RuntimeSchema.getSchema(ThresholdedRandomCutForestState.class)
+        );
 
     public static byte[] serializeRCF(RandomCutForestState model) {
         return serialize(model, rcfSchema);
