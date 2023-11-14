@@ -379,19 +379,17 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
         when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
         MLRegisterModelInput pretrainedInput = mockPretrainedInput();
-        doAnswer(
-                invocation -> {
-                    ActionListener<MLRegisterModelInput> listener = (ActionListener<MLRegisterModelInput>) invocation.getArguments()[2];
-                    listener.onResponse(pretrainedInput);
-                    return null;
-                }
-        ).when(modelHelper).downloadPrebuiltModelConfig(any(), any(), any());
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelInput> listener = (ActionListener<MLRegisterModelInput>) invocation.getArguments()[2];
+            listener.onResponse(pretrainedInput);
+            return null;
+        }).when(modelHelper).downloadPrebuiltModelConfig(any(), any(), any());
         MLTask pretrainedTask = MLTask
-                .builder()
-                .taskId("pretrained")
-                .modelId("pretrained")
-                .functionName(FunctionName.TEXT_EMBEDDING)
-                .build();
+            .builder()
+            .taskId("pretrained")
+            .modelId("pretrained")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .build();
         modelManager.registerMLModel(pretrainedInput, pretrainedTask);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.SPARSE_ENCODING);
 
@@ -941,15 +939,14 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         return input;
     }
 
-    private MLRegisterModelInput mockPretrainedInput()
-    {
+    private MLRegisterModelInput mockPretrainedInput() {
         return MLRegisterModelInput
-                .builder()
-                .modelName(modelName)
-                .version(version)
-                .modelGroupId("modelGroupId")
-                .modelFormat(modelFormat)
-                .functionName(FunctionName.SPARSE_ENCODING)
-                .build();
+            .builder()
+            .modelName(modelName)
+            .version(version)
+            .modelGroupId("modelGroupId")
+            .modelFormat(modelFormat)
+            .functionName(FunctionName.SPARSE_ENCODING)
+            .build();
     }
 }
