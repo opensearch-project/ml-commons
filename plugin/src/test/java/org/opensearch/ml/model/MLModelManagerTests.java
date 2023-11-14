@@ -400,7 +400,13 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .build();
         modelManager.registerMLModel(pretrainedInput, pretrainedTask);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.SPARSE_ENCODING);
-        verify(mlTaskManager).updateMLTask(eq("pretrained"), eq(ImmutableMap.of(FUNCTION_NAME_FIELD, FunctionName.SPARSE_ENCODING)), eq((long) TIMEOUT_IN_MILLIS), eq(false));
+        verify(mlTaskManager)
+            .updateMLTask(
+                eq("pretrained"),
+                eq(ImmutableMap.of(FUNCTION_NAME_FIELD, FunctionName.SPARSE_ENCODING)),
+                eq((long) TIMEOUT_IN_MILLIS),
+                eq(false)
+            );
     }
 
     @Ignore
