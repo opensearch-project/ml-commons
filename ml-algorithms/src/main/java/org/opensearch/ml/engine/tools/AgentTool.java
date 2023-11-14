@@ -69,6 +69,16 @@ public class AgentTool implements Tool {
     }
 
     @Override
+    public String getName() {
+        return this.name;
+    }
+
+    @Override
+    public void setName(String s) {
+        this.name = s;
+    }
+
+    @Override
     public boolean validate(Map<String, String> parameters) {
         return true;
     }

@@ -135,6 +135,9 @@ public class MLAgentExecutor implements Executable {
                             } else if ("cot".equals(mlAgent.getType())) {
                                 MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
                                 reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
+                            } else if ("conversational".equals(mlAgent.getType())) {
+                                MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                                chatAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             }
                         }
                     } else {

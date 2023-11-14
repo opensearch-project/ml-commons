@@ -44,8 +44,9 @@ public interface Tool {
     default void setOutputParser(Parser<?, ?> parser) {};
 
     /**
-     * Get tool type mapping to the run function.
-     * @return the tool type mapping
+     * Get tool type.
+     * Agent uses the type to find the tool.
+     * @return the tool type
      */
     String getType();
 

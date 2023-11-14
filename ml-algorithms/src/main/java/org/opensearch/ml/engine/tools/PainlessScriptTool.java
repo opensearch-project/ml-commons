@@ -75,6 +75,16 @@ public class PainlessScriptTool implements Tool {
     }
 
     @Override
+    public String getName() {
+        return this.name;
+    }
+
+    @Override
+    public void setName(String s) {
+        this.name = s;
+    }
+
+    @Override
     public boolean validate(Map<String, String> parameters) {
         if (parameters == null || parameters.size() == 0) {
             return false;
