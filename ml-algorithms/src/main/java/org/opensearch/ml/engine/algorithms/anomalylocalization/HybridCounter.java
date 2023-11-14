@@ -8,8 +8,9 @@ package org.opensearch.ml.engine.algorithms.anomalylocalization;
 import java.util.List;
 import java.util.Map;
 
-import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  * A hybrid counter that starts with exact counting with map and switches to approximate counting with sketch as the size grows.

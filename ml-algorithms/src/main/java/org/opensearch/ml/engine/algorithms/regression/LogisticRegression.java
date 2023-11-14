@@ -5,6 +5,14 @@
 
 package org.opensearch.ml.engine.algorithms.regression;
 
+import static org.opensearch.ml.engine.utils.ModelSerDeSer.serializeToBase64;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
@@ -39,23 +47,16 @@ import org.tribuo.math.optimisers.Adam;
 import org.tribuo.math.optimisers.RMSProp;
 import org.tribuo.math.optimisers.SGD;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.opensearch.ml.engine.utils.ModelSerDeSer.serializeToBase64;
-
 @Function(FunctionName.LOGISTIC_REGRESSION)
 public class LogisticRegression implements Trainable, Predictable {
     public static final String VERSION = "1.0.0";
-    private static final LogisticRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE = LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
+    private static final LogisticRegressionParams.ObjectiveType DEFAULT_OBJECTIVE_TYPE =
+        LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
     private static final LogisticRegressionParams.OptimizerType DEFAULT_OPTIMIZER_TYPE = LogisticRegressionParams.OptimizerType.ADA_GRAD;
     private static final LogisticRegressionParams.MomentumType DEFAULT_MOMENTUM_TYPE = LogisticRegressionParams.MomentumType.STANDARD;
     private static final double DEFAULT_LEARNING_RATE = 1.0;
 
-    //AdaGrad, AdaDelta, AdaGradRDA, Adam, RMSProp
+    // AdaGrad, AdaDelta, AdaGradRDA, Adam, RMSProp
     private static final double DEFAULT_EPSILON = 0.1;
     private static final int DEFAULT_EPOCHS = 5;
     private static final int DEFAULT_LOGGING_INTERVAL = 1000;
@@ -64,7 +65,7 @@ public class LogisticRegression implements Trainable, Predictable {
     private static final double DEFAULT_MOMENTUM_FACTOR = 0;
     private static final double DEFAULT_BETA1 = 0.9;
     private static final double DEFAULT_BETA2 = 0.99;
-    //RMSProp
+    // RMSProp
     private static final double DEFAULT_DECAY_RATE = 0.9;
 
     private int epochs;
@@ -82,7 +83,7 @@ public class LogisticRegression implements Trainable, Predictable {
      * @param parameters the parameters for linear regression algorithm
      */
     public LogisticRegression(MLAlgoParams parameters) {
-        this.parameters = parameters == null ? LogisticRegressionParams.builder().build() : (LogisticRegressionParams)parameters;
+        this.parameters = parameters == null ? LogisticRegressionParams.builder().build() : (LogisticRegressionParams) parameters;
         validateParameters();
         createObjective();
         createOptimiser();
@@ -117,7 +118,9 @@ public class LogisticRegression implements Trainable, Predictable {
     }
 
     private void createObjective() {
-        LogisticRegressionParams.ObjectiveType objectiveType = Optional.ofNullable(parameters.getObjectiveType()).orElse(DEFAULT_OBJECTIVE_TYPE);
+        LogisticRegressionParams.ObjectiveType objectiveType = Optional
+            .ofNullable(parameters.getObjectiveType())
+            .orElse(DEFAULT_OBJECTIVE_TYPE);
         switch (objectiveType) {
             case HINGE:
                 objective = new Hinge();
@@ -129,11 +132,15 @@ public class LogisticRegression implements Trainable, Predictable {
     }
 
     private void createOptimiser() {
-        LogisticRegressionParams.OptimizerType optimizerType = Optional.ofNullable(parameters.getOptimizerType()).orElse(DEFAULT_OPTIMIZER_TYPE);
+        LogisticRegressionParams.OptimizerType optimizerType = Optional
+            .ofNullable(parameters.getOptimizerType())
+            .orElse(DEFAULT_OPTIMIZER_TYPE);
         Double learningRate = Optional.ofNullable(parameters.getLearningRate()).orElse(DEFAULT_LEARNING_RATE);
         Double epsilon = Optional.ofNullable(parameters.getEpsilon()).orElse(DEFAULT_EPSILON);
         Double momentumFactor = Optional.ofNullable(parameters.getMomentumFactor()).orElse(DEFAULT_MOMENTUM_FACTOR);
-        LogisticRegressionParams.MomentumType momentumType = Optional.ofNullable(parameters.getMomentumType()).orElse(DEFAULT_MOMENTUM_TYPE);
+        LogisticRegressionParams.MomentumType momentumType = Optional
+            .ofNullable(parameters.getMomentumType())
+            .orElse(DEFAULT_MOMENTUM_TYPE);
         Double beta1 = Optional.ofNullable(parameters.getBeta1()).orElse(DEFAULT_BETA1);
         Double beta2 = Optional.ofNullable(parameters.getBeta2()).orElse(DEFAULT_BETA2);
         Double decayRate = Optional.ofNullable(parameters.getDecayRate()).orElse(DEFAULT_DECAY_RATE);
@@ -167,7 +174,7 @@ public class LogisticRegression implements Trainable, Predictable {
                 optimiser = SGD.getSimpleSGD(learningRate, momentumFactor, momentum);
                 break;
             default:
-                //Use default SGD with a constant learning rate.
+                // Use default SGD with a constant learning rate.
                 optimiser = new AdaGrad(learningRate, epsilon);
                 break;
         }
@@ -175,26 +182,33 @@ public class LogisticRegression implements Trainable, Predictable {
 
     @Override
     public MLModel train(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
-        MutableDataset<Label> trainDataset = TribuoUtil.generateDatasetWithTarget(dataFrame, new LabelFactory(),
-                "Logistic regression training data from OpenSearch", TribuoOutputType.LABEL, parameters.getTarget());
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
+        MutableDataset<Label> trainDataset = TribuoUtil
+            .generateDatasetWithTarget(
+                dataFrame,
+                new LabelFactory(),
+                "Logistic regression training data from OpenSearch",
+                TribuoOutputType.LABEL,
+                parameters.getTarget()
+            );
         // LinearSGDTrainer(objective=LogMulticlass,optimiser=AdaGrad(initialLearningRate=1.0,epsilon=0.1,initialValue=0.0),epochs=5,minibatchSize=1,seed=12345)
         Trainer<Label> logisticRegressionTrainer = new LinearSGDTrainer(objective, optimiser, epochs, loggingInterval, minibatchSize, seed);
         org.tribuo.Model<Label> classificationModel = logisticRegressionTrainer.train(trainDataset);
 
-        MLModel model = MLModel.builder()
-                .name(FunctionName.LOGISTIC_REGRESSION.name())
-                .algorithm(FunctionName.LOGISTIC_REGRESSION)
-                .version(VERSION)
-                .content(serializeToBase64(classificationModel))
-                .modelState(MLModelState.TRAINED)
-                .build();
+        MLModel model = MLModel
+            .builder()
+            .name(FunctionName.LOGISTIC_REGRESSION.name())
+            .algorithm(FunctionName.LOGISTIC_REGRESSION)
+            .version(VERSION)
+            .content(serializeToBase64(classificationModel))
+            .modelState(MLModelState.TRAINED)
+            .build();
         return model;
     }
 
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
-        this.classificationModel = (org.tribuo.Model<Label>)ModelSerDeSer.deserialize(model);
+        this.classificationModel = (org.tribuo.Model<Label>) ModelSerDeSer.deserialize(model);
     }
 
     @Override
@@ -209,9 +223,9 @@ public class LogisticRegression implements Trainable, Predictable {
 
     @Override
     public MLOutput predict(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
-        MutableDataset<Label> predictionDataset = TribuoUtil.generateDataset(dataFrame, new LabelFactory(),
-                "Logistic regression prediction data from OpenSearch", TribuoOutputType.LABEL);
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
+        MutableDataset<Label> predictionDataset = TribuoUtil
+            .generateDataset(dataFrame, new LabelFactory(), "Logistic regression prediction data from OpenSearch", TribuoOutputType.LABEL);
 
         List<Prediction<Label>> predictions = classificationModel.predict(predictionDataset);
         List<Map<String, Object>> listPrediction = new ArrayList<>();
@@ -226,7 +240,7 @@ public class LogisticRegression implements Trainable, Predictable {
             throw new IllegalArgumentException("No model found for logistic regression prediction.");
         }
 
-        classificationModel = (org.tribuo.Model<Label>)ModelSerDeSer.deserialize(model);
+        classificationModel = (org.tribuo.Model<Label>) ModelSerDeSer.deserialize(model);
         return predict(mlInput);
     }
 }

@@ -5,15 +5,21 @@
 
 package org.opensearch.ml.engine.algorithms.ad;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
-import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.ad.AnomalyDetectionLibSVMParams;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -35,12 +41,6 @@ import org.tribuo.common.libsvm.KernelType;
 import org.tribuo.common.libsvm.LibSVMModel;
 import org.tribuo.common.libsvm.SVMParameters;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
 /**
  * Wrap Tribuo's anomaly detection based on one-class SVM (libSVM).
  *
@@ -58,7 +58,7 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     public AnomalyDetectionLibSVM() {}
 
     public AnomalyDetectionLibSVM(MLAlgoParams parameters) {
-        this.parameters = parameters == null ? AnomalyDetectionLibSVMParams.builder().build() : (AnomalyDetectionLibSVMParams)parameters;
+        this.parameters = parameters == null ? AnomalyDetectionLibSVMParams.builder().build() : (AnomalyDetectionLibSVMParams) parameters;
         validateParameters();
     }
 
@@ -92,13 +92,18 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
     @Override
     public MLOutput predict(MLInput mlInput) {
         MLInputDataset inputDataset = mlInput.getInputDataset();
-        DataFrame dataFrame = ((DataFrameInputDataset)inputDataset).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) inputDataset).getDataFrame();
         if (libSVMAnomalyModel == null) {
             throw new IllegalArgumentException("model not deployed");
         }
         List<Prediction<Event>> predictions;
-        MutableDataset<Event> predictionDataset = TribuoUtil.generateDataset(dataFrame, new AnomalyFactory(),
-                "Anomaly detection LibSVM prediction data from OpenSearch", TribuoOutputType.ANOMALY_DETECTION_LIBSVM);
+        MutableDataset<Event> predictionDataset = TribuoUtil
+            .generateDataset(
+                dataFrame,
+                new AnomalyFactory(),
+                "Anomaly detection LibSVM prediction data from OpenSearch",
+                TribuoOutputType.ANOMALY_DETECTION_LIBSVM
+            );
         predictions = libSVMAnomalyModel.predict(predictionDataset);
 
         List<Map<String, Object>> adResults = new ArrayList<>();
@@ -124,7 +129,7 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
 
     @Override
     public MLModel train(MLInput mlInput) {
-        DataFrame dataFrame = ((DataFrameInputDataset)mlInput.getInputDataset()).getDataFrame();
+        DataFrame dataFrame = ((DataFrameInputDataset) mlInput.getInputDataset()).getDataFrame();
         KernelType kernelType = parseKernelType();
         SVMParameters params = new SVMParameters<>(new SVMAnomalyType(SVMAnomalyType.SVMMode.ONE_CLASS), kernelType);
         Double gamma = Optional.ofNullable(parameters.getGamma()).orElse(DEFAULT_GAMMA);
@@ -143,21 +148,27 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
         if (parameters.getDegree() != null) {
             params.setDegree(parameters.getDegree());
         }
-        MutableDataset<Event> data = TribuoUtil.generateDataset(dataFrame, new AnomalyFactory(),
-                "Anomaly detection LibSVM training data from OpenSearch", TribuoOutputType.ANOMALY_DETECTION_LIBSVM);
+        MutableDataset<Event> data = TribuoUtil
+            .generateDataset(
+                dataFrame,
+                new AnomalyFactory(),
+                "Anomaly detection LibSVM training data from OpenSearch",
+                TribuoOutputType.ANOMALY_DETECTION_LIBSVM
+            );
 
         LibSVMAnomalyTrainer trainer = new LibSVMAnomalyTrainer(params);
 
         LibSVMModel libSVMModel = trainer.train(data);
-        ((LibSVMAnomalyModel)libSVMModel).getNumberOfSupportVectors();
+        ((LibSVMAnomalyModel) libSVMModel).getNumberOfSupportVectors();
 
-        MLModel model = MLModel.builder()
-                .name(FunctionName.AD_LIBSVM.name())
-                .algorithm(FunctionName.AD_LIBSVM)
-                .version(VERSION)
-                .content(ModelSerDeSer.serializeToBase64(libSVMModel))
-                .modelState(MLModelState.TRAINED)
-                .build();
+        MLModel model = MLModel
+            .builder()
+            .name(FunctionName.AD_LIBSVM.name())
+            .algorithm(FunctionName.AD_LIBSVM)
+            .version(VERSION)
+            .content(ModelSerDeSer.serializeToBase64(libSVMModel))
+            .modelState(MLModelState.TRAINED)
+            .build();
         return model;
     }
 
@@ -166,7 +177,7 @@ public class AnomalyDetectionLibSVM implements Trainable, Predictable {
         if (parameters.getKernelType() == null) {
             return kernelType;
         }
-        switch (parameters.getKernelType()){
+        switch (parameters.getKernelType()) {
             case LINEAR:
                 kernelType = KernelType.LINEAR;
                 break;

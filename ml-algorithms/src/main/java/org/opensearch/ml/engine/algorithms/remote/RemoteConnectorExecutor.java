@@ -5,6 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -17,13 +24,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processInput;
 
 public interface RemoteConnectorExecutor {
 
@@ -44,18 +44,23 @@ public interface RemoteConnectorExecutor {
                 processedDocs += Math.max(tensorCount, 1);
                 tensorOutputs.addAll(tempTensorOutputs);
             }
-
         } else {
             preparePayloadAndInvokeRemoteModel(mlInput, tensorOutputs);
         }
         return new ModelTensorOutput(tensorOutputs);
     }
-    default void setScriptService(ScriptService scriptService){}
+
+    default void setScriptService(ScriptService scriptService) {}
+
     ScriptService getScriptService();
+
     Connector getConnector();
-    default void setClient(Client client){}
-    default void setXContentRegistry(NamedXContentRegistry xContentRegistry){}
-    default void setClusterService(ClusterService clusterService){}
+
+    default void setClient(Client client) {}
+
+    default void setXContentRegistry(NamedXContentRegistry xContentRegistry) {}
+
+    default void setClusterService(ClusterService clusterService) {}
 
     default void preparePayloadAndInvokeRemoteModel(MLInput mlInput, List<ModelTensors> tensorOutputs) {
         Connector connector = getConnector();
@@ -79,6 +84,5 @@ public interface RemoteConnectorExecutor {
     }
 
     void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs);
-
 
 }
