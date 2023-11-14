@@ -8,7 +8,9 @@ package org.opensearch.ml.settings;
 import java.util.List;
 import java.util.function.Function;
 
+import org.opensearch.common.settings.SecureSetting;
 import org.opensearch.common.settings.Setting;
+import org.opensearch.core.common.settings.SecureString;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
@@ -16,6 +18,10 @@ import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAP
 public final class MLCommonsSettings {
 
     private MLCommonsSettings() {}
+
+    public static final Setting<SecureString> ENCRYPTION_SETTING = SecureSetting.secureString(
+            "ml-commons.encryption_key", null
+    );
 
     public static final Setting<String> ML_COMMONS_TASK_DISPATCH_POLICY = Setting
         .simpleString("plugins.ml_commons.task_dispatch_policy", "round_robin", Setting.Property.NodeScope, Setting.Property.Dynamic);

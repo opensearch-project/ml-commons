@@ -27,6 +27,8 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
     private final ClusterService clusterService;
     private Client client;
 
+    private Settings settings;
+
     private ThreadPool threadPool;
     private Scheduler.Cancellable syncModelRoutingCron;
     private DiscoveryNodeHelper nodeHelper;
@@ -58,6 +60,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
             cancel(syncModelRoutingCron);
             startSyncModelRoutingCron();
         });
+        this.settings = settings;
     }
 
     @Override
@@ -71,7 +74,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         if (jobInterval > 0) {
             syncModelRoutingCron = threadPool
                 .scheduleWithFixedDelay(
-                    new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor),
+                    new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor, settings),
                     TimeValue.timeValueSeconds(jobInterval),
                     GENERAL_THREAD_POOL
                 );

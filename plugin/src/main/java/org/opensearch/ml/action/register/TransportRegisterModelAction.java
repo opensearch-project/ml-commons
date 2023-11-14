@@ -7,8 +7,7 @@ package org.opensearch.ml.action.register;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
@@ -30,6 +29,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.settings.SecureString;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
@@ -90,6 +90,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
 
+    SecureString encryptionKey;
+
     @Inject
     public TransportRegisterModelAction(
         TransportService transportService,
@@ -132,6 +134,13 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+        encryptionKey = ENCRYPTION_SETTING.get(settings);
+        if (encryptionKey != null) {
+            log.info("Encryption key at load time: ", encryptionKey.toString());
+        } else {
+            log.info("Encryption key is not loaded");
+        }
+
     }
 
     @Override
@@ -139,6 +148,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
         registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
+        if (encryptionKey != null) {
+            log.info("Encryption key at load time: ", encryptionKey.toString());
+        } else {
+            log.info("Encryption key is not loaded");
+        }
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null
