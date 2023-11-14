@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine;
 
-import org.opensearch.ml.common.MLModel;
-
 import java.util.Map;
+
+import org.opensearch.ml.common.MLModel;
 
 public interface MLExecutable extends Executable {
 

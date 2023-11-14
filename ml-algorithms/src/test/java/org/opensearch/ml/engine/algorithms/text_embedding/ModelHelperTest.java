@@ -5,6 +5,20 @@
 
 package org.opensearch.ml.engine.algorithms.text_embedding;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.verify;
+
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.security.PrivilegedActionException;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -21,20 +35,6 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.file.Path;
-import java.security.PrivilegedActionException;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.verify;
 
 public class ModelHelperTest {
     @Rule
@@ -67,7 +67,8 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit_UrlFailure() {
         modelId = "url_failure_model_id";
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, FunctionName.TEXT_EMBEDDING, actionListener);
+        modelHelper
+            .downloadAndSplit(modelFormat, modelId, "model_name", "1", "http://testurl", null, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(PrivilegedActionException.class, argumentCaptor.getValue().getClass());
@@ -76,7 +77,8 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, FunctionName.TEXT_EMBEDDING, actionListener);
+        modelHelper
+            .downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
@@ -86,7 +88,17 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit_HashFailure() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, "wrong_hash_value", FunctionName.TEXT_EMBEDDING, actionListener);
+        modelHelper
+            .downloadAndSplit(
+                modelFormat,
+                modelId,
+                "model_name",
+                "1",
+                modelUrl,
+                "wrong_hash_value",
+                FunctionName.TEXT_EMBEDDING,
+                actionListener
+            );
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(IllegalArgumentException.class, argumentCaptor.getValue().getClass());
@@ -95,7 +107,8 @@ public class ModelHelperTest {
     @Test
     public void testDownloadAndSplit_Hash() throws URISyntaxException {
         String modelUrl = getClass().getResource("traced_small_model.zip").toURI().toString();
-        modelHelper.downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, FunctionName.TEXT_EMBEDDING, actionListener);
+        modelHelper
+            .downloadAndSplit(modelFormat, modelId, "model_name", "1", modelUrl, hashValue, FunctionName.TEXT_EMBEDDING, actionListener);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertNotNull(argumentCaptor.getValue());
@@ -143,14 +156,15 @@ public class ModelHelperTest {
     @Test
     public void testDownloadPrebuiltModelConfig_WrongModelName() {
         String taskId = "test_task_id";
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .modelName("test_model_name")
-                .version("1.0.1")
-                .modelGroupId("mockGroupId")
-                .modelFormat(modelFormat)
-                .deployModel(false)
-                .modelNodeIds(new String[]{"node_id1"})
-                .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("test_model_name")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .build();
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(registerModelListener).onFailure(argumentCaptor.capture());
@@ -160,14 +174,15 @@ public class ModelHelperTest {
     @Test
     public void testDownloadPrebuiltModelConfig() {
         String taskId = "test_task_id";
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-                .version("1.0.1")
-                .modelGroupId("mockGroupId")
-                .modelFormat(modelFormat)
-                .deployModel(false)
-                .modelNodeIds(new String[]{"node_id1"})
-                .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .build();
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, registerModelListener);
         ArgumentCaptor<MLRegisterModelInput> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelInput.class);
         verify(registerModelListener).onResponse(argumentCaptor.capture());
@@ -180,29 +195,31 @@ public class ModelHelperTest {
     @Test
     public void testDownloadPrebuiltModelMetaList() throws PrivilegedActionException {
         String taskId = "test_task_id";
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-                .version("1.0.1")
-                .modelGroupId("mockGroupId")
-                .modelFormat(modelFormat)
-                .deployModel(false)
-                .modelNodeIds(new String[]{"node_id1"})
-                .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .build();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
-        assertEquals("huggingface/sentence-transformers/all-distilroberta-v1", ((Map<String, String>)modelMetaList.get(0)).get("name"));
+        assertEquals("huggingface/sentence-transformers/all-distilroberta-v1", ((Map<String, String>) modelMetaList.get(0)).get("name"));
     }
 
     @Test
     public void testIsModelAllowed_true() throws PrivilegedActionException {
         String taskId = "test_task_id";
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-                .version("1.0.1")
-                .modelGroupId("mockGroupId")
-                .modelFormat(modelFormat)
-                .deployModel(false)
-                .modelNodeIds(new String[]{"node_id1"})
-                .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .build();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         assertTrue(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
     }
@@ -210,14 +227,15 @@ public class ModelHelperTest {
     @Test
     public void testIsModelAllowed_WrongModelName() throws PrivilegedActionException {
         String taskId = "test_task_id";
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2-wrong")
-                .version("1.0.1")
-                .modelGroupId("mockGroupId")
-                .modelFormat(modelFormat)
-                .deployModel(false)
-                .modelNodeIds(new String[]{"node_id1"})
-                .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2-wrong")
+            .version("1.0.1")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .build();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         assertFalse(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
     }
@@ -225,14 +243,15 @@ public class ModelHelperTest {
     @Test
     public void testIsModelAllowed_WrongModelVersion() throws PrivilegedActionException {
         String taskId = "test_task_id";
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-                .version("000")
-                .modelGroupId("mockGroupId")
-                .modelFormat(modelFormat)
-                .deployModel(false)
-                .modelNodeIds(new String[]{"node_id1"})
-                .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
+            .version("000")
+            .modelGroupId("mockGroupId")
+            .modelFormat(modelFormat)
+            .deployModel(false)
+            .modelNodeIds(new String[] { "node_id1" })
+            .build();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         assertFalse(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
     }
