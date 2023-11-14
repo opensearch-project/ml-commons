@@ -202,7 +202,7 @@ public class MLChatAgentRunner {
 
         final List<String> inputTools = new ArrayList<>();
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getName());
+            String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getType());
             inputTools.add(toolName);
         }
 
@@ -232,7 +232,7 @@ public class MLChatAgentRunner {
         //Create root interaction.
         StepListener<CreateInteractionResponse> createRootItListener = new StepListener<>();
         ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
-        ConversationIndexMessage msg = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).finalAnswer(true).sessionId(sessionId).build();
+        ConversationIndexMessage msg = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response("").finalAnswer(true).sessionId(sessionId).build();
         conversationIndexMemory.save(msg, null, null, createRootItListener);
 
         //Trace number
