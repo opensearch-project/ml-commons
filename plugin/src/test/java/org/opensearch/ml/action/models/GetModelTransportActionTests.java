@@ -93,6 +93,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
@@ -178,6 +179,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             .modelId("test_id")
             .modelState(MLModelState.REGISTERED)
             .algorithm(FunctionName.TEXT_EMBEDDING)
+            .isHidden(false)
             .build();
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);

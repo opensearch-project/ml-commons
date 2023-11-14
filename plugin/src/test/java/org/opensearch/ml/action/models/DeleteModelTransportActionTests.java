@@ -122,6 +122,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
+        when(clusterService.getSettings()).thenReturn(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
