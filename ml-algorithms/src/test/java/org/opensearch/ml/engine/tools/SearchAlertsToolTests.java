@@ -29,7 +29,6 @@ import org.opensearch.client.AdminClient;
 import org.opensearch.client.ClusterAdminClient;
 import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.client.node.NodeClient;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.commons.alerting.action.GetAlertsResponse;
 import org.opensearch.commons.alerting.model.Alert;
 import org.opensearch.core.action.ActionListener;
@@ -44,8 +43,6 @@ public class SearchAlertsToolTests {
     private IndicesAdminClient indicesAdminClient;
     @Mock
     private ClusterAdminClient clusterAdminClient;
-    @Mock
-    private ClusterService clusterService;
 
     private Map<String, String> nullParams;
     private Map<String, String> emptyParams;
@@ -54,7 +51,7 @@ public class SearchAlertsToolTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        SearchAlertsTool.Factory.getInstance().init(nodeClient, clusterService);
+        SearchAlertsTool.Factory.getInstance().init(nodeClient);
 
         nullParams = null;
         emptyParams = Collections.emptyMap();
