@@ -199,9 +199,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void getTask(String taskId, ActionListener<MLTask> listener) {
         MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
 
-        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, ActionListener.wrap(response -> {
-            listener.onResponse(MLTaskGetResponse.fromActionResponse(response).getMlTask());
-        }, listener::onFailure));
+        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, getMLTaskResponseActionListener(listener));
     }
 
     @Override
@@ -272,6 +270,16 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         }, listener::onFailure);
         ActionListener<MLToolGetResponse> actionListener = wrapActionListener(internalListener, res -> {
             MLToolGetResponse getResponse = MLToolGetResponse.fromActionResponse(res);
+            return getResponse;
+        });
+        return actionListener;
+    }
+
+    private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {
+        ActionListener<MLTaskGetResponse> internalListener = ActionListener
+            .wrap(getResponse -> { listener.onResponse(getResponse.getMlTask()); }, listener::onFailure);
+        ActionListener<MLTaskGetResponse> actionListener = wrapActionListener(internalListener, response -> {
+            MLTaskGetResponse getResponse = MLTaskGetResponse.fromActionResponse(response);
             return getResponse;
         });
         return actionListener;
