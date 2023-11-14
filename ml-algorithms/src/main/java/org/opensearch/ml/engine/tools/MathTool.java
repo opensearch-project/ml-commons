@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
 import lombok.Setter;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -20,20 +19,15 @@ import java.util.regex.Pattern;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executeScript;
 
 @ToolAnnotation(MathTool.TYPE)
-public class MathTool implements Tool {
+public class MathTool extends AbstractTool {
     public static final String TYPE = "MathTool";
-
-    @Setter @Getter
-    private String name = TYPE;
+    private static String DEFAULT_DESCRIPTION = "Use this tool to calculate any math problem.";
 
     @Setter
     private ScriptService scriptService;
 
-    private static String DEFAULT_DESCRIPTION = "Use this tool to calculate any math problem.";
-    @Getter @Setter
-    private String description = DEFAULT_DESCRIPTION;
-
     public MathTool(ScriptService scriptService) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.scriptService = scriptService;
     }
 
@@ -54,26 +48,6 @@ public class MathTool implements Tool {
         }
         String result = executeScript(scriptService, input + "+ \"\"", ImmutableMap.of());
         listener.onResponse((T)result);
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

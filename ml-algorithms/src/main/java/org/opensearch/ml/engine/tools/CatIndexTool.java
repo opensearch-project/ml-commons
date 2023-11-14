@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -49,28 +47,16 @@ import static org.opensearch.action.support.clustermanager.ClusterManagerNodeReq
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @ToolAnnotation(CatIndexTool.TYPE)
-public class CatIndexTool implements Tool {
+public class CatIndexTool extends AbstractTool {
     public static final String TYPE = "CatIndexTool";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
 
-    @Setter
-    @Getter
-    private String name = CatIndexTool.TYPE;
-    @Getter
-    @Setter
-    private String description = DEFAULT_DESCRIPTION;
-    @Getter
-    private String version;
-    
     private Client client;
-    @Setter
-    private Parser<?, ?> inputParser;
-    @Setter
-    private Parser<?, ?> outputParser;
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
     public CatIndexTool(Client client, ClusterService clusterService) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.clusterService = clusterService;
 

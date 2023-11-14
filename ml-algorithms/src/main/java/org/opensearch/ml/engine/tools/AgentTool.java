@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.client.Client;
@@ -27,19 +25,15 @@ import java.util.Map;
  */
 @Log4j2
 @ToolAnnotation(AgentTool.TYPE)
-public class AgentTool implements Tool {
+public class AgentTool extends AbstractTool {
     public static final String TYPE = "AgentTool";
+    private static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
     private final Client client;
 
     private String agentId;
-    @Setter @Getter
-    private String name = TYPE;
-
-    private static String DEFAULT_DESCRIPTION = "Use this tool to run any agent.";
-    @Getter @Setter
-    private String description = DEFAULT_DESCRIPTION;
 
     public AgentTool(Client client, String agentId) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.agentId = agentId;
     }
@@ -56,26 +50,6 @@ public class AgentTool implements Tool {
             listener.onFailure(e);
         }));
 
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

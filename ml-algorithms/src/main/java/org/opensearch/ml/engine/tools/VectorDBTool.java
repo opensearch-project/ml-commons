@@ -35,14 +35,9 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
  */
 @Log4j2
 @ToolAnnotation(VectorDBTool.TYPE)
-public class VectorDBTool implements Tool {
+public class VectorDBTool extends AbstractTool {
     public static final String TYPE = "VectorDBTool";
-    @Setter @Getter
-    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
-    @Getter @Setter
-    private String description = DEFAULT_DESCRIPTION;
-
     private Client client;
     private NamedXContentRegistry xContentRegistry;
     private String index;
@@ -54,6 +49,7 @@ public class VectorDBTool implements Tool {
 
     @Builder
     public VectorDBTool(Client client, NamedXContentRegistry xContentRegistry, String index, String embeddingField, String[] sourceFields, Integer k, Integer docSize, String modelId) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.index = index;
@@ -109,26 +105,6 @@ public class VectorDBTool implements Tool {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

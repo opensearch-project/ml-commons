@@ -25,23 +25,15 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 @Log4j2
 @ToolAnnotation(PainlessScriptTool.TYPE)
-public class PainlessScriptTool implements Tool {
+public class PainlessScriptTool extends AbstractTool {
     public static final String TYPE = "PainlessScriptTool";
-
-    @Setter @Getter
-    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to get index information.";
-    @Getter @Setter
-    private String description = DEFAULT_DESCRIPTION;
+
     private Client client;
-    private String modelId;
-    @Setter
-    private Parser inputParser;
-    @Setter
-    private Parser outputParser;
     private ScriptService scriptService;
 
     public PainlessScriptTool(Client client, ScriptService scriptService) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.scriptService = scriptService;
 
@@ -62,26 +54,6 @@ public class PainlessScriptTool implements Tool {
         Map<String, Object> params = gson.fromJson(parameters.get("script_params"), Map.class);
         String s = ScriptUtils.executeScript(scriptService, painlessScript, params) + "";
         listener.onResponse((T)s);
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override

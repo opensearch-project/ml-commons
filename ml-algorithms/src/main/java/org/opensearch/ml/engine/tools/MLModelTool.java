@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.client.Client;
@@ -31,22 +29,14 @@ import java.util.Map;
  */
 @Log4j2
 @ToolAnnotation(MLModelTool.TYPE)
-public class MLModelTool implements Tool {
+public class MLModelTool extends AbstractTool {
     public static final String TYPE = "MLModelTool";
-
-    @Setter @Getter
-    private String name = TYPE;
     private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
-    @Getter @Setter
-    private String description = DEFAULT_DESCRIPTION;
     private Client client;
     private String modelId;
-    @Setter
-    private Parser inputParser;
-    @Setter
-    private Parser outputParser;
 
     public MLModelTool(Client client, String modelId) {
+        super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.modelId = modelId;
 
@@ -76,26 +66,6 @@ public class MLModelTool implements Tool {
             log.error("Failed to run model " + modelId, e);
             listener.onFailure(e);
         }));
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
-    }
-
-    @Override
-    public String getVersion() {
-        return null;
-    }
-
-    @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
     }
 
     @Override
