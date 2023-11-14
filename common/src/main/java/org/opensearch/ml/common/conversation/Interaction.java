@@ -56,6 +56,23 @@ public class Interaction implements Writeable, ToXContentObject {
     private String origin;
     @Getter
     private Map<String, String> additionalInfo;
+    @Getter
+    private String parentInteractionId;
+    @Getter
+    private Integer traceNum;
+
+    public Interaction(String id, Instant createTime, String conversationId, String input, String promptTemplate, String response, String origin, Map<String, String> additionalInfo) {
+        this.id = id;
+        this.createTime = createTime;
+        this.conversationId = conversationId;
+        this.input = input;
+        this.promptTemplate = promptTemplate;
+        this.response = response;
+        this.origin = origin;
+        this.additionalInfo = additionalInfo;
+        this.parentInteractionId = null;
+        this.traceNum = null;
+    }
 
     /**
      * Creates an Interaction object from a map of fields in the OS index
@@ -71,7 +88,9 @@ public class Interaction implements Writeable, ToXContentObject {
         String response  = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD);
         String origin     = (String) fields.get(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD);
         Map<String,String> additionalInfo  = (Map<String,String>) fields.get(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD);
-        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
+        String parentInteractionId = (String) fields.getOrDefault(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, null);
+        Integer traceNum = (Integer) fields.getOrDefault(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, null);
+        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo, parentInteractionId, traceNum);
     }
 
     /**
@@ -102,7 +121,9 @@ public class Interaction implements Writeable, ToXContentObject {
         if (in.readBoolean()) {
             additionalInfo = in.readMap(s -> s.readString(), s -> s.readString());
         }
-        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo);
+        String parentInteractionId = in.readOptionalString();
+        Integer traceNum = in.readOptionalInt();
+        return new Interaction(id, createTime, conversationId, input, promptTemplate, response, origin, additionalInfo, parentInteractionId, traceNum);
     }
 
 
@@ -121,6 +142,8 @@ public class Interaction implements Writeable, ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalString(parentInteractionId);
+        out.writeOptionalInt(traceNum);
     }
 
     @Override
@@ -135,6 +158,12 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
         if(additionalInfo != null) {
             builder.field(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
+        }
+        if (parentInteractionId != null) {
+            builder.field(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parentInteractionId);
+        }
+        if (traceNum != null) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, traceNum);
         }
         builder.endObject();
         return builder;

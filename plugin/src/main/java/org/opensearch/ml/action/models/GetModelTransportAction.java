@@ -8,13 +8,13 @@ package org.opensearch.ml.action.models;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
+import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -77,6 +77,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
+        boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModelGetResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
@@ -84,30 +85,41 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                 if (r != null && r.isExists()) {
                     try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        GetResponse getResponse = r;
-                        String algorithmName = getResponse.getSource().get(ALGORITHM_FIELD).toString();
-
+                        String algorithmName = r.getSource().get(ALGORITHM_FIELD).toString();
+                        Boolean isHidden = (Boolean) r.getSource().get(IS_HIDDEN_FIELD);
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
-                        modelAccessControlHelper
-                            .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                if (!access) {
-                                    wrappedListener
-                                        .onFailure(
-                                            new MLValidationException("User Doesn't have privilege to perform this operation on this model")
-                                        );
-                                } else {
-                                    log.debug("Completed Get Model Request, id:{}", modelId);
-                                    Connector connector = mlModel.getConnector();
-                                    if (connector != null) {
-                                        connector.removeCredential();
+                        if (isHidden != null && isHidden) {
+                            if (isSuperAdmin) {
+                                wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                    );
+                            }
+                        } else {
+                            modelAccessControlHelper
+                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                                    if (!access) {
+                                        wrappedListener
+                                            .onFailure(
+                                                new MLValidationException(
+                                                    "User Doesn't have privilege to perform this operation on this model"
+                                                )
+                                            );
+                                    } else {
+                                        log.debug("Completed Get Model Request, id:{}", modelId);
+                                        Connector connector = mlModel.getConnector();
+                                        if (connector != null) {
+                                            connector.removeCredential();
+                                        }
+                                        wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                                     }
-                                    wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
-                                }
-                            }, e -> {
-                                log.error("Failed to validate Access for Model Id " + modelId, e);
-                                wrappedListener.onFailure(e);
-                            }));
-
+                                }, e -> {
+                                    log.error("Failed to validate Access for Model Id " + modelId, e);
+                                    wrappedListener.onFailure(e);
+                                }));
+                        }
                     } catch (Exception e) {
                         log.error("Failed to parse ml model " + r.getId(), e);
                         wrappedListener.onFailure(e);

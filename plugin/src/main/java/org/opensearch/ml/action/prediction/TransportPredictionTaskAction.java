@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -14,6 +15,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -104,7 +106,20 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                         new MLValidationException("User Doesn't have privilege to perform this operation on this model")
                                     );
                             } else {
-                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                if (modelCacheHelper.getQuotaFlag(modelId) != null && !modelCacheHelper.getQuotaFlag(modelId)) {
+                                    wrappedListener
+                                        .onFailure(new OpenSearchStatusException("Quota is depleted.", RestStatus.TOO_MANY_REQUESTS));
+                                } else {
+                                    if (modelCacheHelper.getRateLimiter(modelId) != null
+                                        && !modelCacheHelper.getRateLimiter(modelId).request()) {
+                                        wrappedListener
+                                            .onFailure(
+                                                new OpenSearchStatusException("Request is throttled.", RestStatus.TOO_MANY_REQUESTS)
+                                            );
+                                    } else {
+                                        executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                    }
+                                }
                             }
                         }, e -> {
                             log.error("Failed to Validate Access for ModelId " + modelId, e);

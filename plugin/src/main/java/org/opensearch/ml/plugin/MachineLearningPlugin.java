@@ -53,7 +53,9 @@ import org.opensearch.ml.action.model_group.TransportRegisterModelGroupAction;
 import org.opensearch.ml.action.model_group.TransportUpdateModelGroupAction;
 import org.opensearch.ml.action.models.DeleteModelTransportAction;
 import org.opensearch.ml.action.models.GetModelTransportAction;
+import org.opensearch.ml.action.models.InPlaceUpdateModelTransportAction;
 import org.opensearch.ml.action.models.SearchModelTransportAction;
+import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
@@ -105,9 +107,11 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.model.MLInPlaceUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
+import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
@@ -138,6 +142,7 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
@@ -157,6 +162,7 @@ import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationsTransportAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsTransportAction;
+import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -188,6 +194,7 @@ import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
 import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
+import org.opensearch.ml.rest.RestMLUpdateModelAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
@@ -308,6 +315,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 new ActionHandler<>(MLUndeployModelsAction.INSTANCE, TransportUndeployModelsAction.class),
                 new ActionHandler<>(MLRegisterModelMetaAction.INSTANCE, TransportRegisterModelMetaAction.class),
                 new ActionHandler<>(MLUploadModelChunkAction.INSTANCE, TransportUploadModelChunkAction.class),
+                new ActionHandler<>(MLUpdateModelAction.INSTANCE, UpdateModelTransportAction.class),
+                new ActionHandler<>(MLInPlaceUpdateModelAction.INSTANCE, InPlaceUpdateModelTransportAction.class),
                 new ActionHandler<>(MLForwardAction.INSTANCE, TransportForwardAction.class),
                 new ActionHandler<>(MLSyncUpAction.INSTANCE, TransportSyncUpOnNodeAction.class),
                 new ActionHandler<>(MLRegisterModelGroupAction.INSTANCE, TransportRegisterModelGroupAction.class),
@@ -485,9 +494,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
             toolFactories.putAll(externalToolFactories);
         }
 
+        MLMemoryManager memoryManager = new MLMemoryManager(client, clusterService, new ConversationMetaIndex(client, clusterService));
         Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
-        conversationIndexMemoryFactory.init(client, mlIndicesHandler);
+        conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
@@ -602,6 +612,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
         RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
         RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
@@ -625,6 +636,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 restMLGetModelAction,
                 restMLDeleteModelAction,
                 restMLSearchModelAction,
+                restMLUpdateModelAction,
                 restMLGetTaskAction,
                 restMLDeleteTaskAction,
                 restMLSearchTaskAction,
@@ -757,7 +769,6 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                 MLCommonsSettings.ML_COMMONS_REMOTE_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ELIGIBLE_NODE_ROLES,
                 MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED,
-                MLCommonsSettings.ML_COMMONS_UPDATE_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED,
                 MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED
             );

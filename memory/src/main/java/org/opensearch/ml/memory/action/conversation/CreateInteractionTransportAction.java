@@ -89,18 +89,18 @@ public class CreateInteractionTransportAction extends HandledTransportAction<Cre
         String ogn = request.getOrigin();
         String prompt = request.getPromptTemplate();
         Map<String, String> additionalInfo = request.getAdditionalInfo();
-        String parintid = request.getParent_interaction_id();
-        Integer traceNumber = request.getTrace_number();
+        String parentId = request.getParentInteractionId();
+        Integer traceNumber = request.getTraceNum();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateInteractionResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener
                 .wrap(iid -> { internalListener.onResponse(new CreateInteractionResponse(iid)); }, e -> {
                     internalListener.onFailure(e);
                 });
-            if (parintid == null || traceNumber == null) {
+            if (parentId == null || traceNumber == null) {
                 cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al);
             } else {
-                cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al, parintid, traceNumber);
+                cmHandler.createInteraction(cid, inp, prompt, rsp, ogn, additionalInfo, al, parentId, traceNumber);
             }
         } catch (Exception e) {
             log.error("Failed to create interaction for conversation " + cid, e);

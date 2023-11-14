@@ -20,6 +20,7 @@ import java.util.UUID;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -61,7 +62,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
-public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
+public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
     private UpdateConnectorTransportAction transportUpdateConnectorAction;
 
@@ -200,6 +201,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).getConnector(any(Client.class), any(String.class), isA(ActionListener.class));
     }
 
+    @Test
     public void test_execute_connectorAccessControl_success() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
@@ -219,6 +221,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(updateResponse);
     }
 
+    @Test
     public void test_execute_connectorAccessControl_NoPermission() {
         doReturn(false).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
@@ -231,6 +234,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_execute_connectorAccessControl_AccessError() {
         doThrow(new RuntimeException("Connector Access Control Error"))
             .when(connectorAccessControlHelper)
@@ -242,6 +246,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("Connector Access Control Error", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_connectorAccessControl_Exception() {
         doThrow(new RuntimeException("exception in access control"))
             .when(connectorAccessControlHelper)
@@ -253,6 +258,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("exception in access control", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_UpdateWrongStatus() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
@@ -273,6 +279,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(updateResponse);
     }
 
+    @Test
     public void test_execute_UpdateException() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
@@ -294,6 +301,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("update document failure", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_SearchResponseNotEmpty() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
@@ -311,6 +319,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_execute_SearchResponseError() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 
@@ -326,6 +335,7 @@ public class TransportUpdateConnectorActionTests extends OpenSearchTestCase {
         assertEquals("Error in Search Request", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_SearchIndexNotFoundError() {
         doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
 

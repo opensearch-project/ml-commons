@@ -43,13 +43,10 @@ public class MLAgent implements ToXContentObject, Writeable {
     private String name;
     private String type;
     private String description;
-    private String prompt;
-    private String modelId;
     private LLMSpec llm;
     private List<MLToolSpec> tools;
     private Map<String, String> parameters;
     private MLMemorySpec memory;
-    private String memoryId;
 
     private Instant createdTime;
     private Instant lastUpdateTime;
@@ -142,7 +139,6 @@ public class MLAgent implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalString(memoryId);
         out.writeInstant(createdTime);
         out.writeInstant(lastUpdateTime);
     }

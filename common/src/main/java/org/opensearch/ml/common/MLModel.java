@@ -23,10 +23,12 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 
 import java.io.IOException;
+import java.sql.Time;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.USER;
@@ -50,8 +52,13 @@ public class MLModel implements ToXContentObject {
     public static final String MODEL_FORMAT_FIELD = "model_format";
     public static final String MODEL_STATE_FIELD = "model_state";
     public static final String MODEL_CONTENT_SIZE_IN_BYTES_FIELD = "model_content_size_in_bytes";
-    //SHA256 hash value of model content.
+    // SHA256 hash value of model content.
     public static final String MODEL_CONTENT_HASH_VALUE_FIELD = "model_content_hash_value";
+
+    // Model level quota and throttling control
+    public static final String QUOTA_FLAG_FIELD = "quota_flag";
+    public static final String RATE_LIMIT_NUMBER_FIELD = "rate_limit_number";
+    public static final String RATE_LIMIT_UNIT_FIELD = "rate_limit_unit";
 
     public static final String MODEL_CONFIG_FIELD = "model_config";
     public static final String CREATED_TIME_FIELD = "created_time";
@@ -75,6 +82,8 @@ public class MLModel implements ToXContentObject {
     public static final String CURRENT_WORKER_NODE_COUNT_FIELD = "current_worker_node_count";
     public static final String PLANNING_WORKER_NODES_FIELD = "planning_worker_nodes";
     public static final String DEPLOY_TO_ALL_NODES_FIELD = "deploy_to_all_nodes";
+
+    public static final String IS_HIDDEN_FIELD = "is_hidden";
     public static final String CONNECTOR_FIELD = "connector";
     public static final String CONNECTOR_ID_FIELD = "connector_id";
 
@@ -92,6 +101,9 @@ public class MLModel implements ToXContentObject {
     private Long modelContentSizeInBytes;
     private String modelContentHash;
     private MLModelConfig modelConfig;
+    private Boolean quotaFlag;
+    private String rateLimitNumber;
+    private TimeUnit rateLimitUnit;
     private Instant createdTime;
     private Instant lastUpdateTime;
     private Instant lastRegisteredTime;
@@ -110,6 +122,9 @@ public class MLModel implements ToXContentObject {
     private String[] planningWorkerNodes; // plan to deploy model to these nodes
     private boolean deployToAllNodes;
 
+    //is domain manager creates any special hidden model in the cluster this status will be true. Otherwise,
+    // False by default
+    private Boolean isHidden;
     @Setter
     private Connector connector;
     private String connectorId;
@@ -126,6 +141,9 @@ public class MLModel implements ToXContentObject {
                    MLModelState modelState,
                    Long modelContentSizeInBytes,
                    String modelContentHash,
+                   Boolean quotaFlag,
+                   String rateLimitNumber,
+                   TimeUnit rateLimitUnit,
                    MLModelConfig modelConfig,
                    Instant createdTime,
                    Instant lastUpdateTime,
@@ -139,6 +157,7 @@ public class MLModel implements ToXContentObject {
                    Integer currentWorkerNodeCount,
                    String[] planningWorkerNodes,
                    boolean deployToAllNodes,
+                   Boolean isHidden,
                    Connector connector,
                    String connectorId) {
         this.name = name;
@@ -152,6 +171,9 @@ public class MLModel implements ToXContentObject {
         this.modelState = modelState;
         this.modelContentSizeInBytes = modelContentSizeInBytes;
         this.modelContentHash = modelContentHash;
+        this.quotaFlag = quotaFlag;
+        this.rateLimitNumber = rateLimitNumber;
+        this.rateLimitUnit = rateLimitUnit;
         this.modelConfig = modelConfig;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -166,6 +188,7 @@ public class MLModel implements ToXContentObject {
         this.currentWorkerNodeCount = currentWorkerNodeCount;
         this.planningWorkerNodes = planningWorkerNodes;
         this.deployToAllNodes = deployToAllNodes;
+        this.isHidden = isHidden;
         this.connector = connector;
         this.connectorId = connectorId;
     }
@@ -197,6 +220,11 @@ public class MLModel implements ToXContentObject {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
             }
+            quotaFlag = input.readOptionalBoolean();
+            rateLimitNumber = input.readOptionalString();
+            if (input.readBoolean()) {
+                rateLimitUnit = input.readEnum(TimeUnit.class);
+            }
             createdTime = input.readOptionalInstant();
             lastUpdateTime = input.readOptionalInstant();
             lastRegisteredTime = input.readOptionalInstant();
@@ -210,6 +238,7 @@ public class MLModel implements ToXContentObject {
             currentWorkerNodeCount = input.readOptionalInt();
             planningWorkerNodes = input.readOptionalStringArray();
             deployToAllNodes = input.readBoolean();
+            isHidden = input.readOptionalBoolean();
             modelGroupId = input.readOptionalString();
             if (input.readBoolean()) {
                 connector = Connector.fromStream(input);
@@ -250,6 +279,14 @@ public class MLModel implements ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalBoolean(quotaFlag);
+        out.writeOptionalString(rateLimitNumber);
+        if (rateLimitUnit != null) {
+            out.writeBoolean(true);
+            out.writeEnum(rateLimitUnit);
+        } else {
+            out.writeBoolean(false);
+        }
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdateTime);
         out.writeOptionalInstant(lastRegisteredTime);
@@ -263,6 +300,7 @@ public class MLModel implements ToXContentObject {
         out.writeOptionalInt(currentWorkerNodeCount);
         out.writeOptionalStringArray(planningWorkerNodes);
         out.writeBoolean(deployToAllNodes);
+        out.writeOptionalBoolean(isHidden);
         out.writeOptionalString(modelGroupId);
         if (connector != null) {
             out.writeBoolean(true);
@@ -312,6 +350,15 @@ public class MLModel implements ToXContentObject {
         if (modelConfig != null) {
             builder.field(MODEL_CONFIG_FIELD, modelConfig);
         }
+        if (quotaFlag != null) {
+            builder.field(QUOTA_FLAG_FIELD, quotaFlag);
+        }
+        if (rateLimitNumber != null) {
+            builder.field(RATE_LIMIT_NUMBER_FIELD, rateLimitNumber);
+        }
+        if (rateLimitUnit != null) {
+            builder.field(RATE_LIMIT_UNIT_FIELD, rateLimitUnit);
+        }
         if (createdTime != null) {
             builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
         }
@@ -351,6 +398,9 @@ public class MLModel implements ToXContentObject {
         if (deployToAllNodes) {
             builder.field(DEPLOY_TO_ALL_NODES_FIELD, deployToAllNodes);
         }
+        if (isHidden != null) {
+            builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
+        }
         if (connector != null) {
             builder.field(CONNECTOR_FIELD, connector);
         }
@@ -371,12 +421,15 @@ public class MLModel implements ToXContentObject {
         String oldContent = null;
         User user = null;
 
-        String description = null;;
+        String description = null;
         MLModelFormat modelFormat = null;
         MLModelState modelState = null;
         Long modelContentSizeInBytes = null;
         String modelContentHash = null;
         MLModelConfig modelConfig = null;
+        Boolean quotaFlag = null;
+        String rateLimitNumber = null;
+        TimeUnit rateLimitUnit = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
         Instant lastUploadedTime = null;
@@ -393,6 +446,7 @@ public class MLModel implements ToXContentObject {
         Integer currentWorkerNodeCount = null;
         List<String> planningWorkerNodes = new ArrayList<>();
         boolean deployToAllNodes = false;
+        boolean isHidden = false;
         Connector connector = null;
         String connectorId = null;
 
@@ -461,6 +515,15 @@ public class MLModel implements ToXContentObject {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
                     break;
+                case QUOTA_FLAG_FIELD:
+                    quotaFlag = parser.booleanValue();
+                    break;
+                case RATE_LIMIT_NUMBER_FIELD:
+                    rateLimitNumber = parser.text();
+                    break;
+                case RATE_LIMIT_UNIT_FIELD:
+                    rateLimitUnit = TimeUnit.valueOf(parser.text());
+                    break;
                 case PLANNING_WORKER_NODE_COUNT_FIELD:
                     planningWorkerNodeCount = parser.intValue();
                     break;
@@ -475,6 +538,9 @@ public class MLModel implements ToXContentObject {
                     break;
                 case DEPLOY_TO_ALL_NODES_FIELD:
                     deployToAllNodes = parser.booleanValue();
+                    break;
+                case IS_HIDDEN_FIELD:
+                    isHidden = parser.booleanValue();
                     break;
                 case CONNECTOR_FIELD:
                     connector = createConnector(parser);
@@ -524,6 +590,9 @@ public class MLModel implements ToXContentObject {
                 .modelContentSizeInBytes(modelContentSizeInBytes)
                 .modelContentHash(modelContentHash)
                 .modelConfig(modelConfig)
+                .quotaFlag(quotaFlag)
+                .rateLimitNumber(rateLimitNumber)
+                .rateLimitUnit(rateLimitUnit)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
                 .lastRegisteredTime(lastRegisteredTime == null? lastUploadedTime : lastRegisteredTime)
@@ -537,6 +606,7 @@ public class MLModel implements ToXContentObject {
                 .currentWorkerNodeCount(currentWorkerNodeCount)
                 .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
                 .deployToAllNodes(deployToAllNodes)
+                .isHidden(isHidden)
                 .connector(connector)
                 .connectorId(connectorId)
                 .build();

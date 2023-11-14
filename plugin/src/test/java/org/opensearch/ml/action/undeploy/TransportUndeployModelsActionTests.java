@@ -105,6 +105,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        Settings settings = Settings.builder().build();
         transportUndeployModelsAction = new TransportUndeployModelsAction(
             transportService,
             actionFilters,
@@ -126,7 +127,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
         ThreadPool threadPool = mock(ThreadPool.class);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-
+        when(clusterService.getSettings()).thenReturn(settings);
         MLModel mlModel = MLModel
             .builder()
             .user(User.parse(USER_STRING))

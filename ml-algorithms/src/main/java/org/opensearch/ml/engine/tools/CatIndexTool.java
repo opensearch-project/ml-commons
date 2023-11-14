@@ -265,14 +265,14 @@ public class CatIndexTool implements Tool {
                 try {
                     GetSettingsResponse settingsResponse = extractResponse(responses, GetSettingsResponse.class);
                     Map<String, Settings> indicesSettings = StreamSupport.stream(
-                        Spliterators.spliterator(settingsResponse.getIndexToSettings().entrySet(), 0),
-                        false
+                            Spliterators.spliterator(settingsResponse.getIndexToSettings().entrySet(), 0),
+                            false
                     ).collect(Collectors.toMap(cursor -> cursor.getKey(), cursor -> cursor.getValue()));
 
                     ClusterStateResponse stateResponse = extractResponse(responses, ClusterStateResponse.class);
                     Map<String, IndexMetadata> indicesStates = StreamSupport.stream(
-                        stateResponse.getState().getMetadata().spliterator(),
-                        false
+                            stateResponse.getState().getMetadata().spliterator(),
+                            false
                     ).collect(Collectors.toMap(indexMetadata -> indexMetadata.getIndex().getName(), Function.identity()));
 
                     ClusterHealthResponse healthResponse = extractResponse(responses, ClusterHealthResponse.class);
@@ -293,6 +293,16 @@ public class CatIndexTool implements Tool {
                 listener.onFailure(e);
             }
         }, size);
+    }
+
+    @Override
+    public String getName() {
+        return this.name;
+    }
+
+    @Override
+    public void setName(String s) {
+        this.name = s;
     }
 
     @Override
