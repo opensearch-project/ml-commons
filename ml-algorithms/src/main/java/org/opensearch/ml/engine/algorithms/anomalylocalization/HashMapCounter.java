@@ -9,9 +9,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
+
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.output.execute.anomalylocalization.Counter;
 
 /**
  * Hashmap-based exact counting.

@@ -1,5 +1,15 @@
 package org.opensearch.ml.engine.utils;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -8,16 +18,6 @@ import org.opensearch.ingest.TestTemplateService;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.script.ScriptService;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 public class ScriptUtilsTest {
 
@@ -32,14 +32,16 @@ public class ScriptUtilsTest {
 
     @Test
     public void test_executePreprocessFunction() {
-        Optional<String> resultOpt = ScriptUtils.executePreprocessFunction(scriptService, "any function", Collections.singletonList("any input"));
+        Optional<String> resultOpt = ScriptUtils
+            .executePreprocessFunction(scriptService, "any function", Collections.singletonList("any input"));
         assertEquals("test result", resultOpt.get());
     }
 
     @Test
     public void test_executeBuildInPostProcessFunction() {
         List<List<Float>> input = Arrays.asList(Arrays.asList(1.0f, 2.0f), Arrays.asList(3.0f, 4.0f));
-        List<ModelTensor> modelTensors = ScriptUtils.executeBuildInPostProcessFunction(input, MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING));
+        List<ModelTensor> modelTensors = ScriptUtils
+            .executeBuildInPostProcessFunction(input, MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING));
         assertNotNull(modelTensors);
         assertEquals(2, modelTensors.size());
     }

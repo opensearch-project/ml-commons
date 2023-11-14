@@ -5,22 +5,21 @@
 
 package org.opensearch.ml.engine.algorithms.regression;
 
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
+import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParams;
 import org.opensearch.ml.common.output.MLPredictionOutput;
-
-import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionPredictionDataFrame;
-import static org.opensearch.ml.engine.helper.LinearRegressionHelper.constructLinearRegressionTrainDataFrame;
-
 
 public class LinearRegressionTest {
     @Rule
@@ -36,28 +35,33 @@ public class LinearRegressionTest {
 
     @Before
     public void setUp() {
-        parameters = LinearRegressionParams.builder()
-                .objectiveType(LinearRegressionParams.ObjectiveType.HUBER)
-                .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
-                .learningRate(0.9)
-                .epsilon(1e-6)
-                .beta1(0.9)
-                .beta2(0.99)
-                .target("price")
-                .build();
+        parameters = LinearRegressionParams
+            .builder()
+            .objectiveType(LinearRegressionParams.ObjectiveType.HUBER)
+            .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
+            .learningRate(0.9)
+            .epsilon(1e-6)
+            .beta1(0.9)
+            .beta2(0.99)
+            .target("price")
+            .build();
         trainDataFrame = constructLinearRegressionTrainDataFrame();
         trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
         trainDataFrameInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(trainDataFrameInputDataSet).build();
         predictionDataFrame = constructLinearRegressionPredictionDataFrame();
         predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
-        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.LINEAR_REGRESSION).inputDataset(predictionDataFrameInputDataSet).build();
+        predictionDataFrameInput = MLInput
+            .builder()
+            .algorithm(FunctionName.LINEAR_REGRESSION)
+            .inputDataset(predictionDataFrameInputDataSet)
+            .build();
     }
 
     @Test
     public void predict() {
         LinearRegression regression = new LinearRegression(parameters);
         MLModel model = regression.train(trainDataFrameInput);
-        MLPredictionOutput output = (MLPredictionOutput)regression.predict(predictionDataFrameInput, model);
+        MLPredictionOutput output = (MLPredictionOutput) regression.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
@@ -77,13 +81,19 @@ public class LinearRegressionTest {
 
     @Test
     public void trainWithLinearDecaySGD() {
-        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.LINEAR_DECAY_SGD).build();
+        LinearRegressionParams newParams = parameters
+            .toBuilder()
+            .optimizerType(LinearRegressionParams.OptimizerType.LINEAR_DECAY_SGD)
+            .build();
         trainAndVerify(newParams);
     }
 
     @Test
     public void trainWithSqrtDecaySGD() {
-        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.SQRT_DECAY_SGD).build();
+        LinearRegressionParams newParams = parameters
+            .toBuilder()
+            .optimizerType(LinearRegressionParams.OptimizerType.SQRT_DECAY_SGD)
+            .build();
         trainAndVerify(newParams);
     }
 
@@ -101,10 +111,12 @@ public class LinearRegressionTest {
 
     @Test
     public void trainWithADAM() {
-        LinearRegressionParams newParams = parameters.toBuilder().optimizerType(LinearRegressionParams.OptimizerType.ADAM)
-                .momentumType(LinearRegressionParams.MomentumType.NESTEROV)
-                .objectiveType(LinearRegressionParams.ObjectiveType.ABSOLUTE_LOSS)
-                .build();
+        LinearRegressionParams newParams = parameters
+            .toBuilder()
+            .optimizerType(LinearRegressionParams.OptimizerType.ADAM)
+            .momentumType(LinearRegressionParams.MomentumType.NESTEROV)
+            .objectiveType(LinearRegressionParams.ObjectiveType.ABSOLUTE_LOSS)
+            .build();
         trainAndVerify(newParams);
     }
 

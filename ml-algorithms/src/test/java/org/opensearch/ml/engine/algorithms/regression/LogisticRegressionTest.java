@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.regression;
 
+import static org.opensearch.ml.engine.helper.LogisticRegressionHelper.constructLogisticRegressionPredictionDataFrame;
+import static org.opensearch.ml.engine.helper.LogisticRegressionHelper.constructLogisticRegressionTrainDataFrame;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -20,9 +23,6 @@ import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.engine.utils.ModelSerDeSer;
 import org.tribuo.classification.Label;
 
-import static org.opensearch.ml.engine.helper.LogisticRegressionHelper.constructLogisticRegressionPredictionDataFrame;
-import static org.opensearch.ml.engine.helper.LogisticRegressionHelper.constructLogisticRegressionTrainDataFrame;
-
 public class LogisticRegressionTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -37,19 +37,28 @@ public class LogisticRegressionTest {
 
     @Before
     public void setUp() {
-        parameters = LogisticRegressionParams.builder()
-                .objectiveType(LogisticRegressionParams.ObjectiveType.LOGMULTICLASS)
-                .optimizerType(LogisticRegressionParams.OptimizerType.ADA_GRAD)
-                .learningRate(0.9)
-                .epsilon(1e-6)
-                .target("class")
-                .build();
+        parameters = LogisticRegressionParams
+            .builder()
+            .objectiveType(LogisticRegressionParams.ObjectiveType.LOGMULTICLASS)
+            .optimizerType(LogisticRegressionParams.OptimizerType.ADA_GRAD)
+            .learningRate(0.9)
+            .epsilon(1e-6)
+            .target("class")
+            .build();
         trainDataFrame = constructLogisticRegressionTrainDataFrame();
         trainDataFrameInputDataSet = new DataFrameInputDataset(trainDataFrame);
-        trainDataFrameInput = MLInput.builder().algorithm(FunctionName.LOGISTIC_REGRESSION).inputDataset(trainDataFrameInputDataSet).build();
+        trainDataFrameInput = MLInput
+            .builder()
+            .algorithm(FunctionName.LOGISTIC_REGRESSION)
+            .inputDataset(trainDataFrameInputDataSet)
+            .build();
         predictionDataFrame = constructLogisticRegressionPredictionDataFrame();
         predictionDataFrameInputDataSet = new DataFrameInputDataset(predictionDataFrame);
-        predictionDataFrameInput = MLInput.builder().algorithm(FunctionName.LOGISTIC_REGRESSION).inputDataset(predictionDataFrameInputDataSet).build();
+        predictionDataFrameInput = MLInput
+            .builder()
+            .algorithm(FunctionName.LOGISTIC_REGRESSION)
+            .inputDataset(predictionDataFrameInputDataSet)
+            .build();
     }
 
     @Test
@@ -106,7 +115,7 @@ public class LogisticRegressionTest {
     public void predict() {
         LogisticRegression classification = new LogisticRegression(parameters);
         MLModel model = classification.train(trainDataFrameInput);
-        MLPredictionOutput output = (MLPredictionOutput)classification.predict(predictionDataFrameInput, model);
+        MLPredictionOutput output = (MLPredictionOutput) classification.predict(predictionDataFrameInput, model);
         DataFrame predictions = output.getPredictionResult();
         Assert.assertEquals(2, predictions.size());
     }
