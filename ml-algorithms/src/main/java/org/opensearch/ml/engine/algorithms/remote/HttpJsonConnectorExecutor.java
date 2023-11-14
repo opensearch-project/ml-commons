@@ -5,9 +5,16 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
+
+import java.security.AccessController;
+import java.security.PrivilegedExceptionAction;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -25,15 +32,9 @@ import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
 
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ConnectorExecutor(HTTP)
@@ -41,11 +42,12 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
 
     @Getter
     private HttpConnector connector;
-    @Setter @Getter
+    @Setter
+    @Getter
     private ScriptService scriptService;
 
     public HttpJsonConnectorExecutor(Connector connector) {
-        this.connector = (HttpConnector)connector;
+        this.connector = (HttpConnector) connector;
     }
 
     @Override
@@ -60,7 +62,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                         String predictEndpoint = connector.getPredictEndpoint(parameters);
                         request = new HttpPost(predictEndpoint);
                         HttpEntity entity = new StringEntity(payload);
-                        ((HttpPost)request).setEntity(entity);
+                        ((HttpPost) request).setEntity(entity);
                     } catch (Exception e) {
                         throw new MLException("Failed to create http request for remote model", e);
                     }
@@ -80,7 +82,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             boolean hasContentTypeHeader = false;
             if (headers != null) {
                 for (String key : headers.keySet()) {
-                    request.addHeader(key, (String)headers.get(key));
+                    request.addHeader(key, (String) headers.get(key));
                     if (key.toLowerCase().equals("Content-Type")) {
                         hasContentTypeHeader = true;
                     }
@@ -91,8 +93,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
             }
 
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                try (CloseableHttpClient httpClient = getHttpClient();
-                     CloseableHttpResponse response = httpClient.execute(request)) {
+                try (CloseableHttpClient httpClient = getHttpClient(); CloseableHttpResponse response = httpClient.execute(request)) {
                     HttpEntity responseEntity = response.getEntity();
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);

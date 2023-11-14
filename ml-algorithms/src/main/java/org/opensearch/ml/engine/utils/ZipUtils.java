@@ -15,6 +15,7 @@ import java.util.Enumeration;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
+
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -30,7 +31,7 @@ public class ZipUtils {
      */
     public static void unzip(File zipFile, Path dest) {
         try {
-            try (ZipFile unzipFile = new ZipFile(zipFile)){
+            try (ZipFile unzipFile = new ZipFile(zipFile)) {
                 Enumeration<ZipArchiveEntry> en = unzipFile.getEntries();
                 ZipArchiveEntry zipEntry;
                 while (en.hasMoreElements()) {
@@ -44,8 +45,7 @@ public class ZipUtils {
                     } else {
                         Path parentFile = file.getParent();
                         if (parentFile == null) {
-                            throw new AssertionError(
-                                    "Parent path should never be null: " + file);
+                            throw new AssertionError("Parent path should never be null: " + file);
                         }
                         Files.createDirectories(parentFile);
                         try (InputStream inputStream = unzipFile.getInputStream(zipEntry)) {

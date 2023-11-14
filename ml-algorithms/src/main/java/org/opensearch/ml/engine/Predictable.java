@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.engine;
 
+import java.util.Map;
+
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.engine.encryptor.Encryptor;
-
-import java.util.Map;
 
 /**
  * This is machine learning algorithms predict interface.

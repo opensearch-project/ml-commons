@@ -5,17 +5,15 @@
 
 package org.opensearch.ml.engine.httpclient;
 
+import static org.junit.Assert.assertNotNull;
+
+import java.net.UnknownHostException;
+
 import org.apache.http.HttpHost;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
 
 public class MLHttpClientFactoryTests {
 
@@ -96,6 +94,7 @@ public class MLHttpClientFactoryTests {
         HttpHost httpHost = new HttpHost("api.openai.com", 8080, "ftp");
         MLHttpClientFactory.validateSchemaAndPort(httpHost);
     }
+
     @Test
     public void test_validateSchemaAndPort_portNotInRange_throwException() {
         expectedException.expect(IllegalArgumentException.class);
