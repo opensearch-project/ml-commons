@@ -167,6 +167,6 @@ public class SearchAlertsToolTests {
         assertEquals(SearchAlertsTool.TYPE, tool.getType());
         assertTrue(tool.validate(emptyParams));
         assertTrue(tool.validate(nonEmptyParams));
-        assertFalse(tool.validate(nullParams));
+        assertTrue(tool.validate(nullParams));
     }
 }
