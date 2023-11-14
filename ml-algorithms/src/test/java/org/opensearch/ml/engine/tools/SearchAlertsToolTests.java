@@ -35,9 +35,6 @@ import org.opensearch.commons.alerting.model.Alert;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.spi.tools.Tool;
 
-import lombok.extern.log4j.Log4j2;
-
-@Log4j2
 public class SearchAlertsToolTests {
     @Mock
     private NodeClient nodeClient;
@@ -50,18 +47,18 @@ public class SearchAlertsToolTests {
     @Mock
     private ClusterService clusterService;
 
-    private Map<String, String> indicesParams;
-    private Map<String, String> otherParams;
+    private Map<String, String> nullParams;
     private Map<String, String> emptyParams;
+    private Map<String, String> nonEmptyParams;
 
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
         SearchAlertsTool.Factory.getInstance().init(nodeClient, clusterService);
 
-        indicesParams = Map.of("index", "[\"foo\"]");
-        otherParams = Map.of("other", "[\"bar\"]");
+        nullParams = null;
         emptyParams = Collections.emptyMap();
+        nonEmptyParams = Map.of("searchString", "foo");
     }
 
     @Test
@@ -78,7 +75,7 @@ public class SearchAlertsToolTests {
             return null;
         }).when(nodeClient).execute(any(ActionType.class), any(), any());
 
-        tool.run(otherParams, listener);
+        tool.run(nonEmptyParams, listener);
         ArgumentCaptor<GetAlertsResponse> responseCaptor = ArgumentCaptor.forClass(GetAlertsResponse.class);
         verify(listener, times(1)).onResponse(responseCaptor.capture());
         assertEquals((Integer) 0, responseCaptor.getValue().getTotalAlerts());
@@ -154,7 +151,7 @@ public class SearchAlertsToolTests {
             return null;
         }).when(nodeClient).execute(any(ActionType.class), any(), any());
 
-        tool.run(otherParams, listener);
+        tool.run(nonEmptyParams, listener);
         ArgumentCaptor<GetAlertsResponse> responseCaptor = ArgumentCaptor.forClass(GetAlertsResponse.class);
         verify(listener, times(1)).onResponse(responseCaptor.capture());
         assertEquals((Integer) mockAlerts.size(), responseCaptor.getValue().getTotalAlerts());
@@ -164,8 +161,8 @@ public class SearchAlertsToolTests {
     public void testValidate() {
         Tool tool = SearchAlertsTool.Factory.getInstance().create(Collections.emptyMap());
         assertEquals(SearchAlertsTool.NAME, tool.getName());
-        assertTrue(tool.validate(indicesParams));
-        assertTrue(tool.validate(otherParams));
-        assertFalse(tool.validate(emptyParams));
+        assertTrue(tool.validate(emptyParams));
+        assertTrue(tool.validate(nonEmptyParams));
+        assertFalse(tool.validate(nullParams));
     }
 }

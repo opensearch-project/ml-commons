@@ -114,7 +114,7 @@ public class SearchAlertsTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
+        if (parameters == null) {
             return false;
         }
         return true;
