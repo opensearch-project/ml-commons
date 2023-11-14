@@ -8,8 +8,11 @@ package org.opensearch.ml.engine.memory;
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.OpenSearchSecurityException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
@@ -40,6 +43,8 @@ import org.opensearch.search.sort.SortOrder;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
 /**
  * Memory manager for Memories. It contains ML memory related operations like create, read interactions etc.
@@ -244,6 +249,36 @@ public class MLMemoryManager {
                     }));
         } catch (Exception e) {
             listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Get the interactions associate with this conversation, sorted by recency
+     * @param interactionId the parent interaction id whose traces to get
+     * @param actionListener listener for the update response
+     */
+    public void updateInteraction(String interactionId, Map<String, Object> updateContent, ActionListener<UpdateResponse> actionListener) {
+        UpdateRequest updateRequest = new UpdateRequest(indexName, interactionId);
+        updateRequest.doc(updateContent);
+        updateRequest.docAsUpsert(true);
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<UpdateResponse> al = ActionListener.runBefore(ActionListener.wrap(updateResponse -> {
+                if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                    log.info("Failed to update the interaction with ID: {}", interactionId);
+                    actionListener.onResponse(updateResponse);
+                    return;
+                }
+                log.info("Successfully updated the interaction with ID: {}", interactionId);
+                actionListener.onResponse(updateResponse);
+            }, exception -> {
+                log.error("Failed to update interaction with ID {}. Details: {}", interactionId, exception);
+                actionListener.onFailure(exception);
+            }), context::restore);
+            client.update(updateRequest, al);
+        } catch (Exception e) {
+            log.error("Failed to update interaction for interaction id {}. Details {}:", interactionId, e);
+            actionListener.onFailure(e);
         }
     }
 }
