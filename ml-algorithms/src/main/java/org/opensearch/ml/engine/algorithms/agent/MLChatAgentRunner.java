@@ -37,6 +37,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
@@ -79,21 +80,20 @@ public class MLChatAgentRunner {
     public static final String CONTEXT = "context";
     public static final String PROMPT = "prompt";
     public static final String LLM_RESPONSE = "llm_response";
-    public static final String APP_TYPE = "app_type";
 
     private Client client;
     private Settings settings;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
-    private Map<String, Tool.Factory> toolFactories;
+    private ToolsFactory toolsFactory;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLChatAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLChatAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, ToolsFactory toolsFactory, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
-        this.toolFactories = toolFactories;
+        this.toolsFactory = toolsFactory;
         this.memoryFactoryMap = memoryFactoryMap;
     }
 
@@ -101,10 +101,11 @@ public class MLChatAgentRunner {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MEMORY_ID);
-        String appType = params.containsKey(APP_TYPE) ? params.get(APP_TYPE) : "OLLY";
+        String appType = mlAgent.getAppType();
+        String title = params.get(QUESTION);
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(mlAgent.getName(), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory->{
+        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory->{
                 memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                     List<Message> messageList = new ArrayList<>();
                     Iterator<Interaction> iterator = r.iterator();
@@ -150,15 +151,15 @@ public class MLChatAgentRunner {
                     executeParams.put(key.replace(toolSpec.getType()+".", ""), params.get(key));
                 }
             }
-            Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
+            Tool tool = toolsFactory.getTool(toolSpec.getType());
             tool.setName(toolSpec.getName());
 
             if (toolSpec.getDescription() != null) {
                 tool.setDescription(toolSpec.getDescription());
             }
-            String toolType = Optional.ofNullable(tool.getType()).orElse(toolSpec.getType());
-            tools.put(toolType, tool);
-            toolSpecMap.put(toolType, toolSpec);
+            String toolName = Optional.ofNullable(tool.getName()).orElse(toolSpec.getType());
+            tools.put(toolName, tool);
+            toolSpecMap.put(toolName, toolSpec);
         }
 
         runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, listener);
@@ -202,7 +203,7 @@ public class MLChatAgentRunner {
 
         final List<String> inputTools = new ArrayList<>();
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getName());
+            String toolName = Optional.ofNullable(entry.getValue().getName()).orElse(entry.getValue().getType());
             inputTools.add(toolName);
         }
 
@@ -219,7 +220,7 @@ public class MLChatAgentRunner {
 
 
         List<ModelTensors> cotModelTensors = new ArrayList<>();
-        cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name(SESSION_ID)
+        cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name(MEMORY_ID)
                 .result(sessionId).build())).build());
 
         StringBuilder scratchpadBuilder = new StringBuilder();
@@ -232,8 +233,8 @@ public class MLChatAgentRunner {
         //Create root interaction.
         StepListener<CreateInteractionResponse> createRootItListener = new StepListener<>();
         ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
-        ConversationIndexMessage msg = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).finalAnswer(true).sessionId(sessionId).build();
-        conversationIndexMemory.save(msg, null, null, createRootItListener);
+        ConversationIndexMessage msg = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response("").finalAnswer(true).sessionId(sessionId).build();
+        conversationIndexMemory.save(msg, null, null, null, createRootItListener);
 
         //Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
@@ -300,7 +301,7 @@ public class MLChatAgentRunner {
                         String finalThought = thought;
                         createRootItListener.whenComplete(r -> {
                             ConversationIndexMessage msgTemp = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response(finalThought).finalAnswer(false).sessionId(sessionId).build();
-                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1));
+                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), null);
                         }, e-> {
                             log.error("Failed to save intermediate step interaction", e);
                         });
@@ -358,16 +359,17 @@ public class MLChatAgentRunner {
                     if (action != null && tools.containsKey(action) && inputTools.contains(action)) {
                         Map<String, String> toolParams = new HashMap<>();
                         toolParams.put("input", actionInput);
-                        if (tools.get(action).validate(toolParams)) {
+                        Map<String, String> toolSpec = toolSpecMap.get(action).getParameters();
+                        if (tools.get(action).validate(toolSpec, toolParams)) {
                             if (tools.get(action) instanceof MLModelTool) {
                                 Map<String, String> llmToolTmpParameters = new HashMap<>();
                                 llmToolTmpParameters.putAll(tmpParameters);
-                                llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
+                                llmToolTmpParameters.putAll(toolSpec);
                                 //TODO: support tool parameter override : langauge_model_tool.prompt
                                 llmToolTmpParameters.put(QUESTION, actionInput);
-                                tools.get(action).run(llmToolTmpParameters, nextStepListener); // run tool
+                                tools.get(action).run(toolSpec, llmToolTmpParameters, nextStepListener); // run tool
                             } else {
-                                tools.get(action).run(toolParams, nextStepListener); // run tool
+                                tools.get(action).run(toolSpec, toolParams, nextStepListener); // run tool
                             }
                         } else {
                             lastActionResult.set("Tool " + action + " can't work for input: " + actionInput);
@@ -416,10 +418,10 @@ public class MLChatAgentRunner {
                     toolResponse = toolResponseSubstitutor.replace(toolResponse);
                     scratchpadBuilder.append(toolResponse).append("\n\n");
                     if (conversationIndexMemory != null) {
-                        String res = "Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result;
+//                        String res = "Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result;
                         createRootItListener.whenComplete(r -> {
-                            ConversationIndexMessage msgTemp = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response(res).finalAnswer(false).sessionId(sessionId).build();
-                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1));
+                            ConversationIndexMessage msgTemp = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(lastActionInput.get()).response((String) result).finalAnswer(false).sessionId(sessionId).build();
+                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), lastAction.get());
                         }, e-> {
                             log.error("Failed to save final answer interaction", e);
                         });

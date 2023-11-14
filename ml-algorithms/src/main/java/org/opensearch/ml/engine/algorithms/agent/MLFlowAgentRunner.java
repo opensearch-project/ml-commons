@@ -23,6 +23,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -44,15 +45,15 @@ public class MLFlowAgentRunner {
     private Settings settings;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
-    private Map<String, Tool.Factory> toolFactories;
+    private ToolsFactory toolsFactory;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLFlowAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, ToolsFactory toolsFactory, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
-        this.toolFactories = toolFactories;
+        this.toolsFactory = toolsFactory;
         this.memoryFactoryMap = memoryFactoryMap;
     }
 
@@ -115,7 +116,7 @@ public class MLFlowAgentRunner {
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
                     Tool tool = createTool(toolSpec);
                     if (finalI < toolSpecs.size()) {
-                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
+                        tool.run(toolSpec.getParameters(), getToolExecuteParams(toolSpec, params), nextStepListener);
                     }
 
                 }, e -> {
@@ -126,9 +127,9 @@ public class MLFlowAgentRunner {
             }
         }
         if (toolSpecs.size() == 1) {
-            firstTool.run(firstToolExecuteParams, listener);
+            firstTool.run(toolSpecs.get(0).getParameters(), firstToolExecuteParams, listener);
         } else {
-            firstTool.run(firstToolExecuteParams, firstStepListener);
+            firstTool.run(toolSpecs.get(0).getParameters(), firstToolExecuteParams, firstStepListener);
         }
     }
 
@@ -151,10 +152,7 @@ public class MLFlowAgentRunner {
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
         }
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
+        Tool tool = toolsFactory.getTool(toolSpec.getType());
         if (toolSpec.getName() != null) {
             tool.setName(toolSpec.getName());
         }

@@ -36,6 +36,7 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -57,15 +58,15 @@ public class MLAgentExecutor implements Executable {
     private Settings settings;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
-    private Map<String, Tool.Factory> toolFactories;
+    private ToolsFactory toolsFactory;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLAgentExecutor(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLAgentExecutor(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, ToolsFactory toolsFactory, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
-        this.toolFactories = toolFactories;
+        this.toolsFactory = toolsFactory;
         this.memoryFactoryMap = memoryFactoryMap;
     }
 
@@ -130,13 +131,13 @@ public class MLAgentExecutor implements Executable {
                                 listener.onFailure(ex);
                             });
                             if ("flow".equals(mlAgent.getType())) {
-                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                                MLFlowAgentRunner flowAgentExecutor = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolsFactory, memoryFactoryMap);
                                 flowAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             } else if ("cot".equals(mlAgent.getType())) {
-                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                                MLReActAgentRunner reactAgentExecutor = new MLReActAgentRunner(client, settings, clusterService, xContentRegistry, toolsFactory, memoryFactoryMap);
                                 reactAgentExecutor.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             } else if ("conversational".equals(mlAgent.getType())) {
-                                MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                                MLChatAgentRunner chatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolsFactory, memoryFactoryMap);
                                 chatAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
                             }
                         }

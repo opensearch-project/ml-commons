@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -108,8 +109,6 @@ public class CatIndexToolTests {
         when(clusterState.metadata()).thenReturn(metadata);
         when(clusterService.state()).thenReturn(clusterState);
 
-        CatIndexTool.Factory.getInstance().init(client, clusterService);
-
         indicesParams = Map.of("index", "[\"foo\"]");
         otherParams = Map.of("other", "[\"bar\"]");
         emptyParams = Collections.emptyMap();
@@ -145,11 +144,11 @@ public class CatIndexToolTests {
 
         when(clusterHealthResponse.getIndices()).thenReturn(Collections.emptyMap());
 
-        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = new CatIndexTool(client, clusterService);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
-        tool.run(otherParams, listener);
+        tool.run(new HashMap<>(), otherParams, listener);
         settingsActionListenerCaptor.getValue().onResponse(getSettingsResponse);
         statsActionListenerCaptor.getValue().onResponse(indicesStatsResponse);
         clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
@@ -213,11 +212,11 @@ public class CatIndexToolTests {
         when(clusterHealthResponse.getIndices()).thenReturn(Map.of(indexName, fooHealth));
 
         // Now make the call
-        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = new CatIndexTool(client, clusterService);
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
 
-        tool.run(otherParams, listener);
+        tool.run(new HashMap<>(), otherParams, listener);
         settingsActionListenerCaptor.getValue().onResponse(getSettingsResponse);
         statsActionListenerCaptor.getValue().onResponse(indicesStatsResponse);
         clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
@@ -237,10 +236,10 @@ public class CatIndexToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = new CatIndexTool(client, clusterService);
         assertEquals(CatIndexTool.TYPE, tool.getName());
-        assertTrue(tool.validate(indicesParams));
-        assertTrue(tool.validate(otherParams));
-        assertFalse(tool.validate(emptyParams));
+        assertTrue(tool.validate(new HashMap<>(), indicesParams));
+        assertTrue(tool.validate(new HashMap<>(), otherParams));
+        assertFalse(tool.validate(new HashMap<>(), emptyParams));
     }
 }

@@ -7,7 +7,7 @@ package org.opensearch.ml.engine.tools;
 
 import lombok.Setter;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.script.ScriptService;
@@ -32,7 +32,7 @@ public class MathTool extends AbstractTool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> toolSpec, Map<String, String> parameters, ActionListener<T> listener) {
         String input = parameters.get("input");
 
         input = input.replaceAll(",", "");
@@ -51,7 +51,7 @@ public class MathTool extends AbstractTool {
     }
 
     @Override
-    public boolean validate(Map<String, String> parameters) {
+    public boolean validate(Map<String, String> toolSpec, Map<String, String> parameters) {
         try {
             run(parameters);
         } catch (Exception e) {
@@ -60,35 +60,4 @@ public class MathTool extends AbstractTool {
         return true;
     }
 
-    public static class Factory implements Tool.Factory<MathTool> {
-        private ScriptService scriptService;
-
-        private static Factory INSTANCE;
-        public static Factory getInstance() {
-            if (INSTANCE != null) {
-                return INSTANCE;
-            }
-            synchronized (MathTool.class) {
-                if (INSTANCE != null) {
-                    return INSTANCE;
-                }
-                INSTANCE = new Factory();
-                return INSTANCE;
-            }
-        }
-
-        public void init(ScriptService scriptService) {
-            this.scriptService = scriptService;
-        }
-
-        @Override
-        public MathTool create(Map<String, Object> map) {
-            return new MathTool(scriptService);
-        }
-
-        @Override
-        public String getDefaultDescription() {
-            return DEFAULT_DESCRIPTION;
-        }
-    }
 }

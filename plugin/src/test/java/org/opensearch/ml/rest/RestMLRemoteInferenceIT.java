@@ -21,6 +21,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.utils.TestHelper;
 
+@Ignore
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");

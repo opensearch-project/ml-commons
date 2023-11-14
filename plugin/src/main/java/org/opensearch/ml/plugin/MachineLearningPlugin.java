@@ -148,7 +148,9 @@ import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.MathTool;
 import org.opensearch.ml.engine.tools.PainlessScriptTool;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 import org.opensearch.ml.engine.tools.VectorDBTool;
+import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -286,9 +288,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
     private ConversationalMemoryHandler cmHandler;
 
     private volatile boolean ragSearchPipelineEnabled;
-
-    private Map<String, Tool.Factory> externalToolFactories;
-    private Map<String, Tool.Factory> toolFactories;
+    private Map<String, Tool> externalTools;
+    private ToolsFactory toolsFactory;
     private ScriptService scriptService;
     private Encryptor encryptor;
 
@@ -475,37 +476,19 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         // Register thread-safe ML objects here.
         LocalSampleCalculator localSampleCalculator = new LocalSampleCalculator(client, settings);
 
-        toolFactories = new HashMap<>();
-
-        MLModelTool.Factory.getInstance().init(client);
-        MathTool.Factory.getInstance().init(scriptService);
-        VectorDBTool.Factory.getInstance().init(client, xContentRegistry);
-        AgentTool.Factory.getInstance().init(client);
-        CatIndexTool.Factory.getInstance().init(client, clusterService);
-        PainlessScriptTool.Factory.getInstance().init(client, scriptService);
-        toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
-        toolFactories.put(MathTool.TYPE, MathTool.Factory.getInstance());
-        toolFactories.put(VectorDBTool.TYPE, VectorDBTool.Factory.getInstance());
-        toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
-        toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
-        toolFactories.put(PainlessScriptTool.TYPE, PainlessScriptTool.Factory.getInstance());
-
-        if (externalToolFactories != null) {
-            toolFactories.putAll(externalToolFactories);
-        }
-
         MLMemoryManager memoryManager = new MLMemoryManager(client, clusterService, new ConversationMetaIndex(client, clusterService));
         Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
         conversationIndexMemoryFactory.init(client, mlIndicesHandler, memoryManager);
         memoryFactoryMap.put(ConversationIndexMemory.TYPE, conversationIndexMemoryFactory);
+        toolsFactory = new ToolsFactory(client, scriptService, clusterService, xContentRegistry, externalTools);
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,
             settings,
             clusterService,
             xContentRegistry,
-            toolFactories,
+            toolsFactory,
             memoryFactoryMap
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
@@ -624,8 +607,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
         RestMemoryGetInteractionsAction restListInteractionsAction = new RestMemoryGetInteractionsAction();
         RestMemoryDeleteConversationAction restDeleteConversationAction = new RestMemoryDeleteConversationAction();
         RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
-        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
-        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
+        RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolsFactory);
+        RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolsFactory);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -825,10 +808,10 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
 
     @Override
     public void loadExtensions(ExtensionLoader loader) {
-        externalToolFactories = new HashMap<>();
+        externalTools = new HashMap<>();
         for (MLCommonsExtension extension : loader.loadExtensions(MLCommonsExtension.class)) {
-            List<Tool.Factory<? extends Tool>> toolFactories = extension.getToolFactories();
-            for (Tool.Factory<? extends Tool> toolFactory : toolFactories) {
+            List<Tool> toolFactories = extension.getTools();
+            for (Tool toolFactory : toolFactories) {
                 ToolAnnotation toolAnnotation = toolFactory.getClass().getDeclaringClass().getAnnotation(ToolAnnotation.class);
                 if (toolAnnotation == null) {
                     throw new IllegalArgumentException(
@@ -836,7 +819,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin, Searc
                     );
                 }
                 String annotationValue = toolAnnotation.value();
-                externalToolFactories.put(annotationValue, toolFactory);
+                externalTools.put(annotationValue, toolFactory);
             }
         }
     }

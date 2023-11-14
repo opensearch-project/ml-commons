@@ -21,6 +21,7 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 import software.amazon.awssdk.utils.ImmutableMap;
 
 import java.util.Arrays;
@@ -46,18 +47,14 @@ public class MLFlowAgentRunnerTest {
     @Mock
     private NamedXContentRegistry xContentRegistry;
 
-    private Map<String, Tool.Factory> toolFactories;
-
     @Mock
     private Map<String, Memory.Factory> memoryMap;
 
     private MLFlowAgentRunner mlFlowAgentRunner;
 
     @Mock
-    private Tool.Factory firstToolFactory;
+    private ToolsFactory toolsFactory;
 
-    @Mock
-    private Tool.Factory secondToolFactory;
     @Mock
     private Tool firstTool;
 
@@ -70,25 +67,20 @@ public class MLFlowAgentRunnerTest {
     @Captor
     private ArgumentCaptor<Object> objectCaptor;
 
-    @Captor
-    private ArgumentCaptor<StepListener<Object>> nextStepListenerCaptor;
-
     @Before
     @SuppressWarnings("unchecked")
     public void setup() {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
-        toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
-        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
-        when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
-        when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
-        Mockito.doAnswer(generateToolResponse("First tool response")).when(firstTool).run(Mockito.anyMap(), nextStepListenerCaptor.capture());
-        Mockito.doAnswer(generateToolResponse("Second tool response")).when(secondTool).run(Mockito.anyMap(), nextStepListenerCaptor.capture());
+        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolsFactory, memoryMap);
+        when(toolsFactory.getTool(Mockito.anyString())).thenReturn(firstTool).thenReturn(secondTool);
+        Mockito.doAnswer(generateToolResponse("First tool response")).when(firstTool).run(Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.doAnswer(generateToolResponse("Second tool response")).when(secondTool).run(Mockito.any(), Mockito.any(), Mockito.any());
     }
 
     private Answer generateToolResponse(String response) {
         return invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(1);
+            ActionListener<Object> listener = invocation.getArgument(2);
             listener.onResponse(response);
             return null;
         };

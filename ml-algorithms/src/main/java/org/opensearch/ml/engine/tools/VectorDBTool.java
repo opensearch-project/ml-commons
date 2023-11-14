@@ -17,6 +17,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.search.SearchHit;
@@ -38,30 +39,25 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 public class VectorDBTool extends AbstractTool {
     public static final String TYPE = "VectorDBTool";
     private static String DEFAULT_DESCRIPTION = "Use this tool to search data in OpenSearch index.";
+
     private Client client;
     private NamedXContentRegistry xContentRegistry;
-    private String index;
-    private String embeddingField;
-    private String[] sourceFields;
-    private String modelId;
-    private Integer docSize ;
-    private Integer k;
 
     @Builder
-    public VectorDBTool(Client client, NamedXContentRegistry xContentRegistry, String index, String embeddingField, String[] sourceFields, Integer k, Integer docSize, String modelId) {
+    public VectorDBTool(Client client, NamedXContentRegistry xContentRegistry) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
-        this.index = index;
-        this.embeddingField = embeddingField;
-        this.sourceFields = sourceFields;
-        this.modelId = modelId;
-        this.docSize = docSize == null? 2 : docSize;
-        this.k = k == null? 10 : k;
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> toolSpec, Map<String, String> parameters, ActionListener<T> listener) {
+        String index = toolSpec.get("index");
+        String embeddingField = toolSpec.get("embedding_field");
+        String[] sourceFields = gson.fromJson(toolSpec.get("source_field"), String[].class);
+        String modelId = toolSpec.get("model_id");
+        Integer docSize = toolSpec.containsKey("doc_size")? Integer.parseInt(toolSpec.get("doc_size")) : 2;
+        Integer k = toolSpec.containsKey("k")? Integer.parseInt(toolSpec.get("k")) : 10;
         try {
             String question = parameters.get("input");
             try {
@@ -108,7 +104,7 @@ public class VectorDBTool extends AbstractTool {
     }
 
     @Override
-    public boolean validate(Map<String, String> parameters) {
+    public boolean validate(Map<String, String> toolSpec, Map<String, String> parameters) {
         if (parameters == null || parameters.size() == 0) {
             return false;
         }
@@ -120,50 +116,4 @@ public class VectorDBTool extends AbstractTool {
         this.client = client;
     }
 
-    public static class Factory implements Tool.Factory<VectorDBTool> {
-        private Client client;
-        private NamedXContentRegistry xContentRegistry;
-
-        private static Factory INSTANCE;
-        public static Factory getInstance() {
-            if (INSTANCE != null) {
-                return INSTANCE;
-            }
-            synchronized (VectorDBTool.class) {
-                if (INSTANCE != null) {
-                    return INSTANCE;
-                }
-                INSTANCE = new Factory();
-                return INSTANCE;
-            }
-        }
-
-        public void init(Client client, NamedXContentRegistry xContentRegistry) {
-            this.client = client;
-            this.xContentRegistry = xContentRegistry;
-        }
-
-        @Override
-        public VectorDBTool create(Map<String, Object> params) {
-            String index = (String)params.get("index");
-            String embeddingField = (String)params.get("embedding_field");
-            String[] sourceFields = gson.fromJson((String)params.get("source_field"), String[].class);
-            String modelId = (String)params.get("model_id");
-            Integer docSize = params.containsKey("doc_size")? Integer.parseInt((String)params.get("doc_size")) : 2;
-            return VectorDBTool.builder()
-                    .client(client)
-                    .xContentRegistry(xContentRegistry)
-                    .index(index)
-                    .embeddingField(embeddingField)
-                    .sourceFields(sourceFields)
-                    .modelId(modelId)
-                    .docSize(docSize)
-                    .build();
-        }
-
-        @Override
-        public String getDefaultDescription() {
-            return DEFAULT_DESCRIPTION;
-        }
-    }
 }

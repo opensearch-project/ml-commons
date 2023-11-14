@@ -13,7 +13,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
@@ -39,8 +39,9 @@ public class AgentTool extends AbstractTool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        AgentMLInput agentMLInput = AgentMLInput.AgentMLInputBuilder().agentId(agentId).functionName(FunctionName.AGENT).inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build()).build();
+    public <T> void run(Map<String, String> toolSpec, Map<String, String> parameters, ActionListener<T> listener) {
+        AgentMLInput agentMLInput = AgentMLInput.AgentMLInputBuilder().agentId(agentId).functionName(FunctionName.AGENT)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(parameters).build()).build();
         ActionRequest request = new MLExecuteTaskRequest(FunctionName.AGENT, agentMLInput, false);
         client.execute(MLExecuteTaskAction.INSTANCE, request, ActionListener.wrap(r->{
             ModelTensorOutput output = (ModelTensorOutput) r.getOutput();
@@ -53,39 +54,7 @@ public class AgentTool extends AbstractTool {
     }
 
     @Override
-    public boolean validate(Map<String, String> parameters) {
+    public boolean validate(Map<String, String> toolSpec, Map<String, String> parameters) {
         return true;
-    }
-
-    public static class Factory implements Tool.Factory<AgentTool> {
-        private Client client;
-
-        private static Factory INSTANCE;
-        public static Factory getInstance() {
-            if (INSTANCE != null) {
-                return INSTANCE;
-            }
-            synchronized (AgentTool.class) {
-                if (INSTANCE != null) {
-                    return INSTANCE;
-                }
-                INSTANCE = new Factory();
-                return INSTANCE;
-            }
-        }
-
-        public void init(Client client) {
-            this.client = client;
-        }
-
-        @Override
-        public AgentTool create(Map<String, Object> map) {
-            return new AgentTool(client, (String)map.get("agent_id"));
-        }
-
-        @Override
-        public String getDefaultDescription() {
-            return DEFAULT_DESCRIPTION;
-        }
     }
 }

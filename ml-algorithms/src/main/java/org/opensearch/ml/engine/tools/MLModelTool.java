@@ -14,8 +14,8 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -31,36 +31,36 @@ import java.util.Map;
 @ToolAnnotation(MLModelTool.TYPE)
 public class MLModelTool extends AbstractTool {
     public static final String TYPE = "MLModelTool";
+    private static final String MODEL_ID = "model_id";
     private static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     private Client client;
-    private String modelId;
 
-    public MLModelTool(Client client, String modelId) {
+    public MLModelTool(Client client) {
         super(TYPE, DEFAULT_DESCRIPTION);
         this.client = client;
-        this.modelId = modelId;
 
-        outputParser = new Parser() {
+        this.setOutputParser(new Parser() {
             @Override
             public Object parse(Object o) {
                 List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
                 return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
             }
-        };
+        });
     }
 
-
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> toolSpec, Map<String, String> parameters, ActionListener<T> listener) {
+        validate(toolSpec, parameters);
+        String modelId = toolSpec.get(MODEL_ID);
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
         ActionRequest request = new MLPredictionTaskRequest(modelId, MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.<MLTaskResponse>wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
-            if (outputParser == null) {
+            if (this.getOutputParser() == null) {
                 listener.onResponse((T) modelTensorOutput.getMlModelOutputs());
             } else {
-                listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
+                listener.onResponse((T) this.getOutputParser().parse(modelTensorOutput.getMlModelOutputs()));
             }
         }, e -> {
             log.error("Failed to run model " + modelId, e);
@@ -69,42 +69,12 @@ public class MLModelTool extends AbstractTool {
     }
 
     @Override
-    public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
+    public boolean validate(Map<String, String> toolSpec, Map<String, String> parameters) {
+        if (parameters == null || parameters.size() == 0 || toolSpec == null || toolSpec == null
+                || toolSpec.size() == 0 || !toolSpec.containsKey(MODEL_ID)) {
+
             return false;
         }
         return true;
-    }
-
-    public static class Factory implements Tool.Factory<MLModelTool> {
-        private Client client;
-
-        private static Factory INSTANCE;
-        public static Factory getInstance() {
-            if (INSTANCE != null) {
-                return INSTANCE;
-            }
-            synchronized (MLModelTool.class) {
-                if (INSTANCE != null) {
-                    return INSTANCE;
-                }
-                INSTANCE = new Factory();
-                return INSTANCE;
-            }
-        }
-
-        public void init(Client client) {
-            this.client = client;
-        }
-
-        @Override
-        public MLModelTool create(Map<String, Object> map) {
-            return new MLModelTool(client, (String)map.get("model_id"));
-        }
-
-        @Override
-        public String getDefaultDescription() {
-            return DEFAULT_DESCRIPTION;
-        }
     }
 }

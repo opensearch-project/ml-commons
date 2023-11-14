@@ -18,5 +18,5 @@ public interface MLCommonsExtension {
      * Get tool factories.
      * @return A list of tool factories
      */
-    List<Tool.Factory<? extends Tool>> getToolFactories();
+    List<Tool> getTools();
 }

@@ -36,6 +36,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchHit;
 
@@ -83,15 +84,15 @@ public class MLReActAgentRunner {
     private Settings settings;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
-    private Map<String, Tool.Factory> toolFactories;
+    private ToolsFactory toolsFactory;
     private Map<String, Memory.Factory> memoryFactoryMap;
 
-    public MLReActAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, Map<String, Tool.Factory> toolFactories, Map<String, Memory.Factory> memoryFactoryMap) {
+    public MLReActAgentRunner(Client client, Settings settings, ClusterService clusterService, NamedXContentRegistry xContentRegistry, ToolsFactory toolsFactory, Map<String, Memory.Factory> memoryFactoryMap) {
         this.client = client;
         this.settings = settings;
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
-        this.toolFactories = toolFactories;
+        this.toolsFactory = toolsFactory;
         this.memoryFactoryMap = memoryFactoryMap;
     }
 
@@ -159,19 +160,20 @@ public class MLReActAgentRunner {
                     executeParams.put(key.replace(toolSpec.getName()+".", ""), params.get(key));
                 }
             }
-            if (!toolFactories.containsKey(toolSpec.getType())) {
-                listener.onFailure(new IllegalArgumentException("No tool factory found for " + toolSpec.getType()));
+            try {
+                Tool tool = toolsFactory.getTool(toolSpec.getType());
+                tool.setName(toolSpec.getName());
+
+                if (toolSpec.getDescription() != null) {
+                    tool.setDescription(toolSpec.getDescription());
+                }
+                String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
+                tools.put(toolName, tool);
+                toolSpecMap.put(toolName, toolSpec);
+            } catch ( IllegalArgumentException e) {
+                listener.onFailure(e);
                 return;
             }
-            Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-            tool.setName(toolSpec.getName());
-
-            if (toolSpec.getDescription() != null) {
-                tool.setDescription(toolSpec.getDescription());
-            }
-            String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
-            tools.put(toolName, tool);
-            toolSpecMap.put(toolName, toolSpec);
         }
 
         runReAct(llm, tools, toolSpecMap, params, memory, sessionId, listener);
@@ -350,16 +352,17 @@ public class MLReActAgentRunner {
                     if (action != null && tools.containsKey(action) && inputTools.contains(action)) {
                         Map<String, String> toolParams = new HashMap<>();
                         toolParams.put("input", actionInput);
-                        if (tools.get(action).validate(toolParams)) {
+                        Map<String, String> toolSpec = toolSpecMap.get(action).getParameters();
+                        if (tools.get(action).validate(toolSpec, toolParams)) {
                             if (tools.get(action) instanceof MLModelTool) {
                                 Map<String, String> llmToolTmpParameters = new HashMap<>();
                                 llmToolTmpParameters.putAll(tmpParameters);
-                                llmToolTmpParameters.putAll(toolSpecMap.get(action).getParameters());
+                                llmToolTmpParameters.putAll(toolSpec);
                                 //TODO: support tool parameter override : langauge_model_tool.prompt
                                 llmToolTmpParameters.put(QUESTION, actionInput);
-                                tools.get(action).run(llmToolTmpParameters, nextStepListener); // run tool
+                                tools.get(action).run(toolSpecMap.get(action).getParameters(), llmToolTmpParameters, nextStepListener); // run tool
                             } else {
-                                tools.get(action).run(toolParams, nextStepListener); // run tool
+                                tools.get(action).run(toolSpecMap.get(action).getParameters(), toolParams, nextStepListener); // run tool
                             }
                         } else {
                             lastActionResult.set("Tool " + action + " can't work for input: " + actionInput);

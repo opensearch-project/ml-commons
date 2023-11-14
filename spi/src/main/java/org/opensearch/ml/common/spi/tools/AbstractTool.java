@@ -1,48 +1,40 @@
 package org.opensearch.ml.common.spi.tools;
 
-import lombok.Getter;
-import lombok.Setter;
-
 import java.util.Map;
 
+/**
+ * Abstract tool used to simplify tool creation. Concrete Tool implementation needs to be thread safe.
+ */
 public abstract class AbstractTool implements Tool {
 
     /**
      * Name of the tool to be used in prompt.
      */
-    @Setter
-    @Getter
     private String name;
 
     /**
      * Default description of the tool. This description will be used by LLM to select next tool to execute.
      */
-    @Getter
-    @Setter
     private String description;
 
     /**
      * Tool type mapping to the corresponding run function. Tool type will be used by agent framework to identify the tool.
      */
-    @Getter
     private String type;
 
     /**
      * Current tool version.
      */
-    @Getter
-    protected String version;
+    private String version;
 
     /**
      * Parser used to read tool input.
      */
-    @Setter
     private Parser inputParser;
 
     /**
      * Parser used to write tool output.
      */
-    @Setter
     private Parser outputParser;
 
     /**
@@ -98,11 +90,20 @@ public abstract class AbstractTool implements Tool {
 
     @Override
     public void setInputParser(Parser inputParser) {
-        this.version = version;
+        this.inputParser = inputParser;
     }
 
     public Parser getInputParser() {
         return this.inputParser;
+    }
+
+    @Override
+    public void setOutputParser(Parser outputParser) {
+        this.outputParser = outputParser;
+    }
+
+    public Parser getOutputParser() {
+        return this.outputParser;
     }
 
     /**
@@ -112,7 +113,7 @@ public abstract class AbstractTool implements Tool {
      * @return
      */
     @Override
-    public abstract boolean validate(Map<String, String> parameters);
+    public abstract boolean validate(Map<String, String> toolSpec, Map<String, String> parameters);
 
 }
 

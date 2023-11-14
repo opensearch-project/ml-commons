@@ -12,12 +12,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.ToolMetadata;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.tools.MLListToolsAction;
 import org.opensearch.ml.common.transport.tools.MLToolsListRequest;
+import org.opensearch.ml.engine.tools.ToolsFactory;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
@@ -26,10 +28,10 @@ import org.opensearch.rest.action.RestToXContentListener;
 public class RestMLListToolsAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_ACTION = "ml_get_tools_action";
 
-    private Map<String, Tool.Factory> toolFactories;
+    private ToolsFactory toolsFactory;
 
-    public RestMLListToolsAction(Map<String, Tool.Factory> toolFactories) {
-        this.toolFactories = toolFactories;
+    public RestMLListToolsAction(ToolsFactory toolsFactory) {
+        this.toolsFactory = toolsFactory;
     }
 
     @Override
@@ -57,9 +59,9 @@ public class RestMLListToolsAction extends BaseRestHandler {
      */
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        List<ToolMetadata> toolList = new ArrayList<>();
-        toolFactories
-            .forEach((key, value) -> toolList.add(ToolMetadata.builder().name(key).description(value.getDefaultDescription()).build()));
+        List<ToolMetadata> toolList = toolsFactory.getAllTools().stream()
+                .map(tool -> ToolMetadata.builder().name(tool.getName()).description(tool.getDescription()).build())
+                .collect(Collectors.toList());
         MLToolsListRequest mlToolsGetRequest = MLToolsListRequest.builder().externalTools(toolList).build();
         return channel -> client.execute(MLListToolsAction.INSTANCE, mlToolsGetRequest, new RestToXContentListener<>(channel));
     }

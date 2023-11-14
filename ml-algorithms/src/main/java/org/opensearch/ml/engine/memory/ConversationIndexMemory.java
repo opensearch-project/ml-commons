@@ -31,6 +31,7 @@ import org.opensearch.search.sort.SortOrder;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -92,17 +93,17 @@ public class ConversationIndexMemory implements Memory {
         }));
     }
 
-    public void save(Message message, String parentId, Integer traceNum) {
-        this.save(message, parentId, traceNum, ActionListener.<CreateInteractionResponse>wrap(r -> {
+    public void save(Message message, String parentId, Integer traceNum, String action) {
+        this.save(message, parentId, traceNum, action, ActionListener.<CreateInteractionResponse>wrap(r -> {
             log.info("saved message into memory {}, parent id: {}, trace number: {}, interaction id: {}", conversationId, parentId, traceNum, r.getId());
         }, e-> {
             log.error("Failed to save interaction", e);
         }));
     }
 
-    public void save(Message message, String parentId, Integer traceNum, ActionListener listener) {
+    public void save(Message message, String parentId, Integer traceNum, String action, ActionListener listener) {
         ConversationIndexMessage msg = (ConversationIndexMessage) message;
-        memoryManager.createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), null, null, parentId, traceNum, listener);
+        memoryManager.createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), action, Collections.singletonMap("None", "None"), parentId, traceNum, listener);
     }
 
     @Override

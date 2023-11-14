@@ -30,8 +30,8 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.spi.tools.AbstractTool;
 import org.opensearch.ml.common.spi.tools.Parser;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,18 +60,18 @@ public class CatIndexTool extends AbstractTool {
         this.client = client;
         this.clusterService = clusterService;
 
-        outputParser = new Parser<>() {
+        super.setOutputParser(new Parser<>() {
             @Override
             public Object parse(Object o) {
                 @SuppressWarnings("unchecked")
                 List<ModelTensors> mlModelOutputs = (List<ModelTensors>) o;
                 return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
             }
-        };
+        });
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
+    public <T> void run(Map<String, String> toolSpec, Map<String, String> parameters, ActionListener<T> listener) {
         // TODO: This logic exactly matches the OpenSearch _cat/indices REST action. If code at
         // o.o.rest/action/cat/RestIndicesAction.java changes those changes need to be reflected here
         // https://github.com/opensearch-project/ml-commons/pull/1582#issuecomment-1796962876
@@ -158,11 +158,6 @@ public class CatIndexTool extends AbstractTool {
                 }
             }
         );
-    }
-
-    @Override
-    public String getType() {
-        return TYPE;
     }
 
     /**
@@ -282,7 +277,7 @@ public class CatIndexTool extends AbstractTool {
     }
 
     @Override
-    public boolean validate(Map<String, String> parameters) {
+    public boolean validate(Map<String, String> toolSpec, Map<String, String> parameters) {
         if (parameters == null || parameters.size() == 0) {
             return false;
         }
@@ -292,48 +287,6 @@ public class CatIndexTool extends AbstractTool {
     /**
      * Factory for the {@link CatIndexTool}
      */
-    public static class Factory implements Tool.Factory<CatIndexTool> {
-        private Client client;
-        private ClusterService clusterService;
-
-        private static Factory INSTANCE;
-
-        /** 
-         * Create or return the singleton factory instance
-         */
-        public static Factory getInstance() {
-            if (INSTANCE != null) {
-                return INSTANCE;
-            }
-            synchronized (CatIndexTool.class) {
-                if (INSTANCE != null) {
-                    return INSTANCE;
-                }
-                INSTANCE = new Factory();
-                return INSTANCE;
-            }
-        }
-
-        /**
-         * Initialize this factory
-         * @param client The OpenSearch client
-         * @param clusterService The OpenSearch cluster service
-         */
-        public void init(Client client, ClusterService clusterService) {
-            this.client = client;
-            this.clusterService = clusterService;
-        }
-
-        @Override
-        public CatIndexTool create(Map<String, Object> map) {
-            return new CatIndexTool(client, clusterService);
-        }
-
-        @Override
-        public String getDefaultDescription() {
-            return DEFAULT_DESCRIPTION;
-        }
-    }
 
     private Table getTableWithHeader() {
         Table table = new Table();

@@ -9,7 +9,7 @@ import org.opensearch.core.action.ActionListener;
 import java.util.Map;
 
 /**
- * General tool interface.
+ * General tool interface. Tool implementation needs to be thread safe.
  */
 public interface Tool {
 
@@ -29,7 +29,7 @@ public interface Tool {
      * @param listener an action listener for the response
      * @param <T> The output type
      */
-    default <T> void run(Map<String, String> parameters, ActionListener<T> listener) {};
+    default <T> void run(Map<String, String> toolSpec, Map<String, String> parameters, ActionListener<T> listener) {};
 
     /**
      * Set input parser.
@@ -85,7 +85,7 @@ public interface Tool {
      * @param parameters input parameters
      * @return true if the input is valid
      */
-    boolean validate(Map<String, String> parameters);
+    boolean validate(Map<String, String> toolSpec, Map<String, String> parameters);
 
     /**
      * Check if should end the whole CoT immediately.
@@ -107,23 +107,4 @@ public interface Tool {
         return false;
     }
 
-    /**
-     * Tool factory which can create instance of {@link Tool}.
-     * @param <T> The subclass this factory produces
-     */
-    interface Factory<T extends Tool> {
-        /**
-         * Create an instance of this tool.
-         *
-         * @param params Parameters for the tool
-         * @return an instance of this tool
-         */
-        T create(Map<String, Object> params);
-
-        /**
-         * Get the default description of this tool.
-         * @return the default description
-         */
-        String getDefaultDescription();
-    }
 }

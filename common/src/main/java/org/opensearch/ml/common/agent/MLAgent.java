@@ -39,6 +39,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+    public static final String APP_TYPE_FIELD = "app_type";
 
     private String name;
     private String type;
@@ -50,6 +51,7 @@ public class MLAgent implements ToXContentObject, Writeable {
 
     private Instant createdTime;
     private Instant lastUpdateTime;
+    private String appType;
 
     @Builder(toBuilder = true)
     public MLAgent(String name,
@@ -60,7 +62,8 @@ public class MLAgent implements ToXContentObject, Writeable {
                    Map<String, String> parameters,
                    MLMemorySpec memory,
                    Instant createdTime,
-                   Instant lastUpdateTime) {
+                   Instant lastUpdateTime,
+                   String appType) {
         if (name == null) {
             throw new IllegalArgumentException("agent name is null");
         }
@@ -73,6 +76,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.memory = memory;
         this.createdTime = createdTime;
         this.lastUpdateTime = lastUpdateTime;
+        this.appType = appType;
     }
 
     public MLAgent(StreamInput input) throws IOException{
@@ -97,6 +101,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         createdTime = input.readInstant();
         lastUpdateTime = input.readInstant();
+        appType = input.readString();
         if (!"flow".equals(type)) {
             Set<String> toolNames = new HashSet<>();
             for (MLToolSpec toolSpec : tools) {
@@ -141,6 +146,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
         out.writeInstant(createdTime);
         out.writeInstant(lastUpdateTime);
+        out.writeString(appType);
     }
 
     @Override
@@ -173,6 +179,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (lastUpdateTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
+        if (appType != null) {
+            builder.field(APP_TYPE_FIELD, appType);
+        }
         builder.endObject();
         return builder;
     }
@@ -187,6 +196,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         MLMemorySpec memory = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
+        String appType = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -225,6 +235,9 @@ public class MLAgent implements ToXContentObject, Writeable {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case APP_TYPE_FIELD:
+                    appType = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -240,6 +253,7 @@ public class MLAgent implements ToXContentObject, Writeable {
                 .memory(memory)
                 .createdTime(createdTime)
                 .lastUpdateTime(lastUpdateTime)
+                .appType(appType)
                 .build();
     }
 
