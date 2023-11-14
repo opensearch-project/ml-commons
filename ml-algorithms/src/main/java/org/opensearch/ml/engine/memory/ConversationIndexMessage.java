@@ -6,11 +6,13 @@
 package org.opensearch.ml.engine.memory;
 
 import lombok.Builder;
+import lombok.Data;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import java.io.IOException;
 import java.time.Instant;
 
+@Data
 public class ConversationIndexMessage extends BaseMessage {
 
     private String sessionId;
