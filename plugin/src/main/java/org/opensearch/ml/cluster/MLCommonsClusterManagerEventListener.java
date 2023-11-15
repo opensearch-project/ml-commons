@@ -8,6 +8,8 @@ package org.opensearch.ml.cluster;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 
+import java.util.List;
+
 import org.opensearch.client.Client;
 import org.opensearch.cluster.LocalNodeClusterManagerListener;
 import org.opensearch.cluster.service.ClusterService;
@@ -22,8 +24,6 @@ import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
 
 import lombok.extern.log4j.Log4j2;
-
-import java.util.List;
 
 @Log4j2
 public class MLCommonsClusterManagerEventListener implements LocalNodeClusterManagerListener {
@@ -81,9 +81,12 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         });
         mlModelAutoReDeployer.setStartCronJobListener(listener);
         String localNodeId = clusterService.localNode().getId();
-        threadPool.schedule(() -> mlModelAutoReDeployer.buildAutoReloadArrangement(List.of(localNodeId), localNodeId),
-            TimeValue.timeValueSeconds(jobInterval),
-            GENERAL_THREAD_POOL);
+        threadPool
+            .schedule(
+                () -> mlModelAutoReDeployer.buildAutoReloadArrangement(List.of(localNodeId), localNodeId),
+                TimeValue.timeValueSeconds(jobInterval),
+                GENERAL_THREAD_POOL
+            );
     }
 
     private void startSyncModelRoutingCron() {

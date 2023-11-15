@@ -18,7 +18,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import lombok.Setter;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
@@ -51,6 +50,7 @@ import com.google.common.collect.ImmutableMap;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2

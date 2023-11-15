@@ -244,20 +244,20 @@ public class MLSyncUpCron implements Runnable {
                     FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
                     MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
                     Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
-                                          ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
-                                          : null;
+                        ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
+                        : null;
                     int planningWorkerNodeCount = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                                                  ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                                                  : 0;
+                        ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
+                        : 0;
                     int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                                                        ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                                                        : 0;
+                        ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
+                        : 0;
                     boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                                               ? (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                                               : false;
+                        ? (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
+                        : false;
                     List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
-                                                     ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
-                                                     : new ArrayList<>();
+                        ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
+                        : new ArrayList<>();
                     if (deployToAllNodes) {
                         DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
                         planningWorkerNodeCount = eligibleNodes.length;
@@ -312,8 +312,8 @@ public class MLSyncUpCron implements Runnable {
         if (currentWorkerNodeCount == 0
             && state != MLModelState.DEPLOY_FAILED
             && !(state == MLModelState.DEPLOYING
-            && lastUpdateTime != null
-            && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
+                && lastUpdateTime != null
+                && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
             // If model not deployed to any node and no node is deploying the model, then set model state as DEPLOY_FAILED
             return MLModelState.DEPLOY_FAILED;
         }
