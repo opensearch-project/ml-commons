@@ -1,6 +1,7 @@
 package org.opensearch.ml.engine.tools;
 
 import lombok.Builder;
+import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -26,11 +27,15 @@ import java.util.Optional;
 public class VisualizationsTool implements Tool {
     public static final String NAME = "Find Visualizations";
     public static final String TYPE = "VisualizationTool";
+    public static final String VERSION = "v1.0";
+
     public static final String SAVED_OBJECT_TYPE = "visualization";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to find user created visualizations. This tool takes the visualization name as input and returns the first 3 matching visualizations";
     private String description = DEFAULT_DESCRIPTION;
 
+    private String name = NAME;
     private final Client client;
+    @Getter
     private final String index;
 
     @Builder
@@ -93,16 +98,17 @@ public class VisualizationsTool implements Tool {
 
     @Override
     public String getVersion() {
-        return null;
+        return VERSION;
     }
 
     @Override
     public String getName() {
-        return NAME;
+        return name;
     }
 
     @Override
     public void setName(String name) {
+        this.name = name;
     }
 
     @Override
