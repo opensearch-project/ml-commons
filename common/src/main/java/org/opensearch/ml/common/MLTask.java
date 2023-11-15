@@ -50,7 +50,8 @@ public class MLTask implements ToXContentObject, Writeable {
     @Setter
     private String modelId;
     private final MLTaskType taskType;
-    private final FunctionName functionName;
+    @Setter
+    private FunctionName functionName;
     @Setter
     private MLTaskState state;
     private final MLInputDataType inputType;

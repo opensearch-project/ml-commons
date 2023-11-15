@@ -21,9 +21,11 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
+import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
@@ -49,8 +51,10 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.PrivilegedActionException;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -167,6 +171,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private ActionListener<String> actionListener;
     @Mock
     private ScriptService scriptService;
+
+    @Mock
+    private MLTask pretrainedMLTask;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -371,6 +378,35 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlIndicesHandler).initModelIndexIfAbsent(any());
         verify(client).index(any(), any());
         verify(modelHelper).downloadAndSplit(eq(modelFormat), eq(modelId), eq(modelName), eq(version), eq(url), any(), any(), any());
+    }
+
+    public void testRegisterMLModel_RegisterPreBuildModel() throws PrivilegedActionException {
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+        MLRegisterModelInput pretrainedInput = mockPretrainedInput();
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelInput> listener = (ActionListener<MLRegisterModelInput>) invocation.getArguments()[2];
+            listener.onResponse(pretrainedInput);
+            return null;
+        }).when(modelHelper).downloadPrebuiltModelConfig(any(), any(), any());
+        MLTask pretrainedTask = MLTask
+            .builder()
+            .taskId("pretrained")
+            .modelId("pretrained")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .build();
+        modelManager.registerMLModel(pretrainedInput, pretrainedTask);
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.SPARSE_ENCODING);
+        verify(mlTaskManager)
+            .updateMLTask(
+                eq("pretrained"),
+                eq(ImmutableMap.of(FUNCTION_NAME_FIELD, FunctionName.SPARSE_ENCODING)),
+                eq((long) TIMEOUT_IN_MILLIS),
+                eq(false)
+            );
     }
 
     @Ignore
@@ -915,5 +951,16 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .totalChunks(2)
             .build();
         return input;
+    }
+
+    private MLRegisterModelInput mockPretrainedInput() {
+        return MLRegisterModelInput
+            .builder()
+            .modelName(modelName)
+            .version(version)
+            .modelGroupId("modelGroupId")
+            .modelFormat(modelFormat)
+            .functionName(FunctionName.SPARSE_ENCODING)
+            .build();
     }
 }
