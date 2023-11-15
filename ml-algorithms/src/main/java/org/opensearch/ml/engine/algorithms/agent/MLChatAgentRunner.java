@@ -79,7 +79,6 @@ public class MLChatAgentRunner {
     public static final String CONTEXT = "context";
     public static final String PROMPT = "prompt";
     public static final String LLM_RESPONSE = "llm_response";
-    public static final String APP_TYPE = "app_type";
 
     private Client client;
     private Settings settings;
@@ -101,7 +100,7 @@ public class MLChatAgentRunner {
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MEMORY_ID);
-        String appType = params.containsKey(APP_TYPE) ? params.get(APP_TYPE) : "OLLY";
+        String appType = mlAgent.getAppType();
         String title = params.get(QUESTION);
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
@@ -157,9 +156,9 @@ public class MLChatAgentRunner {
             if (toolSpec.getDescription() != null) {
                 tool.setDescription(toolSpec.getDescription());
             }
-            String toolType = Optional.ofNullable(tool.getType()).orElse(toolSpec.getType());
-            tools.put(toolType, tool);
-            toolSpecMap.put(toolType, toolSpec);
+            String toolName = Optional.ofNullable(tool.getName()).orElse(toolSpec.getType());
+            tools.put(toolName, tool);
+            toolSpecMap.put(toolName, toolSpec);
         }
 
         runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, listener);
