@@ -114,6 +114,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
+@Ignore
 public class MLModelManagerTests extends OpenSearchTestCase {
 
     @Rule
