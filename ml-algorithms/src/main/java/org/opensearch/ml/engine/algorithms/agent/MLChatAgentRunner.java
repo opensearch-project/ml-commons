@@ -102,9 +102,10 @@ public class MLChatAgentRunner {
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MEMORY_ID);
         String appType = params.containsKey(APP_TYPE) ? params.get(APP_TYPE) : "OLLY";
+        String title = params.get(QUESTION);
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(mlAgent.getName(), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory->{
+        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory->{
                 memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
                     List<Message> messageList = new ArrayList<>();
                     Iterator<Interaction> iterator = r.iterator();
@@ -219,7 +220,7 @@ public class MLChatAgentRunner {
 
 
         List<ModelTensors> cotModelTensors = new ArrayList<>();
-        cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name(SESSION_ID)
+        cotModelTensors.add(ModelTensors.builder().mlModelTensors(Arrays.asList(ModelTensor.builder().name(MEMORY_ID)
                 .result(sessionId).build())).build());
 
         StringBuilder scratchpadBuilder = new StringBuilder();
@@ -233,7 +234,7 @@ public class MLChatAgentRunner {
         StepListener<CreateInteractionResponse> createRootItListener = new StepListener<>();
         ConversationIndexMemory conversationIndexMemory = (ConversationIndexMemory) memory;
         ConversationIndexMessage msg = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response("").finalAnswer(true).sessionId(sessionId).build();
-        conversationIndexMemory.save(msg, null, null, createRootItListener);
+        conversationIndexMemory.save(msg, null, null, null, createRootItListener);
 
         //Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
@@ -300,7 +301,7 @@ public class MLChatAgentRunner {
                         String finalThought = thought;
                         createRootItListener.whenComplete(r -> {
                             ConversationIndexMessage msgTemp = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response(finalThought).finalAnswer(false).sessionId(sessionId).build();
-                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1));
+                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), null);
                         }, e-> {
                             log.error("Failed to save intermediate step interaction", e);
                         });
@@ -416,10 +417,10 @@ public class MLChatAgentRunner {
                     toolResponse = toolResponseSubstitutor.replace(toolResponse);
                     scratchpadBuilder.append(toolResponse).append("\n\n");
                     if (conversationIndexMemory != null) {
-                        String res = "Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result;
+//                        String res = "Action: " + lastAction.get() + "\nAction Input: " + lastActionInput + "\nObservation: " + result;
                         createRootItListener.whenComplete(r -> {
-                            ConversationIndexMessage msgTemp = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(question).response(res).finalAnswer(false).sessionId(sessionId).build();
-                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1));
+                            ConversationIndexMessage msgTemp = ConversationIndexMessage.conversationIndexMessageBuilder().type("ReAct").question(lastActionInput.get()).response((String) result).finalAnswer(false).sessionId(sessionId).build();
+                            conversationIndexMemory.save(msgTemp, r.getId(), traceNumber.addAndGet(1), lastAction.get());
                         }, e-> {
                             log.error("Failed to save final answer interaction", e);
                         });
