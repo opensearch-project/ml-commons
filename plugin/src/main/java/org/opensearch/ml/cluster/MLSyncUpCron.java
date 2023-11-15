@@ -32,10 +32,8 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
-import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -65,7 +63,6 @@ public class MLSyncUpCron implements Runnable {
     private volatile Boolean mlConfigInited;
     @VisibleForTesting
     Semaphore updateModelStateSemaphore;
-    private MLModelAutoReDeployer mlModelAutoReDeployer;
 
     public MLSyncUpCron(
         Client client,
@@ -247,20 +244,20 @@ public class MLSyncUpCron implements Runnable {
                     FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
                     MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
                     Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
-                        ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
-                        : null;
+                                          ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
+                                          : null;
                     int planningWorkerNodeCount = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                        ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                        : 0;
+                                                  ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
+                                                  : 0;
                     int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                        ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                        : 0;
+                                                        ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
+                                                        : 0;
                     boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                        ? (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                        : false;
+                                               ? (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
+                                               : false;
                     List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
-                        ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
-                        : new ArrayList<>();
+                                                     ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
+                                                     : new ArrayList<>();
                     if (deployToAllNodes) {
                         DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
                         planningWorkerNodeCount = eligibleNodes.length;
@@ -273,19 +270,17 @@ public class MLSyncUpCron implements Runnable {
                             newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
                         }
                     }
-                    if (modelWorkerNodes != null && modelWorkerNodes.size() != 0) {
-                        MLModelState mlModelState = getNewModelState(
-                            deployingModels,
-                            modelWorkerNodes,
-                            modelId,
-                            state,
-                            lastUpdateTime,
-                            planningWorkerNodeCount,
-                            currentWorkerNodeCountInIndex
-                        );
-                        if (mlModelState != null) {
-                            newModelStates.put(modelId, mlModelState);
-                        }
+                    MLModelState mlModelState = getNewModelState(
+                        deployingModels,
+                        modelWorkerNodes,
+                        modelId,
+                        state,
+                        lastUpdateTime,
+                        planningWorkerNodeCount,
+                        currentWorkerNodeCountInIndex
+                    );
+                    if (mlModelState != null) {
+                        newModelStates.put(modelId, mlModelState);
                     }
                 }
                 bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes);
@@ -317,8 +312,8 @@ public class MLSyncUpCron implements Runnable {
         if (currentWorkerNodeCount == 0
             && state != MLModelState.DEPLOY_FAILED
             && !(state == MLModelState.DEPLOYING
-                && lastUpdateTime != null
-                && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
+            && lastUpdateTime != null
+            && lastUpdateTime + DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS > Instant.now().toEpochMilli())) {
             // If model not deployed to any node and no node is deploying the model, then set model state as DEPLOY_FAILED
             return MLModelState.DEPLOY_FAILED;
         }
