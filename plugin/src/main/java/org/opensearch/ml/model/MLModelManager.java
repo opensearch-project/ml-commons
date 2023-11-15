@@ -1103,12 +1103,13 @@ public class MLModelManager {
             TimeUnit rateLimitUnit = mlModel.getRateLimitUnit();
             log
                 .debug(
-                    "Initializing the rate limiter for Model {}, with TPS limit {}, evenly distributed on {} nodes",
+                    "Initializing the rate limiter for Model {}, with TPS limit {} and burst capacity {}, evenly distributed on {} nodes",
                     mlModel.getModelId(),
                     rateLimitNumber / rateLimitUnit.toSeconds(1),
+                    rateLimitNumber,
                     eligibleNodeCount
                 );
-            return new TokenBucket(System::nanoTime, rateLimitNumber / rateLimitUnit.toNanos(1) / eligibleNodeCount, 2);
+            return new TokenBucket(System::nanoTime, rateLimitNumber / rateLimitUnit.toNanos(1) / eligibleNodeCount, rateLimitNumber);
         }
         return null;
     }
