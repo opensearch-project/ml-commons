@@ -43,6 +43,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 import com.google.gson.Gson;
+
 @Ignore
 public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
 
