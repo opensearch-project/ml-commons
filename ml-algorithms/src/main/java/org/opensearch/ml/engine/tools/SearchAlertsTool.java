@@ -67,10 +67,11 @@ public class SearchAlertsTool implements Tool {
         final String tableSortOrder = parameters.getOrDefault("sortOrder", "asc");
         final String tableSortString = parameters.getOrDefault("sortString", "monitor_name.keyword");
         final int tableSize = parameters.containsKey("size") ? Integer.parseInt(parameters.get("size")) : 20;
+        final int startIndex = parameters.containsKey("startIndex") ? Integer.parseInt(parameters.get("startIndex")) : 0;
         final String searchString = parameters.getOrDefault("searchString", null);
 
-        // not exposing "missing" or "startIndex" from the table, using defaults of null/0, respectively
-        final Table table = new Table(tableSortOrder, tableSortString, null, tableSize, 0, searchString);
+        // not exposing "missing" from the table, using default of null
+        final Table table = new Table(tableSortOrder, tableSortString, null, tableSize, startIndex, searchString);
 
         final String severityLevel = parameters.getOrDefault("severityLevel", "ALL");
         final String alertState = parameters.getOrDefault("alertState", "ALL");
