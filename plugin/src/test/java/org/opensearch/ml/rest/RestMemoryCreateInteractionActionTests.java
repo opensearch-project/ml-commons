@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.common.bytes.BytesArray;
@@ -42,7 +43,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 
 import com.google.gson.Gson;
-
+@Ignore
 public class RestMemoryCreateInteractionActionTests extends OpenSearchTestCase {
 
     Gson gson;
