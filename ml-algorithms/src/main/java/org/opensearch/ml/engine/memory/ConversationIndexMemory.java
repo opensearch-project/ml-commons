@@ -31,6 +31,7 @@ import org.opensearch.search.sort.SortOrder;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -102,7 +103,7 @@ public class ConversationIndexMemory implements Memory {
 
     public void save(Message message, String parentId, Integer traceNum, ActionListener listener) {
         ConversationIndexMessage msg = (ConversationIndexMessage) message;
-        memoryManager.createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), null, null, parentId, traceNum, listener);
+        memoryManager.createInteraction(conversationId, msg.getQuestion(), null, msg.getResponse(), null, Collections.singletonMap("None", "None"), parentId, traceNum, listener);
     }
 
     @Override
