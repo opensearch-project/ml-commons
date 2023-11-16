@@ -31,17 +31,20 @@ public class MLModelGetRequest extends ActionRequest {
 
     String modelId;
     boolean returnContent;
+    boolean isDirectRequest;
 
     @Builder
-    public MLModelGetRequest(String modelId, boolean returnContent) {
+    public MLModelGetRequest(String modelId, boolean returnContent, boolean isDirectRequest) {
         this.modelId = modelId;
         this.returnContent = returnContent;
+        this.isDirectRequest = isDirectRequest;
     }
 
     public MLModelGetRequest(StreamInput in) throws IOException {
         super(in);
         this.modelId = in.readString();
         this.returnContent = in.readBoolean();
+        this.isDirectRequest = in.readBoolean();
     }
 
     @Override
@@ -49,6 +52,7 @@ public class MLModelGetRequest extends ActionRequest {
         super.writeTo(out);
         out.writeString(this.modelId);
         out.writeBoolean(returnContent);
+        out.writeBoolean(isDirectRequest);
     }
 
     @Override

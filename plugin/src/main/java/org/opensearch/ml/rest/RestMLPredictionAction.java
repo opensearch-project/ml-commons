@@ -90,7 +90,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         }
 
         return channel -> {
-            MLModelGetRequest getModelRequest = new MLModelGetRequest(modelId, false);
+            MLModelGetRequest getModelRequest = new MLModelGetRequest(modelId, false, false);
             ActionListener<MLModelGetResponse> listener = ActionListener.wrap(r -> {
                 MLModel mlModel = r.getMlModel();
                 String algoName = mlModel.getAlgorithm().name();

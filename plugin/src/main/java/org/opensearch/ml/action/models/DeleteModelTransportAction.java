@@ -85,7 +85,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.fromActionRequest(request);
         String modelId = mlModelDeleteRequest.getModelId();
-        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false);
+        MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
