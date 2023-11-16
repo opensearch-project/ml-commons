@@ -85,7 +85,7 @@ public class MLAgentExecutor implements Executable {
         if (clusterService.state().metadata().hasIndex(ML_AGENT_INDEX)) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 GetRequest getRequest = new GetRequest(ML_AGENT_INDEX).id(agentId);
-                client.get(getRequest, ActionListener.<GetResponse>wrap(r -> {
+                client.get(getRequest, ActionListener.runBefore(ActionListener.<GetResponse>wrap(r -> {
                     if (r.isExists()) {
                         try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -146,7 +146,7 @@ public class MLAgentExecutor implements Executable {
                 }, e -> {
                     log.error("Failed to get agent", e);
                     listener.onFailure(e);
-                }));
+                }), () -> context.restore()));
             }
         }
 
