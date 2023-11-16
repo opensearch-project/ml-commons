@@ -277,7 +277,7 @@ public class MLRegisterModelInputTest {
                 .deployModel(true)
                 .modelNodeIds(new String[]{"modelNodeIds" })
                 .build();
-        XContentBuilder builder = XContentFactory.jsonBuilder();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         mcorrInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
         assertEquals(testString, jsonStr);
