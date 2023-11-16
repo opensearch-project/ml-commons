@@ -91,6 +91,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     private void startSyncModelRoutingCron() {
         if (jobInterval > 0) {
+            log.info("Starting ML sync up job...");
             syncModelRoutingCron = threadPool
                 .scheduleWithFixedDelay(
                     new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor),
