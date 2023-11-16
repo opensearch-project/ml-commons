@@ -114,7 +114,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("User Doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetModel_ValidateAccessFailed() throws IOException {
