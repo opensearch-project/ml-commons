@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.tools;
 
 import org.junit.Assert;
@@ -16,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.spi.tools.Tool;
 
 import java.io.IOException;
@@ -40,12 +46,12 @@ public class VisualizationToolTests {
         MockitoAnnotations.openMocks(this);
         VisualizationsTool.Factory.getInstance().init(client);
         try (InputStream searchResponseIns = VisualizationToolTests.class.getResourceAsStream("visualization.json")) {
-            if (searchResponseIns !=null) {
+            if (searchResponseIns != null) {
                 searchResponse = new String(searchResponseIns.readAllBytes());
             }
         }
         try (InputStream searchResponseIns = VisualizationToolTests.class.getResourceAsStream("visualization_not_found.json")) {
-            if (searchResponseIns !=null) {
+            if (searchResponseIns != null) {
                 searchResponseNotFound = new String(searchResponseIns.readAllBytes());
             }
         }
@@ -111,6 +117,26 @@ public class VisualizationToolTests {
 
         SearchResponse response = SearchResponse.fromXContent(JsonXContent.jsonXContent.createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.IGNORE_DEPRECATIONS, searchResponseNotFound));
         searchResponseListener.getValue().onResponse(response);
+
+        future.join();
+        assertEquals("No Visualization found", future.get());
+    }
+
+    @Test
+    public void testRunToolWithIndexNotExists() throws Exception {
+        Tool tool = VisualizationsTool.Factory.getInstance().create(Collections.emptyMap());
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+
+        ArgumentCaptor<ActionListener<SearchResponse>> searchResponseListener = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(client).search(any(SearchRequest.class), searchResponseListener.capture());
+
+        Map<String, String> params = Map.of("input", "Sales by gender");
+
+        tool.run(params, listener);
+
+        IndexNotFoundException notFoundException = new IndexNotFoundException("test-index");
+        searchResponseListener.getValue().onFailure(notFoundException);
 
         future.join();
         assertEquals("No Visualization found", future.get());

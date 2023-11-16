@@ -1,13 +1,20 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.tools;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -76,7 +83,11 @@ public class VisualizationsTool implements Tool {
 
             @Override
             public void onFailure(Exception e) {
-                listener.onFailure(e);
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                    listener.onResponse((T) "No Visualization found");
+                } else {
+                    listener.onFailure(e);
+                }
             }
         });
     }
