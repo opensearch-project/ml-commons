@@ -47,7 +47,8 @@ dependencies {
     implementation("ai.djl.onnxruntime:onnxruntime-engine:0.21.0") {
         exclude group: "com.microsoft.onnxruntime", module: "onnxruntime"
     }
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.3.50"
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
+
     def os = DefaultNativePlatform.currentOperatingSystem
     //mac doesn't support GPU
     if (os.macOsX) {
