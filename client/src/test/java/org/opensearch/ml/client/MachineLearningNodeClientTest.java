@@ -56,6 +56,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
@@ -66,6 +67,9 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
+import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -151,6 +155,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<MLRegisterModelGroupResponse> registerModelGroupResponseActionListener;
+
+    @Mock
+    ActionListener<MLRegisterAgentResponse> registerAgentResponseActionListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -676,6 +683,27 @@ public class MachineLearningNodeClientTest {
 
     }
 
+    @Test
+    public void testRegisterAgent() {
+        String agentId = "agentId";
+
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterAgentResponse> actionListener = invocation.getArgument(2);
+            MLRegisterAgentResponse output = new MLRegisterAgentResponse(agentId);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLRegisterAgentAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        MLAgent mlAgent = MLAgent.builder().name("Agent name").build();
+
+        machineLearningNodeClient.registerAgent(mlAgent, registerAgentResponseActionListener);
+
+        verify(client).execute(eq(MLRegisterAgentAction.INSTANCE), isA(MLRegisterAgentRequest.class), any());
+        verify(registerAgentResponseActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(agentId, (argumentCaptor.getValue()).getAgentId());
+    }
+
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {
         XContentBuilder content = o.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
 
@@ -701,4 +729,5 @@ public class MachineLearningNodeClientTest {
             SearchResponse.Clusters.EMPTY
         );
     }
+
 }

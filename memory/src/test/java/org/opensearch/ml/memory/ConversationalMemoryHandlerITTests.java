@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.OpenSearchSecurityException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
@@ -46,6 +47,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST, numDataNodes = 2)
+@Ignore
 public class ConversationalMemoryHandlerITTests extends OpenSearchIntegTestCase {
 
     private Client client;

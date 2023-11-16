@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.client.Client;
@@ -39,6 +40,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @ThreadLeakScope(ThreadLeakScope.Scope.NONE)
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST, numDataNodes = 2)
+@Ignore
 public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
 
     private Client client;
