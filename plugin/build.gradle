@@ -101,6 +101,10 @@ compileJava {
     options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
 }
 
+compileTestJava {
+    options.compilerArgs.addAll(["-processor", 'lombok.launch.AnnotationProcessorHider$AnnotationProcessor'])
+}
+
 //TODO: check which one should be enabled
 licenseHeaders.enabled = true
 testingConventions.enabled = false
