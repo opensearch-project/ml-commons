@@ -5,12 +5,22 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
+import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import org.apache.http.ProtocolVersion;
-import org.apache.http.StatusLine;
-import org.apache.http.message.BasicStatusLine;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -41,22 +51,6 @@ import software.amazon.awssdk.http.ExecutableHttpRequest;
 import software.amazon.awssdk.http.HttpExecuteResponse;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.SdkHttpResponse;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
-import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
-import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
 
 public class AwsConnectorExecutorTest {
 
@@ -154,15 +148,25 @@ public class AwsConnectorExecutorTest {
         when(response.httpResponse()).thenReturn(httpResponse);
         when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
 
-        ConnectorAction predictAction = ConnectorAction.builder()
-                .actionType(ConnectorAction.ActionType.PREDICT)
-                .method("POST")
-                .url("http://test.com/mock")
-                .requestBody("{\"input\": \"${parameters.input}\"}")
-                .build();
-        Map<String, String> credential = ImmutableMap.of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
-        Connector connector = AwsConnector.awsConnectorBuilder().name("test connector").version("1").protocol("http").parameters(parameters).credential(credential).actions(Arrays.asList(predictAction)).build();
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
 
@@ -250,7 +254,8 @@ public class AwsConnectorExecutorTest {
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
 
         MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
-        ModelTensorOutput modelTensorOutput = executor.executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
+        ModelTensorOutput modelTensorOutput = executor
+            .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().size());
         Assert.assertEquals("response", modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getName());

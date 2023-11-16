@@ -33,10 +33,17 @@ public interface RemoteConnectorExecutor {
         if (mlInput.getInputDataset() instanceof TextDocsInputDataSet) {
             TextDocsInputDataSet textDocsInputDataSet = (TextDocsInputDataSet) mlInput.getInputDataset();
             int processedDocs = 0;
-            while(processedDocs < textDocsInputDataSet.getDocs().size()) {
+            while (processedDocs < textDocsInputDataSet.getDocs().size()) {
                 List<String> textDocs = textDocsInputDataSet.getDocs().subList(processedDocs, textDocsInputDataSet.getDocs().size());
                 List<ModelTensors> tempTensorOutputs = new ArrayList<>();
-                preparePayloadAndInvokeRemoteModel(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build()).build(), tempTensorOutputs);
+                preparePayloadAndInvokeRemoteModel(
+                    MLInput
+                        .builder()
+                        .algorithm(FunctionName.TEXT_EMBEDDING)
+                        .inputDataset(TextDocsInputDataSet.builder().docs(textDocs).build())
+                        .build(),
+                    tempTensorOutputs
+                );
                 int tensorCount = 0;
                 if (tempTensorOutputs.size() > 0 && tempTensorOutputs.get(0).getMlModelTensors() != null) {
                     tensorCount = tempTensorOutputs.get(0).getMlModelTensors().size();

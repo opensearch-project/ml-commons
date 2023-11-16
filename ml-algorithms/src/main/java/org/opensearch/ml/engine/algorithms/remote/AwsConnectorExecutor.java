@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
+import static software.amazon.awssdk.http.SdkHttpMethod.POST;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -34,11 +39,6 @@ import software.amazon.awssdk.http.HttpExecuteRequest;
 import software.amazon.awssdk.http.HttpExecuteResponse;
 import software.amazon.awssdk.http.SdkHttpClient;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
-
-import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
-import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
-import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 @Log4j2
 @ConnectorExecutor(AWS_SIGV4)
