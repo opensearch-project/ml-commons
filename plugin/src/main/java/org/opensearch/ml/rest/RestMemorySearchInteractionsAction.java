@@ -38,7 +38,7 @@ import org.opensearch.rest.RestResponse;
 import org.opensearch.rest.action.RestResponseListener;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-import com.google.common.collect.ImmutableList;
+import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 
 public class RestMemorySearchInteractionsAction extends BaseRestHandler {
     private static final String SEARCH_INTERACTIONS_NAME = "conversation_memory_search_interactions";
