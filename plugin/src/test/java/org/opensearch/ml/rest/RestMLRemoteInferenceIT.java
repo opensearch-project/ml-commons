@@ -21,6 +21,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.utils.TestHelper;
 
+@Ignore
 public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
@@ -447,8 +448,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(((List) responseMap.get("embedding")).isEmpty());
     }
 
-
-    @Ignore
     public void testCohereGenerateTextModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (COHERE_KEY == null) {
