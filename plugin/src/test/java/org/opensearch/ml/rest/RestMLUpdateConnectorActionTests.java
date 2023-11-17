@@ -67,7 +67,6 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
-        when(mlFeatureEnabledSetting.isUpdateConnectorEnabled()).thenReturn(true);
         restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
 
         doAnswer(invocation -> {

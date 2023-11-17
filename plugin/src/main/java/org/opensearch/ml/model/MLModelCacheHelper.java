@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
@@ -73,6 +74,50 @@ public class MLModelCacheHelper {
     public synchronized void setModelState(String modelId, MLModelState state) {
         log.debug("Updating State of Model {}  to state {}", modelId, state);
         getExistingModelCache(modelId).setModelState(state);
+    }
+
+    /**
+     * Set a rate limiter to enable throttling
+     * @param modelId model id
+     * @param rateLimiter rate limiter
+     */
+    public synchronized void setRateLimiter(String modelId, TokenBucket rateLimiter) {
+        log.debug("Setting the rate limiter for Model {}", modelId);
+        getExistingModelCache(modelId).setRateLimiter(rateLimiter);
+    }
+
+    /**
+     * Get the current rate limiter for the model
+     * @param modelId model id
+     */
+    public TokenBucket getRateLimiter(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getRateLimiter();
+    }
+
+    /**
+     * Set a quota flag to control if the model can still receive request
+     * @param modelId model id
+     * @param quotaFlag rate limiter
+     */
+    public synchronized void setQuotaFlag(String modelId, Boolean quotaFlag) {
+        log.debug("Setting the quota flag for Model {}", modelId);
+        getExistingModelCache(modelId).setQuotaFlag(quotaFlag);
+    }
+
+    /**
+     * Get the current quota flag condition for the model
+     * @param modelId model id
+     */
+    public Boolean getQuotaFlag(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getQuotaFlag();
     }
 
     /**

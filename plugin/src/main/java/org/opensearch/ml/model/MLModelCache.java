@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.DoubleStream;
 
+import org.opensearch.common.util.TokenBucket;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -33,6 +34,8 @@ public class MLModelCache {
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) FunctionName functionName;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Predictable predictor;
     private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) MLExecutable executor;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) TokenBucket rateLimiter;
+    private @Setter(AccessLevel.PROTECTED) @Getter(AccessLevel.PROTECTED) Boolean quotaFlag;
     private final Set<String> targetWorkerNodes;
     private final Set<String> workerNodes;
     private MLModel modelInfo;
