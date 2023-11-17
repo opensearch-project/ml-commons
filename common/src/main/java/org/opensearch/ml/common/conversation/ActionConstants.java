@@ -56,10 +56,13 @@ public class ActionConstants {
     public final static String SUCCESS_FIELD = "success";
 
     private final static String BASE_REST_PATH = "/_plugins/_ml/memory/conversation";
+    private final static String BASE_REST_INTERACTION_PATH = "/_plugins/_ml/memory/interaction";
     /** path for create conversation */
     public final static String CREATE_CONVERSATION_REST_PATH = BASE_REST_PATH + "/_create";
     /** path for list conversations */
     public final static String GET_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/_list";
+    /** path for update conversations */
+    public final static String UPDATE_CONVERSATIONS_REST_PATH  = BASE_REST_PATH + "/{conversation_id}/_update";
     /** path for put interaction */
     public final static String CREATE_INTERACTION_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_create";
     /** path for get interactions */
@@ -70,6 +73,8 @@ public class ActionConstants {
     public final static String SEARCH_CONVERSATIONS_REST_PATH = BASE_REST_PATH + "/_search";
     /** path for search interactions */
     public final static String SEARCH_INTERACTIONS_REST_PATH = BASE_REST_PATH + "/{conversation_id}/_search";
+    /** path for update interactions */
+    public final static String UPDATE_INTERACTIONS_REST_PATH = BASE_REST_INTERACTION_PATH + "/{interaction_id}/_update";
 
     /** default max results returned by get operations */
     public final static int DEFAULT_MAX_RESULTS = 10;
