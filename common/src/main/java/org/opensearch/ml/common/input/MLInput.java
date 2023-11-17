@@ -9,7 +9,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -58,8 +57,8 @@ public class MLInput implements Input {
     public static final String TARGET_RESPONSE_POSITIONS_FIELD = "target_response_positions";
     // Input text sentences for text embedding model
     public static final String TEXT_DOCS_FIELD = "text_docs";
-    // Input text pairs for text similarity model
-    public static final String TEXT_PAIRS_FIELD = "text_pairs";
+    // Input query text to compare against for text similarity model
+    public static final String QUERY_TEXT_FIELD = "query_text";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -165,14 +164,13 @@ public class MLInput implements Input {
                     break;
                 case TEXT_SIMILARITY:
                     TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
-                    List<Pair<String, String>> pairs = ds.getPairs();
-                    if (pairs != null && !pairs.isEmpty()) {
-                        builder.startArray(TEXT_PAIRS_FIELD);
-                        for(Pair<String, String> p : pairs) {
-                            builder.startArray();
-                            builder.value(p.getLeft());
-                            builder.value(p.getRight());
-                            builder.endArray();
+                    List<String> tdocs = ds.getTextDocs();
+                    String queryText = ds.getQueryText();
+                    builder.field(QUERY_TEXT_FIELD, queryText);
+                    if (tdocs != null && !tdocs.isEmpty()) {
+                        builder.startArray(TEXT_DOCS_FIELD);
+                        for(String d : tdocs) {
+                            builder.value(d);
                         }
                         builder.endArray();
                     }
@@ -206,7 +204,7 @@ public class MLInput implements Input {
         List<String> targetResponse = new ArrayList<>();
         List<Integer> targetResponsePositions = new ArrayList<>();
         List<String> textDocs = new ArrayList<>();
-        List<Pair<String, String>> textPairs = new ArrayList<>();
+        String queryText = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -254,17 +252,8 @@ public class MLInput implements Input {
                         textDocs.add(parser.text());
                     }
                     break;
-                case TEXT_PAIRS_FIELD:
-                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                        parser.nextToken();
-                        String query = parser.text();
-                        parser.nextToken();
-                        String context = parser.text();
-                        textPairs.add(Pair.of(query, context));
-                        ensureExpectedToken(XContentParser.Token.END_ARRAY, parser.nextToken(), parser);
-                    }
+                case QUERY_TEXT_FIELD:
+                    queryText = parser.text();
                     break;
                 default:
                     parser.skipChildren();
@@ -277,7 +266,7 @@ public class MLInput implements Input {
             inputDataSet = new TextDocsInputDataSet(textDocs, filter);
         }
         if (algorithm == FunctionName.TEXT_SIMILARITY) {
-            inputDataSet = new TextSimilarityInputDataSet(textPairs);
+            inputDataSet = new TextSimilarityInputDataSet(queryText, textDocs);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }

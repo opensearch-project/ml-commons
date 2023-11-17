@@ -105,9 +105,10 @@ public class TextSimilarityCrossEncoderModelTest {
         textSimilarityCrossEncoderModel = new TextSimilarityCrossEncoderModel();
 
         inputDataSet = TextSimilarityInputDataSet.builder()
-            .pairs(Arrays.asList(
-                Pair.of("today is sunny", "That is a happy dog"), 
-                Pair.of("today is sunny", "it's summer")))
+            .textDocs(Arrays.asList(
+                "That is a happy dog", 
+                "it's summer"))
+            .queryText("it's summer")
             .build();
     }
 

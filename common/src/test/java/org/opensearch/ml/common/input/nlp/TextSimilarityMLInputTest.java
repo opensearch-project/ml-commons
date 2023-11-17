@@ -53,11 +53,9 @@ public class TextSimilarityMLInputTest {
 
     @Before
     public void setup() {
-        List<Pair<String, String>> pairs = List.of(
-            Pair.of("today is sunny", "That is a happy dog"), 
-            Pair.of("today is sunny", "it's summer")
-        );
-        MLInputDataset dataset = TextSimilarityInputDataSet.builder().pairs(pairs).build();
+        List<String> docs = List.of("That is a happy dog", "it's summer");
+        String queryText = "today is sunny";
+        MLInputDataset dataset = TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build();
         input = new TextSimilarityMLInput(algorithm, dataset);
     }
 
@@ -75,10 +73,12 @@ public class TextSimilarityMLInputTest {
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());
         assert (parsedInput instanceof TextSimilarityMLInput);
         TextSimilarityMLInput parsedTSMLI = (TextSimilarityMLInput) parsedInput;
-        List<Pair<String, String>> pairs = ((TextSimilarityInputDataSet) parsedTSMLI.getInputDataset()).getPairs();
-        assert (pairs.size() == 2);
-        assert (pairs.get(0).equals(Pair.of("today is sunny", "That is a happy dog")));
-        assert (pairs.get(1).equals(Pair.of("today is sunny", "it's summer")));
+        List<String> docs = ((TextSimilarityInputDataSet) parsedTSMLI.getInputDataset()).getTextDocs();
+        String queryText = ((TextSimilarityInputDataSet) parsedTSMLI.getInputDataset()).getQueryText();
+        assert (docs.size() == 2);
+        assert (docs.get(0).equals("That is a happy dog"));
+        assert (docs.get(1).equals("it's summer"));
+        assert (queryText.equals("today is sunny"));
     }
 
     @Test
@@ -86,12 +86,12 @@ public class TextSimilarityMLInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assert (jsonStr.equals("{\"algorithm\":\"TEXT_SIMILARITY\",\"text_pairs\":[[\"today is sunny\",\"That is a happy dog\"],[\"today is sunny\",\"it's summer\"]]}"));
+        assert (jsonStr.equals("{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}"));
     }
 
     @Test
     public void testParseJson() throws IOException {
-        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"text_pairs\":[[\"today is sunny\",\"That is a happy dog\"],[\"today is sunny\",\"it's summer\"]]}";
+        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[\"That is a happy dog\",\"it's summer\"]}";
         XContentParser parser = XContentType.JSON.xContent()
                 .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                         Collections.emptyList()).getNamedXContents()), null, json);
@@ -100,15 +100,17 @@ public class TextSimilarityMLInputTest {
         MLInput parsedInput = MLInput.parse(parser, input.getFunctionName().name());
         assert (parsedInput instanceof TextSimilarityMLInput);
         TextSimilarityMLInput parsedTSMLI = (TextSimilarityMLInput) parsedInput;
-        List<Pair<String, String>> pairs = ((TextSimilarityInputDataSet) parsedTSMLI.getInputDataset()).getPairs();
-        assert (pairs.size() == 2);
-        assert (pairs.get(0).equals(Pair.of("today is sunny", "That is a happy dog")));
-        assert (pairs.get(1).equals(Pair.of("today is sunny", "it's summer")));
+        List<String> docs = ((TextSimilarityInputDataSet) parsedTSMLI.getInputDataset()).getTextDocs();
+        String queryText = ((TextSimilarityInputDataSet) parsedTSMLI.getInputDataset()).getQueryText();
+        assert (docs.size() == 2);
+        assert (docs.get(0).equals("That is a happy dog"));
+        assert (docs.get(1).equals("it's summer"));
+        assert (queryText.equals("today is sunny"));
     }
 
     @Test
     public void testParseJson_NoPairs_ThenFail() throws IOException {
-        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"text_pairs\":[]}";
+        String json = "{\"algorithm\":\"TEXT_SIMILARITY\",\"query_text\":\"today is sunny\",\"text_docs\":[]}";
         XContentParser parser = XContentType.JSON.xContent()
                 .createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                         Collections.emptyList()).getNamedXContents()), null, json);
@@ -116,7 +118,7 @@ public class TextSimilarityMLInputTest {
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
             () -> MLInput.parse(parser, input.getFunctionName().name()));
-        assert (e.getMessage().equals("no text pairs"));
+        assert (e.getMessage().equals("no text docs"));
     }
 
     @Test
@@ -126,8 +128,8 @@ public class TextSimilarityMLInputTest {
         input.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         TextSimilarityMLInput newInput = new TextSimilarityMLInput(in);
-        List<Pair<String, String>> newPairs = ((TextSimilarityInputDataSet) newInput.getInputDataset()).getPairs();
-        List<Pair<String, String>> oldPairs = ((TextSimilarityInputDataSet) input.getInputDataset()).getPairs();
+        List<String> newPairs = ((TextSimilarityInputDataSet) newInput.getInputDataset()).getTextDocs();
+        List<String> oldPairs = ((TextSimilarityInputDataSet) input.getInputDataset()).getTextDocs();
         assert (newPairs.equals(oldPairs));
     }
 

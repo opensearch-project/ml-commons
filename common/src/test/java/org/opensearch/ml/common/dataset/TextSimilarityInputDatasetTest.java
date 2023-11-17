@@ -22,7 +22,6 @@ import static org.junit.Assert.assertThrows;
 import java.io.IOException;
 import java.util.List;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -35,24 +34,24 @@ public class TextSimilarityInputDatasetTest {
     
     @Test
     public void testStreaming() throws IOException {
-        List<Pair<String, String>> pairs = List.of(
-            Pair.of("today is sunny", "That is a happy dog"), 
-            Pair.of("today is sunny", "it's summer")
-        );
-        TextSimilarityInputDataSet dataset = TextSimilarityInputDataSet.builder().pairs(pairs).build();
+        List<String> docs = List.of("That is a happy dog", "it's summer");
+        String queryText = "today is sunny";
+        TextSimilarityInputDataSet dataset = TextSimilarityInputDataSet.builder().queryText(queryText).textDocs(docs).build();
         BytesStreamOutput outbytes = new BytesStreamOutput();
         StreamOutput osso = new OutputStreamStreamOutput(outbytes);
         dataset.writeTo(osso);
         StreamInput in = new BytesStreamInput(BytesReference.toBytes(outbytes.bytes()));
         TextSimilarityInputDataSet newDs = (TextSimilarityInputDataSet) MLInputDataset.fromStream(in);
-        assert (dataset.getPairs().equals(newDs.getPairs()));
+        assert (dataset.getTextDocs().equals(newDs.getTextDocs()));
+        assert (dataset.getQueryText().equals(newDs.getQueryText()));
     }
 
     @Test
     public void noPairs_ThenFail() {
-        List<Pair<String, String>> pairs = List.of();
+        List<String> docs = List.of();
+        String queryText = "today is sunny";
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> TextSimilarityInputDataSet.builder().pairs(pairs).build());
+            () -> TextSimilarityInputDataSet.builder().textDocs(docs).queryText(queryText).build());
         assert (e.getMessage().equals("pairs must be nonempty"));
     }
 }

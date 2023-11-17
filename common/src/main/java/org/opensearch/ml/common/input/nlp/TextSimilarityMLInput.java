@@ -21,7 +21,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -36,12 +35,11 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 
 /**
  * MLInput which supports a text similarity algorithm
- * Inputs are pairs of texts. Outputs are real numbers
+ * Inputs are a query and a list of texts. Outputs are real numbers
  * Use this for Cross Encoder models
  */
 @org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_SIMILARITY})
 public class TextSimilarityMLInput extends MLInput {
-    public static final String TEXT_PAIRS_FIELD = "text_pairs";
 
     public TextSimilarityMLInput(FunctionName algorithm, MLInputDataset dataset) {
         super(algorithm, null, dataset);
@@ -65,14 +63,13 @@ public class TextSimilarityMLInput extends MLInput {
         }
         if(inputDataset != null) {
             TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
-            List<Pair<String, String>> pairs = ds.getPairs();
-            if (pairs != null && !pairs.isEmpty()) {
-                builder.startArray(TEXT_PAIRS_FIELD);
-                for(Pair<String, String> p : pairs) {
-                    builder.startArray();
-                    builder.value(p.getLeft());
-                    builder.value(p.getRight());
-                    builder.endArray();
+            List<String> docs = ds.getTextDocs();
+            String queryText = ds.getQueryText();
+            builder.field(QUERY_TEXT_FIELD, queryText);
+            if (docs != null && !docs.isEmpty()) {
+                builder.startArray(TEXT_DOCS_FIELD);
+                for(String d : docs) {
+                    builder.value(d);
                 }
                 builder.endArray();
             }
@@ -84,7 +81,8 @@ public class TextSimilarityMLInput extends MLInput {
     public TextSimilarityMLInput(XContentParser parser, FunctionName functionName) throws IOException {
         super();
         this.algorithm = functionName;
-        List<Pair<String, String>> pairs = new ArrayList<>();
+        List<String> docs = new ArrayList<>();
+        String queryText = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -92,27 +90,27 @@ public class TextSimilarityMLInput extends MLInput {
             parser.nextToken();
 
             switch (fieldName) {
-                case TEXT_PAIRS_FIELD:
+                case TEXT_DOCS_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                        parser.nextToken();
-                        String query = parser.text();
-                        parser.nextToken();
                         String context = parser.text();
-                        pairs.add(Pair.of(query, context));
-                        ensureExpectedToken(XContentParser.Token.END_ARRAY, parser.nextToken(), parser);
+                        docs.add(context);
                     }
                     break;
+                case QUERY_TEXT_FIELD: 
+                    queryText = parser.text();
                 default:
                     parser.skipChildren();
                     break;
             }
         }        
-        if(pairs.isEmpty()) {
-            throw new IllegalArgumentException("no text pairs");
+        if(docs.isEmpty()) {
+            throw new IllegalArgumentException("no text docs");
         }
-        inputDataset = new TextSimilarityInputDataSet(pairs);
+        if(queryText == null) {
+            throw new IllegalArgumentException("no query text");
+        }
+        inputDataset = new TextSimilarityInputDataSet(queryText, docs);
     }
 
 }

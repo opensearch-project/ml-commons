@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
@@ -37,36 +36,40 @@ import lombok.experimental.FieldDefaults;
 @InputDataSet(MLInputDataType.TEXT_SIMILARITY)
 public class TextSimilarityInputDataSet extends MLInputDataset {
     
-    private List<Pair<String, String>> pairs;
+    private List<String> textDocs;
+
+    private String queryText;
 
     @Builder(toBuilder = true)
-    public TextSimilarityInputDataSet(List<Pair<String, String>> pairs) {
+    public TextSimilarityInputDataSet(String queryText, List<String> textDocs) {
         super(MLInputDataType.TEXT_SIMILARITY);
-        Objects.requireNonNull(pairs);
-        if(pairs.isEmpty()) {
+        Objects.requireNonNull(textDocs);
+        Objects.requireNonNull(queryText);
+        if(textDocs.isEmpty()) {
             throw new IllegalArgumentException("pairs must be nonempty");
         }
-        this.pairs = pairs;
+        this.textDocs = textDocs;
+        this.queryText = queryText;
     }
 
     public TextSimilarityInputDataSet(StreamInput in) throws IOException {
         super(MLInputDataType.TEXT_SIMILARITY);
+        this.queryText = in.readString();
         int size = in.readInt();
-        this.pairs = new ArrayList<Pair<String, String>>();
+        this.textDocs = new ArrayList<String>();
         for(int i = 0; i < size; i++) {
-            String query = in.readString();
             String context = in.readString();
-            this.pairs.add(Pair.of(query, context));
+            this.textDocs.add(context);
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeInt(this.pairs.size());
-        for (Pair<String, String> p : this.pairs) {
-            out.writeString(p.getLeft());
-            out.writeString(p.getRight());
+        out.writeString(queryText);
+        out.writeInt(this.textDocs.size());
+        for (String doc : this.textDocs) {
+            out.writeString(doc);
         }
     }
 }

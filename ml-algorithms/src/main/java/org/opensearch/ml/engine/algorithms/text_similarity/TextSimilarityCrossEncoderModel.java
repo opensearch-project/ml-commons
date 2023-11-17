@@ -20,7 +20,6 @@ package org.opensearch.ml.engine.algorithms.text_similarity;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
@@ -46,10 +45,11 @@ public class TextSimilarityCrossEncoderModel extends DLModel {
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
         TextSimilarityInputDataSet textSimInput = (TextSimilarityInputDataSet) inputDataSet;
-        for (Pair<String, String> pair : textSimInput.getPairs()) {
+        String queryText = textSimInput.getQueryText();
+        for (String doc : textSimInput.getTextDocs()) {
             Input input = new Input();
-            input.add(pair.getLeft());
-            input.add(pair.getRight());
+            input.add(queryText);
+            input.add(doc);
             output = getPredictor().predict(input);
             ModelTensors outputTensors = ModelTensors.fromBytes(output.getData().getAsBytes());
             tensorOutputs.add(outputTensors);
