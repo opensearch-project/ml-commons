@@ -16,6 +16,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -87,42 +88,72 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
-            mlModelManager.getModel(modelId, ActionListener.wrap(mlModel -> {
-                FunctionName functionName = mlModel.getAlgorithm();
-                mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
-                modelAccessControlHelper
-                    .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                        if (!access) {
-                            wrappedListener
-                                .onFailure(
-                                    new MLValidationException("User Doesn't have privilege to perform this operation on this model")
-                                );
-                        } else {
-                            String requestId = mlPredictionTaskRequest.getRequestID();
-                            log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
-                            long startTime = System.nanoTime();
-                            mlPredictTaskRunner
-                                .run(
-                                    functionName,
-                                    mlPredictionTaskRequest,
-                                    transportService,
-                                    ActionListener.runAfter(wrappedListener, () -> {
-                                        long endTime = System.nanoTime();
-                                        double durationInMs = (endTime - startTime) / 1e6;
-                                        modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
-                                        log.debug("completed predict request " + requestId + " for model " + modelId);
-                                    })
-                                );
-                        }
-                    }, e -> {
-                        log.error("Failed to Validate Access for ModelId " + modelId, e);
-                        wrappedListener.onFailure(e);
-                    }));
-            }, e -> {
-                log.error("Failed to find model " + modelId, e);
-                wrappedListener.onFailure(e);
-            }));
+            MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
+            ActionListener<MLModel> modelActionListener = new ActionListener<>() {
+                @Override
+                public void onResponse(MLModel mlModel) {
+                    context.restore();
+                    modelCacheHelper.setModelInfo(modelId, mlModel);
+                    FunctionName functionName = mlModel.getAlgorithm();
+                    mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
+                    modelAccessControlHelper
+                        .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                            if (!access) {
+                                wrappedListener
+                                    .onFailure(
+                                        new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                    );
+                            } else {
+                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                            }
+                        }, e -> {
+                            log.error("Failed to Validate Access for ModelId " + modelId, e);
+                            wrappedListener.onFailure(e);
+                        }));
+                }
 
+                @Override
+                public void onFailure(Exception e) {
+                    log.error("Failed to find model " + modelId, e);
+                    wrappedListener.onFailure(e);
+                }
+            };
+
+            if (cachedMlModel != null) {
+                modelActionListener.onResponse(cachedMlModel);
+            } else {
+                // For multi-node cluster, the function name is null in cache, so should always get model first.
+                mlModelManager.getModel(modelId, modelActionListener);
+            }
         }
+    }
+
+    private void executePredict(
+        MLPredictionTaskRequest mlPredictionTaskRequest,
+        ActionListener<MLTaskResponse> wrappedListener,
+        String modelId
+    ) {
+        String requestId = mlPredictionTaskRequest.getRequestID();
+        log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
+        long startTime = System.nanoTime();
+        // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
+        // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
+        // from model cache first.
+        FunctionName functionName = modelCacheHelper
+            .getOptionalFunctionName(modelId)
+            .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
+        mlPredictTaskRunner
+            .run(
+                // This is by design to NOT use mlPredictionTaskRequest.getMlInput().getAlgorithm() here
+                functionName,
+                mlPredictionTaskRequest,
+                transportService,
+                ActionListener.runAfter(wrappedListener, () -> {
+                    long endTime = System.nanoTime();
+                    double durationInMs = (endTime - startTime) / 1e6;
+                    modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
+                    log.debug("completed predict request " + requestId + " for model " + modelId);
+                })
+            );
     }
 }

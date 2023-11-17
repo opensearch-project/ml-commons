@@ -11,6 +11,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 
 import org.apache.lucene.search.join.ScoreMode;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -19,6 +20,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.BoolQueryBuilder;
@@ -30,7 +32,6 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -64,35 +65,48 @@ public class ConnectorAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, context::restore);
-            client.get(getRequest, ActionListener.wrap(r -> {
-                if (r != null && r.isExists()) {
-                    try (
-                        XContentParser parser = MLNodeUtils
-                            .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
-                    ) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        Connector connector = Connector.createConnector(parser);
-                        boolean hasPermission = hasPermission(user, connector);
-                        wrappedListener.onResponse(hasPermission);
-                    } catch (Exception e) {
-                        log.error("Failed to parse connector:" + connectorId);
-                        wrappedListener.onFailure(e);
-                    }
-                } else {
-                    wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find connector:" + connectorId));
-                }
-            }, e -> {
-                log.error("Fail to get connector", e);
-                wrappedListener.onFailure(new IllegalStateException("Fail to get connector:" + connectorId));
-            }));
+            getConnector(client, connectorId, ActionListener.wrap(connector -> {
+                boolean hasPermission = hasPermission(user, connector);
+                wrappedListener.onResponse(hasPermission);
+            }, e -> { wrappedListener.onFailure(e); }));
         } catch (Exception e) {
             log.error("Failed to validate Access for connector:" + connectorId, e);
             listener.onFailure(e);
         }
+    }
 
+    public boolean validateConnectorAccess(Client client, Connector connector) {
+        User user = RestActionUtils.getUserContext(client);
+        if (isAdmin(user) || accessControlNotEnabled(user)) {
+            return true;
+        }
+        return hasPermission(user, connector);
+    }
+
+    public void getConnector(Client client, String connectorId, ActionListener<Connector> listener) {
+        GetRequest getRequest = new GetRequest().index(CommonValue.ML_CONNECTOR_INDEX).id(connectorId);
+        client.get(getRequest, ActionListener.wrap(r -> {
+            if (r != null && r.isExists()) {
+                try (
+                    XContentParser parser = MLNodeUtils
+                        .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, r.getSourceAsBytesRef())
+                ) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                    Connector connector = Connector.createConnector(parser);
+                    listener.onResponse(connector);
+                } catch (Exception e) {
+                    log.error("Failed to parse connector:" + connectorId);
+                    listener.onFailure(e);
+                }
+            } else {
+                listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+            }
+        }, e -> {
+            log.error("Failed to get connector", e);
+            listener.onFailure(new OpenSearchStatusException("Failed to get connector:" + connectorId, RestStatus.NOT_FOUND));
+        }));
     }
 
     public boolean skipConnectorAccessControl(User user) {

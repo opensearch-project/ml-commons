@@ -14,7 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +24,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -98,8 +98,8 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/connectors/_update/{connector_id}", route.getPath());
+        assertEquals(RestRequest.Method.PUT, route.getMethod());
+        assertEquals("/_plugins/_ml/connectors/{connector_id}", route.getPath());
     }
 
     public void testUpdateConnectorRequest() throws Exception {
@@ -109,12 +109,19 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLUpdateConnectorAction.INSTANCE), argumentCaptor.capture(), any());
         MLUpdateConnectorRequest updateConnectorRequest = argumentCaptor.getValue();
         assertEquals("test_connectorId", updateConnectorRequest.getConnectorId());
-        assertEquals("This is test description", updateConnectorRequest.getUpdateContent().get("description"));
-        assertEquals("2", updateConnectorRequest.getUpdateContent().get("version"));
+        assertEquals("This is test description", updateConnectorRequest.getUpdateContent().getDescription());
+        assertEquals("2", updateConnectorRequest.getUpdateContent().getVersion());
+    }
+
+    public void testUpdateConnectorRequestWithParsingException() throws Exception {
+        exceptionRule.expect(OpenSearchParseException.class);
+        exceptionRule.expectMessage("Can't get text on a VALUE_NULL");
+        RestRequest request = getRestRequestWithNullValue();
+        restMLUpdateConnectorAction.handleRequest(request, channel, client);
     }
 
     public void testUpdateConnectorRequestWithEmptyContent() throws Exception {
-        exceptionRule.expect(IOException.class);
+        exceptionRule.expect(OpenSearchParseException.class);
         exceptionRule.expectMessage("Failed to update connector: Request body is empty");
         RestRequest request = getRestRequestWithEmptyContent();
         restMLUpdateConnectorAction.handleRequest(request, channel, client);
@@ -140,6 +147,20 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         RestRequest.Method method = RestRequest.Method.POST;
         final Map<String, Object> updateContent = Map.of("version", "2", "description", "This is test description");
         String requestContent = new Gson().toJson(updateContent).toString();
+        Map<String, String> params = new HashMap<>();
+        params.put("connector_id", "test_connectorId");
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(method)
+            .withPath("/_plugins/_ml/connectors/_update/{connector_id}")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    private RestRequest getRestRequestWithNullValue() {
+        RestRequest.Method method = RestRequest.Method.POST;
+        String requestContent = "{\"version\":\"2\",\"description\":null}";
         Map<String, String> params = new HashMap<>();
         params.put("connector_id", "test_connectorId");
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

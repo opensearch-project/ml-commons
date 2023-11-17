@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
@@ -23,6 +24,8 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.exception.MLException;
@@ -54,6 +57,7 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
     public void invokeRemoteModel(MLInput mlInput, Map<String, String> parameters, String payload, List<ModelTensors> tensorOutputs) {
         try {
             AtomicReference<String> responseRef = new AtomicReference<>("");
+            AtomicReference<Integer> statusCodeRef = new AtomicReference<>();
 
             HttpUriRequest request;
             switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
@@ -98,12 +102,18 @@ public class HttpJsonConnectorExecutor implements RemoteConnectorExecutor {
                     String responseBody = EntityUtils.toString(responseEntity);
                     EntityUtils.consume(responseEntity);
                     responseRef.set(responseBody);
+                    statusCodeRef.set(response.getStatusLine().getStatusCode());
                 }
                 return null;
             });
             String modelResponse = responseRef.get();
+            Integer statusCode = statusCodeRef.get();
+            if (statusCode < 200 || statusCode >= 300) {
+                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
+            }
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
+            tensors.setStatusCode(statusCode);
             tensorOutputs.add(tensors);
         } catch (RuntimeException e) {
             log.error("Fail to execute http connector", e);

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
@@ -86,6 +87,7 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
             HttpExecuteResponse response = AccessController.doPrivileged((PrivilegedExceptionAction<HttpExecuteResponse>) () -> {
                 return httpClient.prepareRequest(executeRequest).call();
             });
+            int statusCode = response.httpResponse().statusCode();
 
             AbortableInputStream body = null;
             if (response.responseBody().isPresent()) {
@@ -104,8 +106,12 @@ public class AwsConnectorExecutor implements RemoteConnectorExecutor {
                 throw new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST);
             }
             String modelResponse = responseBuilder.toString();
+            if (statusCode < 200 || statusCode >= 300) {
+                throw new OpenSearchStatusException(REMOTE_SERVICE_ERROR + modelResponse, RestStatus.fromCode(statusCode));
+            }
 
             ModelTensors tensors = processOutput(modelResponse, connector, scriptService, parameters);
+            tensors.setStatusCode(statusCode);
             tensorOutputs.add(tensors);
         } catch (RuntimeException exception) {
             log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);

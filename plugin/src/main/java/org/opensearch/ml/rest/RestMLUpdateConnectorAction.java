@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
@@ -43,12 +44,7 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(
-                new Route(
-                    RestRequest.Method.POST,
-                    String.format(Locale.ROOT, "%s/connectors/_update/{%s}", ML_BASE_URI, PARAMETER_CONNECTOR_ID)
-                )
-            );
+            .of(new Route(RestRequest.Method.PUT, String.format(Locale.ROOT, "%s/connectors/{%s}", ML_BASE_URI, PARAMETER_CONNECTOR_ID)));
     }
 
     @Override
@@ -65,14 +61,17 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
         }
 
         if (!request.hasContent()) {
-            throw new IOException("Failed to update connector: Request body is empty");
+            throw new OpenSearchParseException("Failed to update connector: Request body is empty");
         }
 
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
 
-        XContentParser parser = request.contentParser();
-        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-
-        return MLUpdateConnectorRequest.parse(parser, connectorId);
+        try {
+            XContentParser parser = request.contentParser();
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            return MLUpdateConnectorRequest.parse(parser, connectorId);
+        } catch (IllegalStateException illegalStateException) {
+            throw new OpenSearchParseException(illegalStateException.getMessage());
+        }
     }
 }

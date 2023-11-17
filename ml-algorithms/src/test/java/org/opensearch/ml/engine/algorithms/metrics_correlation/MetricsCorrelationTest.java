@@ -18,6 +18,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.engine.algorithms.DLModel.ML_ENGINE;
 import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_HELPER;
 import static org.opensearch.ml.engine.algorithms.DLModel.MODEL_ZIP_FILE;
@@ -31,9 +33,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -43,16 +48,27 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.Version;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
@@ -97,19 +113,25 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
+import org.opensearch.threadpool.ThreadPool;
 
-//TODO: fix mockito error: Cannot mock/spy class org.opensearch.common.settings.Settings final class
+import com.google.common.collect.ImmutableMap;
 
-@Ignore
 public class MetricsCorrelationTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
     @Mock
     Client client;
-    @Mock
     Settings settings;
+
     @Mock
     private ClusterService clusterService;
+
+    @Mock
+    ThreadPool threadPool;
+
+    ThreadContext threadContext;
+
     @Mock
     SearchRequest searchRequest;
     SearchResponse searchResponse;
@@ -141,6 +163,8 @@ public class MetricsCorrelationTest {
 
     private final String modelId = "modelId";
     private final String modelGroupId = "modelGroupId";
+
+    final String USER_STRING = "myuser|role1,role2|myTenant";
 
     MLTask mlTask;
 
@@ -180,6 +204,16 @@ public class MetricsCorrelationTest {
 
         MockitoAnnotations.openMocks(this);
         metricsCorrelation = spy(new MetricsCorrelation(client, settings, clusterService));
+
+        settings = Settings.builder().build();
+        ClusterState testClusterState = setupTestClusterState();
+        when(clusterService.state()).thenReturn(testClusterState);
+
+        threadContext = new ThreadContext(settings);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
         List<float[]> inputData = new ArrayList<>();
         inputData.add(new float[] { -1.0f, 2.0f, 3.0f });
         inputData.add(new float[] { -1.0f, 2.0f, 3.0f });
@@ -261,16 +295,27 @@ public class MetricsCorrelationTest {
         extendedInput = MetricsCorrelationInput.builder().inputData(extendedInputData).build();
     }
 
+    @Ignore
     @Test
     public void testWhenModelIdNotNullButModelIsNotDeployed() throws ExecuteException {
-        metricsCorrelation.initModel(model, params);
         MLModelGetResponse response = new MLModelGetResponse(model);
         ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
         when(client.execute(any(MLModelGetAction.class), any(MLModelGetRequest.class))).thenReturn(mockedFuture);
         when(mockedFuture.actionGet(anyLong())).thenReturn(response);
 
         doAnswer(invocation -> {
-            MLModel smallModel = model.toBuilder().modelConfig(modelConfig).modelState(MLModelState.DEPLOYED).build();
+
+            MLModel smallModel = MLModel
+                .builder()
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .name(FunctionName.METRICS_CORRELATION.name())
+                .modelId(modelId)
+                .modelGroupId(modelGroupId)
+                .algorithm(FunctionName.METRICS_CORRELATION)
+                .version(MCORR_ML_VERSION)
+                .modelConfig(modelConfig)
+                .modelState(MLModelState.UNDEPLOYED)
+                .build();
             MLModelGetResponse responseTemp = new MLModelGetResponse(smallModel);
             ActionFuture<MLModelGetResponse> mockedFutureTemp = mock(ActionFuture.class);
             MLTaskGetResponse taskResponse = new MLTaskGetResponse(mlTask);
@@ -278,8 +323,8 @@ public class MetricsCorrelationTest {
             when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(mockedFutureResponse);
             when(mockedFutureResponse.actionGet(anyLong())).thenReturn(taskResponse);
             when(mockedFutureTemp.actionGet(anyLong())).thenReturn(responseTemp);
-
             metricsCorrelation.initModel(smallModel, params);
+            smallModel.toBuilder().modelState(MLModelState.DEPLOYED).build();
             return null;
         }).when(client).execute(any(MLDeployModelAction.class), any(MLDeployModelRequest.class), isA(ActionListener.class));
 
@@ -289,6 +334,7 @@ public class MetricsCorrelationTest {
         assertNull(mlModelOutputs.get(0).getMCorrModelTensors());
     }
 
+    @Ignore
     @Test
     public void testExecuteWithModelInIndexAndEmptyOutput() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -349,6 +395,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
+    @Ignore
     @Test
     public void testExecuteWithNoModelIndexAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -389,6 +436,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
+    @Ignore
     @Test
     public void testExecuteWithModelInIndexAndInvokeDeployAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -435,6 +483,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
+    @Ignore
     @Test
     public void testExecuteWithNoModelInIndexAndOneEvent() throws ExecuteException, URISyntaxException {
         Map<String, Object> params = new HashMap<>();
@@ -476,6 +525,7 @@ public class MetricsCorrelationTest {
         assertNotNull(mlModelOutputs.get(0).getMCorrModelTensors().get(0).getSuspected_metrics());
     }
 
+    // working
     @Test
     public void testGetModel() {
         ActionFuture<MLModelGetResponse> mockedFuture = mock(ActionFuture.class);
@@ -508,6 +558,7 @@ public class MetricsCorrelationTest {
         return XContentBuilder.builder(XContentType.JSON.xContent());
     }
 
+    // working
     @Test
     public void testSearchRequest() {
         String expectedIndex = CommonValue.ML_MODEL_INDEX;
@@ -546,6 +597,7 @@ public class MetricsCorrelationTest {
         assertEquals(MLModel.MODEL_VERSION_FIELD, versionQueryBuilder.fieldName());
     }
 
+    @Ignore
     @Test
     public void testRegisterModel() throws InterruptedException {
         doAnswer(invocation -> {
@@ -709,6 +761,63 @@ public class MetricsCorrelationTest {
             100,
             ShardSearchFailure.EMPTY_ARRAY,
             SearchResponse.Clusters.EMPTY
+        );
+    }
+
+    public static ClusterState setupTestClusterState() {
+        Set<DiscoveryNodeRole> roleSet = new HashSet<>();
+        roleSet.add(DiscoveryNodeRole.DATA_ROLE);
+        DiscoveryNode node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            roleSet,
+            Version.CURRENT
+        );
+        Metadata metadata = new Metadata.Builder()
+            .indices(
+                ImmutableMap
+                    .<String, IndexMetadata>builder()
+                    .put(
+                        ML_MODEL_INDEX,
+                        IndexMetadata
+                            .builder("test")
+                            .settings(
+                                Settings
+                                    .builder()
+                                    .put("index.number_of_shards", 1)
+                                    .put("index.number_of_replicas", 1)
+                                    .put("index.version.created", Version.CURRENT.id)
+                            )
+                            .build()
+                    )
+                    .put(
+                        ML_MODEL_GROUP_INDEX,
+                        IndexMetadata
+                            .builder(ML_MODEL_GROUP_INDEX)
+                            .settings(
+                                Settings
+                                    .builder()
+                                    .put("index.number_of_shards", 1)
+                                    .put("index.number_of_replicas", 1)
+                                    .put("index.version.created", Version.CURRENT.id)
+                            )
+                            .build()
+                    )
+                    .build()
+            )
+            .build();
+        return new ClusterState(
+            new ClusterName("test cluster"),
+            123l,
+            "111111",
+            metadata,
+            null,
+            DiscoveryNodes.builder().add(node).build(),
+            null,
+            Map.of(),
+            0,
+            false
         );
     }
 }

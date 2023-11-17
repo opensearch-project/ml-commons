@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
@@ -49,6 +50,7 @@ import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.http.ExecutableHttpRequest;
 import software.amazon.awssdk.http.HttpExecuteResponse;
 import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.SdkHttpResponse;
 
 public class AwsConnectorExecutorTest {
 
@@ -101,6 +103,49 @@ public class AwsConnectorExecutorTest {
         exceptionRule.expectMessage("No response from model");
         when(response.responseBody()).thenReturn(Optional.empty());
         when(httpRequest.call()).thenReturn(response);
+        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(response.httpResponse()).thenReturn(httpResponse);
+        when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
+
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(ConnectorAction.ActionType.PREDICT)
+            .method("POST")
+            .url("http://test.com/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Map<String, String> credential = ImmutableMap
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+        Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
+        Connector connector = AwsConnector
+            .awsConnectorBuilder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(predictAction))
+            .build();
+        connector.decrypt((c) -> encryptor.decrypt(c));
+        AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
+
+        MLInputDataset inputDataSet = RemoteInferenceInputDataSet.builder().parameters(ImmutableMap.of("input", "test input data")).build();
+        executor.executePredict(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build());
+    }
+
+    @Test
+    public void executePredict_RemoteInferenceInput_InvalidToken() throws IOException {
+        exceptionRule.expect(OpenSearchStatusException.class);
+        exceptionRule.expectMessage("{\"message\":\"The security token included in the request is invalid\"}");
+        String jsonString = "{\"message\":\"The security token included in the request is invalid\"}";
+        InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
+        AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
+        when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
+        when(httpRequest.call()).thenReturn(response);
+        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
+        when(httpResponse.statusCode()).thenReturn(403);
+        when(response.httpResponse()).thenReturn(httpResponse);
         when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
 
         ConnectorAction predictAction = ConnectorAction
@@ -135,6 +180,9 @@ public class AwsConnectorExecutorTest {
         InputStream inputStream = new ByteArrayInputStream(jsonString.getBytes());
         AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
         when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
+        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(response.httpResponse()).thenReturn(httpResponse);
         when(httpRequest.call()).thenReturn(response);
         when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
 
@@ -177,6 +225,9 @@ public class AwsConnectorExecutorTest {
         AbortableInputStream abortableInputStream = AbortableInputStream.create(inputStream);
         when(response.responseBody()).thenReturn(Optional.of(abortableInputStream));
         when(httpRequest.call()).thenReturn(response);
+        SdkHttpResponse httpResponse = mock(SdkHttpResponse.class);
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(response.httpResponse()).thenReturn(httpResponse);
         when(httpClient.prepareRequest(any())).thenReturn(httpRequest);
 
         ConnectorAction predictAction = ConnectorAction
@@ -202,7 +253,7 @@ public class AwsConnectorExecutorTest {
         connector.decrypt((c) -> encryptor.decrypt(c));
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector, httpClient));
 
-        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input", "test input data")).build();
+        MLInputDataset inputDataSet = TextDocsInputDataSet.builder().docs(ImmutableList.of("input")).build();
         ModelTensorOutput modelTensorOutput = executor
             .executePredict(MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build());
         Assert.assertEquals(1, modelTensorOutput.getMlModelOutputs().size());

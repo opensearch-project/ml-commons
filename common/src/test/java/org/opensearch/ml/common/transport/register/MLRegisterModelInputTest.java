@@ -22,6 +22,7 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.search.SearchModule;
 
@@ -74,7 +75,6 @@ public class MLRegisterModelInputTest {
                 .deployModel(true)
                 .modelNodeIds(new String[]{"modelNodeIds" })
                 .build();
-
     }
 
     @Test
@@ -254,6 +254,59 @@ public class MLRegisterModelInputTest {
             assertNull(parsedInput.getModelConfig());
             assertNull(parsedInput.getModelFormat());
             assertEquals(input.getConnector(), parsedInput.getConnector());
+        });
+    }
+
+    @Test
+    public void testMCorrInput() throws IOException {
+        String testString = "{\"function_name\":\"METRICS_CORRELATION\",\"name\":\"METRICS_CORRELATION\",\"version\":\"1.0.0b1\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+
+        MetricsCorrelationModelConfig mcorrConfig = MetricsCorrelationModelConfig.builder()
+                .modelType("testModelType")
+                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .build();
+
+        MLRegisterModelInput mcorrInput = MLRegisterModelInput.builder()
+                .functionName(FunctionName.METRICS_CORRELATION)
+                .modelName(FunctionName.METRICS_CORRELATION.name())
+                .version("1.0.0b1")
+                .modelGroupId(modelGroupId)
+                .url(url)
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .modelConfig(mcorrConfig)
+                .deployModel(true)
+                .modelNodeIds(new String[]{"modelNodeIds" })
+                .build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        mcorrInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertEquals(testString, jsonStr);
+    }
+
+    @Test
+    public void readInputStream_MCorr() throws IOException {
+        MetricsCorrelationModelConfig mcorrConfig = MetricsCorrelationModelConfig.builder()
+                .modelType("testModelType")
+                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+                .build();
+
+        MLRegisterModelInput mcorrInput = MLRegisterModelInput.builder()
+                .functionName(FunctionName.METRICS_CORRELATION)
+                .modelName(FunctionName.METRICS_CORRELATION.name())
+                .version("1.0.0b1")
+                .modelGroupId(modelGroupId)
+                .url(url)
+                .modelFormat(MLModelFormat.TORCH_SCRIPT)
+                .modelConfig(mcorrConfig)
+                .deployModel(true)
+                .modelNodeIds(new String[]{"modelNodeIds" })
+                .build();
+        readInputStream(mcorrInput, parsedInput -> {
+            assertEquals(parsedInput.getModelConfig().getModelType(), mcorrConfig.getModelType());
+            assertEquals(parsedInput.getModelConfig().getAllConfig(), mcorrConfig.getAllConfig());
+            assertEquals(parsedInput.getFunctionName(), FunctionName.METRICS_CORRELATION);
+            assertEquals(parsedInput.getModelName(), FunctionName.METRICS_CORRELATION.name());
+            assertEquals(parsedInput.getModelGroupId(), modelGroupId);
         });
     }
 

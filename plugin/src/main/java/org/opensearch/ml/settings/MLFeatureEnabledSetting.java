@@ -18,6 +18,7 @@ public class MLFeatureEnabledSetting {
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
+
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_REMOTE_INFERENCE_ENABLED, it -> isRemoteInferenceEnabled = it);
