@@ -19,8 +19,8 @@ package org.opensearch.ml.memory.index;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -412,40 +412,70 @@ public class InteractionsIndexITTests extends OpenSearchIntegTestCase {
         final String conversation2 = "conversation2";
         CountDownLatch cdl = new CountDownLatch(1);
         StepListener<String> iid1 = new StepListener<>();
-        index.createInteraction(conversation1, "input about fish", "pt", "response about fish", "origin1", Collections.singletonMap("metadata", "some meta"), iid1);
+        index
+            .createInteraction(
+                conversation1,
+                "input about fish",
+                "pt",
+                "response about fish",
+                "origin1",
+                Collections.singletonMap("metadata", "some meta"),
+                iid1
+            );
 
         StepListener<String> iid2 = new StepListener<>();
-        iid1
-            .whenComplete(
-                r -> { index.createInteraction(conversation1, "input about squash", "pt", "response about squash", "origin1", Collections.singletonMap("metadata", "some meta"), iid2); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }
-            );
+        iid1.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation1,
+                    "input about squash",
+                    "pt",
+                    "response about squash",
+                    "origin1",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid2
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         StepListener<String> iid3 = new StepListener<>();
-        iid2
-            .whenComplete(
-                r -> { index.createInteraction(conversation2, "input about fish", "pt2", "response about fish", "origin1", Collections.singletonMap("metadata", "some meta"), iid3); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }
-            );
+        iid2.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation2,
+                    "input about fish",
+                    "pt2",
+                    "response about fish",
+                    "origin1",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid3
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         StepListener<String> iid4 = new StepListener<>();
-        iid3
-            .whenComplete(
-                r -> { index.createInteraction(conversation1, "input about france", "pt", "response about france", "origin1", Collections.singletonMap("metadata", "some meta"), iid4); },
-                e -> {
-                    cdl.countDown();
-                    log.error(e);
-                    assert (false);
-                }
-            );
+        iid3.whenComplete(r -> {
+            index
+                .createInteraction(
+                    conversation1,
+                    "input about france",
+                    "pt",
+                    "response about france",
+                    "origin1",
+                    Collections.singletonMap("metadata", "some meta"),
+                    iid4
+                );
+        }, e -> {
+            cdl.countDown();
+            log.error(e);
+            assert (false);
+        });
 
         StepListener<SearchResponse> searchListener = new StepListener<>();
         iid4.whenComplete(r -> {
