@@ -260,12 +260,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void registerAgent(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
         MLRegisterAgentRequest mlRegisterAgentRequest = MLRegisterAgentRequest.builder().mlAgent(mlAgent).build();
-        client
-            .execute(
-                MLRegisterAgentAction.INSTANCE,
-                mlRegisterAgentRequest,
-                ActionListener.wrap(listener::onResponse, listener::onFailure)
-            );
+        client.execute(MLRegisterAgentAction.INSTANCE, mlRegisterAgentRequest, getMLRegisterAgentResponseActionListener(listener));
     }
 
     private ActionListener<MLRegisterAgentResponse> getMLRegisterAgentResponseActionListener(

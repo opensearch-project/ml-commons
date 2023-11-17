@@ -38,6 +38,7 @@ public class VisualizationsTool extends AbstractTool {
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
     private static final String DEFAULT_DESCRIPTION = "Use this tool to find user created visualizations. This tool takes the visualization name as input and returns the first 3 matching visualizations";
+
     private final Client client;
 
     @Builder

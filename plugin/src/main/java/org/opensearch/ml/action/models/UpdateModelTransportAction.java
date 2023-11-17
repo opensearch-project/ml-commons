@@ -115,10 +115,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 boolean modelDeployFlag = isModelDeployed(mlModel.getModelState());
                 FunctionName functionName = mlModel.getAlgorithm();
-                MLModelState mlModelState = mlModel.getModelState();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
                         if (isSuperAdmin) {
@@ -134,8 +133,9 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                         } else {
                             actionListener
                                 .onFailure(
-                                    new MLValidationException(
-                                        "User doesn't have permission to perform this operation on this model, model ID " + modelId
+                                    new OpenSearchStatusException(
+                                        "User doesn't have privilege to perform this operation on this model, model ID " + modelId,
+                                        RestStatus.FORBIDDEN
                                     )
                                 );
                         }
@@ -179,7 +179,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             },
                 e -> actionListener
                     .onFailure(new MLResourceNotFoundException("Failed to find model to update with the provided model id: " + modelId))
-            ), () -> context.restore()));
+            ));
         } catch (Exception e) {
             log.error("Failed to update ML model for " + modelId, e);
             actionListener.onFailure(e);

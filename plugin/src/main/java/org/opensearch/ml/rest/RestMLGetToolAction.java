@@ -8,15 +8,12 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.*;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.ToolMetadata;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.tools.MLGetToolAction;
 import org.opensearch.ml.common.transport.tools.MLToolGetRequest;
 import org.opensearch.ml.engine.tools.ToolsFactory;
@@ -61,9 +58,11 @@ public class RestMLGetToolAction extends BaseRestHandler {
      */
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        List<ToolMetadata> toolList = toolsFactory.getAllTools().stream()
-                .map(tool -> ToolMetadata.builder().name(tool.getName()).description(tool.getDescription()).build())
-                .collect(Collectors.toList());
+        List<ToolMetadata> toolList = toolsFactory
+            .getAllTools()
+            .stream()
+            .map(tool -> ToolMetadata.builder().name(tool.getName()).description(tool.getDescription()).build())
+            .collect(Collectors.toList());
         String toolName = getParameterId(request, PARAMETER_TOOL_NAME);
         MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().toolName(toolName).externalTools(toolList).build();
         return channel -> client.execute(MLGetToolAction.INSTANCE, mlToolGetRequest, new RestToXContentListener<>(channel));

@@ -43,6 +43,7 @@ public class SearchAlertsToolTests {
     private IndicesAdminClient indicesAdminClient;
     @Mock
     private ClusterAdminClient clusterAdminClient;
+
     private Tool tool;
 
     private Map<String, String> nullParams;

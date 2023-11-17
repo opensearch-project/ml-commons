@@ -40,11 +40,10 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.SortOrder;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 
 /**
  * Memory manager for Memories. It contains ML memory related operations like create, read interactions etc.
@@ -52,7 +51,6 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 @Log4j2
 @AllArgsConstructor
 public class MLMemoryManager {
-    public static final int DEFAULT_TIMEOUT_IN_MILLIS = 5000;
 
     private Client client;
     private ClusterService clusterService;
@@ -99,6 +97,8 @@ public class MLMemoryManager {
         Preconditions.checkNotNull(conversationId);
         Preconditions.checkNotNull(input);
         Preconditions.checkNotNull(response);
+        // additionalInfo cannot be null as flat object
+        additionalInfo = (additionalInfo == null)? new HashMap<>():additionalInfo;
         try {
             client.execute(
                     CreateInteractionAction.INSTANCE,
@@ -138,6 +138,8 @@ public class MLMemoryManager {
                 }
             }, e -> { actionListener.onFailure(e); });
             conversationMetaIndex.checkAccess(conversationId, accessListener);
+        } catch (Exception e) {
+            actionListener.onFailure(e);
         }
     }
 
@@ -195,19 +197,9 @@ public class MLMemoryManager {
                 actionListener.onResponse(List.of());
                 return;
             }
-            ActionListener<Boolean> accessListener = ActionListener.wrap(access -> {
-                if (access) {
-                    innerGetTraces(parentInteractionId, actionListener);
-                } else {
-                    String userstr = client
-                            .threadPool()
-                            .getThreadContext()
-                            .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
-                    throw new OpenSearchSecurityException("User [" + user + "] does not have access to interaction " + parentInteractionId);
-                }
-            }, e -> { actionListener.onFailure(e); });
-            conversationMetaIndex.checkAccess(parentInteractionId, accessListener);
+            innerGetTraces(parentInteractionId, actionListener);
+        } catch (Exception e) {
+            actionListener.onFailure(e);
         }
     }
 

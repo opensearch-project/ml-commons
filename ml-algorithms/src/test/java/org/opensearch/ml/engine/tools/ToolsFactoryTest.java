@@ -60,6 +60,12 @@ public class ToolsFactoryTest {
     }
 
     @Test
+    public void testCreateToolWithNullExternalTool() {
+        ToolsFactory toolsFactory = new ToolsFactory(client, scriptService, clusterService, xContentRegistry, null);
+        Assert.assertNotNull(toolsFactory);
+    }
+
+    @Test
     public void testGetAllTools() {
         List<Tool> tools = toolsFactory.getAllTools();
         Assert.assertEquals(9, tools.size());

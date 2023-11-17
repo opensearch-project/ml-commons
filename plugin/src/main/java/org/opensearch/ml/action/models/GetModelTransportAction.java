@@ -77,6 +77,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
+
         boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -89,12 +90,12 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                         Boolean isHidden = (Boolean) r.getSource().get(IS_HIDDEN_FIELD);
                         MLModel mlModel = MLModel.parse(parser, algorithmName);
                         if (isHidden != null && isHidden) {
-                            if (isSuperAdmin) {
+                            if (isSuperAdmin || !mlModelGetRequest.isDirectRequest()) {
                                 wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                             } else {
                                 wrappedListener
                                     .onFailure(
-                                        new MLValidationException("User Doesn't have privilege to perform this operation on this model")
+                                        new MLValidationException("User doesn't have privilege to perform this operation on this model")
                                     );
                             }
                         } else {
@@ -104,7 +105,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                                         wrappedListener
                                             .onFailure(
                                                 new MLValidationException(
-                                                    "User Doesn't have privilege to perform this operation on this model"
+                                                    "User doesn't have privilege to perform this operation on this model"
                                                 )
                                             );
                                     } else {

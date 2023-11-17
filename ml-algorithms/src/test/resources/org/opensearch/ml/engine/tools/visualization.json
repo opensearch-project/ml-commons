@@ -1,0 +1,58 @@
+{
+  "took": 4,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 1,
+      "relation": "eq"
+    },
+    "max_score": 0.2847877,
+    "hits": [
+      {
+        "_index": ".kibana_1",
+        "_id": "visualization:aeb212e0-4c84-11e8-b3d7-01146121b73d",
+        "_score": 0.2847877,
+        "_source": {
+          "visualization": {
+            "title": "[Ecommerce]Sales by gender",
+            "visState": "",
+            "uiStateJSON": "{}",
+            "description": "",
+            "version": 1,
+            "kibanaSavedObjectMeta": {
+              "searchSourceJSON": "{}"
+            }
+          },
+          "type": "visualization",
+          "references": [
+            {
+              "name": "control_0_index_pattern",
+              "type": "index-pattern",
+              "id": "d3d7af60-4c81-11e8-b3d7-01146121b73d"
+            },
+            {
+              "name": "control_1_index_pattern",
+              "type": "index-pattern",
+              "id": "d3d7af60-4c81-11e8-b3d7-01146121b73d"
+            },
+            {
+              "name": "control_2_index_pattern",
+              "type": "index-pattern",
+              "id": "d3d7af60-4c81-11e8-b3d7-01146121b73d"
+            }
+          ],
+          "migrationVersion": {
+            "visualization": "7.10.0"
+          },
+          "updated_at": "2023-11-10T02:50:24.881Z"
+        }
+      }
+    ]
+  }
+}
